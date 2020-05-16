@@ -208,4 +208,20 @@ pub mod tests {
 			)
 		);
 	}
+
+	#[test]
+	fn basic_math_with_indents() {
+		assert_eq!(
+			parse("2	+ 	  2	  *	2   	").unwrap(),
+			Expr::BinaryOp(
+				Box::new(Expr::Num(2.0)),
+				BinaryOp::Add,
+				Box::new(Expr::BinaryOp(
+					Box::new(Expr::Num(2.0)),
+					BinaryOp::Mul,
+					Box::new(Expr::Num(2.0)),
+				)),
+			)
+		);
+	}
 }
