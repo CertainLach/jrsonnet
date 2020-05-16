@@ -53,8 +53,8 @@ parser! {
 			/ name:id() __() "(" __() params:params() __() ")" __() "=" __() expr:boxed_expr() {expr::Bind::Function(name, params, expr)}
 		pub rule assertion() -> expr::AssertStmt = "assert" _() cond:boxed_expr() msg:(__() ":" __() e:boxed_expr() {e})? { expr::AssertStmt(cond, msg) }
 		pub rule string() -> String
-			= "\"" str:$((!['"'][_])+) "\"" {str.to_owned()}
-			/ "'" str:$((!['\''][_])+) "'" {str.to_owned()}
+			= "\"" str:$((!['"'][_])*) "\"" {str.to_owned()}
+			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}
 		pub rule field_name() -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
 			/ name:string() {expr::FieldName::Fixed(name)}
