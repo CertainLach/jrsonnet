@@ -187,10 +187,12 @@ pub fn parse(str: &str) -> Result<Expr, peg::error::ParseError<peg::str::LineCol
 #[cfg(test)]
 pub mod tests {
 	use super::{expr::*, parse};
+
 	#[test]
 	fn empty_object() {
-		assert_eq!(parse("{}").unwrap(), Expr::Obj(ObjBody::MemberList(vec![])),);
+		assert_eq!(parse("{}").unwrap(), Expr::Obj(ObjBody::MemberList(vec![])));
 	}
+
 	#[test]
 	fn basic_math() {
 		assert_eq!(
