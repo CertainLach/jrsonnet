@@ -29,7 +29,7 @@ pub enum FieldMember {
 	},
 	Function {
 		name: FieldName,
-		params: Params,
+		params: ParamsDesc,
 		visibility: Visibility,
 		value: Expr,
 	},
@@ -74,10 +74,10 @@ pub enum BinaryOpType {
 
 	BitAnd,
 	BitOr,
+	BitXor,
+
 	And,
 	Or,
-
-	BitXor,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -87,7 +87,7 @@ pub enum Param {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Params(pub Vec<Param>);
+pub struct ParamsDesc(pub Vec<Param>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Arg {
@@ -96,12 +96,12 @@ pub enum Arg {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Args(pub Vec<Arg>);
+pub struct ArgsDesc(pub Vec<Arg>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum Bind {
 	Value(String, Box<Expr>),
-	Function(String, Params, Box<Expr>),
+	Function(String, ParamsDesc, Box<Expr>),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -179,8 +179,8 @@ pub enum Expr {
 	/// (obj)
 	Parened(Box<Expr>),
 
-	Params(Params),
-	Args(Args),
+	Params(ParamsDesc),
+	Args(ArgsDesc),
 
 	UnaryOp(UnaryOpType, Box<Expr>),
 	BinaryOp(Box<Expr>, BinaryOpType, Box<Expr>),
@@ -191,7 +191,7 @@ pub enum Expr {
 	Import(String),
 	ImportStr(String),
 	Error(Box<Expr>),
-	Apply(Box<Expr>, Args),
+	Apply(Box<Expr>, ArgsDesc),
 	Select(Box<Expr>, String),
 	Index(Box<Expr>, Box<Expr>),
 	Slice {
@@ -200,7 +200,7 @@ pub enum Expr {
 		end: Option<Box<Expr>>,
 		step: Option<Box<Expr>>,
 	},
-	Function(Params, Box<Expr>),
+	Function(ParamsDesc, Box<Expr>),
 	IfElse {
 		cond: IfSpec,
 		cond_then: Box<Expr>,

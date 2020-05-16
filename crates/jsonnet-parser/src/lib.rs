@@ -1,3 +1,5 @@
+#![feature(box_syntax)]
+
 use peg::parser;
 
 mod expr;
@@ -6,7 +8,7 @@ pub use expr::*;
 enum Suffix {
 	String(String),
 	Expression(Expr),
-	Apply(expr::Args),
+	Apply(expr::ArgsDesc),
 }
 
 parser! {
@@ -18,27 +20,33 @@ parser! {
 		rule digit() -> char = d:$(['0'..='9']) {d.chars().nth(0).unwrap()}
 		rule int() -> u32 = a:$(digit()+) { a.parse().unwrap() }
 		rule number() -> f64 = quiet!{a:$((['-'|'+'])? int() ("." int())? (['e'|'E'] (s:['+'|'-'])? int())?) { a.parse().unwrap() }} / expected!("<number>")
-		rule id() -> String = quiet!{ !("local" / "super" / "self" / "true" / "false" / "null" / "$" / "if" / "then" / "else") s:$(alpha() (alpha() / digit())*) {s.to_owned()}} / expected!("<identifier>")
+		rule id() -> String = quiet!{ !("local" / "super" / "self" / "true" / "false" / "null" / "$" / "if" / "then" / "else" / "function") s:$(alpha() (alpha() / digit())*) {s.to_owned()}} / expected!("<identifier>")
 
 		pub rule positional_param() -> expr::Param = name:id() {expr::Param::Positional(name)}
 		pub rule named_param() -> expr::Param = name:id() __() "=" __() expr:boxed_expr() {expr::Param::Named(name, expr)}
-		pub rule params() -> expr::Params
-			= positionals:(positional_param() ** delimiter()) delimiter() named:(named_param() ** delimiter()) {
-				expr::Params([&positionals[..], &named[..]].concat())
+		pub rule params() -> expr::ParamsDesc
+			= positionals:(positional_param() ** delimiter()) named: (delimiter() named:(named_param() ** delimiter()) {named})? {
+				if named.is_some() {
+					expr::ParamsDesc([&positionals[..], &named.unwrap()[..]].concat())
+				} else {
+					expr::ParamsDesc(positionals)
+				}
 			}
-			/ named:(named_param() ** delimiter()) {expr::Params(named)}
-			/ positionals:(positional_param() ** delimiter()) {expr::Params(positionals)}
-			/ {expr::Params(Vec::new())}
+			/ named:(named_param() ** delimiter()) {expr::ParamsDesc(named)}
+			/ {expr::ParamsDesc(Vec::new())}
 
 		pub rule positional_arg() -> expr::Arg = quiet!{name:boxed_expr() {expr::Arg::Positional(name)}}/expected!("<positional arg>")
 		pub rule named_arg() -> expr::Arg = quiet!{name:id() __() "=" __() expr:boxed_expr() {expr::Arg::Named(name, expr)}}/expected!("<named arg>")
-		pub rule args() -> expr::Args
-			= positionals:(positional_arg() ** delimiter()) delimiter() named:(named_arg() ** delimiter()) {
-				expr::Args([&positionals[..], &named[..]].concat())
+		pub rule args() -> expr::ArgsDesc
+			= positionals:(positional_arg() ** delimiter()) named: (delimiter() named:(named_arg() ** delimiter()) {named})? {
+				if named.is_some() {
+					expr::ArgsDesc([&positionals[..], &named.unwrap()[..]].concat())
+				} else {
+					expr::ArgsDesc(positionals)
+				}
 			}
-			/ named:(named_arg() ** delimiter()) {expr::Args(named)}
-			/ positionals:(positional_arg() ** delimiter()) {expr::Args(positionals)}
-			/ {expr::Args(Vec::new())}
+			/ named:(named_arg() ** delimiter()) {expr::ArgsDesc(named)}
+			/ {expr::ArgsDesc(Vec::new())}
 
 		pub rule bind() -> expr::Bind
 			= name:id() __() "=" __() expr:boxed_expr() {expr::Bind::Value(name, expr)}
@@ -118,6 +126,27 @@ parser! {
 			/ if_then_else_expr()
 			/ local_expr()
 
+			/ "function" __() "(" __() params:params() __() ")" __() expr:boxed_expr() {Expr::Function(params, expr)}
+
+		rule expr_basic_with_suffix() -> Expr
+			= a:expr_basic() suffixes:(__() suffix:expr_suffix() {suffix})* {
+				let mut cur = a;
+				for suffix in suffixes {
+					match suffix {
+						Suffix::String(index) => {
+							cur = Expr::Index(Box::new(cur), Box::new(Expr::Str(index)))
+						},
+						Suffix::Expression(index) => {
+							cur = Expr::Index(Box::new(cur), Box::new(index))
+						},
+						Suffix::Apply(args) => {
+							cur = Expr::Apply(Box::new(cur), args)
+						}
+					}
+				}
+				cur
+			}
+
 		rule expr_suffix() -> Suffix
 			= "." __() s:id() { Suffix::String(s) }
 			/ "[" __() s:expr() __() "]" { Suffix::Expression(s) }
@@ -153,26 +182,10 @@ parser! {
 				a:(@) __() "/" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Div, Box::new(b))}
 				a:(@) __() "%" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Mod, Box::new(b))}
 				--
-				e:expr_basic() {e}
+				e:expr_basic_with_suffix() {e}
 				"(" __() e:boxed_expr() __() ")" {Expr::Parened(e)}
-			} suffixes:(__() suffix:expr_suffix() {suffix})* {
-				let mut cur = a;
-				for suffix in suffixes {
-					match suffix {
-						Suffix::String(index) => {
-							cur = Expr::Index(Box::new(cur), Box::new(Expr::Str(index)))
-						},
-						Suffix::Expression(index) => {
-							cur = Expr::Index(Box::new(cur), Box::new(index))
-						},
-						Suffix::Apply(args) => {
-							cur = Expr::Apply(Box::new(cur), args)
-						}
-					}
-				}
-				cur
 			}
-			/ e:expr_basic() {e}
+			/ e:expr_basic_with_suffix() {e}
 
 		pub rule boxed_expr() -> Box<Expr> = e:expr() {Box::new(e)}
 		pub rule jsonnet() -> Expr = __() e:expr() __() {e}
@@ -203,6 +216,22 @@ pub mod tests {
 					BinaryOpType::Mul,
 					Box::new(Expr::Num(2.0))
 				))
+			)
+		);
+	}
+
+	#[test]
+	fn suffix_comparsion() {
+		use Expr::*;
+		assert_eq!(
+			parse("std.type(a) == \"string\"").unwrap(),
+			BinaryOp(
+				box Apply(
+					box Index(box Var("std".to_owned()), box Str("type".to_owned())),
+					ArgsDesc(vec![Arg::Positional(box Var("a".to_owned()))])
+				),
+				BinaryOpType::Eq,
+				box Str("string".to_owned())
 			)
 		);
 	}
