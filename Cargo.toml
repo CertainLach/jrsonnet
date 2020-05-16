@@ -1,2 +1,5 @@
 [workspace]
-members = ["crates/jsonnet-parser"]
+members = [
+	"crates/jsonnet-parser",
+	"crates/jsonnet-evaluator",
+]

@@ -43,7 +43,7 @@ pub enum Member {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum UnaryOp {
+pub enum UnaryOpType {
 	Plus,
 	Minus,
 	BitNot,
@@ -51,7 +51,7 @@ pub enum UnaryOp {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum BinaryOp {
+pub enum BinaryOpType {
 	Mul,
 	Div,
 	Mod,
@@ -129,10 +129,14 @@ pub enum ObjBody {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub enum Literal {
+pub enum ValueType {
 	Null,
 	True,
 	False,
+}
+
+#[derive(Debug, Clone, PartialEq)]
+pub enum LiteralType {
 	This,
 	Super,
 	Dollar,
@@ -141,8 +145,9 @@ pub enum Literal {
 /// Syntax base
 #[derive(Debug, Clone, PartialEq)]
 pub enum Expr {
+	Value(ValueType),
 	/// Plain value: null/true/false
-	Literal(Literal),
+	Literal(LiteralType),
 
 	/// String value: "hello"
 	Str(String),
@@ -177,8 +182,8 @@ pub enum Expr {
 	Params(Params),
 	Args(Args),
 
-	UnaryOp(UnaryOp, Box<Expr>),
-	BinaryOp(Box<Expr>, BinaryOp, Box<Expr>),
+	UnaryOp(UnaryOpType, Box<Expr>),
+	BinaryOp(Box<Expr>, BinaryOpType, Box<Expr>),
 	AssertExpr(AssertStmt, Box<Expr>),
 	LocalExpr(Vec<Bind>, Box<Expr>),
 

@@ -1,7 +1,7 @@
 use peg::parser;
 
-pub mod expr;
-use expr::{Expr, Literal};
+mod expr;
+pub use expr::*;
 
 enum Suffix {
 	String(String),
@@ -101,10 +101,11 @@ parser! {
 			cond_else,
 		}}
 		pub rule expr_basic() -> Expr
-			= "null" {Expr::Literal(Literal::Null)}
-			/ "true" {Expr::Literal(Literal::True)} / "false" {Expr::Literal(Literal::False)}
-			/ "self" {Expr::Literal(Literal::This)} / "$" {Expr::Literal(Literal::Dollar)}
-			/ "super" {Expr::Literal(Literal::Super)}
+			= "null" {Expr::Value(ValueType::Null)}
+			/ "true" {Expr::Value(ValueType::True)} / "false" {Expr::Value(ValueType::False)}
+
+			/ "self" {Expr::Literal(LiteralType::This)} / "$" {Expr::Literal(LiteralType::Dollar)}
+			/ "super" {Expr::Literal(LiteralType::Super)}
 
 			/ string_expr() / number_expr()
 			/ array_expr()
@@ -124,36 +125,36 @@ parser! {
 
 		rule expr() -> Expr
 			= a:precedence! {
-				a:(@) __() "||" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Or, Box::new(b))}
+				a:(@) __() "||" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Or, Box::new(b))}
 				--
-				a:(@) __() "&&" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::And, Box::new(b))}
+				a:(@) __() "&&" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::And, Box::new(b))}
 				--
-				a:(@) __() "|" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::BitOr, Box::new(b))}
+				a:(@) __() "|" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::BitOr, Box::new(b))}
 				--
-				a:@ __() "^" __() b:(@) {Expr::BinaryOp(Box::new(a), expr::BinaryOp::BitXor, Box::new(b))}
+				a:@ __() "^" __() b:(@) {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::BitXor, Box::new(b))}
 				--
-				a:(@) __() "&" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::BitAnd, Box::new(b))}
+				a:(@) __() "&" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::BitAnd, Box::new(b))}
 				--
-				a:(@) __() "==" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Eq, Box::new(b))}
-				a:(@) __() "!=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Ne, Box::new(b))}
+				a:(@) __() "==" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Eq, Box::new(b))}
+				a:(@) __() "!=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Ne, Box::new(b))}
 				--
-				a:(@) __() "<" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Lt, Box::new(b))}
-				a:(@) __() ">" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Gt, Box::new(b))}
-				a:(@) __() "<=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Lte, Box::new(b))}
-				a:(@) __() ">=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Gte, Box::new(b))}
+				a:(@) __() "<" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Lt, Box::new(b))}
+				a:(@) __() ">" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Gt, Box::new(b))}
+				a:(@) __() "<=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Lte, Box::new(b))}
+				a:(@) __() ">=" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Gte, Box::new(b))}
 				--
-				a:(@) __() "<<" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Lhs, Box::new(b))}
-				a:(@) __() ">>" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Rhs, Box::new(b))}
+				a:(@) __() "<<" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Lhs, Box::new(b))}
+				a:(@) __() ">>" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Rhs, Box::new(b))}
 				--
-				a:(@) __() "+" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Add, Box::new(b))}
-				a:(@) __() "-" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Sub, Box::new(b))}
+				a:(@) __() "+" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Add, Box::new(b))}
+				a:(@) __() "-" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Sub, Box::new(b))}
 				--
-				a:(@) __() "*" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Mul, Box::new(b))}
-				a:(@) __() "/" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Div, Box::new(b))}
-				a:(@) __() "%" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOp::Mod, Box::new(b))}
+				a:(@) __() "*" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Mul, Box::new(b))}
+				a:(@) __() "/" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Div, Box::new(b))}
+				a:(@) __() "%" __() b:@ {Expr::BinaryOp(Box::new(a), expr::BinaryOpType::Mod, Box::new(b))}
 				--
 				e:expr_basic() {e}
-				"(" __() e:expr_basic() __() ")" {Expr::Parened(Box::new(e))}
+				"(" __() e:boxed_expr() __() ")" {Expr::Parened(e)}
 			} suffixes:(__() suffix:expr_suffix() {suffix})* {
 				let mut cur = a;
 				for suffix in suffixes {
@@ -196,10 +197,10 @@ pub mod tests {
 			parse("2+2*2").unwrap(),
 			Expr::BinaryOp(
 				Box::new(Expr::Num(2.0)),
-				BinaryOp::Add,
+				BinaryOpType::Add,
 				Box::new(Expr::BinaryOp(
 					Box::new(Expr::Num(2.0)),
-					BinaryOp::Mul,
+					BinaryOpType::Mul,
 					Box::new(Expr::Num(2.0))
 				))
 			)
