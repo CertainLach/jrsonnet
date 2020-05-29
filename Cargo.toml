@@ -2,4 +2,5 @@
 members = [
 	"crates/jsonnet-parser",
 	"crates/jsonnet-evaluator",
+	"crates/jsonnet-stdlib",
 ]

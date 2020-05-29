@@ -5,14 +5,20 @@ name = "jsonnet-evaluator"
 version = "0.1.0"
 dependencies = [
  "jsonnet-parser",
+ "jsonnet-stdlib",
 ]
 
 [[package]]
 name = "jsonnet-parser"
 version = "0.1.0"
 dependencies = [
+ "jsonnet-stdlib",
  "peg",
 ]
+
+[[package]]
+name = "jsonnet-stdlib"
+version = "0.1.0"
 
 [[package]]
 name = "peg"
