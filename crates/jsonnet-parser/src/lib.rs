@@ -240,10 +240,28 @@ pub fn parse(str: &str) -> Result<Expr, peg::error::ParseError<peg::str::LineCol
 #[cfg(test)]
 pub mod tests {
 	use super::{expr::*, parse};
+
+	mod expressions {
+		use super::*;
+
+		pub fn basic_math() -> Expr {
+			Expr::BinaryOp(
+				Box::new(Expr::Num(2.0)),
+				BinaryOpType::Add,
+				Box::new(Expr::BinaryOp(
+					Box::new(Expr::Num(2.0)),
+					BinaryOpType::Mul,
+					Box::new(Expr::Num(2.0)),
+				)),
+			)
+		}
+	}
+
 	#[test]
 	fn empty_object() {
-		assert_eq!(parse("{}").unwrap(), Expr::Obj(ObjBody::MemberList(vec![])),);
+		assert_eq!(parse("{}").unwrap(), Expr::Obj(ObjBody::MemberList(vec![])));
 	}
+
 	#[test]
 	fn basic_math() {
 		assert_eq!(
@@ -256,6 +274,23 @@ pub mod tests {
 					BinaryOpType::Mul,
 					Box::new(Expr::Num(2.0))
 				))
+			)
+		);
+	}
+
+	#[test]
+	fn basic_math_with_indents() {
+		assert_eq!(parse("2	+ 	  2	  *	2   	").unwrap(), expressions::basic_math());
+	}
+
+	#[test]
+	fn basic_math_parened() {
+		assert_eq!(
+			parse("2+(2+2*2)").unwrap(),
+			Expr::BinaryOp(
+				Box::new(Expr::Num(2.0)),
+				BinaryOpType::Add,
+				Box::new(Expr::Parened(Box::new(expressions::basic_math()))),
 			)
 		);
 	}
