@@ -1,23 +1,4 @@
 #[macro_export]
-macro_rules! dynamic_wrapper {
-	($orig: ident, $wrapper: ident) => {
-		#[derive(Debug, Clone)]
-		pub struct $wrapper(pub std::rc::Rc<dyn $orig>);
-		impl std::ops::Deref for $wrapper {
-			type Target = dyn $orig;
-			fn deref(&self) -> &Self::Target {
-				&*self.0
-			}
-		}
-		impl std::cmp::PartialEq for $wrapper {
-			fn eq(&self, other: &Self) -> bool {
-				Rc::ptr_eq(&self.0, &other.0)
-			}
-		}
-	};
-}
-
-#[macro_export]
 macro_rules! future_wrapper {
 	($orig: ty, $wrapper: ident) => {
 		#[derive(Debug, Clone)]
@@ -39,17 +20,36 @@ macro_rules! future_wrapper {
 				self.unwrap()
 			}
 		}
+		impl Default for $wrapper {
+			fn default() -> Self {
+				Self::new()
+			}
+		}
 	};
 }
 
 #[macro_export]
-macro_rules! dummy_debug {
-	($struct: ident) => {
-		impl std::fmt::Debug for $struct {
+macro_rules! rc_fn_helper {
+	($name: ident, $macro_name: ident, $fn: ty) => {
+		#[derive(Clone)]
+		#[doc = "Function wrapper"]
+		pub struct $name(pub std::rc::Rc<$fn>);
+		impl std::fmt::Debug for $name {
 			fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-				f.debug_struct(std::stringify!($struct))
-					.finish_non_exhaustive()
+				f.debug_struct(std::stringify!($name)).finish()
 			}
+		}
+		impl std::cmp::PartialEq for $name {
+			fn eq(&self, other: &$name) -> bool {
+				std::ptr::eq(&self.0, &other.0)
+			}
+		}
+		#[doc = "Macro to ease wrapper creation"]
+		#[macro_export]
+		macro_rules! $macro_name {
+			($val: expr) => {
+				$crate::$name(std::rc::Rc::new($val))
+			};
 		}
 	};
 }

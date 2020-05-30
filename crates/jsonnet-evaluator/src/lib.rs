@@ -1,44 +1,50 @@
 #![feature(box_syntax, box_patterns)]
 #![feature(type_alias_impl_trait)]
 #![feature(debug_non_exhaustive)]
-
-mod binding;
+#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 mod ctx;
 mod dynamic;
 mod evaluate;
 mod obj;
 mod val;
 
-pub use binding::*;
 pub use ctx::*;
 pub use dynamic::*;
 pub use evaluate::*;
 use jsonnet_parser::*;
 pub use obj::*;
-use std::fmt::Debug;
-use std::rc::Rc;
 pub use val::*;
 
-pub trait FunctionRhs: Debug {
-	fn evaluate(&self, ctx: Context) -> Val;
-}
-dynamic_wrapper!(FunctionRhs, BoxedFunctionRhs);
-
-pub trait FunctionDefault: Debug {
-	fn default(&self, ctx: Context, expr: Expr) -> Val;
-}
-dynamic_wrapper!(FunctionDefault, BoxedFunctionDefault);
+rc_fn_helper!(
+	Binding,
+	binding,
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Val
+);
+rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Val);
+rc_fn_helper!(
+	FunctionDefault,
+	function_default,
+	dyn Fn(Context, Expr) -> Val
+);
 
 #[cfg(test)]
 pub mod tests {
 	use super::{evaluate, Context, Val};
 	use jsonnet_parser::*;
 
-	// macro_rules! eval {
-	// 	($str: expr) => {
-	// 		evaluate(Context::new(), &parse($str).unwrap())
-	// 	};
-	// }
+	macro_rules! eval {
+		($str: expr) => {
+			evaluate(Context::new(), &parse($str).unwrap())
+		};
+	}
+
+	macro_rules! eval_stdlib {
+		($str: expr) => {
+			let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
+			evaluate(Context::new(), &parse(&(std + $str)).unwrap())
+		};
+	}
+
 	macro_rules! assert_eval {
 		($str: expr) => {
 			assert_eq!(
@@ -165,23 +171,48 @@ pub mod tests {
 		);
 	}
 
+	#[test]
+	fn direct_self() {
+		println!(
+			"{:#?}",
+			eval!(
+				r#"
+					{
+						local me = self,
+						a: 3,
+						b(): me.a,
+					}
+				"#
+			)
+		);
+	}
+
+	#[test]
+	fn indirect_self() {
+		// `self` assigned to `me` was lost when being
+		// referenced from field
+		eval_stdlib!(
+			r#"{
+				local me = std.trace("test", self),
+				b: me,
+			}.b"#
+		);
+	}
+
 	// We can't trust other tests (And official jsonnet testsuite), if assert is not working correctly
 	#[test]
 	fn std_assert_ok() {
-		let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
-		evaluate(
-			Context::new(),
-			&parse(&(std + "std.assertEqual(4.5 << 2, 16,)")).unwrap(),
-		);
+		eval_stdlib!("std.assertEqual(4.5 << 2, 16)");
 	}
 
 	#[test]
 	#[should_panic]
 	fn std_assert_failure() {
-		let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
-		evaluate(
-			Context::new(),
-			&parse(&(std + "std.assertEqual(4.5 << 2, 15,)")).unwrap(),
-		);
+		eval_stdlib!("std.assertEqual(4.5 << 2, 15)");
+	}
+
+	#[test]
+	fn base64_works() {
+		eval_stdlib!(r#"std.base64("test")"#);
 	}
 }

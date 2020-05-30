@@ -1,20 +1,11 @@
-use crate::{dummy_debug, future_wrapper, BoxedBinding, ObjValue};
+use crate::{future_wrapper, rc_fn_helper, Binding, ObjValue};
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
-pub trait ContextCreator: Debug {
-	fn create_context(&self, this: &Option<ObjValue>, super_obj: &Option<ObjValue>) -> Context;
-}
-pub type BoxedContextCreator = Rc<dyn ContextCreator>;
-
-#[derive(Debug)]
-pub struct ConstantContextCreator {
-	pub context: FutureContext,
-}
-impl ContextCreator for ConstantContextCreator {
-	fn create_context(&self, _this: &Option<ObjValue>, _super_obj: &Option<ObjValue>) -> Context {
-		self.context.clone().unwrap()
-	}
-}
+rc_fn_helper!(
+	ContextCreator,
+	context_creator,
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Context
+);
 
 future_wrapper!(Context, FutureContext);
 
@@ -23,10 +14,16 @@ struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: Rc<RefCell<HashMap<String, BoxedBinding>>>,
+	bindings: Rc<RefCell<HashMap<String, Binding>>>,
 }
 pub struct Context(Rc<ContextInternals>);
-dummy_debug!(Context);
+impl Debug for Context {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_struct("Context")
+			.field("this", &self.0.this.clone().map(|e| Rc::as_ptr(&e.0)))
+			.finish()
+	}
+}
 impl Context {
 	pub fn new_future() -> FutureContext {
 		FutureContext(Rc::new(RefCell::new(None)))
@@ -53,12 +50,12 @@ impl Context {
 		}))
 	}
 
-	pub fn binding(&self, name: &str) -> BoxedBinding {
+	pub fn binding(&self, name: &str) -> Binding {
 		self.0
 			.bindings
 			.borrow()
 			.get(name)
-			.map(|e| e.clone())
+			.cloned()
 			.unwrap_or_else(|| {
 				panic!("can't find {} in {:?}", name, self);
 			})
@@ -72,14 +69,15 @@ impl Context {
 
 	pub fn extend(
 		&self,
-		new_bindings: HashMap<String, BoxedBinding>,
+		new_bindings: HashMap<String, Binding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
 	) -> Context {
-		let dollar = new_dollar.or(self.0.dollar.clone());
-		let this = new_this.or(self.0.this.clone());
-		let super_obj = new_super_obj.or(self.0.super_obj.clone());
+		println!("Extend with {:?} {:?}", new_dollar, new_this);
+		let dollar = new_dollar.or_else(|| self.0.dollar.clone());
+		let this = new_this.or_else(|| self.0.this.clone());
+		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
 		let bindings = if new_bindings.is_empty() {
 			self.0.bindings.clone()
 		} else {
@@ -97,6 +95,13 @@ impl Context {
 		}))
 	}
 }
+
+impl Default for Context {
+	fn default() -> Self {
+		Self::new()
+	}
+}
+
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
 		Rc::ptr_eq(&self.0, &other.0)

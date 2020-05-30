@@ -37,7 +37,7 @@ pub enum Member {
 	AssertStmt(AssertStmt),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum UnaryOpType {
 	Plus,
 	Minus,

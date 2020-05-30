@@ -1,7 +1,8 @@
-use crate::{dummy_debug, evaluate_binary_op, BoxedBinding, Val};
+use crate::{evaluate_binary_op, Binding, Val};
 use jsonnet_parser::{BinaryOpType, Visibility};
 use std::{
 	collections::{BTreeMap, BTreeSet},
+	fmt::Debug,
 	rc::Rc,
 };
 
@@ -9,7 +10,7 @@ use std::{
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
-	pub invoke: BoxedBinding,
+	pub invoke: Binding,
 }
 
 #[derive(Debug)]
@@ -17,8 +18,28 @@ pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
 	this_entries: Rc<BTreeMap<String, ObjMember>>,
 }
-pub struct ObjValue(Rc<ObjValueInternals>);
-dummy_debug!(ObjValue);
+pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
+impl Debug for ObjValue {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if let Some(super_obj) = self.0.super_obj.as_ref() {
+			if f.alternate() {
+				write!(f, "{:#?}", super_obj)?;
+			} else {
+				write!(f, "{:?}", super_obj)?;
+			}
+			write!(f, " + ")?;
+		}
+		let mut debug = f.debug_struct("ObjValue");
+		debug.field("$ptr", &Rc::as_ptr(&self.0));
+		for (name, member) in self.0.this_entries.iter() {
+			debug.field(name, member);
+		}
+		debug.finish_non_exhaustive()
+		// .field("fields", &self.fields())
+		// .finish_non_exhaustive()
+	}
+}
+
 impl ObjValue {
 	pub fn new(
 		super_obj: Option<ObjValue>,
@@ -47,26 +68,30 @@ impl ObjValue {
 		}
 		fields
 	}
-	pub fn get_raw(&self, key: &str, real_this: Option<ObjValue>) -> Option<Val> {
+	pub fn get(&self, key: &str) -> Option<Val> {
+		// TODO: Cache get_raw result
+		self.get_raw(key, Some(self))
+	}
+	fn get_raw(&self, key: &str, real_this: Option<&ObjValue>) -> Option<Val> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
-			(Some(k), None) => Some(k.invoke.evaluate(
-				real_this.or_else(|| Some(self.clone())),
-				self.0.super_obj.clone().map(|e| e.clone()),
+			(Some(k), None) => Some(k.invoke.0(
+				real_this.as_ref().map(|e| (*e).clone()),
+				self.0.super_obj.clone(),
 			)),
 			(Some(k), Some(s)) => {
-				let our = k
-					.invoke
-					.evaluate(Some(self.clone()), self.0.super_obj.clone());
+				let our = k.invoke.0(
+					real_this.as_ref().map(|e| (*e).clone()),
+					self.0.super_obj.clone(),
+				);
 				if k.add {
-					s.get_raw(key, Some(self.clone()))
-						.map_or(Some(our.clone()), |v| {
-							Some(evaluate_binary_op(&v, BinaryOpType::Add, &our))
-						})
+					s.get_raw(key, real_this).map_or(Some(our.clone()), |v| {
+						Some(evaluate_binary_op(&v, BinaryOpType::Add, &our))
+					})
 				} else {
 					Some(our)
 				}
 			}
-			(None, Some(s)) => s.get_raw(key, Some(self.clone())),
+			(None, Some(s)) => s.get_raw(key, real_this),
 			(None, None) => None,
 		}
 	}
