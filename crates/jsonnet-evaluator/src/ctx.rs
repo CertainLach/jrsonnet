@@ -74,7 +74,6 @@ impl Context {
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
 	) -> Context {
-		println!("Extend with {:?} {:?}", new_dollar, new_this);
 		let dollar = new_dollar.or_else(|| self.0.dollar.clone());
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());

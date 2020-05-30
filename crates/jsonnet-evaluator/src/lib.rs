@@ -193,7 +193,7 @@ pub mod tests {
 		// referenced from field
 		eval_stdlib!(
 			r#"{
-				local me = std.trace("test", self),
+				local me = self,
 				b: me,
 			}.b"#
 		);

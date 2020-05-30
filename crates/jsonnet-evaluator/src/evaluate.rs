@@ -29,9 +29,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 	} else {
 		(
 			b.name.clone(),
-				binding!(move |this, super_obj| {
-					println!("Evaluating binding");
-					Val::Lazy(lazy_val!(
+			binding!(move |this, super_obj| {
+				Val::Lazy(lazy_val!(
 					closure!(clone context_creator, clone b, || evaluate(
 						context_creator.0(this.clone(), super_obj.clone()),
 						&b.value
@@ -137,12 +136,11 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 			let future_bindings = FutureNewBindings::new();
 			let future_this = FutureObjValue::new();
 			let context_creator = context_creator!(
-				closure!(clone context, clone future_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-					println!("Context created");
+				closure!(clone context, clone future_bindings, clone future_this, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
 					context.clone().extend(
 						future_bindings.clone().unwrap(),
 						context.clone().dollar().clone().or_else(||this.clone()),
-						this,
+						Some(future_this.clone().unwrap()),
 						super_obj
 					)
 				})
@@ -154,15 +152,12 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 					Member::BindStmt(b) => Some(b.clone()),
 					_ => None,
 				})
-				.map(|b| {
-					evaluate_binding(&b, context_creator.clone())
-				})
+				.map(|b| evaluate_binding(&b, context_creator.clone()))
 			{
 				bindings.insert(n, b);
 			}
 			future_bindings.fill(bindings);
 
-			println!("Bindings filled");
 			let mut new_members = BTreeMap::new();
 			for member in members.into_iter() {
 				match member {
@@ -180,8 +175,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 								add: plus,
 								visibility: visibility.clone(),
 								invoke: binding!(
-									closure!(clone value, clone context_creator, clone future_this, |this, super_obj| {
-										// FIXME: I should take "this" instead of "future_this" there?
+									closure!(clone value, clone context_creator, |this, super_obj| {
 										// TODO: Assert
 										evaluate(
 											context_creator.0(this, super_obj),
@@ -205,8 +199,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 								add: false,
 								visibility: Visibility::Hidden,
 								invoke: binding!(
-									closure!(clone value, clone context_creator, clone future_this, |this, super_obj| {
-										// FIXME: I should take "this" instead of "future_this" there?
+									closure!(clone value, clone context_creator, |this, super_obj| {
 										// TODO: Assert
 										evaluate_method(
 											context_creator.0(this, super_obj),
@@ -231,15 +224,12 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 pub fn evaluate(context: Context, expr: &Expr) -> Val {
 	use Expr::*;
 	match &*expr {
-		Literal(LiteralType::This) => {
-			println!("{:?}", context.this());
-			Val::Obj(
-				context
-					.this()
-					.clone()
-					.unwrap_or_else(|| panic!("this not found")),
-			)
-		}
+		Literal(LiteralType::This) => Val::Obj(
+			context
+				.this()
+				.clone()
+				.unwrap_or_else(|| panic!("this not found")),
+		),
 		Literal(LiteralType::Super) => Val::Obj(
 			context
 				.super_obj()
