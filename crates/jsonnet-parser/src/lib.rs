@@ -23,8 +23,8 @@ parser! {
 
 		/// For comma-delimited elements
 		rule comma() = quiet!{_ "," _} / expected!("<comma>")
-		rule alpha() -> char = c:$(['_' | 'a'..='z' | 'A'..='Z']) {c.chars().nth(0).unwrap()}
-		rule digit() -> char = d:$(['0'..='9']) {d.chars().nth(0).unwrap()}
+		rule alpha() -> char = c:$(['_' | 'a'..='z' | 'A'..='Z']) {c.chars().next().unwrap()}
+		rule digit() -> char = d:$(['0'..='9']) {d.chars().next().unwrap()}
 		rule end_of_ident() = !['0'..='9' | '_' | 'a'..='z' | 'A'..='Z']
 		/// Sequence of digits
 		rule uint() -> u32 = a:$(digit()+) { a.parse().unwrap() }
@@ -106,7 +106,7 @@ parser! {
 					value,
 					post_locals,
 					first,
-					rest: rest.unwrap_or(Vec::new()),
+					rest: rest.unwrap_or_default(),
 				}
 			}
 			/ members:(member() ** comma()) comma()? {expr::ObjBody::MemberList(members)}
@@ -119,7 +119,7 @@ parser! {
 		pub rule parened_expr() -> Expr = "(" e:boxed_expr() ")" {Expr::Parened(e)}
 		pub rule obj_expr() -> Expr = "{" _ body:objinside() _ "}" {Expr::Obj(body)}
 		pub rule array_expr() -> Expr = "[" _ elems:(expr() ** comma()) _ comma()? "]" {Expr::Arr(elems)}
-		pub rule array_comp_expr() -> Expr = "[" _ expr:boxed_expr() _ comma()? _ forspec:forspec() _ others:(others: compspec() _ {others})? "]" {Expr::ArrComp(expr, forspec, others.unwrap_or(vec![]))}
+		pub rule array_comp_expr() -> Expr = "[" _ expr:boxed_expr() _ comma()? _ forspec:forspec() _ others:(others: compspec() _ {others})? "]" {Expr::ArrComp(expr, forspec, others.unwrap_or_default())}
 		pub rule index_expr() -> Expr
 			= val:boxed_expr() "." idx:id() {Expr::Index(val, Box::new(Expr::Str(idx)))}
 			/ val:boxed_expr() "[" key:boxed_expr() "]" {Expr::Index(val, key)}
@@ -390,11 +390,14 @@ pub mod tests {
 	#[test]
 	fn infix_precedence() {
 		use Expr::*;
-		assert_eq!(parse("!a && !b").unwrap(), BinaryOp(
-			box UnaryOp(UnaryOpType::Not, box Var("a".to_owned())),
-			BinaryOpType::And,
-			box UnaryOp(UnaryOpType::Not, box Var("b".to_owned()))
-		));
+		assert_eq!(
+			parse("!a && !b").unwrap(),
+			BinaryOp(
+				box UnaryOp(UnaryOpType::Not, box Var("a".to_owned())),
+				BinaryOpType::And,
+				box UnaryOp(UnaryOpType::Not, box Var("b".to_owned()))
+			)
+		);
 	}
 
 	#[test]

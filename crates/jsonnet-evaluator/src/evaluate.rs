@@ -152,7 +152,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 					context.clone().extend(
 						new_bindings.clone().unwrap(),
 						context.clone().dollar().clone().or_else(||this.clone()),
-						Some(this.clone().unwrap()),
+						Some(this.unwrap()),
 						super_obj
 					)
 				})
@@ -347,7 +347,7 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 					}
 					("std", "codepoint") => {
 						assert_eq!(args.len(), 1);
-						if let Val::Str(s) = evaluate(context.clone(), &args[0].1) {
+						if let Val::Str(s) = evaluate(context, &args[0].1) {
 							assert!(
 								s.chars().count() == 1,
 								"std.codepoint should receive single char string"

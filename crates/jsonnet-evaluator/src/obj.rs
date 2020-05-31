@@ -79,10 +79,7 @@ impl ObjValue {
 				self.0.super_obj.clone(),
 			)),
 			(Some(k), Some(s)) => {
-				let our = k.invoke.0(
-					Some(real_this.clone()),
-					self.0.super_obj.clone(),
-				);
+				let our = k.invoke.0(Some(real_this.clone()), self.0.super_obj.clone());
 				if k.add {
 					s.get_raw(key, real_this).map_or(Some(our.clone()), |v| {
 						Some(evaluate_binary_op(&v, BinaryOpType::Add, &our))
