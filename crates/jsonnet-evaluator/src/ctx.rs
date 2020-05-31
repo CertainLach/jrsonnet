@@ -1,4 +1,4 @@
-use crate::{future_wrapper, rc_fn_helper, Binding, ObjValue};
+use crate::{future_wrapper, rc_fn_helper, LazyBinding, ObjValue, LazyVal, Val};
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
@@ -14,7 +14,7 @@ struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: Rc<RefCell<HashMap<String, Binding>>>,
+	bindings: Rc<HashMap<String, LazyVal>>,
 }
 pub struct Context(Rc<ContextInternals>);
 impl Debug for Context {
@@ -46,14 +46,13 @@ impl Context {
 			dollar: None,
 			this: None,
 			super_obj: None,
-			bindings: Rc::new(RefCell::new(HashMap::new())),
+			bindings: Rc::new(HashMap::new()),
 		}))
 	}
 
-	pub fn binding(&self, name: &str) -> Binding {
+	pub fn binding(&self, name: &str) -> LazyVal {
 		self.0
 			.bindings
-			.borrow()
 			.get(name)
 			.cloned()
 			.unwrap_or_else(|| {
@@ -69,7 +68,7 @@ impl Context {
 
 	pub fn extend(
 		&self,
-		new_bindings: HashMap<String, Binding>,
+		new_bindings: HashMap<String, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -80,11 +79,14 @@ impl Context {
 		let bindings = if new_bindings.is_empty() {
 			self.0.bindings.clone()
 		} else {
-			let new = self.0.bindings.clone();
-			for (k, v) in new_bindings.into_iter() {
-				new.borrow_mut().insert(k, v);
+			let mut new = HashMap::new(); // = self.0.bindings.clone();
+			for (k, v) in self.0.bindings.iter() {
+				new.insert(k.clone(), v.clone());
 			}
-			new
+			for (k, v) in new_bindings.into_iter() {
+				new.insert(k, v.0(this.clone(), super_obj.clone()));
+			}
+			Rc::new(new)
 		};
 		Context(Rc::new(ContextInternals {
 			dollar,

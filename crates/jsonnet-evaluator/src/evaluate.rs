@@ -1,6 +1,7 @@
 use crate::{
-	binding, bool_val, context_creator, function_default, function_rhs, future_wrapper, lazy_val,
-	Binding, Context, ContextCreator, FuncDesc, ObjMember, ObjValue, Val,
+	binding, bool_val, context_creator, function_default, function_rhs, future_wrapper,
+	lazy_binding, lazy_val, Binding, Context, ContextCreator, FuncDesc, LazyBinding, ObjMember,
+	ObjValue, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -12,30 +13,28 @@ use std::{
 	rc::Rc,
 };
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (String, Binding) {
+pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (String, LazyBinding) {
 	let b = b.clone();
 	if let Some(args) = &b.params {
 		let args = args.clone();
 		(
 			b.name.clone(),
-			binding!(move |this, super_obj| Val::Lazy(lazy_val!(
+			lazy_binding!(move |this, super_obj| lazy_val!(
 				closure!(clone b, clone args, clone context_creator, || evaluate_method(
 					context_creator.0(this.clone(), super_obj.clone()),
 					&b.value,
 					args.clone()
 				))
-			))),
+			)),
 		)
 	} else {
 		(
 			b.name.clone(),
-			binding!(move |this, super_obj| {
-				Val::Lazy(lazy_val!(
-					closure!(clone context_creator, clone b, || evaluate(
-						context_creator.0(this.clone(), super_obj.clone()),
-						&b.value
-					))
-				))
+			lazy_binding!(move |this, super_obj| {
+				lazy_val!(closure!(clone context_creator, clone b, || evaluate(
+					context_creator.0(this.clone(), super_obj.clone()),
+					&b.value
+				)))
 			}),
 		)
 	}
@@ -87,6 +86,19 @@ pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
 		(Val::Str(v1), BinaryOpType::Add, Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
 
+		(Val::Literal(LiteralType::False), BinaryOpType::And, Val::Literal(LiteralType::False)) => {
+			bool_val(false)
+		}
+		(Val::Literal(LiteralType::False), BinaryOpType::And, Val::Literal(LiteralType::True)) => {
+			bool_val(false)
+		}
+		(Val::Literal(LiteralType::True), BinaryOpType::And, Val::Literal(LiteralType::False)) => {
+			bool_val(false)
+		}
+		(Val::Literal(LiteralType::True), BinaryOpType::And, Val::Literal(LiteralType::True)) => {
+			bool_val(true)
+		}
+
 		(Val::Obj(v1), BinaryOpType::Add, Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 
 		(Val::Arr(a), BinaryOpType::Add, Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
@@ -126,37 +138,39 @@ pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
 	}
 }
 
-future_wrapper!(HashMap<String, Binding>, FutureNewBindings);
+future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 // TODO: Asserts
 pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 	match object {
 		ObjBody::MemberList(members) => {
-			let future_bindings = FutureNewBindings::new();
+			let new_bindings = FutureNewBindings::new();
 			let future_this = FutureObjValue::new();
 			let context_creator = context_creator!(
-				closure!(clone context, clone future_bindings, clone future_this, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
+				closure!(clone context, clone new_bindings, clone future_this, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
 					context.clone().extend(
-						future_bindings.clone().unwrap(),
+						new_bindings.clone().unwrap(),
 						context.clone().dollar().clone().or_else(||this.clone()),
-						Some(future_this.clone().unwrap()),
+						Some(this.clone().unwrap()),
 						super_obj
 					)
 				})
 			);
-			let mut bindings: HashMap<String, Binding> = HashMap::new();
-			for (n, b) in members
-				.iter()
-				.filter_map(|m| match m {
-					Member::BindStmt(b) => Some(b.clone()),
-					_ => None,
-				})
-				.map(|b| evaluate_binding(&b, context_creator.clone()))
 			{
-				bindings.insert(n, b);
+				let mut bindings: HashMap<String, LazyBinding> = HashMap::new();
+				for (n, b) in members
+					.iter()
+					.filter_map(|m| match m {
+						Member::BindStmt(b) => Some(b.clone()),
+						_ => None,
+					})
+					.map(|b| evaluate_binding(&b, context_creator.clone()))
+				{
+					bindings.insert(n, b);
+				}
+				new_bindings.fill(bindings);
 			}
-			future_bindings.fill(bindings);
 
 			let mut new_members = BTreeMap::new();
 			for member in members.into_iter() {
@@ -176,11 +190,12 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 								visibility: visibility.clone(),
 								invoke: binding!(
 									closure!(clone value, clone context_creator, |this, super_obj| {
+										let context = context_creator.0(this, super_obj);
 										// TODO: Assert
 										evaluate(
-											context_creator.0(this, super_obj),
+											context,
 											&value,
-										)
+										).unwrap_if_lazy()
 									})
 								),
 							},
@@ -244,27 +259,39 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 			evaluate_binary_op(&evaluate(context.clone(), v1), *o, &evaluate(context, v2))
 		}
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)),
-		Var(name) => {
-			let variable = context.binding(&name);
-			variable.0(None, None).unwrap_if_lazy()
-		}
+		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy(),
 		Index(box value, box index) => {
 			match (
 				evaluate(context.clone(), value).unwrap_if_lazy(),
-				evaluate(context, index),
+				evaluate(context.clone(), index),
 			) {
 				(Val::Obj(v), Val::Str(s)) => v
 					.get(&s)
-					.unwrap_or_else(|| panic!("{} not found in {:?}", s, v)),
+					.unwrap_or_else(closure!(clone context, || {
+						if let Some(n) = v.get("__intristic_namespace__") {
+							if let Val::Str(n) = n.unwrap_if_lazy() {
+								Val::Intristic(n, s)
+							} else {
+								panic!("__intristic_namespace__ should be string");
+							}
+						} else {
+							panic!("{} not found in {:?}", s, v)
+						}
+					}))
+					.unwrap_if_lazy(),
 				(Val::Arr(v), Val::Num(n)) => v
 					.get(n as usize)
 					.unwrap_or_else(|| panic!("out of bounds"))
 					.clone(),
+				(Val::Str(s), Val::Num(n)) => {
+					// FIXME: Only works for ASCII
+					Val::Str(String::from_utf8(vec![s.as_bytes()[n as usize]]).unwrap())
+				}
 				(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<String, Binding> = HashMap::new();
+			let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
 			let context_creator = context_creator!(
@@ -287,6 +314,49 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 		Apply(box value, ArgsDesc(args)) => {
 			let value = evaluate(context.clone(), value).unwrap_if_lazy();
 			match value {
+				// TODO: Capture context of application
+				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
+					("std", "length") => {
+						assert_eq!(args.len(), 1);
+						let expr = &args.get(0).unwrap().1;
+						match evaluate(context, expr) {
+							Val::Str(n) => Val::Num(n.len() as f64),
+							Val::Arr(i) => Val::Num(i.len() as f64),
+							v => panic!("can't get length of {:?}", v),
+						}
+					}
+					("std", "type") => {
+						assert_eq!(args.len(), 1);
+						let expr = &args.get(0).unwrap().1;
+						Val::Str(evaluate(context, expr).type_of().to_owned())
+					}
+					("std", "makeArray") => {
+						assert_eq!(args.len(), 2);
+						if let (Val::Num(v), Val::Func(d)) = (
+							evaluate(context.clone(), &args[0].1),
+							evaluate(context, &args[1].1),
+						) {
+							assert!(v > 0.0);
+							let mut out = Vec::with_capacity(v as usize);
+							for i in 0..v as usize {
+								out.push(d.evaluate(vec![(None, Val::Num(i as f64))]))
+							}
+							Val::Arr(out)
+						} else {
+							panic!("bad makeArray call");
+						}
+					}
+					("std", "codepoint") => {
+						assert_eq!(args.len(), 1);
+						if let Val::Str(s) = evaluate(context.clone(), &args[0].1) {
+							// FIXME: this is not a codepoint
+							Val::Num(s.as_bytes()[0] as f64)
+						} else {
+							panic!("bad codepoint call");
+						}
+					}
+					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
+				},
 				Val::Func(f) => f.evaluate(
 					args.clone()
 						.into_iter()

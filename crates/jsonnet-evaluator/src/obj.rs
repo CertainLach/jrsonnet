@@ -70,17 +70,17 @@ impl ObjValue {
 	}
 	pub fn get(&self, key: &str) -> Option<Val> {
 		// TODO: Cache get_raw result
-		self.get_raw(key, Some(self))
+		self.get_raw(key, self)
 	}
-	fn get_raw(&self, key: &str, real_this: Option<&ObjValue>) -> Option<Val> {
+	fn get_raw(&self, key: &str, real_this: &ObjValue) -> Option<Val> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
 			(Some(k), None) => Some(k.invoke.0(
-				real_this.as_ref().map(|e| (*e).clone()),
+				Some(real_this.clone()),
 				self.0.super_obj.clone(),
 			)),
 			(Some(k), Some(s)) => {
 				let our = k.invoke.0(
-					real_this.as_ref().map(|e| (*e).clone()),
+					Some(real_this.clone()),
 					self.0.super_obj.clone(),
 				);
 				if k.add {

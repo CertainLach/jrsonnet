@@ -20,6 +20,11 @@ rc_fn_helper!(
 	binding,
 	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Val
 );
+rc_fn_helper!(
+	LazyBinding,
+	lazy_binding,
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> LazyVal
+);
 rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Val);
 rc_fn_helper!(
 	FunctionDefault,
@@ -39,10 +44,10 @@ pub mod tests {
 	}
 
 	macro_rules! eval_stdlib {
-		($str: expr) => {
+		($str: expr) => {{
 			let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
 			evaluate(Context::new(), &parse(&(std + $str)).unwrap())
-		};
+			}};
 	}
 
 	macro_rules! assert_eval {
@@ -57,6 +62,14 @@ pub mod tests {
 		($str: expr, $out: expr) => {
 			assert_eq!(
 				format!("{}", evaluate(Context::new(), &parse($str).unwrap())),
+				$out
+				)
+		};
+	}
+	macro_rules! assert_json_stdlib {
+		($str: expr, $out: expr) => {
+			assert_eq!(
+				format!("{}", eval_stdlib!($str)),
 				$out
 				)
 		};
@@ -110,7 +123,7 @@ pub mod tests {
 
 	#[test]
 	fn object_inheritance() {
-		assert_json!("{a:self.b} + {b:3}", r#"{"a":3,"b":3}"#);
+		assert_json!("{a: self.b} + {b:3}", r#"{"a":3,"b":3}"#);
 	}
 
 	#[test]
@@ -194,7 +207,8 @@ pub mod tests {
 		eval_stdlib!(
 			r#"{
 				local me = self,
-				b: me,
+				a: 3,
+				b: me.a,
 			}.b"#
 		);
 	}
@@ -212,7 +226,15 @@ pub mod tests {
 	}
 
 	#[test]
+	fn string_is_string() {
+		assert_eq!(
+			eval_stdlib!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
+			Val::Literal(LiteralType::False)
+		);
+	}
+
+	#[test]
 	fn base64_works() {
-		eval_stdlib!(r#"std.base64("test")"#);
+		assert_json_stdlib!(r#"std.base64("test")"#, r#""dGVzdA==""#);
 	}
 }

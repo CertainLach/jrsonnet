@@ -1,4 +1,6 @@
-use crate::{binding, rc_fn_helper, Binding, Context, FunctionDefault, FunctionRhs, ObjValue};
+use crate::{
+	lazy_binding, rc_fn_helper, Context, FunctionDefault, FunctionRhs, LazyBinding, ObjValue,
+};
 use closure::closure;
 use jsonnet_parser::{LiteralType, ParamsDesc};
 use std::{
@@ -18,7 +20,7 @@ pub struct FuncDesc {
 impl FuncDesc {
 	// TODO: Check for unset variables
 	pub fn evaluate(&self, args: Vec<(Option<String>, Val)>) -> Val {
-		let mut new_bindings: HashMap<String, Binding> = HashMap::new();
+		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
 		let future_ctx = Context::new_future();
 
 		// self.params
@@ -37,8 +39,8 @@ impl FuncDesc {
 		for (name, val) in args.clone().into_iter().filter(|e| e.0.is_some()) {
 			new_bindings.insert(
 				name.as_ref().unwrap().clone(),
-				binding!(
-					closure!(clone val, |_, _| Val::Lazy(lazy_val!(closure!(clone val, || val.clone()))))
+				lazy_binding!(
+					closure!(clone val, |_, _| lazy_val!(closure!(clone val, || val.clone())))
 				),
 			);
 		}
@@ -46,8 +48,8 @@ impl FuncDesc {
 			if let Some((None, val)) = args.get(i) {
 				new_bindings.insert(
 					param.0.clone(),
-					binding!(
-						closure!(clone val, |_, _| Val::Lazy(lazy_val!(closure!(clone val, || val.clone()))))
+					lazy_binding!(
+						closure!(clone val, |_, _| lazy_val!(closure!(clone val, || val.clone())))
 					),
 				);
 			}
