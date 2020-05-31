@@ -153,8 +153,6 @@ parser! {
 			/ var_expr()
 			/ local_expr()
 			/ if_then_else_expr()
-			/ "-" _ expr:boxed_expr() { Expr::UnaryOp(UnaryOpType::Minus, expr) }
-			/ "!" _ expr:boxed_expr() { Expr::UnaryOp(UnaryOpType::Not, expr) }
 
 			/ keyword("function") _ "(" _ params:params() _ ")" _ expr:boxed_expr() {Expr::Function(params, expr)}
 			/ assertion:assertion() _ ";" _ expr:boxed_expr() { Expr::AssertExpr(assertion, expr) }
@@ -223,6 +221,8 @@ parser! {
 				a:(@) _ "%" _ b:@ {Expr::BinaryOp(Box::new(a), BinaryOpType::Mod, Box::new(b))}
 				--
 				e:expr_basic_with_suffix() {e}
+				"-" _ expr:expr_basic_with_suffix() { Expr::UnaryOp(UnaryOpType::Minus, box expr) }
+				"!" _ expr:expr_basic_with_suffix() { Expr::UnaryOp(UnaryOpType::Not, box expr) }
 				"(" _ e:boxed_expr() _ ")" {Expr::Parened(e)}
 			}
 			/ e:expr_basic_with_suffix() {e}
@@ -385,6 +385,16 @@ pub mod tests {
 	#[test]
 	fn multiple_args_buf() {
 		parse("a(b, null_fields)").unwrap();
+	}
+
+	#[test]
+	fn infix_precedence() {
+		use Expr::*;
+		assert_eq!(parse("!a && !b").unwrap(), BinaryOp(
+			box UnaryOp(UnaryOpType::Not, box Var("a".to_owned())),
+			BinaryOpType::And,
+			box UnaryOp(UnaryOpType::Not, box Var("b".to_owned()))
+		));
 	}
 
 	#[test]
