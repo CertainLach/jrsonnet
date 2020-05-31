@@ -1,7 +1,7 @@
 use crate::{
 	binding, bool_val, context_creator, function_default, function_rhs, future_wrapper,
-	lazy_binding, lazy_val, Binding, Context, ContextCreator, FuncDesc, LazyBinding, ObjMember,
-	ObjValue, Val,
+	lazy_binding, lazy_val, Context, ContextCreator, FuncDesc, LazyBinding, ObjMember, ObjValue,
+	Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -284,8 +284,7 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 					.unwrap_or_else(|| panic!("out of bounds"))
 					.clone(),
 				(Val::Str(s), Val::Num(n)) => {
-					// FIXME: Only works for ASCII
-					Val::Str(String::from_utf8(vec![s.as_bytes()[n as usize]]).unwrap())
+					Val::Str(s.chars().skip(n as usize - 1).take(1).collect())
 				}
 				(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
 			}
@@ -320,7 +319,7 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 						assert_eq!(args.len(), 1);
 						let expr = &args.get(0).unwrap().1;
 						match evaluate(context, expr) {
-							Val::Str(n) => Val::Num(n.len() as f64),
+							Val::Str(n) => Val::Num(n.chars().count() as f64),
 							Val::Arr(i) => Val::Num(i.len() as f64),
 							v => panic!("can't get length of {:?}", v),
 						}
@@ -349,8 +348,11 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 					("std", "codepoint") => {
 						assert_eq!(args.len(), 1);
 						if let Val::Str(s) = evaluate(context.clone(), &args[0].1) {
-							// FIXME: this is not a codepoint
-							Val::Num(s.as_bytes()[0] as f64)
+							assert!(
+								s.chars().count() == 1,
+								"std.codepoint should receive single char string"
+							);
+							Val::Num(s.chars().take(1).next().unwrap() as u32 as f64)
 						} else {
 							panic!("bad codepoint call");
 						}

@@ -68,10 +68,7 @@ pub mod tests {
 	}
 	macro_rules! assert_json_stdlib {
 		($str: expr, $out: expr) => {
-			assert_eq!(
-				format!("{}", eval_stdlib!($str)),
-				$out
-				)
+			assert_eq!(format!("{}", eval_stdlib!($str)), $out)
 		};
 	}
 	macro_rules! assert_eval_neg {
@@ -236,5 +233,13 @@ pub mod tests {
 	#[test]
 	fn base64_works() {
 		assert_json_stdlib!(r#"std.base64("test")"#, r#""dGVzdA==""#);
+	}
+
+	#[test]
+	fn utf8_chars() {
+		assert_json_stdlib!(
+			r#"local c="😎";{c:std.codepoint(c),l:std.length(c)}"#,
+			r#"{"c":128526,"l":1}"#
+		)
 	}
 }

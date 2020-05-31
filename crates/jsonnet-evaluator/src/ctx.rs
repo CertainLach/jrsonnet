@@ -1,4 +1,4 @@
-use crate::{future_wrapper, rc_fn_helper, LazyBinding, ObjValue, LazyVal, Val};
+use crate::{future_wrapper, rc_fn_helper, LazyBinding, LazyVal, ObjValue};
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
@@ -51,13 +51,9 @@ impl Context {
 	}
 
 	pub fn binding(&self, name: &str) -> LazyVal {
-		self.0
-			.bindings
-			.get(name)
-			.cloned()
-			.unwrap_or_else(|| {
-				panic!("can't find {} in {:?}", name, self);
-			})
+		self.0.bindings.get(name).cloned().unwrap_or_else(|| {
+			panic!("can't find {} in {:?}", name, self);
+		})
 	}
 	pub fn into_future(self, ctx: FutureContext) -> Context {
 		{
