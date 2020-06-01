@@ -1,11 +1,14 @@
-use std::fmt::Display;
+use std::{
+	fmt::{Debug, Display},
+	rc::Rc,
+};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(String),
 	/// {["dyn"+"amic"]: 3}
-	Dyn(Box<Expr>),
+	Dyn(LocExpr),
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -19,7 +22,7 @@ pub enum Visibility {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct AssertStmt(pub Box<Expr>, pub Option<Box<Expr>>);
+pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct FieldMember {
@@ -27,7 +30,7 @@ pub struct FieldMember {
 	pub plus: bool,
 	pub params: Option<ParamsDesc>,
 	pub visibility: Visibility,
-	pub value: Expr,
+	pub value: LocExpr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
@@ -77,7 +80,7 @@ pub enum BinaryOpType {
 
 /// name, default value
 #[derive(Debug, Clone, PartialEq)]
-pub struct Param(pub String, pub Option<Box<Expr>>);
+pub struct Param(pub String, pub Option<LocExpr>);
 /// Defined function parameters
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamsDesc(pub Vec<Param>);
@@ -88,7 +91,7 @@ impl ParamsDesc {
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct Arg(pub Option<String>, pub Box<Expr>);
+pub struct Arg(pub Option<String>, pub LocExpr);
 #[derive(Debug, Clone, PartialEq)]
 pub struct ArgsDesc(pub Vec<Arg>);
 
@@ -96,13 +99,13 @@ pub struct ArgsDesc(pub Vec<Arg>);
 pub struct BindSpec {
 	pub name: String,
 	pub params: Option<ParamsDesc>,
-	pub value: Box<Expr>,
+	pub value: LocExpr,
 }
 
 #[derive(Debug, Clone, PartialEq)]
-pub struct IfSpecData(pub Box<Expr>);
+pub struct IfSpecData(pub LocExpr);
 #[derive(Debug, Clone, PartialEq)]
-pub struct ForSpecData(pub String, pub Box<Expr>);
+pub struct ForSpecData(pub String, pub LocExpr);
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum CompSpec {
@@ -115,8 +118,8 @@ pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp {
 		pre_locals: Vec<BindSpec>,
-		key: Box<Expr>,
-		value: Box<Expr>,
+		key: LocExpr,
+		value: LocExpr,
 		post_locals: Vec<BindSpec>,
 		first: ForSpecData,
 		rest: Vec<CompSpec>,
@@ -147,9 +150,9 @@ impl Display for LiteralType {
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SliceDesc {
-	pub start: Option<Box<Expr>>,
-	pub end: Option<Box<Expr>>,
-	pub step: Option<Box<Expr>>,
+	pub start: Option<LocExpr>,
+	pub end: Option<LocExpr>,
+	pub step: Option<LocExpr>,
 }
 
 /// Syntax base
@@ -165,7 +168,7 @@ pub enum Expr {
 	Var(String),
 
 	/// Array of expressions: [1, 2, "Hello"]
-	Arr(Vec<Expr>),
+	Arr(Vec<LocExpr>),
 	/// Array comprehension:
 	/// ```jsonnet
 	///  ingredients: [
@@ -177,15 +180,15 @@ pub enum Expr {
 	///    ]
 	///  ],
 	/// ```
-	ArrComp(Box<Expr>, ForSpecData, Vec<CompSpec>),
+	ArrComp(LocExpr, ForSpecData, Vec<CompSpec>),
 
 	/// Object: {a: 2}
 	Obj(ObjBody),
 	/// Object extension: var1 {b: 2}
-	ObjExtend(Box<Expr>, ObjBody),
+	ObjExtend(LocExpr, ObjBody),
 
 	/// (obj)
-	Parened(Box<Expr>),
+	Parened(LocExpr),
 
 	/// Params in function definition
 	/// hello, world, test = 2
@@ -195,13 +198,13 @@ pub enum Expr {
 	Args(ArgsDesc),
 
 	/// -2
-	UnaryOp(UnaryOpType, Box<Expr>),
+	UnaryOp(UnaryOpType, LocExpr),
 	/// 2 - 2
-	BinaryOp(Box<Expr>, BinaryOpType, Box<Expr>),
+	BinaryOp(LocExpr, BinaryOpType, LocExpr),
 	/// assert 2 == 2 : "Math is broken"
-	AssertExpr(AssertStmt, Box<Expr>),
+	AssertExpr(AssertStmt, LocExpr),
 	/// local a = 2; { b: a }
-	LocalExpr(Vec<BindSpec>, Box<Expr>),
+	LocalExpr(Vec<BindSpec>, LocExpr),
 
 	/// a = 3
 	Bind(BindSpec),
@@ -210,25 +213,66 @@ pub enum Expr {
 	/// importStr "file.txt"
 	ImportStr(String),
 	/// error "I'm broken"
-	Error(Box<Expr>),
+	Error(LocExpr),
 	/// a(b, c)
-	Apply(Box<Expr>, ArgsDesc),
+	Apply(LocExpr, ArgsDesc),
 	///
-	Select(Box<Expr>, String),
+	Select(LocExpr, String),
 	/// a[b]
-	Index(Box<Expr>, Box<Expr>),
+	Index(LocExpr, LocExpr),
 	/// a[1::2]
-	Slice(Box<Expr>, SliceDesc),
+	Slice(LocExpr, SliceDesc),
 	/// function(x) x
-	Function(ParamsDesc, Box<Expr>),
+	Function(ParamsDesc, LocExpr),
 	/// if true == false then 1 else 2
 	IfElse {
 		cond: IfSpecData,
-		cond_then: Box<Expr>,
-		cond_else: Option<Box<Expr>>,
+		cond_then: LocExpr,
+		cond_else: Option<LocExpr>,
 	},
 	/// if 2 = 3
 	IfSpec(IfSpecData),
 	/// for elem in array
 	ForSpec(ForSpecData),
+}
+
+/// file, begin offset, end offset
+#[derive(Clone, PartialEq)]
+pub struct ExprLocation(pub String, pub usize, pub usize);
+impl Debug for ExprLocation {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}:{:?}", self.0, self.1)
+	}
+}
+
+/// Holds AST expression and its location in source file+
+#[derive(Clone, PartialEq)]
+pub struct LocExpr(pub Rc<Expr>, pub Option<Rc<ExprLocation>>);
+impl Debug for LocExpr {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{:?} from {:?}", self.0, self.1)
+	}
+}
+
+/// Creates LocExpr from Expr and ExprLocation components
+#[macro_export]
+macro_rules! loc_expr {
+	($expr:expr, $need_loc:expr, ($name:expr, $start:expr, $end:expr)) => {
+		LocExpr(
+			Rc::new($expr),
+			if $need_loc {
+				Some(Rc::new(ExprLocation($name.to_owned(), $start, $end)))
+			} else {
+				None
+			},
+		)
+	};
+}
+
+/// Creates LocExpr without location info
+#[macro_export]
+macro_rules! loc_expr_todo {
+	($expr:expr) => {
+		LocExpr(Rc::new($expr), None)
+	};
 }
