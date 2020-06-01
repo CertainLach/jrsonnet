@@ -1,14 +1,54 @@
-use crate::{
-	lazy_binding, rc_fn_helper, Context, FunctionDefault, FunctionRhs, LazyBinding, ObjValue,
-};
+use crate::{lazy_binding, Context, FunctionDefault, FunctionRhs, LazyBinding, ObjValue};
 use closure::closure;
-use jsonnet_parser::{LiteralType, ParamsDesc};
+use jsonnet_parser::ParamsDesc;
 use std::{
+	cell::RefCell,
 	collections::HashMap,
 	fmt::{Debug, Display},
+	rc::Rc,
 };
 
-rc_fn_helper!(LazyVal, lazy_val, dyn Fn() -> Val);
+struct LazyValInternals {
+	pub f: Box<dyn Fn() -> Val>,
+	pub cached: RefCell<Option<Val>>,
+}
+#[derive(Clone)]
+pub struct LazyVal(Rc<LazyValInternals>);
+impl LazyVal {
+	pub fn new(f: Box<dyn Fn() -> Val>) -> Self {
+		LazyVal(Rc::new(LazyValInternals {
+			f,
+			cached: RefCell::new(None),
+		}))
+	}
+	pub fn evaluate(&self) -> Val {
+		{
+			let cached = self.0.cached.borrow();
+			if cached.is_some() {
+				return cached.clone().unwrap();
+			}
+		}
+		let result = (self.0.f)();
+		self.0.cached.borrow_mut().replace(result.clone());
+		result
+	}
+}
+#[macro_export]
+macro_rules! lazy_val {
+	($f: expr) => {
+		$crate::LazyVal::new(Box::new($f))
+	};
+}
+impl Debug for LazyVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "Lazy")
+	}
+}
+impl PartialEq for LazyVal {
+	fn eq(&self, other: &Self) -> bool {
+		Rc::ptr_eq(&self.0, &other.0)
+	}
+}
 
 #[derive(Debug, PartialEq, Clone)]
 pub struct FuncDesc {
@@ -64,7 +104,8 @@ impl FuncDesc {
 
 #[derive(Debug, PartialEq, Clone)]
 pub enum Val {
-	Literal(LiteralType),
+	Bool(bool),
+	Null,
 	Str(String),
 	Num(f64),
 	Lazy(LazyVal),
@@ -78,7 +119,7 @@ pub enum Val {
 impl Val {
 	pub fn unwrap_if_lazy(self) -> Self {
 		if let Val::Lazy(v) = self {
-			v.0().unwrap_if_lazy()
+			v.evaluate().unwrap_if_lazy()
 		} else {
 			self
 		}
@@ -97,7 +138,6 @@ impl Val {
 impl Display for Val {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Val::Literal(v) => write!(f, "{}", v)?,
 			Val::Str(str) => write!(f, "\"{}\"", str)?,
 			Val::Num(n) => write!(f, "{}", n)?,
 			Val::Arr(values) => {
@@ -128,7 +168,7 @@ impl Display for Val {
 				write!(f, "}}")?;
 			}
 			Val::Lazy(lazy) => {
-				write!(f, "{}", lazy.0())?;
+				write!(f, "{}", lazy.evaluate())?;
 			}
 			Val::Func(_) => {
 				write!(f, "<<FUNC>>")?;
@@ -140,9 +180,5 @@ impl Display for Val {
 }
 
 pub fn bool_val(v: bool) -> Val {
-	if v {
-		Val::Literal(LiteralType::True)
-	} else {
-		Val::Literal(LiteralType::False)
-	}
+	Val::Bool(v)
 }
