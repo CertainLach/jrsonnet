@@ -1,7 +1,7 @@
 use crate::{
 	binding, bool_val, context_creator, function_default, function_rhs, future_wrapper,
-	lazy_binding, lazy_val, Context, ContextCreator, FuncDesc, LazyBinding, ObjMember, ObjValue,
-	Val,
+	lazy_binding, lazy_val, Context, ContextCreator, EvaluationState, FuncDesc, LazyBinding,
+	ObjMember, ObjValue, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -13,15 +13,20 @@ use std::{
 	rc::Rc,
 };
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (String, LazyBinding) {
+pub fn evaluate_binding(
+	eval_state: EvaluationState,
+	b: &BindSpec,
+	context_creator: ContextCreator,
+) -> (String, LazyBinding) {
 	let b = b.clone();
 	if let Some(args) = &b.params {
 		let args = args.clone();
 		(
 			b.name.clone(),
 			lazy_binding!(move |this, super_obj| lazy_val!(
-				closure!(clone b, clone args, clone context_creator, || evaluate_method(
+				closure!(clone b, clone args, clone context_creator, clone eval_state, || evaluate_method(
 					context_creator.0(this.clone(), super_obj.clone()),
+					eval_state.clone(),
 					&b.value,
 					args.clone()
 				))
@@ -31,29 +36,45 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 		(
 			b.name.clone(),
 			lazy_binding!(move |this, super_obj| {
-				lazy_val!(closure!(clone context_creator, clone b, || evaluate(
-					context_creator.0(this.clone(), super_obj.clone()),
-					&b.value
-				)))
+				lazy_val!(
+					closure!(clone context_creator, clone b, clone eval_state, || evaluate(
+						context_creator.0(this.clone(), super_obj.clone()),
+						eval_state.clone(),
+						&b.value
+					))
+				)
 			}),
 		)
 	}
 }
 
-pub fn evaluate_method(ctx: Context, expr: &LocExpr, arg_spec: ParamsDesc) -> Val {
+pub fn evaluate_method(
+	ctx: Context,
+	eval_state: EvaluationState,
+	expr: &LocExpr,
+	arg_spec: ParamsDesc,
+) -> Val {
 	Val::Func(FuncDesc {
 		ctx,
 		params: arg_spec,
-		eval_rhs: function_rhs!(closure!(clone expr, |ctx| evaluate(ctx, &expr))),
-		eval_default: function_default!(|ctx, default| evaluate(ctx, &default)),
+		eval_rhs: function_rhs!(
+			closure!(clone expr, clone eval_state, |ctx| evaluate(ctx, eval_state.clone(), &expr))
+		),
+		eval_default: function_default!(
+			closure!(clone eval_state, |ctx, default| evaluate(ctx, eval_state.clone(), &default))
+		),
 	})
 }
 
-pub fn evaluate_field_name(context: Context, field_name: &jsonnet_parser::FieldName) -> String {
+pub fn evaluate_field_name(
+	context: Context,
+	eval_state: EvaluationState,
+	field_name: &jsonnet_parser::FieldName,
+) -> String {
 	match field_name {
 		jsonnet_parser::FieldName::Fixed(n) => n.clone(),
 		jsonnet_parser::FieldName::Dyn(expr) => {
-			let name = evaluate(context, expr).unwrap_if_lazy();
+			let name = evaluate(context, eval_state, expr).unwrap_if_lazy();
 			match name {
 				Val::Str(n) => n,
 				_ => panic!(
@@ -132,7 +153,7 @@ future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 // TODO: Asserts
-pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
+pub fn evaluate_object(context: Context, eval_state: EvaluationState, object: ObjBody) -> ObjValue {
 	match object {
 		ObjBody::MemberList(members) => {
 			let new_bindings = FutureNewBindings::new();
@@ -155,7 +176,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 						Member::BindStmt(b) => Some(b.clone()),
 						_ => None,
 					})
-					.map(|b| evaluate_binding(&b, context_creator.clone()))
+					.map(|b| evaluate_binding(eval_state.clone(), &b, context_creator.clone()))
 				{
 					bindings.insert(n, b);
 				}
@@ -172,18 +193,19 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 						visibility,
 						value,
 					}) => {
-						let name = evaluate_field_name(context.clone(), &name);
+						let name = evaluate_field_name(context.clone(), eval_state.clone(), &name);
 						new_members.insert(
 							name,
 							ObjMember {
 								add: plus,
 								visibility: visibility.clone(),
 								invoke: binding!(
-									closure!(clone value, clone context_creator, |this, super_obj| {
+									closure!(clone value, clone context_creator, clone eval_state, |this, super_obj| {
 										let context = context_creator.0(this, super_obj);
 										// TODO: Assert
 										evaluate(
 											context,
+											eval_state.clone(),
 											&value,
 										).unwrap_if_lazy()
 									})
@@ -197,17 +219,18 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 						value,
 						..
 					}) => {
-						let name = evaluate_field_name(context.clone(), &name);
+						let name = evaluate_field_name(context.clone(), eval_state.clone(), &name);
 						new_members.insert(
 							name,
 							ObjMember {
 								add: false,
 								visibility: Visibility::Hidden,
 								invoke: binding!(
-									closure!(clone value, clone context_creator, |this, super_obj| {
+									closure!(clone value, clone context_creator, clone eval_state, |this, super_obj| {
 										// TODO: Assert
 										evaluate_method(
 											context_creator.0(this, super_obj),
+											eval_state.clone(),
 											&value.clone(),
 											params.clone(),
 										)
@@ -226,165 +249,171 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 	}
 }
 
-pub fn evaluate(context: Context, expr: &LocExpr) -> Val {
+pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -> Val {
+	println!("===");
+	eval_state.print_stack_trace();
 	use Expr::*;
-	let LocExpr(expr, loc) = expr;
-	match &**expr {
-		Literal(LiteralType::This) => Val::Obj(
-			context
-				.this()
-				.clone()
-				.unwrap_or_else(|| panic!("this not found")),
-		),
-		Literal(LiteralType::Super) => Val::Obj(
-			context
-				.super_obj()
-				.clone()
-				.unwrap_or_else(|| panic!("super not found")),
-		),
-		Literal(LiteralType::True) => Val::Bool(true),
-		Literal(LiteralType::False) => Val::Bool(false),
-		Literal(LiteralType::Null) => Val::Null,
-		Parened(e) => evaluate(context, e),
-		Str(v) => Val::Str(v.clone()),
-		Num(v) => Val::Num(*v),
-		BinaryOp(v1, o, v2) => {
-			evaluate_binary_op(&evaluate(context.clone(), v1), *o, &evaluate(context, v2))
-		}
-		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)),
-		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy(),
-		Index(value, index) => {
-			match (
-				evaluate(context.clone(), value).unwrap_if_lazy(),
-				evaluate(context.clone(), index),
-			) {
-				(Val::Obj(v), Val::Str(s)) => v
-					.get(&s)
-					.unwrap_or_else(closure!(clone context, || {
-						if let Some(n) = v.get("__intristic_namespace__") {
-							if let Val::Str(n) = n.unwrap_if_lazy() {
-								Val::Intristic(n, s)
+	eval_state.clone().push(expr.clone(), "expr".to_owned(), || {
+		let LocExpr(expr, loc) = expr;
+		match &**expr {
+			Literal(LiteralType::This) => Val::Obj(
+				context
+					.this()
+					.clone()
+					.unwrap_or_else(|| panic!("this not found")),
+			),
+			Literal(LiteralType::Super) => Val::Obj(
+				context
+					.super_obj()
+					.clone()
+					.unwrap_or_else(|| panic!("super not found")),
+			),
+			Literal(LiteralType::True) => Val::Bool(true),
+			Literal(LiteralType::False) => Val::Bool(false),
+			Literal(LiteralType::Null) => Val::Null,
+			Parened(e) => evaluate(context, eval_state.clone(), e),
+			Str(v) => Val::Str(v.clone()),
+			Num(v) => Val::Num(*v),
+			BinaryOp(v1, o, v2) => evaluate_binary_op(
+				&evaluate(context.clone(), eval_state.clone(), v1),
+				*o,
+				&evaluate(context, eval_state.clone(), v2),
+			),
+			UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, eval_state, v)),
+			Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy(),
+			Index(value, index) => {
+				match (
+					evaluate(context.clone(), eval_state.clone(), value).unwrap_if_lazy(),
+					evaluate(context.clone(), eval_state.clone(), index),
+				) {
+					(Val::Obj(v), Val::Str(s)) => v
+						.get(&s)
+						.unwrap_or_else(closure!(clone context, || {
+							if let Some(n) = v.get("__intristic_namespace__") {
+								if let Val::Str(n) = n.unwrap_if_lazy() {
+									Val::Intristic(n, s)
+								} else {
+									panic!("__intristic_namespace__ should be string");
+								}
 							} else {
-								panic!("__intristic_namespace__ should be string");
+								panic!("{} not found in {:?}", s, v)
 							}
-						} else {
-							panic!("{} not found in {:?}", s, v)
-						}
-					}))
-					.unwrap_if_lazy(),
-				(Val::Arr(v), Val::Num(n)) => v
-					.get(n as usize)
-					.unwrap_or_else(|| panic!("out of bounds"))
-					.clone(),
-				(Val::Str(s), Val::Num(n)) => {
-					Val::Str(s.chars().skip(n as usize).take(1).collect())
+						}))
+						.unwrap_if_lazy(),
+					(Val::Arr(v), Val::Num(n)) => v
+						.get(n as usize)
+						.unwrap_or_else(|| panic!("out of bounds"))
+						.clone(),
+					(Val::Str(s), Val::Num(n)) => {
+						Val::Str(s.chars().skip(n as usize).take(1).collect())
+					}
+					(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
 				}
-				(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
 			}
-		}
-		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
-			let future_context = Context::new_future();
+			LocalExpr(bindings, returned) => {
+				let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
+				let future_context = Context::new_future();
 
-			let context_creator = context_creator!(
-				closure!(clone future_context, |_, _| future_context.clone().unwrap())
-			);
+				let context_creator = context_creator!(
+					closure!(clone future_context, |_, _| future_context.clone().unwrap())
+				);
 
-			for (k, v) in bindings
-				.iter()
-				.map(move |b| evaluate_binding(b, context_creator.clone()))
-			{
-				new_bindings.insert(k, v);
+				for (k, v) in bindings
+					.iter()
+					.map(|b| evaluate_binding(eval_state.clone(), b, context_creator.clone()))
+				{
+					new_bindings.insert(k, v);
+				}
+
+				let context = context
+					.extend(new_bindings, None, None, None)
+					.into_future(future_context);
+				evaluate(context, eval_state.clone(), &returned.clone())
 			}
-
-			let context = context
-				.extend(new_bindings, None, None, None)
-				.into_future(future_context);
-			evaluate(context, &returned.clone())
-		}
-		Obj(body) => Val::Obj(evaluate_object(context, body.clone())),
-		Apply(value, ArgsDesc(args)) => {
-			let value = evaluate(context.clone(), value).unwrap_if_lazy();
-			match value {
-				// TODO: Capture context of application
-				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
-					("std", "length") => {
-						assert_eq!(args.len(), 1);
-						let expr = &args.get(0).unwrap().1;
-						match evaluate(context, expr) {
-							Val::Str(n) => Val::Num(n.chars().count() as f64),
-							Val::Arr(i) => Val::Num(i.len() as f64),
-							v => panic!("can't get length of {:?}", v),
-						}
-					}
-					("std", "type") => {
-						assert_eq!(args.len(), 1);
-						let expr = &args.get(0).unwrap().1;
-						Val::Str(evaluate(context, expr).type_of().to_owned())
-					}
-					("std", "makeArray") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Num(v), Val::Func(d)) = (
-							evaluate(context.clone(), &args[0].1),
-							evaluate(context, &args[1].1),
-						) {
-							assert!(v > 0.0);
-							let mut out = Vec::with_capacity(v as usize);
-							for i in 0..v as usize {
-								out.push(d.evaluate(vec![(None, Val::Num(i as f64))]))
+			Obj(body) => Val::Obj(evaluate_object(context, eval_state, body.clone())),
+			Apply(value, ArgsDesc(args)) => {
+				let value = evaluate(context.clone(), eval_state.clone(), value).unwrap_if_lazy();
+				match value {
+					// TODO: Capture context of application
+					Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
+						("std", "length") => {
+							assert_eq!(args.len(), 1);
+							let expr = &args.get(0).unwrap().1;
+							match evaluate(context, eval_state.clone(), expr) {
+								Val::Str(n) => Val::Num(n.chars().count() as f64),
+								Val::Arr(i) => Val::Num(i.len() as f64),
+								v => panic!("can't get length of {:?}", v),
 							}
-							Val::Arr(out)
-						} else {
-							panic!("bad makeArray call");
 						}
-					}
-					("std", "codepoint") => {
-						assert_eq!(args.len(), 1);
-						if let Val::Str(s) = evaluate(context, &args[0].1) {
-							assert!(
-								s.chars().count() == 1,
-								"std.codepoint should receive single char string"
-							);
-							Val::Num(s.chars().take(1).next().unwrap() as u32 as f64)
-						} else {
-							panic!("bad codepoint call");
+						("std", "type") => {
+							assert_eq!(args.len(), 1);
+							let expr = &args.get(0).unwrap().1;
+							Val::Str(evaluate(context, eval_state, expr).type_of().to_owned())
 						}
-					}
-					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
-				},
-				Val::Func(f) => f.evaluate(
-					args.clone()
-						.into_iter()
-						.map(|a| {
-							(
-								a.clone().0,
-								Val::Lazy(lazy_val!(
-									closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
-								)),
-							)
-						})
-						.collect(),
-				),
-				_ => panic!("{:?} is not a function", value),
+						("std", "makeArray") => {
+							assert_eq!(args.len(), 2);
+							if let (Val::Num(v), Val::Func(d)) = (
+								evaluate(context.clone(), eval_state.clone(), &args[0].1),
+								evaluate(context, eval_state, &args[1].1),
+							) {
+								assert!(v > 0.0);
+								let mut out = Vec::with_capacity(v as usize);
+								for i in 0..v as usize {
+									out.push(d.evaluate(vec![(None, Val::Num(i as f64))]))
+								}
+								Val::Arr(out)
+							} else {
+								panic!("bad makeArray call");
+							}
+						}
+						("std", "codepoint") => {
+							assert_eq!(args.len(), 1);
+							if let Val::Str(s) = evaluate(context, eval_state, &args[0].1) {
+								assert!(
+									s.chars().count() == 1,
+									"std.codepoint should receive single char string"
+								);
+								Val::Num(s.chars().take(1).next().unwrap() as u32 as f64)
+							} else {
+								panic!("bad codepoint call");
+							}
+						}
+						(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
+					},
+					Val::Func(f) => f.evaluate(
+						args.clone()
+							.into_iter()
+							.map(move |a| {
+								(
+									a.clone().0,
+									Val::Lazy(lazy_val!(
+										closure!(clone context, clone a, clone eval_state, || evaluate(context.clone(), eval_state.clone(), &a.clone().1))
+									)),
+								)
+							})
+							.collect(),
+					),
+					_ => panic!("{:?} is not a function", value),
+				}
 			}
-		}
-		Function(params, body) => evaluate_method(context, body, params.clone()),
-		Error(e) => panic!("error: {}", evaluate(context, e)),
-		IfElse {
-			cond,
-			cond_then,
-			cond_else,
-		} => match evaluate(context.clone(), &cond.0).unwrap_if_lazy() {
-			Val::Bool(true) => evaluate(context, cond_then),
-			Val::Bool(false) => match cond_else {
-				Some(v) => evaluate(context, v),
-				None => Val::Bool(false),
+			Function(params, body) => evaluate_method(context, eval_state, body, params.clone()),
+			Error(e) => panic!("error: {}", evaluate(context, eval_state, e)),
+			IfElse {
+				cond,
+				cond_then,
+				cond_else,
+			} => match evaluate(context.clone(), eval_state.clone(), &cond.0).unwrap_if_lazy() {
+				Val::Bool(true) => evaluate(context, eval_state.clone(), cond_then),
+				Val::Bool(false) => match cond_else {
+					Some(v) => evaluate(context, eval_state, v),
+					None => Val::Bool(false),
+				},
+				v => panic!("if condition evaluated to {:?} (boolean needed instead)", v),
 			},
-			v => panic!("if condition evaluated to {:?} (boolean needed instead)", v),
-		},
-		_ => panic!(
-			"evaluation not implemented: {:?}",
-			LocExpr(expr.clone(), loc.clone())
-		),
-	}
+			_ => panic!(
+				"evaluation not implemented: {:?}",
+				LocExpr(expr.clone(), loc.clone())
+			),
+		}
+	})
 }

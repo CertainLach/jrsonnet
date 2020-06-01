@@ -246,7 +246,11 @@ macro_rules! loc_expr {
 		LocExpr(
 			std::rc::Rc::new($expr),
 			if $need_loc {
-				Some(std::rc::Rc::new(ExprLocation($name.to_owned(), $start, $end)))
+				Some(std::rc::Rc::new(ExprLocation(
+					$name.to_owned(),
+					$start,
+					$end,
+				)))
 			} else {
 				None
 				},

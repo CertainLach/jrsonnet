@@ -4,12 +4,14 @@
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 mod ctx;
 mod dynamic;
+mod error;
 mod evaluate;
 mod obj;
 mod val;
 
 pub use ctx::*;
 pub use dynamic::*;
+pub use error::*;
 pub use evaluate::*;
 use jsonnet_parser::*;
 pub use obj::*;
@@ -33,22 +35,19 @@ rc_fn_helper!(
 	dyn Fn(Context, LocExpr) -> Val
 );
 
-pub struct ExitGuard<'s>(&'s EvaluationState);
-impl<'s> Drop for ExitGuard<'s> {
-	fn drop(&mut self) {
-		self.0.stack.borrow_mut().pop();
-	}
-}
-
+#[derive(Default, Clone)]
 pub struct EvaluationState {
-	pub stack: Rc<RefCell<Vec<LocExpr>>>,
-	pub files: Rc<RefCell<HashMap<String, String>>>,
+	/// Used for stack-overflows and stacktraces
+	pub stack: Rc<RefCell<Vec<(LocExpr, String)>>>,
+	/// Contains file source codes and evaluated results for imports and pretty printing stacktraces
+	pub files: Rc<RefCell<HashMap<String, (String, Option<Val>)>>>,
 }
 impl EvaluationState {
-	#[must_use = "should keep exit guard before exit from function"]
-	pub fn push(&self, e: LocExpr) -> ExitGuard {
-		self.stack.borrow_mut().push(e);
-		ExitGuard(self)
+	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
+		self.stack.borrow_mut().push((e, comment));
+		let result = f();
+		self.stack.borrow_mut().pop();
+		result
 	}
 	pub fn print_stack_trace(&self) {
 		for e in self
@@ -56,19 +55,19 @@ impl EvaluationState {
 			.borrow()
 			.iter()
 			.rev()
-			.map(|e| e.1.clone())
+			.map(|(loc, comment)| loc.1.clone().map(|v| (v, comment.clone())))
 			.flatten()
 		{
-			println!("{:?}", e)
+			println!("{:?} - {:?}", e.0, e.1)
 		}
 	}
-}
-impl Default for EvaluationState {
-	fn default() -> Self {
-		EvaluationState {
-			stack: Rc::new(RefCell::new(Vec::new())),
-			files: Rc::new(RefCell::new(HashMap::new())),
-		}
+	pub fn stack_trace(&self) -> Vec<(LocExpr, String)> {
+		self.stack
+			.borrow()
+			.iter()
+			.rev()
+			.map(|e| e.clone())
+			.collect()
 	}
 }
 
@@ -81,19 +80,24 @@ pub mod tests {
 	#[test]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
-		let _v = state.push(loc_expr!(
-			Expr::Num(0.0),
-			true,
-			("test.jsonnet".to_owned(), 10, 20)
-		));
-
-		state.print_stack_trace()
+		state.push(
+			loc_expr!(Expr::Num(0.0), true, ("test1.jsonnet".to_owned(), 10, 20)),
+			"outer".to_owned(),
+			|| {
+				state.push(
+					loc_expr!(Expr::Num(0.0), true, ("test2.jsonnet".to_owned(), 30, 40)),
+					"inner".to_owned(),
+					|| state.print_stack_trace(),
+				);
+			},
+		);
 	}
 
 	macro_rules! eval {
 		($str: expr) => {
 			evaluate(
 				Context::new(),
+				EvaluationState::default(),
 				&parse(
 					$str,
 					&ParserSettings {
@@ -111,6 +115,7 @@ pub mod tests {
 			let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
 			evaluate(
 				Context::new(),
+				EvaluationState::default(),
 				&parse(
 					&(std + $str),
 					&ParserSettings {
@@ -128,6 +133,7 @@ pub mod tests {
 			assert_eq!(
 				evaluate(
 					Context::new(),
+					EvaluationState::default(),
 					&parse(
 						$str,
 						&ParserSettings {
@@ -148,6 +154,7 @@ pub mod tests {
 					"{}",
 					evaluate(
 						Context::new(),
+						EvaluationState::default(),
 						&parse(
 							$str,
 							&ParserSettings {
@@ -172,6 +179,7 @@ pub mod tests {
 			assert_eq!(
 				evaluate(
 					Context::new(),
+					EvaluationState::default(),
 					&parse(
 						$str,
 						&ParserSettings {
@@ -380,7 +388,6 @@ pub mod tests {
 			local x19 = {k: x18.k + x18.k};
 			local x20 = {k: x19.k + x19.k};
 			local x21 = {k: x20.k + x20.k};
-			x21.k
 		"#
 		);
 	}
