@@ -29,7 +29,7 @@ rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Val);
 rc_fn_helper!(
 	FunctionDefault,
 	function_default,
-	dyn Fn(Context, Expr) -> Val
+	dyn Fn(Context, LocExpr) -> Val
 );
 
 #[cfg(test)]
@@ -39,21 +39,30 @@ pub mod tests {
 
 	macro_rules! eval {
 		($str: expr) => {
-			evaluate(Context::new(), &parse($str).unwrap())
+			evaluate(Context::new(), &parse($str, &ParserSettings {
+				loc_data: false,
+				file_name: "test.jsonnet".to_owned(),
+			}).unwrap())
 		};
 	}
 
 	macro_rules! eval_stdlib {
 		($str: expr) => {{
 			let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
-			evaluate(Context::new(), &parse(&(std + $str)).unwrap())
+			evaluate(Context::new(), &parse(&(std + $str), &ParserSettings {
+				loc_data: false,
+				file_name: "test.jsonnet".to_owned(),
+			}).unwrap())
 			}};
 	}
 
 	macro_rules! assert_eval {
 		($str: expr) => {
 			assert_eq!(
-				evaluate(Context::new(), &parse($str).unwrap()),
+				evaluate(Context::new(), &parse($str, &ParserSettings {
+					loc_data: false,
+					file_name: "test.jsonnet".to_owned(),
+				}).unwrap()),
 				Val::Literal(LiteralType::True)
 				)
 		};
@@ -61,7 +70,10 @@ pub mod tests {
 	macro_rules! assert_json {
 		($str: expr, $out: expr) => {
 			assert_eq!(
-				format!("{}", evaluate(Context::new(), &parse($str).unwrap())),
+				format!("{}", evaluate(Context::new(), &parse($str, &ParserSettings {
+					loc_data: false,
+					file_name: "test.jsonnet".to_owned(),
+				}).unwrap())),
 				$out
 				)
 		};
@@ -74,7 +86,10 @@ pub mod tests {
 	macro_rules! assert_eval_neg {
 		($str: expr) => {
 			assert_eq!(
-				evaluate(Context::new(), &parse($str).unwrap()),
+				evaluate(Context::new(), &parse($str, &ParserSettings {
+					loc_data: false,
+					file_name: "test.jsonnet".to_owned(),
+				}).unwrap()),
 				Val::Literal(LiteralType::False)
 				)
 		};
