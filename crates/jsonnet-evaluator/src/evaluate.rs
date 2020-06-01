@@ -250,8 +250,6 @@ pub fn evaluate_object(context: Context, eval_state: EvaluationState, object: Ob
 }
 
 pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -> Val {
-	println!("===");
-	eval_state.print_stack_trace();
 	use Expr::*;
 	eval_state.clone().push(expr.clone(), "expr".to_owned(), || {
 		let LocExpr(expr, loc) = expr;
@@ -329,6 +327,13 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 					.extend(new_bindings, None, None, None)
 					.into_future(future_context);
 				evaluate(context, eval_state.clone(), &returned.clone())
+			}
+			Arr(items) => {
+				let mut out = Vec::with_capacity(items.len());
+				for item in items {
+					out.push(evaluate(context.clone(), eval_state.clone(), item));
+				}
+				Val::Arr(out)
 			}
 			Obj(body) => Val::Obj(evaluate_object(context, eval_state, body.clone())),
 			Apply(value, ArgsDesc(args)) => {
