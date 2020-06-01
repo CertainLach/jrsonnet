@@ -1,7 +1,8 @@
 use crate::{evaluate_binary_op, Binding, Val};
 use jsonnet_parser::{BinaryOpType, Visibility};
 use std::{
-	collections::{BTreeMap, BTreeSet},
+	cell::RefCell,
+	collections::{BTreeMap, BTreeSet, HashMap},
 	fmt::Debug,
 	rc::Rc,
 };
@@ -17,6 +18,7 @@ pub struct ObjMember {
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
 	this_entries: Rc<BTreeMap<String, ObjMember>>,
+	value_cache: RefCell<HashMap<String, Val>>,
 }
 pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
 impl Debug for ObjValue {
@@ -48,6 +50,7 @@ impl ObjValue {
 		ObjValue(Rc::new(ObjValueInternals {
 			super_obj,
 			this_entries,
+			value_cache: RefCell::new(HashMap::new()),
 		}))
 	}
 	pub fn with_super(&self, super_obj: ObjValue) -> ObjValue {
@@ -69,8 +72,14 @@ impl ObjValue {
 		fields
 	}
 	pub fn get(&self, key: &str) -> Option<Val> {
-		// TODO: Cache get_raw result
-		self.get_raw(key, self)
+		if let Some(v) = self.0.value_cache.borrow().get(key) {
+			return Some(v.clone());
+		}
+		let v = self.get_raw(key, self).map(|v| v.unwrap_if_lazy());
+		if let Some(v) = v.clone() {
+			self.0.value_cache.borrow_mut().insert(key.to_owned(), v);
+		}
+		v
 	}
 	fn get_raw(&self, key: &str, real_this: &ObjValue) -> Option<Val> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
