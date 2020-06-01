@@ -13,6 +13,7 @@ pub use dynamic::*;
 pub use evaluate::*;
 use jsonnet_parser::*;
 pub use obj::*;
+use std::{cell::RefCell, collections::HashMap, rc::Rc};
 pub use val::*;
 
 rc_fn_helper!(
@@ -32,48 +33,131 @@ rc_fn_helper!(
 	dyn Fn(Context, LocExpr) -> Val
 );
 
+pub struct ExitGuard<'s>(&'s EvaluationState);
+impl<'s> Drop for ExitGuard<'s> {
+	fn drop(&mut self) {
+		self.0.stack.borrow_mut().pop();
+	}
+}
+
+pub struct EvaluationState {
+	pub stack: Rc<RefCell<Vec<LocExpr>>>,
+	pub files: Rc<RefCell<HashMap<String, String>>>,
+}
+impl EvaluationState {
+	#[must_use = "should keep exit guard before exit from function"]
+	pub fn push(&self, e: LocExpr) -> ExitGuard {
+		self.stack.borrow_mut().push(e);
+		ExitGuard(self)
+	}
+	pub fn print_stack_trace(&self) {
+		for e in self
+			.stack
+			.borrow()
+			.iter()
+			.rev()
+			.map(|e| e.1.clone())
+			.flatten()
+		{
+			println!("{:?}", e)
+		}
+	}
+}
+impl Default for EvaluationState {
+	fn default() -> Self {
+		EvaluationState {
+			stack: Rc::new(RefCell::new(Vec::new())),
+			files: Rc::new(RefCell::new(HashMap::new())),
+		}
+	}
+}
+
 #[cfg(test)]
 pub mod tests {
 	use super::{evaluate, Context, Val};
+	use crate::EvaluationState;
 	use jsonnet_parser::*;
+
+	#[test]
+	fn eval_state_stacktrace() {
+		let state = EvaluationState::default();
+		let _v = state.push(loc_expr!(
+			Expr::Num(0.0),
+			true,
+			("test.jsonnet".to_owned(), 10, 20)
+		));
+
+		state.print_stack_trace()
+	}
 
 	macro_rules! eval {
 		($str: expr) => {
-			evaluate(Context::new(), &parse($str, &ParserSettings {
-				loc_data: false,
-				file_name: "test.jsonnet".to_owned(),
-			}).unwrap())
+			evaluate(
+				Context::new(),
+				&parse(
+					$str,
+					&ParserSettings {
+						loc_data: true,
+						file_name: "test.jsonnet".to_owned(),
+					},
+					)
+				.unwrap(),
+				)
 		};
 	}
 
 	macro_rules! eval_stdlib {
 		($str: expr) => {{
 			let std = "local std = ".to_owned() + jsonnet_stdlib::STDLIB_STR + ";";
-			evaluate(Context::new(), &parse(&(std + $str), &ParserSettings {
-				loc_data: false,
-				file_name: "test.jsonnet".to_owned(),
-			}).unwrap())
+			evaluate(
+				Context::new(),
+				&parse(
+					&(std + $str),
+					&ParserSettings {
+						loc_data: true,
+						file_name: "test.jsonnet".to_owned(),
+					},
+					)
+				.unwrap(),
+				)
 			}};
 	}
 
 	macro_rules! assert_eval {
 		($str: expr) => {
 			assert_eq!(
-				evaluate(Context::new(), &parse($str, &ParserSettings {
-					loc_data: false,
-					file_name: "test.jsonnet".to_owned(),
-				}).unwrap()),
-				Val::Literal(LiteralType::True)
+				evaluate(
+					Context::new(),
+					&parse(
+						$str,
+						&ParserSettings {
+							loc_data: true,
+							file_name: "test.jsonnet".to_owned(),
+						}
+						)
+					.unwrap()
+					),
+				Val::Bool(true)
 				)
 		};
 	}
 	macro_rules! assert_json {
 		($str: expr, $out: expr) => {
 			assert_eq!(
-				format!("{}", evaluate(Context::new(), &parse($str, &ParserSettings {
-					loc_data: false,
-					file_name: "test.jsonnet".to_owned(),
-				}).unwrap())),
+				format!(
+					"{}",
+					evaluate(
+						Context::new(),
+						&parse(
+							$str,
+							&ParserSettings {
+								loc_data: true,
+								file_name: "test.jsonnet".to_owned(),
+							}
+						)
+						.unwrap()
+						)
+					),
 				$out
 				)
 		};
@@ -86,11 +170,18 @@ pub mod tests {
 	macro_rules! assert_eval_neg {
 		($str: expr) => {
 			assert_eq!(
-				evaluate(Context::new(), &parse($str, &ParserSettings {
-					loc_data: false,
-					file_name: "test.jsonnet".to_owned(),
-				}).unwrap()),
-				Val::Literal(LiteralType::False)
+				evaluate(
+					Context::new(),
+					&parse(
+						$str,
+						&ParserSettings {
+							loc_data: true,
+							file_name: "test.jsonnet".to_owned(),
+						}
+						)
+					.unwrap()
+					),
+				Val::Bool(false)
 				)
 		};
 	}
@@ -241,7 +332,7 @@ pub mod tests {
 	fn string_is_string() {
 		assert_eq!(
 			eval_stdlib!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
-			Val::Literal(LiteralType::False)
+			Val::Bool(false)
 		);
 	}
 
@@ -256,5 +347,41 @@ pub mod tests {
 			r#"local c="😎";{c:std.codepoint(c),l:std.length(c)}"#,
 			r#"{"c":128526,"l":1}"#
 		)
+	}
+
+	#[test]
+	fn json() {
+		println!("{:?}", eval_stdlib!(r#"std.manifestJson({a:3, b:4, c:6})"#));
+	}
+
+	#[test]
+	fn sjsonnet() {
+		eval!(
+			r#"
+			local x0 = {k: 1};
+			local x1 = {k: x0.k + x0.k};
+			local x2 = {k: x1.k + x1.k};
+			local x3 = {k: x2.k + x2.k};
+			local x4 = {k: x3.k + x3.k};
+			local x5 = {k: x4.k + x4.k};
+			local x6 = {k: x5.k + x5.k};
+			local x7 = {k: x6.k + x6.k};
+			local x8 = {k: x7.k + x7.k};
+			local x9 = {k: x8.k + x8.k};
+			local x10 = {k: x9.k + x9.k};
+			local x11 = {k: x10.k + x10.k};
+			local x12 = {k: x11.k + x11.k};
+			local x13 = {k: x12.k + x12.k};
+			local x14 = {k: x13.k + x13.k};
+			local x15 = {k: x14.k + x14.k};
+			local x16 = {k: x15.k + x15.k};
+			local x17 = {k: x16.k + x16.k};
+			local x18 = {k: x17.k + x17.k};
+			local x19 = {k: x18.k + x18.k};
+			local x20 = {k: x19.k + x19.k};
+			local x21 = {k: x20.k + x20.k};
+			x21.k
+		"#
+		);
 	}
 }

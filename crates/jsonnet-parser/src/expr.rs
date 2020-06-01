@@ -1,7 +1,4 @@
-use std::{
-	fmt::{Debug, Display},
-	rc::Rc,
-};
+use std::{fmt::Debug, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq)]
 pub enum FieldName {
@@ -135,18 +132,6 @@ pub enum LiteralType {
 	True,
 	False,
 }
-impl Display for LiteralType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		use LiteralType::*;
-		match self {
-			This => write!(f, "this"),
-			Null => write!(f, "null"),
-			True => write!(f, "true"),
-			False => write!(f, "false"),
-			_ => panic!("non printable item"),
-		}
-	}
-}
 
 #[derive(Debug, Clone, PartialEq)]
 pub struct SliceDesc {
@@ -241,7 +226,7 @@ pub enum Expr {
 pub struct ExprLocation(pub String, pub usize, pub usize);
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{:?}", self.0, self.1)
+		write!(f, "{}:{:?}-{:?}", self.0, self.1, self.2)
 	}
 }
 
@@ -259,13 +244,13 @@ impl Debug for LocExpr {
 macro_rules! loc_expr {
 	($expr:expr, $need_loc:expr, ($name:expr, $start:expr, $end:expr)) => {
 		LocExpr(
-			Rc::new($expr),
+			std::rc::Rc::new($expr),
 			if $need_loc {
-				Some(Rc::new(ExprLocation($name.to_owned(), $start, $end)))
+				Some(std::rc::Rc::new(ExprLocation($name.to_owned(), $start, $end)))
 			} else {
 				None
-			},
-		)
+				},
+			)
 	};
 }
 
