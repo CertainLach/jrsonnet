@@ -67,37 +67,25 @@ pub fn evaluate_field_name(context: Context, field_name: &jsonnet_parser::FieldN
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Val {
 	match (op, b) {
-		(o, Val::Lazy(l)) => evaluate_unary_op(o, &l.0()),
-		(UnaryOpType::Not, Val::Literal(LiteralType::True)) => Val::Literal(LiteralType::False),
-		(UnaryOpType::Not, Val::Literal(LiteralType::False)) => Val::Literal(LiteralType::True),
+		(o, Val::Lazy(l)) => evaluate_unary_op(o, &l.evaluate()),
+		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
 		(op, o) => panic!("unary op not implemented: {:?} {:?}", op, o),
 	}
 }
 
 pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
 	match (a, op, b) {
-		(Val::Lazy(a), o, b) => evaluate_binary_op(&a.0(), o, b),
-		(a, o, Val::Lazy(b)) => evaluate_binary_op(a, o, &b.0()),
+		(Val::Lazy(a), o, b) => evaluate_binary_op(&a.evaluate(), o, b),
+		(a, o, Val::Lazy(b)) => evaluate_binary_op(a, o, &b.evaluate()),
 
 		(Val::Str(v1), BinaryOpType::Add, Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
-		(Val::Str(v1), BinaryOpType::Eq, Val::Str(v2)) => bool_val(v1 == v2),
 		(Val::Str(v1), BinaryOpType::Ne, Val::Str(v2)) => bool_val(v1 != v2),
 
 		(Val::Str(v1), BinaryOpType::Add, Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
 
-		(Val::Literal(LiteralType::False), BinaryOpType::And, Val::Literal(LiteralType::False)) => {
-			bool_val(false)
-		}
-		(Val::Literal(LiteralType::False), BinaryOpType::And, Val::Literal(LiteralType::True)) => {
-			bool_val(false)
-		}
-		(Val::Literal(LiteralType::True), BinaryOpType::And, Val::Literal(LiteralType::False)) => {
-			bool_val(false)
-		}
-		(Val::Literal(LiteralType::True), BinaryOpType::And, Val::Literal(LiteralType::True)) => {
-			bool_val(true)
-		}
+		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
+		(Val::Bool(a), BinaryOpType::Or, Val::Bool(b)) => Val::Bool(*a || *b),
 
 		(Val::Obj(v1), BinaryOpType::Add, Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 
@@ -134,6 +122,8 @@ pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
 		(Val::Num(v1), BinaryOpType::BitXor, Val::Num(v2)) => {
 			Val::Num(((*v1 as i32) ^ (*v2 as i32)) as f64)
 		}
+		(a, BinaryOpType::Eq, b) => bool_val(a == b),
+		(a, BinaryOpType::Ne, b) => bool_val(a != b),
 		_ => panic!("no rules for binary operation: {:?} {:?} {:?}", a, op, b),
 	}
 }
@@ -238,7 +228,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 
 pub fn evaluate(context: Context, expr: &LocExpr) -> Val {
 	use Expr::*;
-	let LocExpr(expr, _location) = expr;
+	let LocExpr(expr, loc) = expr;
 	match &**expr {
 		Literal(LiteralType::This) => Val::Obj(
 			context
@@ -252,7 +242,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Val {
 				.clone()
 				.unwrap_or_else(|| panic!("super not found")),
 		),
-		Literal(t) => Val::Literal(t.clone()),
+		Literal(LiteralType::True) => Val::Bool(true),
+		Literal(LiteralType::False) => Val::Bool(false),
+		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(context, e),
 		Str(v) => Val::Str(v.clone()),
 		Num(v) => Val::Num(*v),
@@ -383,13 +375,16 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Val {
 			cond_then,
 			cond_else,
 		} => match evaluate(context.clone(), &cond.0).unwrap_if_lazy() {
-			Val::Literal(LiteralType::True) => evaluate(context, cond_then),
-			Val::Literal(LiteralType::False) => match cond_else {
+			Val::Bool(true) => evaluate(context, cond_then),
+			Val::Bool(false) => match cond_else {
 				Some(v) => evaluate(context, v),
-				None => Val::Literal(LiteralType::False),
+				None => Val::Bool(false),
 			},
 			v => panic!("if condition evaluated to {:?} (boolean needed instead)", v),
 		},
-		_ => panic!("evaluation not implemented: {:?}", expr),
+		_ => panic!(
+			"evaluation not implemented: {:?}",
+			LocExpr(expr.clone(), loc.clone())
+		),
 	}
 }
