@@ -388,6 +388,7 @@ pub mod tests {
 			local x19 = {k: x18.k + x18.k};
 			local x20 = {k: x19.k + x19.k};
 			local x21 = {k: x20.k + x20.k};
+			x21.k
 		"#
 		);
 	}
