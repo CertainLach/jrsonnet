@@ -5,8 +5,8 @@ use crate::{
 };
 use closure::closure;
 use jsonnet_parser::{
-	ArgsDesc, BinaryOpType, BindSpec, Expr, FieldMember, LiteralType, Member, ObjBody, ParamsDesc,
-	UnaryOpType, Visibility,
+	ArgsDesc, BinaryOpType, BindSpec, Expr, FieldMember, LiteralType, LocExpr, Member, ObjBody,
+	ParamsDesc, UnaryOpType, Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -40,7 +40,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 	}
 }
 
-pub fn evaluate_method(ctx: Context, expr: &Expr, arg_spec: ParamsDesc) -> Val {
+pub fn evaluate_method(ctx: Context, expr: &LocExpr, arg_spec: ParamsDesc) -> Val {
 	Val::Func(FuncDesc {
 		ctx,
 		params: arg_spec,
@@ -236,9 +236,10 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> ObjValue {
 	}
 }
 
-pub fn evaluate(context: Context, expr: &Expr) -> Val {
+pub fn evaluate(context: Context, expr: &LocExpr) -> Val {
 	use Expr::*;
-	match &*expr {
+	let LocExpr(expr, _location) = expr;
+	match &**expr {
 		Literal(LiteralType::This) => Val::Obj(
 			context
 				.this()
@@ -260,7 +261,7 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 		}
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)),
 		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy(),
-		Index(box value, box index) => {
+		Index(value, index) => {
 			match (
 				evaluate(context.clone(), value).unwrap_if_lazy(),
 				evaluate(context.clone(), index),
@@ -284,7 +285,7 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 					.unwrap_or_else(|| panic!("out of bounds"))
 					.clone(),
 				(Val::Str(s), Val::Num(n)) => {
-					Val::Str(s.chars().skip(n as usize - 1).take(1).collect())
+					Val::Str(s.chars().skip(n as usize).take(1).collect())
 				}
 				(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
 			}
@@ -307,10 +308,10 @@ pub fn evaluate(context: Context, expr: &Expr) -> Val {
 			let context = context
 				.extend(new_bindings, None, None, None)
 				.into_future(future_context);
-			evaluate(context, &*returned.clone())
+			evaluate(context, &returned.clone())
 		}
 		Obj(body) => Val::Obj(evaluate_object(context, body.clone())),
-		Apply(box value, ArgsDesc(args)) => {
+		Apply(value, ArgsDesc(args)) => {
 			let value = evaluate(context.clone(), value).unwrap_if_lazy();
 			match value {
 				// TODO: Capture context of application
