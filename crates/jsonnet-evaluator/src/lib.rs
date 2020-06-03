@@ -9,6 +9,7 @@ mod evaluate;
 mod obj;
 mod val;
 
+use closure::closure;
 pub use ctx::*;
 pub use dynamic::*;
 pub use error::*;
@@ -35,34 +36,111 @@ rc_fn_helper!(
 	dyn Fn(Context, LocExpr) -> Val
 );
 
-#[derive(Default, Clone)]
-pub struct EvaluationState {
+#[derive(Default)]
+pub struct EvaluationStateInternals {
 	/// Used for stack-overflows and stacktraces
-	pub stack: Rc<RefCell<Vec<(LocExpr, String)>>>,
+	stack: RefCell<Vec<(LocExpr, String)>>,
 	/// Contains file source codes and evaluated results for imports and pretty printing stacktraces
-	pub files: Rc<RefCell<HashMap<String, (String, Option<Val>)>>>,
+	files: RefCell<HashMap<String, (String, LocExpr, Option<Val>)>>,
+	globals: RefCell<HashMap<String, Val>>,
 }
+
+#[derive(Default, Clone)]
+pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
+	pub fn add_file(&self, name: String, code: String) -> Result<(), Box<dyn std::error::Error>> {
+		self.0.files.borrow_mut().insert(
+			name.clone(),
+			(
+				code.clone(),
+				parse(
+					&code,
+					&ParserSettings {
+						file_name: name.clone(),
+						loc_data: true,
+					},
+				)?,
+				None,
+			),
+		);
+
+		Ok(())
+	}
+	pub fn evaluate_file(&self, name: &str) -> Result<Val, Box<dyn std::error::Error>> {
+		let expr: LocExpr = {
+			let ro_map = self.0.files.borrow();
+			let value = ro_map
+				.get(name)
+				.unwrap_or_else(|| panic!("file not added: {:?}", name));
+			if value.2.is_some() {
+				return Ok(value.2.clone().unwrap());
+			}
+			value.1.clone()
+		};
+		let value = evaluate(self.create_default_context(), self.clone(), &expr);
+		{
+			self.0
+				.files
+				.borrow_mut()
+				.get_mut(name)
+				.unwrap()
+				.2
+				.replace(value.clone());
+		}
+		Ok(value)
+	}
+
+	pub fn parse_evaluate_raw(&self, code: &str) -> Val {
+		let parsed = parse(
+			&code,
+			&ParserSettings {
+				file_name: "raw.jsonnet".to_owned(),
+				loc_data: true,
+			},
+		);
+		evaluate(
+			self.create_default_context(),
+			self.clone(),
+			&parsed.unwrap(),
+		)
+	}
+
+	pub fn add_stdlib(&self) {
+		use jsonnet_stdlib::STDLIB_STR;
+		self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
+			.unwrap();
+		let val = self.evaluate_file("std.jsonnet").unwrap();
+		self.0.globals.borrow_mut().insert("std".to_owned(), val);
+	}
+
+	pub fn create_default_context(&self) -> Context {
+		let globals = self.0.globals.borrow();
+		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
+		for (name, value) in globals.iter() {
+			new_bindings.insert(
+				name.clone(),
+				lazy_binding!(
+					closure!(clone value, |_self, _super_obj| lazy_val!(closure!(clone value, ||value.clone())))
+				),
+			);
+		}
+		Context::new().extend(new_bindings, None, None, None)
+	}
+
 	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
-		self.stack.borrow_mut().push((e, comment));
+		self.0.stack.borrow_mut().push((e, comment));
 		let result = f();
-		self.stack.borrow_mut().pop();
+		self.0.stack.borrow_mut().pop();
 		result
 	}
 	pub fn print_stack_trace(&self) {
-		for e in self
-			.stack
-			.borrow()
-			.iter()
-			.rev()
-			.map(|(loc, comment)| loc.1.clone().map(|v| (v, comment.clone())))
-			.flatten()
-		{
+		for e in self.stack_trace() {
 			println!("{:?} - {:?}", e.0, e.1)
 		}
 	}
 	pub fn stack_trace(&self) -> Vec<(LocExpr, String)> {
-		self.stack
+		self.0
+			.stack
 			.borrow()
 			.iter()
 			.rev()
@@ -90,6 +168,16 @@ pub mod tests {
 					|| state.print_stack_trace(),
 				);
 			},
+		);
+	}
+
+	#[test]
+	fn eval_state_standard() {
+		let state = EvaluationState::default();
+		state.add_stdlib();
+		assert_eq!(
+			state.parse_evaluate_raw(r#"std.base64("test") == "dGVzdA==""#),
+			Val::Bool(true)
 		);
 	}
 
@@ -359,12 +447,18 @@ pub mod tests {
 
 	#[test]
 	fn json() {
-		println!("{:?}", eval_stdlib!(r#"std.manifestJsonEx({a:3, b:4, c:6},"")"#));
+		assert_json_stdlib!(
+			r#"std.manifestJsonEx({a:3, b:4, c:6},"")"#,
+			r#""{\n"a": 3,\n"b": 4,\n"c": 6\n}""#
+		);
 	}
 
 	#[test]
 	fn test() {
-		assert_json_stdlib!(r#"[[a, b] for a in [1,2,3] for b in [4,5,6]]"#, "");
+		assert_json_stdlib!(
+			r#"[[a, b] for a in [1,2,3] for b in [4,5,6]]"#,
+			"[[1,4],[1,5],[1,6],[2,4],[2,5],[2,6],[3,4],[3,5],[3,6]]"
+		);
 	}
 
 	#[test]
