@@ -5,8 +5,9 @@ use crate::{
 };
 use closure::closure;
 use jsonnet_parser::{
-	ArgsDesc, BinaryOpType, BindSpec, Expr, FieldMember, LiteralType, LocExpr, Member, ObjBody,
-	ParamsDesc, UnaryOpType, Visibility,
+	el, Arg, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember,
+	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
+	Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -94,29 +95,64 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Val {
 	}
 }
 
-pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
-	match (a, op, b) {
-		(Val::Lazy(a), o, b) => evaluate_binary_op(&a.evaluate(), o, b),
-		(a, o, Val::Lazy(b)) => evaluate_binary_op(a, o, &b.evaluate()),
+pub fn evaluate_add_op(a: &Val, b: &Val) -> Val {
+	match (a, b) {
+		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
+		(Val::Str(v1), Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
+		(Val::Num(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
+		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
+		(Val::Arr(a), Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
+		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
+		_ => panic!("can't add: {:?} and {:?}", a, b),
+	}
+}
 
-		(Val::Str(v1), BinaryOpType::Add, Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
+pub fn evaluate_binary_op(
+	context: Context,
+	eval_state: EvaluationState,
+	a: &Val,
+	op: BinaryOpType,
+	b: &Val,
+) -> Val {
+	match (a, op, b) {
+		(Val::Lazy(a), o, b) => evaluate_binary_op(context, eval_state, &a.evaluate(), o, b),
+		(a, o, Val::Lazy(b)) => evaluate_binary_op(context, eval_state, a, o, &b.evaluate()),
+
+		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b),
+
 		(Val::Str(v1), BinaryOpType::Ne, Val::Str(v2)) => bool_val(v1 != v2),
 
-		(Val::Str(v1), BinaryOpType::Add, Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
+		(Val::Str(format), BinaryOpType::Mod, args) => evaluate(
+			context
+				.with_var("__tmp__format__".to_owned(), Val::Str(format.to_owned()))
+				.with_var(
+					"__tmp__args__".to_owned(),
+					match args {
+						Val::Arr(v) => Val::Arr(v.clone()),
+						v => Val::Arr(vec![v.clone()]),
+					},
+				),
+			eval_state,
+			&el!(Expr::Apply(
+				el!(Expr::Index(
+					el!(Expr::Var("std".to_owned())),
+					el!(Expr::Str("format".to_owned()))
+				)),
+				ArgsDesc(vec![
+					Arg(None, el!(Expr::Var("__tmp__format__".to_owned()))),
+					Arg(None, el!(Expr::Var("__tmp__args__".to_owned())))
+				])
+			)),
+		),
 
 		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
 		(Val::Bool(a), BinaryOpType::Or, Val::Bool(b)) => Val::Bool(*a || *b),
-
-		(Val::Obj(v1), BinaryOpType::Add, Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
-
-		(Val::Arr(a), BinaryOpType::Add, Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
 
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => Val::Num(v1 / v2),
 		(Val::Num(v1), BinaryOpType::Mod, Val::Num(v2)) => Val::Num(v1 % v2),
 
-		(Val::Num(v1), BinaryOpType::Add, Val::Num(v2)) => Val::Num(v1 + v2),
 		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::Num(v1 - v2),
 
 		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
@@ -151,6 +187,42 @@ pub fn evaluate_binary_op(a: &Val, op: BinaryOpType, b: &Val) -> Val {
 
 future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
+
+pub fn evaluate_comp(
+	context: Context,
+	eval_state: EvaluationState,
+	value: &LocExpr,
+	specs: &[CompSpec],
+) -> Option<Vec<Val>> {
+	match specs.get(0) {
+		None => Some(vec![evaluate(context, eval_state, &value)]),
+		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
+			match evaluate(context.clone(), eval_state.clone(), &cond).unwrap_if_lazy() {
+				Val::Bool(false) => None,
+				Val::Bool(true) => evaluate_comp(context, eval_state, value, &specs[1..]),
+				_ => panic!("if expression evaluated to non-boolean value"),
+			}
+		}
+		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
+			match evaluate(context.clone(), eval_state.clone(), &expr).unwrap_if_lazy() {
+				Val::Arr(list) => {
+					let mut out = Vec::new();
+					for item in list {
+						let item = item.clone();
+						out.push(evaluate_comp(
+							context.with_var(var.clone(), item),
+							eval_state.clone(),
+							value,
+							&specs[1..],
+						));
+					}
+					Some(out.iter().flatten().flatten().cloned().collect())
+				}
+				_ => panic!("for expression evaluated to non-iterable value"),
+			}
+		}
+	}
+}
 
 // TODO: Asserts
 pub fn evaluate_object(context: Context, eval_state: EvaluationState, object: ObjBody) -> ObjValue {
@@ -272,11 +344,18 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 			Parened(e) => evaluate(context, eval_state.clone(), e),
 			Str(v) => Val::Str(v.clone()),
 			Num(v) => Val::Num(*v),
-			BinaryOp(v1, o, v2) => evaluate_binary_op(
-				&evaluate(context.clone(), eval_state.clone(), v1),
-				*o,
-				&evaluate(context, eval_state.clone(), v2),
-			),
+			BinaryOp(v1, o, v2) => {
+				let a = evaluate(context.clone(), eval_state.clone(), v1).unwrap_if_lazy();
+				let op = *o;
+				let b = evaluate(context.clone(), eval_state.clone(), v2).unwrap_if_lazy();
+				evaluate_binary_op(
+					context,
+					eval_state,
+					&a,
+					op,
+					&b,
+				)
+			},
 			UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, eval_state, v)),
 			Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy(),
 			Index(value, index) => {
@@ -286,7 +365,7 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 				) {
 					(Val::Obj(v), Val::Str(s)) => v
 						.get(&s)
-						.unwrap_or_else(closure!(clone context, || {
+						.unwrap_or_else(closure!(clone context, clone eval_state, || {
 							if let Some(n) = v.get("__intristic_namespace__") {
 								if let Val::Str(n) = n.unwrap_if_lazy() {
 									Val::Intristic(n, s)
@@ -335,12 +414,16 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 				}
 				Val::Arr(out)
 			}
+			ArrComp(expr, compspecs) => {
+				Val::Arr(evaluate_comp(context, eval_state, expr, compspecs).unwrap())
+			}
 			Obj(body) => Val::Obj(evaluate_object(context, eval_state, body.clone())),
 			Apply(value, ArgsDesc(args)) => {
 				let value = evaluate(context.clone(), eval_state.clone(), value).unwrap_if_lazy();
 				match value {
 					// TODO: Capture context of application
 					Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
+						// arr/string/function
 						("std", "length") => {
 							assert_eq!(args.len(), 1);
 							let expr = &args.get(0).unwrap().1;
@@ -350,11 +433,13 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 								v => panic!("can't get length of {:?}", v),
 							}
 						}
+						// any
 						("std", "type") => {
 							assert_eq!(args.len(), 1);
 							let expr = &args.get(0).unwrap().1;
 							Val::Str(evaluate(context, eval_state, expr).type_of().to_owned())
 						}
+						// length, idx=>any
 						("std", "makeArray") => {
 							assert_eq!(args.len(), 2);
 							if let (Val::Num(v), Val::Func(d)) = (
@@ -371,6 +456,7 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 								panic!("bad makeArray call");
 							}
 						}
+						// string
 						("std", "codepoint") => {
 							assert_eq!(args.len(), 1);
 							if let Val::Str(s) = evaluate(context, eval_state, &args[0].1) {
@@ -381,6 +467,19 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 								Val::Num(s.chars().take(1).next().unwrap() as u32 as f64)
 							} else {
 								panic!("bad codepoint call");
+							}
+						}
+						// object, includeHidden
+						("std", "objectFieldsEx") => {
+							assert_eq!(args.len(), 2);
+							if let (Val::Obj(body), Val::Bool(_include_hidden)) = (
+								evaluate(context.clone(), eval_state.clone(), &args[0].1),
+								evaluate(context, eval_state, &args[1].1),
+							) {
+								// TODO: handle visibility (_include_hidden)
+								Val::Arr(body.fields().into_iter().map(Val::Str).collect())
+							} else {
+								panic!("bad objectFieldsEx call");
 							}
 						}
 						(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
@@ -402,6 +501,17 @@ pub fn evaluate(context: Context, eval_state: EvaluationState, expr: &LocExpr) -
 				}
 			}
 			Function(params, body) => evaluate_method(context, eval_state, body, params.clone()),
+			AssertExpr(AssertStmt(value, msg), returned) => {
+				if evaluate(context.clone(), eval_state.clone(), &value).try_cast_bool() {
+					evaluate(context, eval_state, returned)
+				}else {
+					if let Some(msg) = msg {
+						panic!("assertion failed ({:?}): {}", value, evaluate(context, eval_state, msg).try_cast_str());
+					} else {
+						panic!("assertion failed ({:?}): no message", value);
+					}
+				}
+			},
 			Error(e) => panic!("error: {}", evaluate(context, eval_state, e)),
 			IfElse {
 				cond,

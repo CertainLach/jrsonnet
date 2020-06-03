@@ -117,6 +117,18 @@ pub enum Val {
 	Intristic(String, String),
 }
 impl Val {
+	pub fn try_cast_bool(self) -> bool {
+		match self.unwrap_if_lazy() {
+			Val::Bool(v) => v,
+			v => panic!("expected bool, got {:?}", v),
+		}
+	}
+	pub fn try_cast_str(self) -> String {
+		match self.unwrap_if_lazy() {
+			Val::Str(v) => v,
+			v => panic!("expected bool, got {:?}", v),
+		}
+	}
 	pub fn unwrap_if_lazy(self) -> Self {
 		if let Val::Lazy(v) = self {
 			v.evaluate().unwrap_if_lazy()

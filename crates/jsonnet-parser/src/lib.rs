@@ -125,7 +125,7 @@ parser! {
 		pub rule string_expr(s: &ParserSettings) -> LocExpr = l(s, <s:string() {Expr::Str(s)}>)
 		pub rule obj_expr(s: &ParserSettings) -> LocExpr = l(s,<"{" _ body:objinside(s) _ "}" {Expr::Obj(body)}>)
 		pub rule array_expr(s: &ParserSettings) -> LocExpr = l(s,<"[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}>)
-		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr = l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {Expr::ArrComp(expr, forspec, others.unwrap_or_default())}>)
+		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr = l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {Expr::ArrComp(expr, [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat())}>)
 		pub rule number_expr(s: &ParserSettings) -> LocExpr = l(s,<n:number() { expr::Expr::Num(n) }>)
 		pub rule var_expr(s: &ParserSettings) -> LocExpr = l(s,<n:id() { expr::Expr::Var(n) }>)
 		pub rule if_then_else_expr(s: &ParserSettings) -> LocExpr = l(s,<cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
@@ -252,15 +252,18 @@ pub fn parse(
 	jsonnet_parser::jsonnet(str, settings)
 }
 
+#[macro_export]
+macro_rules! el {
+	($expr:expr) => {
+		LocExpr(std::rc::Rc::new($expr), None)
+	};
+}
+
 #[cfg(test)]
 pub mod tests {
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
-	macro_rules! el {
-		($expr:expr) => {
-			LocExpr(std::rc::Rc::new($expr), None)
-		};
-	}
+
 	macro_rules! parse {
 		($s:expr) => {
 			parse(
@@ -390,8 +393,10 @@ pub mod tests {
 					)),
 					ArgsDesc(vec![Arg(None, el!(Var("x".to_owned())))])
 				)),
-				ForSpecData("x".to_owned(), el!(Var("arr".to_owned()))),
-				vec![]
+				vec![CompSpec::ForSpec(ForSpecData(
+					"x".to_owned(),
+					el!(Var("arr".to_owned()))
+				))]
 			)),
 		)
 	}
@@ -403,24 +408,26 @@ pub mod tests {
 			parse!("[k for k in std.objectFields(patch) if patch[k] == null]"),
 			el!(ArrComp(
 				el!(Var("k".to_owned())),
-				ForSpecData(
-					"k".to_owned(),
-					el!(Apply(
-						el!(Index(
-							el!(Var("std".to_owned())),
-							el!(Str("objectFields".to_owned()))
-						)),
-						ArgsDesc(vec![Arg(None, el!(Var("patch".to_owned())))])
-					))
-				),
-				vec![CompSpec::IfSpec(IfSpecData(el!(BinaryOp(
-					el!(Index(
-						el!(Var("patch".to_owned())),
-						el!(Var("k".to_owned()))
+				vec![
+					CompSpec::ForSpec(ForSpecData(
+						"k".to_owned(),
+						el!(Apply(
+							el!(Index(
+								el!(Var("std".to_owned())),
+								el!(Str("objectFields".to_owned()))
+							)),
+							ArgsDesc(vec![Arg(None, el!(Var("patch".to_owned())))])
+						))
 					)),
-					BinaryOpType::Eq,
-					el!(Literal(LiteralType::Null))
-				))))]
+					CompSpec::IfSpec(IfSpecData(el!(BinaryOp(
+						el!(Index(
+							el!(Var("patch".to_owned())),
+							el!(Var("k".to_owned()))
+						)),
+						BinaryOpType::Eq,
+						el!(Literal(LiteralType::Null))
+					))))
+				]
 			))
 		);
 	}

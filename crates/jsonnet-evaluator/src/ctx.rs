@@ -1,4 +1,7 @@
-use crate::{future_wrapper, rc_fn_helper, LazyBinding, LazyVal, ObjValue};
+use crate::{
+	future_wrapper, lazy_binding, lazy_val, rc_fn_helper, LazyBinding, LazyVal, ObjValue, Val,
+};
+use closure::closure;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
@@ -60,6 +63,17 @@ impl Context {
 			ctx.0.borrow_mut().replace(self);
 		}
 		ctx.unwrap()
+	}
+
+	pub fn with_var(&self, name: String, value: Val) -> Context {
+		let mut new_bindings: HashMap<_, LazyBinding> = HashMap::new();
+		new_bindings.insert(
+			name,
+			lazy_binding!(
+				closure!(clone value, |_t, _s|lazy_val!(closure!(clone value, ||value.clone())))
+			),
+		);
+		self.extend(new_bindings, None, None, None)
 	}
 
 	pub fn extend(

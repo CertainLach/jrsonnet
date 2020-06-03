@@ -165,7 +165,7 @@ pub enum Expr {
 	///    ]
 	///  ],
 	/// ```
-	ArrComp(LocExpr, ForSpecData, Vec<CompSpec>),
+	ArrComp(LocExpr, Vec<CompSpec>),
 
 	/// Object: {a: 2}
 	Obj(ObjBody),

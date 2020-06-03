@@ -359,7 +359,12 @@ pub mod tests {
 
 	#[test]
 	fn json() {
-		println!("{:?}", eval_stdlib!(r#"std.manifestJson({a:3, b:4, c:6})"#));
+		println!("{:?}", eval_stdlib!(r#"std.manifestJsonEx({a:3, b:4, c:6},"")"#));
+	}
+
+	#[test]
+	fn test() {
+		assert_json_stdlib!(r#"[[a, b] for a in [1,2,3] for b in [4,5,6]]"#, "");
 	}
 
 	#[test]
