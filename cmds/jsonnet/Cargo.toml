@@ -1,0 +1,16 @@
+[package]
+name = "jsonnet"
+version = "0.1.0"
+authors = ["Лач <iam@lach.pw>"]
+edition = "2018"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+jsonnet-evaluator = { path = "../../crates/jsonnet-evaluator" }
+annotate-snippets = "0.8.0"
+
+[dependencies.clap]
+version = "3.0.0-beta.1"
+default-features = false
+features = ["std", "derive", "suggestions", "color", "unstable", "wrap_help"]

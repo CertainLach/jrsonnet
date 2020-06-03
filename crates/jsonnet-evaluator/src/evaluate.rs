@@ -77,6 +77,7 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
 		(Val::Str(v1), Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
 		(Val::Num(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
+		(Val::Str(v1), v2) => Val::Str(format!("{}{:?}", v1, v2)),
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
 		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),

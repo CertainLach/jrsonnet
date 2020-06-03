@@ -84,6 +84,13 @@ impl EvaluationState {
 
 		Ok(())
 	}
+	pub fn get_source(&self, name: &str) -> String {
+		let ro_map = self.0.files.borrow();
+		let value = ro_map
+			.get(name)
+			.unwrap_or_else(|| panic!("file not added: {:?}", name));
+		value.0.clone()
+	}
 	pub fn evaluate_file(&self, name: &str) -> Result<Val> {
 		self.begin_state();
 		let expr: LocExpr = {
