@@ -1,4 +1,4 @@
-use crate::{evaluate_add_op, Binding, Val};
+use crate::{evaluate_add_op, Binding, Result, Val};
 use jsonnet_parser::Visibility;
 use std::{
 	cell::RefCell,
@@ -32,13 +32,10 @@ impl Debug for ObjValue {
 			write!(f, " + ")?;
 		}
 		let mut debug = f.debug_struct("ObjValue");
-		debug.field("$ptr", &Rc::as_ptr(&self.0));
 		for (name, member) in self.0.this_entries.iter() {
 			debug.field(name, member);
 		}
 		debug.finish_non_exhaustive()
-		// .field("fields", &self.fields())
-		// .finish_non_exhaustive()
 	}
 }
 
@@ -71,33 +68,40 @@ impl ObjValue {
 		}
 		fields
 	}
-	pub fn get(&self, key: &str) -> Option<Val> {
+	pub fn get(&self, key: &str) -> Result<Option<Val>> {
 		if let Some(v) = self.0.value_cache.borrow().get(key) {
-			return Some(v.clone());
+			return Ok(Some(v.clone()));
 		}
-		let v = self.get_raw(key, self).map(|v| v.unwrap_if_lazy());
-		if let Some(v) = v.clone() {
-			self.0.value_cache.borrow_mut().insert(key.to_owned(), v);
+		if let Some(v) = self.get_raw(key, self)? {
+			let v = v.unwrap_if_lazy()?;
+			self.0
+				.value_cache
+				.borrow_mut()
+				.insert(key.to_owned(), v.clone());
+			Ok(Some(v))
+		} else {
+			Ok(None)
 		}
-		v
 	}
-	fn get_raw(&self, key: &str, real_this: &ObjValue) -> Option<Val> {
+	fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
-			(Some(k), None) => Some(k.invoke.0(
+			(Some(k), None) => Ok(Some(k.invoke.0(
 				Some(real_this.clone()),
 				self.0.super_obj.clone(),
-			)),
+			)?)),
 			(Some(k), Some(s)) => {
-				let our = k.invoke.0(Some(real_this.clone()), self.0.super_obj.clone());
+				let our = k.invoke.0(Some(real_this.clone()), self.0.super_obj.clone())?;
 				if k.add {
-					s.get_raw(key, real_this)
-						.map_or(Some(our.clone()), |v| Some(evaluate_add_op(&v, &our)))
+					s.get_raw(key, real_this)?
+						.map_or(Ok(Some(our.clone())), |v| {
+							Ok(Some(evaluate_add_op(&v, &our)?))
+						})
 				} else {
-					Some(our)
+					Ok(Some(our))
 				}
 			}
 			(None, Some(s)) => s.get_raw(key, real_this),
-			(None, None) => None,
+			(None, None) => Ok(None),
 		}
 	}
 }

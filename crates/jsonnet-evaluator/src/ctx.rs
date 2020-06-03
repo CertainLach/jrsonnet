@@ -1,5 +1,6 @@
 use crate::{
-	future_wrapper, lazy_binding, lazy_val, rc_fn_helper, LazyBinding, LazyVal, ObjValue, Val,
+	future_wrapper, lazy_binding, lazy_val, rc_fn_helper, LazyBinding, LazyVal, ObjValue, Result,
+	Val,
 };
 use closure::closure;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
@@ -7,7 +8,7 @@ use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 rc_fn_helper!(
 	ContextCreator,
 	context_creator,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Context
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Context>
 );
 
 future_wrapper!(Context, FutureContext);
@@ -65,12 +66,12 @@ impl Context {
 		ctx.unwrap()
 	}
 
-	pub fn with_var(&self, name: String, value: Val) -> Context {
+	pub fn with_var(&self, name: String, value: Val) -> Result<Context> {
 		let mut new_bindings: HashMap<_, LazyBinding> = HashMap::new();
 		new_bindings.insert(
 			name,
 			lazy_binding!(
-				closure!(clone value, |_t, _s|lazy_val!(closure!(clone value, ||value.clone())))
+				closure!(clone value, |_t, _s|Ok(lazy_val!(closure!(clone value, ||Ok(value.clone())))))
 			),
 		);
 		self.extend(new_bindings, None, None, None)
@@ -82,7 +83,7 @@ impl Context {
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
-	) -> Context {
+	) -> Result<Context> {
 		let dollar = new_dollar.or_else(|| self.0.dollar.clone());
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
@@ -94,16 +95,16 @@ impl Context {
 				new.insert(k.clone(), v.clone());
 			}
 			for (k, v) in new_bindings.into_iter() {
-				new.insert(k, v.0(this.clone(), super_obj.clone()));
+				new.insert(k, v.0(this.clone(), super_obj.clone())?);
 			}
 			Rc::new(new)
 		};
-		Context(Rc::new(ContextInternals {
+		Ok(Context(Rc::new(ContextInternals {
 			dollar,
 			this,
 			super_obj,
 			bindings,
-		}))
+		})))
 	}
 }
 

@@ -9,6 +9,4 @@ edition = "2018"
 [dependencies]
 jsonnet-parser = { path = "../jsonnet-parser" }
 closure = "0.3.0"
-
-[dev-dependencies]
 jsonnet-stdlib = { version = "0.1.0", path = "../jsonnet-stdlib" }

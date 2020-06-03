@@ -22,41 +22,59 @@ pub use val::*;
 rc_fn_helper!(
 	Binding,
 	binding,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Val
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Val>
 );
 rc_fn_helper!(
 	LazyBinding,
 	lazy_binding,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> LazyVal
+	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>
 );
-rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Val);
+rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Result<Val>);
 rc_fn_helper!(
 	FunctionDefault,
 	function_default,
-	dyn Fn(Context, LocExpr) -> Val
+	dyn Fn(Context, LocExpr) -> Result<Val>
 );
 
+pub struct FileData(String, LocExpr, Option<Val>);
 #[derive(Default)]
 pub struct EvaluationStateInternals {
 	/// Used for stack-overflows and stacktraces
-	stack: RefCell<Vec<(LocExpr, String)>>,
+	stack: RefCell<Vec<StackTraceElement>>,
 	/// Contains file source codes and evaluated results for imports and pretty printing stacktraces
-	files: RefCell<HashMap<String, (String, LocExpr, Option<Val>)>>,
+	files: RefCell<HashMap<String, FileData>>,
 	globals: RefCell<HashMap<String, Val>>,
+}
+
+thread_local! {
+	pub static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
+}
+pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
+	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
+}
+pub(crate) fn create_error<T>(err: Error) -> Result<T> {
+	with_state(|s| s.error(err))
+}
+pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
+	with_state(|s| s.push(e, comment, f))
 }
 
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
-	pub fn add_file(&self, name: String, code: String) -> Result<(), Box<dyn std::error::Error>> {
+	pub fn add_file(
+		&self,
+		name: String,
+		code: String,
+	) -> std::result::Result<(), Box<dyn std::error::Error>> {
 		self.0.files.borrow_mut().insert(
 			name.clone(),
-			(
+			FileData(
 				code.clone(),
 				parse(
 					&code,
 					&ParserSettings {
-						file_name: name.clone(),
+						file_name: name,
 						loc_data: true,
 					},
 				)?,
@@ -66,7 +84,8 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn evaluate_file(&self, name: &str) -> Result<Val, Box<dyn std::error::Error>> {
+	pub fn evaluate_file(&self, name: &str) -> Result<Val> {
+		self.begin_state();
 		let expr: LocExpr = {
 			let ro_map = self.0.files.borrow();
 			let value = ro_map
@@ -77,7 +96,7 @@ impl EvaluationState {
 			}
 			value.1.clone()
 		};
-		let value = evaluate(self.create_default_context(), self.clone(), &expr);
+		let value = evaluate(self.create_default_context()?, &expr)?;
 		{
 			self.0
 				.files
@@ -87,10 +106,11 @@ impl EvaluationState {
 				.2
 				.replace(value.clone());
 		}
+		self.end_state();
 		Ok(value)
 	}
 
-	pub fn parse_evaluate_raw(&self, code: &str) -> Val {
+	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
@@ -98,29 +118,30 @@ impl EvaluationState {
 				loc_data: true,
 			},
 		);
-		evaluate(
-			self.create_default_context(),
-			self.clone(),
-			&parsed.unwrap(),
-		)
+		self.begin_state();
+		let value = evaluate(self.create_default_context()?, &parsed.unwrap());
+		self.end_state();
+		value
 	}
 
 	pub fn add_stdlib(&self) {
+		self.begin_state();
 		use jsonnet_stdlib::STDLIB_STR;
 		self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
 			.unwrap();
 		let val = self.evaluate_file("std.jsonnet").unwrap();
 		self.0.globals.borrow_mut().insert("std".to_owned(), val);
+		self.end_state();
 	}
 
-	pub fn create_default_context(&self) -> Context {
+	pub fn create_default_context(&self) -> Result<Context> {
 		let globals = self.0.globals.borrow();
 		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
 				lazy_binding!(
-					closure!(clone value, |_self, _super_obj| lazy_val!(closure!(clone value, ||value.clone())))
+					closure!(clone value, |_self, _super_obj| Ok(lazy_val!(closure!(clone value, ||Ok(value.clone())))))
 				),
 			);
 		}
@@ -128,30 +149,37 @@ impl EvaluationState {
 	}
 
 	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
-		self.0.stack.borrow_mut().push((e, comment));
+		self.0
+			.stack
+			.borrow_mut()
+			.push(StackTraceElement(e, comment));
 		let result = f();
 		self.0.stack.borrow_mut().pop();
 		result
 	}
 	pub fn print_stack_trace(&self) {
-		for e in self.stack_trace() {
+		for e in self.stack_trace().0 {
 			println!("{:?} - {:?}", e.0, e.1)
 		}
 	}
-	pub fn stack_trace(&self) -> Vec<(LocExpr, String)> {
-		self.0
-			.stack
-			.borrow()
-			.iter()
-			.rev()
-			.map(|e| e.clone())
-			.collect()
+	pub fn stack_trace(&self) -> StackTrace {
+		StackTrace(self.0.stack.borrow().iter().rev().cloned().collect())
+	}
+	pub fn error<T>(&self, err: Error) -> Result<T> {
+		Err(LocError(err, self.stack_trace()))
+	}
+
+	fn begin_state(&self) {
+		EVAL_STATE.with(|v| v.borrow_mut().replace(self.clone()));
+	}
+	fn end_state(&self) {
+		EVAL_STATE.with(|v| v.borrow_mut().take());
 	}
 }
 
 #[cfg(test)]
 pub mod tests {
-	use super::{evaluate, Context, Val};
+	use super::Val;
 	use crate::EvaluationState;
 	use jsonnet_parser::*;
 
@@ -176,7 +204,9 @@ pub mod tests {
 		let state = EvaluationState::default();
 		state.add_stdlib();
 		assert_eq!(
-			state.parse_evaluate_raw(r#"std.base64("test") == "dGVzdA==""#),
+			state
+				.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==w")"#)
+				.unwrap(),
 			Val::Bool(true)
 		);
 	}
@@ -282,6 +312,7 @@ pub mod tests {
 		};
 	}
 
+	/*
 	/// Sanity checking, before trusting to another tests
 	#[test]
 	fn equality_operator() {
@@ -491,4 +522,5 @@ pub mod tests {
 		"#
 		);
 	}
+	*/
 }
