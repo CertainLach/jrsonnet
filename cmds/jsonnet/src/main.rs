@@ -1,4 +1,5 @@
 use clap::Clap;
+use jsonnet_evaluator::Val;
 
 #[derive(Clap)]
 #[clap(version = "0.1.0", author = "Lach <iam@lach.pw>")]
@@ -21,15 +22,26 @@ fn main() {
 			String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap(),
 		)
 		.unwrap();
-	let result = evaluator.evaluate_file(&opts.input.clone());
+	let result = evaluator.evaluate_file(&opts.input);
 	match result {
-		Ok(v) => println!("{:?}", v),
+		Ok(v) => match v {
+			Val::Str(s) => println!("{}", s),
+			Val::Num(n) => println!("{}", n),
+			_v => eprintln!(
+				"jsonnet output is not a string.\nDid you forgot to set --format, or wrap your data with std.manifestJson?"
+			),
+		},
 		Err(err) => {
+			println!("Error: {:?}", err.0);
 			use annotate_snippets::{
 				display_list::{DisplayList, FormatOptions},
 				snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
 			};
 			for item in (err.1).0.iter() {
+				let desc = &item.1;
+				if (item.0).1.is_none() {
+					continue;
+				}
 				let source = (item.0).1.clone().unwrap();
 				let code = evaluator.get_source(&source.0);
 				let snippet = Snippet {
@@ -49,7 +61,7 @@ fn main() {
 						origin: Some(&source.0),
 						fold: true,
 						annotations: vec![SourceAnnotation {
-							label: &"Example error annotation",
+							label: desc,
 							annotation_type: AnnotationType::Error,
 							range: (source.1, source.2),
 						}],
