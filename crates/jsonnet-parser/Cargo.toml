@@ -8,9 +8,13 @@ edition = "2018"
 default = []
 # Trace peg token parsing
 trace = ["peg/trace"]
+# TODO:
+# serialize = ["serde"]
 
 [dependencies]
 peg = "0.6.2"
+serde = { version = "1.0.111", features = ["derive", "rc"] }
 
 [dev-dependencies]
 jsonnet-stdlib = { version = "0.1.0", path = "../jsonnet-stdlib" }
+bincode = "1.2.1"

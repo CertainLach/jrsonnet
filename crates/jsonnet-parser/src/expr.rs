@@ -1,6 +1,7 @@
+use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, rc::Rc};
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(String),
@@ -8,7 +9,7 @@ pub enum FieldName {
 	Dyn(LocExpr),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Visibility {
 	/// :
 	Normal,
@@ -18,10 +19,10 @@ pub enum Visibility {
 	Unhide,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
@@ -30,14 +31,14 @@ pub struct FieldMember {
 	pub value: LocExpr,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
 	AssertStmt(AssertStmt),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum UnaryOpType {
 	Plus,
 	Minus,
@@ -45,7 +46,7 @@ pub enum UnaryOpType {
 	Not,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum BinaryOpType {
 	Mul,
 	Div,
@@ -76,10 +77,10 @@ pub enum BinaryOpType {
 }
 
 /// name, default value
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Param(pub String, pub Option<LocExpr>);
 /// Defined function parameters
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParamsDesc(pub Vec<Param>);
 impl ParamsDesc {
 	pub fn with_defaults(&self) -> Vec<Param> {
@@ -87,30 +88,30 @@ impl ParamsDesc {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Arg(pub Option<String>, pub LocExpr);
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArgsDesc(pub Vec<Arg>);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BindSpec {
 	pub name: String,
 	pub params: Option<ParamsDesc>,
 	pub value: LocExpr,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct IfSpecData(pub LocExpr);
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ForSpecData(pub String, pub LocExpr);
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp {
@@ -123,7 +124,7 @@ pub enum ObjBody {
 	},
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum LiteralType {
 	This,
 	Super,
@@ -133,7 +134,7 @@ pub enum LiteralType {
 	False,
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
 	pub end: Option<LocExpr>,
@@ -141,7 +142,7 @@ pub struct SliceDesc {
 }
 
 /// Syntax base
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum Expr {
 	Literal(LiteralType),
 
@@ -222,7 +223,7 @@ pub enum Expr {
 }
 
 /// file, begin offset, end offset
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct ExprLocation(pub String, pub usize, pub usize);
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -231,7 +232,7 @@ impl Debug for ExprLocation {
 }
 
 /// Holds AST expression and its location in source file+
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Serialize, Deserialize)]
 pub struct LocExpr(pub Rc<Expr>, pub Option<Rc<ExprLocation>>);
 impl Debug for LocExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -242,7 +243,7 @@ impl Debug for LocExpr {
 /// Creates LocExpr from Expr and ExprLocation components
 #[macro_export]
 macro_rules! loc_expr {
-	($expr:expr, $need_loc:expr, ($name:expr, $start:expr, $end:expr)) => {
+	($expr:expr, $need_loc:expr,($name:expr, $start:expr, $end:expr)) => {
 		LocExpr(
 			std::rc::Rc::new($expr),
 			if $need_loc {

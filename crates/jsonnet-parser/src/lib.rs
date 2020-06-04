@@ -1,4 +1,7 @@
 #![feature(box_syntax)]
+#![feature(test)]
+
+extern crate test;
 
 use peg::parser;
 use std::rc::Rc;
@@ -41,8 +44,11 @@ parser! {
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
 		rule id() -> String = quiet!{ !reserved() s:$(alpha() (alpha() / digit())*) {s.to_owned()}} / expected!("<identifier>")
 
-		rule keyword(id: &'static str) = ##parse_string_literal(id) end_of_ident()
-		rule l(s: &ParserSettings, x: rule<Expr>) -> LocExpr = start:position!() v:x() end:position!() {loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end))}
+		rule keyword(id: &'static str)
+			= ##parse_string_literal(id) end_of_ident()
+		// Adds location data information to existing expression
+		rule l(s: &ParserSettings, x: rule<Expr>) -> LocExpr
+			= start:position!() v:x() end:position!() {loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end))}
 
 		pub rule param(s: &ParserSettings) -> expr::Param = name:id() expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
@@ -73,10 +79,11 @@ parser! {
 		pub rule bind(s: &ParserSettings) -> expr::BindSpec
 			= name:id() _ "=" _ expr:expr(s) {expr::BindSpec{name, params: None, value: expr}}
 			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec{name, params: Some(params), value: expr}}
-		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt = keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
+		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
+			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
 		pub rule string() -> String
-			= "\"" str:$(("\\\"" / !['"'][_])*) "\"" {str.to_owned()}
-			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}
+			= v:("\"" str:$(("\\\"" / !['"'][_])*) "\"" {str.to_owned()}
+			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}) {v.replace("\\n", "\n")}
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
 			/ name:string() {expr::FieldName::Fixed(name)}
@@ -118,21 +125,32 @@ parser! {
 				}
 			}
 			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}
-		pub rule ifspec(s: &ParserSettings) -> IfSpecData = keyword("if") _ expr:expr(s) {IfSpecData(expr)}
-		pub rule forspec(s: &ParserSettings) -> ForSpecData = keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
-		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec> = s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} )+ {s}
-		pub rule local_expr(s: &ParserSettings) -> LocExpr = l(s,<keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }>)
-		pub rule string_expr(s: &ParserSettings) -> LocExpr = l(s, <s:string() {Expr::Str(s)}>)
-		pub rule obj_expr(s: &ParserSettings) -> LocExpr = l(s,<"{" _ body:objinside(s) _ "}" {Expr::Obj(body)}>)
-		pub rule array_expr(s: &ParserSettings) -> LocExpr = l(s,<"[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}>)
-		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr = l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {Expr::ArrComp(expr, [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat())}>)
-		pub rule number_expr(s: &ParserSettings) -> LocExpr = l(s,<n:number() { expr::Expr::Num(n) }>)
-		pub rule var_expr(s: &ParserSettings) -> LocExpr = l(s,<n:id() { expr::Expr::Var(n) }>)
-		pub rule if_then_else_expr(s: &ParserSettings) -> LocExpr = l(s,<cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
-			cond,
-			cond_then,
-			cond_else,
-		}}>)
+		pub rule ifspec(s: &ParserSettings) -> IfSpecData
+			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
+		pub rule forspec(s: &ParserSettings) -> ForSpecData
+			= keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
+		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
+			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} )+ {s}
+		pub rule local_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }>)
+		pub rule string_expr(s: &ParserSettings) -> LocExpr
+			= l(s, <s:string() {Expr::Str(s)}>)
+		pub rule obj_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<"{" _ body:objinside(s) _ "}" {Expr::Obj(body)}>)
+		pub rule array_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<"[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}>)
+		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {Expr::ArrComp(expr, [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat())}>)
+		pub rule number_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<n:number() { expr::Expr::Num(n) }>)
+		pub rule var_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<n:id() { expr::Expr::Var(n) }>)
+		pub rule if_then_else_expr(s: &ParserSettings) -> LocExpr
+			= l(s,<cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
+				cond,
+				cond_then,
+				cond_else,
+			}}>)
 
 		pub rule literal(s: &ParserSettings) -> LocExpr
 			= l(s,<v:(
@@ -244,7 +262,6 @@ parser! {
 	}
 }
 
-// TODO: impl FromStr from Expr
 pub fn parse(
 	str: &str,
 	settings: &ParserSettings,
@@ -460,5 +477,20 @@ pub mod tests {
 	#[test]
 	fn can_parse_stdlib() {
 		parse!(jsonnet_stdlib::STDLIB_STR);
+	}
+
+	use test::Bencher;
+
+	// From source code
+	#[bench]
+	fn bench_parse_peg(b: &mut Bencher) {
+		b.iter(|| parse!(jsonnet_stdlib::STDLIB_STR))
+	}
+
+	// From serialized blob
+	#[bench]
+	fn bench_parse_serde_bincode(b: &mut Bencher) {
+		let serialized = bincode::serialize(&parse!(jsonnet_stdlib::STDLIB_STR)).unwrap();
+		b.iter(|| bincode::deserialize::<LocExpr>(&serialized))
 	}
 }
