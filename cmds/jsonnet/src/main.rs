@@ -21,12 +21,20 @@ impl FromStr for Format {
 #[derive(Clap)]
 #[clap(version = "0.1.0", author = "Lach <iam@lach.pw>")]
 struct Opts {
-	#[clap(about = "File to compile")]
-	input: String,
 	#[clap(long, about = "Disable global std variable")]
 	no_stdlib: bool,
-	#[clap(long, short = "f", default_value = "none", possible_values = &["none", "json"])]
+	#[clap(long, about = "Add external string")]
+	ext_str: Option<Vec<String>>,
+	#[clap(long, about = "Add external string from code")]
+	ext_code: Option<Vec<String>>,
+	#[clap(long, about = "Add TLA")]
+	tla_str: Option<Vec<String>>,
+	#[clap(long, about = "Add TLA from code")]
+	tla_code: Option<Vec<String>>,
+	#[clap(long, short = "f", default_value = "json", possible_values = &["none", "json"])]
 	format: Format,
+	#[clap(about = "File to compile")]
+	input: String,
 }
 
 fn main() {
@@ -50,7 +58,7 @@ fn main() {
 				}
 				evaluator.add_global("__tmp__to_json__".to_owned(), v);
 				v = evaluator
-					.parse_evaluate_raw("std.manifestJson(__tmp__to_json__)")
+					.parse_evaluate_raw("std.manifestJsonEx(__tmp__to_json__, \"  \")")
 					.expect("json serialization");
 			}
 			match v {
