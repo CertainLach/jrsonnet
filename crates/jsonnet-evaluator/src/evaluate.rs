@@ -77,9 +77,14 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
+
 		(Val::Str(v1), Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
 		(Val::Num(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
-		(Val::Str(v1), v2) => Val::Str(format!("{}{:?}", v1, v2)),
+		(Val::Str(v1), Val::Bool(v2)) => Val::Str(format!("{}{}", v1, v2)),
+		(Val::Bool(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
+		(Val::Str(v1), Val::Null) => Val::Str(format!("{}null", v1)),
+		(Val::Null, Val::Str(v2)) => Val::Str(format!("null{}", v2)),
+
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
 		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
@@ -156,6 +161,11 @@ pub fn evaluate_binary_op_normal(
 		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
+
+		(Val::Str(v1), BinaryOpType::Lt, Val::Str(v2)) => Val::Bool(v1 < v2),
+		(Val::Str(v1), BinaryOpType::Gt, Val::Str(v2)) => Val::Bool(v1 > v2),
+		(Val::Str(v1), BinaryOpType::Lte, Val::Str(v2)) => Val::Bool(v1 <= v2),
+		(Val::Str(v1), BinaryOpType::Gte, Val::Str(v2)) => Val::Bool(v1 >= v2),
 
 		(Val::Num(v1), BinaryOpType::Lt, Val::Num(v2)) => Val::Bool(v1 < v2),
 		(Val::Num(v1), BinaryOpType::Gt, Val::Num(v2)) => Val::Bool(v1 > v2),
