@@ -6,7 +6,25 @@ edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
+[features]
+default = ["serialized-stdlib"]
+serialized-stdlib = ["serde", "bincode"]
+
 [dependencies]
 jsonnet-parser = { path = "../jsonnet-parser" }
 closure = "0.3.0"
-jsonnet-stdlib = { version = "0.1.0", path = "../jsonnet-stdlib" }
+jsonnet-stdlib = { path = "../jsonnet-stdlib" }
+
+[dependencies.serde]
+version = "1.0.111"
+optional = true
+
+[dependencies.bincode]
+version = "1.2.1"
+optional = true
+
+[build-dependencies]
+jsonnet-parser = { path = "../jsonnet-parser" }
+jsonnet-stdlib = { path = "../jsonnet-stdlib" }
+serde = "1.0.111"
+bincode = "1.2.1"

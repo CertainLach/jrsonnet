@@ -41,7 +41,8 @@ pub struct FileData(String, LocExpr, Option<Val>);
 pub struct EvaluationStateInternals {
 	/// Used for stack-overflows and stacktraces
 	stack: RefCell<Vec<StackTraceElement>>,
-	/// Contains file source codes and evaluated results for imports and pretty printing stacktraces
+	/// Contains file source codes and evaluated results for imports and pretty
+	/// printing stacktraces
 	files: RefCell<HashMap<String, FileData>>,
 	globals: RefCell<HashMap<String, Val>>,
 }
@@ -81,6 +82,19 @@ impl EvaluationState {
 				None,
 			),
 		);
+
+		Ok(())
+	}
+	pub fn add_parsed_file(
+		&self,
+		name: String,
+		code: String,
+		parsed: LocExpr,
+	) -> std::result::Result<(), Box<dyn std::error::Error>> {
+		self.0
+			.files
+			.borrow_mut()
+			.insert(name, FileData(code, parsed, None));
 
 		Ok(())
 	}
@@ -134,8 +148,16 @@ impl EvaluationState {
 	pub fn add_stdlib(&self) {
 		self.begin_state();
 		use jsonnet_stdlib::STDLIB_STR;
-		self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
-			.unwrap();
+		if cfg!(feature = "serialized-stdlib") {
+			self.add_parsed_file(
+				"std.jsonnet".to_owned(),
+				STDLIB_STR.to_owned(),
+				bincode::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/stdlib.bincode"))).expect("deserialize stdlib"),
+			).unwrap();
+		} else {
+			self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
+				.unwrap();
+		}
 		let val = self.evaluate_file("std.jsonnet").unwrap();
 		self.0.globals.borrow_mut().insert("std".to_owned(), val);
 		self.end_state();
