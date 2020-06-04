@@ -5,9 +5,8 @@ use crate::{
 };
 use closure::closure;
 use jsonnet_parser::{
-	el, Arg, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember,
-	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
-	Visibility,
+	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, ForSpecData,
+	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType, Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -102,55 +101,20 @@ pub fn evaluate_binary_op_special(
 		match (evaluate(context.clone(), &a)?.unwrap_if_lazy()?, op, b) {
 			(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
 			(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
-			(a, op, eb) => evaluate_binary_op_normal(
-				context.clone(),
-				&a,
-				op,
-				&evaluate(context, eb)?.unwrap_if_lazy()?,
-			)?,
+			(a, op, eb) => {
+				evaluate_binary_op_normal(&a, op, &evaluate(context, eb)?.unwrap_if_lazy()?)?
+			}
 		},
 	)
 }
 
-pub fn evaluate_binary_op_normal(
-	context: Context,
-	a: &Val,
-	op: BinaryOpType,
-	b: &Val,
-) -> Result<Val> {
+pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
 
-		(Val::Str(v1), BinaryOpType::Eq, Val::Str(v2)) => Val::Bool(v1 == v2),
-		(Val::Str(v1), BinaryOpType::Ne, Val::Str(v2)) => Val::Bool(v1 != v2),
-
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
-		(Val::Str(format), BinaryOpType::Mod, args) => evaluate(
-			context
-				.with_var("__tmp__format__".to_owned(), Val::Str(format.to_owned()))?
-				.with_var(
-					"__tmp__args__".to_owned(),
-					match args {
-						Val::Arr(v) => Val::Arr(v.clone()),
-						v => Val::Arr(vec![v.clone()]),
-					},
-				)?,
-			&el!(Expr::Apply(
-				el!(Expr::Index(
-					el!(Expr::Var("std".to_owned())),
-					el!(Expr::Str("format".to_owned()))
-				)),
-				ArgsDesc(vec![
-					Arg(None, el!(Expr::Var("__tmp__format__".to_owned()))),
-					Arg(None, el!(Expr::Var("__tmp__args__".to_owned())))
-				])
-			)),
-		)?,
 
 		// Bool X Bool
-		(Val::Bool(a), BinaryOpType::Eq, Val::Bool(b)) => Val::Bool(a == b),
-		(Val::Bool(a), BinaryOpType::Ne, Val::Bool(b)) => Val::Bool(a != b),
-
 		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
 		(Val::Bool(a), BinaryOpType::Or, Val::Bool(b)) => Val::Bool(*a || *b),
 
@@ -163,7 +127,6 @@ pub fn evaluate_binary_op_normal(
 		// Num X Num
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => Val::Num(v1 / v2),
-		(Val::Num(v1), BinaryOpType::Mod, Val::Num(v2)) => Val::Num(v1 % v2),
 
 		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::Num(v1 - v2),
 
@@ -171,9 +134,6 @@ pub fn evaluate_binary_op_normal(
 		(Val::Num(v1), BinaryOpType::Gt, Val::Num(v2)) => Val::Bool(v1 > v2),
 		(Val::Num(v1), BinaryOpType::Lte, Val::Num(v2)) => Val::Bool(v1 <= v2),
 		(Val::Num(v1), BinaryOpType::Gte, Val::Num(v2)) => Val::Bool(v1 >= v2),
-
-		(Val::Num(v1), BinaryOpType::Eq, Val::Num(v2)) => Val::Bool((v1 - v2).abs() < f64::EPSILON),
-		(Val::Num(v1), BinaryOpType::Ne, Val::Num(v2)) => Val::Bool((v1 - v2).abs() > f64::EPSILON),
 
 		(Val::Num(v1), BinaryOpType::BitAnd, Val::Num(v2)) => {
 			Val::Num(((*v1 as i32) & (*v2 as i32)) as f64)
@@ -191,28 +151,6 @@ pub fn evaluate_binary_op_normal(
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
 
-		// Arr X Arr
-		(Val::Arr(a), BinaryOpType::Eq, Val::Arr(b)) => {
-			if a.len() != b.len() {
-				Val::Bool(false)
-			} else {
-				for i in 0..a.len() {
-					if let Val::Bool(v) = evaluate_binary_op_normal(
-						context.clone(),
-						&a[i].clone().unwrap_if_lazy()?,
-						op,
-						&b[i].clone().unwrap_if_lazy()?,
-					)? {
-						if !v {
-							return Ok(Val::Bool(false));
-						}
-					} else {
-						unreachable!()
-					}
-				}
-				return Ok(Val::Bool(true));
-			}
-		}
 		_ => panic!("no rules for binary operation: {:?} {:?} {:?}", a, op, b),
 	})
 }
@@ -385,7 +323,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Index(value, index) => {
 			match (
 				evaluate(context.clone(), value)?.unwrap_if_lazy()?,
-				evaluate(context.clone(), index)?,
+				evaluate(context, index)?,
 			) {
 				(Val::Obj(v), Val::Str(s)) => {
 					if let Some(v) = v.get(&s)? {
@@ -506,9 +444,17 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad objectFieldsEx call");
 						}
 					}
+					("std", "primitiveEquals") => {
+						assert_eq!(args.len(), 2);
+						let (a, b) = (
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context, &args[1].1)?,
+						);
+						Val::Bool(a == b)
+					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
-				Val::Func(f) => push(locexpr.clone(), "function call".to_owned(), || {
+				Val::Func(f) => push(locexpr, "function call".to_owned(), || {
 					f.evaluate(
 						args.clone()
 							.into_iter()
@@ -528,10 +474,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Function(params, body) => evaluate_method(context, body, params.clone()),
 		AssertExpr(AssertStmt(value, msg), returned) => {
-			if push(value.clone(), "assertion condition".to_owned(), || {
+			let assertion_result = push(value.clone(), "assertion condition".to_owned(), || {
 				evaluate(context.clone(), &value)?
 					.try_cast_bool("assertion condition should be boolean")
-			})? {
+			})?;
+			if assertion_result {
 				push(
 					returned.clone(),
 					"assert 'return' branch".to_owned(),
@@ -555,9 +502,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if push(cond.0.clone(), "if condition".to_owned(), || {
+			let condition_result = push(cond.0.clone(), "if condition".to_owned(), || {
 				evaluate(context.clone(), &cond.0)?.try_cast_bool("if condition should be boolean")
-			})? {
+			})?;
+			if condition_result {
 				push(
 					cond_then.clone(),
 					"if condition 'then' branch".to_owned(),

@@ -7,7 +7,7 @@ edition = "2018"
 [features]
 default = []
 # Trace peg token parsing
-trace = ["peg/trace"]
+# trace = ["peg/trace"]
 # TODO:
 # serialize = ["serde"]
 

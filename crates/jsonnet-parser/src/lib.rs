@@ -230,8 +230,18 @@ parser! {
 				--
 				a:(@) _ "&" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
 				--
-				a:(@) _ "==" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Eq, b))}
-				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Ne, b))}
+				a:(@) _ "==" _ b:@ {loc_expr_todo!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("equals".to_owned()))
+					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+				))}
+				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("equals".to_owned()))
+					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+				))))}
 				--
 				a:(@) _ "<" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
 				a:(@) _ ">" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
@@ -390,25 +400,6 @@ pub mod tests {
 	}
 
 	#[test]
-	fn suffix_comparsion() {
-		use Expr::*;
-		assert_eq!(
-			parse!("std.type(a) == \"string\""),
-			el!(BinaryOp(
-				el!(Apply(
-					el!(Index(
-						el!(Var("std".to_owned())),
-						el!(Str("type".to_owned()))
-					)),
-					ArgsDesc(vec![Arg(None, el!(Var("a".to_owned())))])
-				)),
-				BinaryOpType::Eq,
-				el!(Str("string".to_owned()))
-			))
-		);
-	}
-
-	#[test]
 	fn array_comp() {
 		use Expr::*;
 		assert_eq!(
@@ -427,37 +418,6 @@ pub mod tests {
 				))]
 			)),
 		)
-	}
-
-	#[test]
-	fn array_comp_with_ifs() {
-		use Expr::*;
-		assert_eq!(
-			parse!("[k for k in std.objectFields(patch) if patch[k] == null]"),
-			el!(ArrComp(
-				el!(Var("k".to_owned())),
-				vec![
-					CompSpec::ForSpec(ForSpecData(
-						"k".to_owned(),
-						el!(Apply(
-							el!(Index(
-								el!(Var("std".to_owned())),
-								el!(Str("objectFields".to_owned()))
-							)),
-							ArgsDesc(vec![Arg(None, el!(Var("patch".to_owned())))])
-						))
-					)),
-					CompSpec::IfSpec(IfSpecData(el!(BinaryOp(
-						el!(Index(
-							el!(Var("patch".to_owned())),
-							el!(Var("k".to_owned()))
-						)),
-						BinaryOpType::Eq,
-						el!(Literal(LiteralType::Null))
-					))))
-				]
-			))
-		);
 	}
 
 	#[test]

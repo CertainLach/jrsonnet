@@ -50,7 +50,7 @@ pub enum UnaryOpType {
 pub enum BinaryOpType {
 	Mul,
 	Div,
-	// Mod is desugared to stdlib
+	// Mod is desugared to std.mod
 	// Mod,
 	Add,
 	Sub,
@@ -65,8 +65,9 @@ pub enum BinaryOpType {
 
 	In,
 
-	Eq,
-	Ne,
+	// Eq/Ne is desugared to std.equals
+	// Eq,
+	// Ne,
 
 	BitAnd,
 	BitOr,
