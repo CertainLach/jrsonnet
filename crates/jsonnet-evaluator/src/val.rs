@@ -44,7 +44,11 @@ macro_rules! lazy_val {
 }
 impl Debug for LazyVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "Lazy")
+		if self.0.cached.borrow().is_some() {
+			write!(f, "{:?}", self.0.cached.borrow().clone().unwrap())
+		} else {
+			write!(f, "Lazy")
+		}
 	}
 }
 impl PartialEq for LazyVal {

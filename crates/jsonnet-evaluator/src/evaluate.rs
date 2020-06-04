@@ -121,6 +121,7 @@ pub fn evaluate_binary_op_normal(
 	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
 
+		(Val::Str(v1), BinaryOpType::Eq, Val::Str(v2)) => Val::Bool(v1 == v2),
 		(Val::Str(v1), BinaryOpType::Ne, Val::Str(v2)) => Val::Bool(v1 != v2),
 
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
@@ -146,26 +147,25 @@ pub fn evaluate_binary_op_normal(
 			)),
 		)?,
 
+		// Bool X Bool
+		(Val::Bool(a), BinaryOpType::Eq, Val::Bool(b)) => Val::Bool(a == b),
+		(Val::Bool(a), BinaryOpType::Ne, Val::Bool(b)) => Val::Bool(a != b),
+
 		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
 		(Val::Bool(a), BinaryOpType::Or, Val::Bool(b)) => Val::Bool(*a || *b),
 
+		// Str X Str
+		(Val::Str(v1), BinaryOpType::Lt, Val::Str(v2)) => Val::Bool(v1 < v2),
+		(Val::Str(v1), BinaryOpType::Gt, Val::Str(v2)) => Val::Bool(v1 > v2),
+		(Val::Str(v1), BinaryOpType::Lte, Val::Str(v2)) => Val::Bool(v1 <= v2),
+		(Val::Str(v1), BinaryOpType::Gte, Val::Str(v2)) => Val::Bool(v1 >= v2),
+
+		// Num X Num
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => Val::Num(v1 / v2),
 		(Val::Num(v1), BinaryOpType::Mod, Val::Num(v2)) => Val::Num(v1 % v2),
 
 		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::Num(v1 - v2),
-
-		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
-			Val::Num(((*v1 as i32) << (*v2 as i32)) as f64)
-		}
-		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
-			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
-		}
-
-		(Val::Str(v1), BinaryOpType::Lt, Val::Str(v2)) => Val::Bool(v1 < v2),
-		(Val::Str(v1), BinaryOpType::Gt, Val::Str(v2)) => Val::Bool(v1 > v2),
-		(Val::Str(v1), BinaryOpType::Lte, Val::Str(v2)) => Val::Bool(v1 <= v2),
-		(Val::Str(v1), BinaryOpType::Gte, Val::Str(v2)) => Val::Bool(v1 >= v2),
 
 		(Val::Num(v1), BinaryOpType::Lt, Val::Num(v2)) => Val::Bool(v1 < v2),
 		(Val::Num(v1), BinaryOpType::Gt, Val::Num(v2)) => Val::Bool(v1 > v2),
@@ -184,8 +184,35 @@ pub fn evaluate_binary_op_normal(
 		(Val::Num(v1), BinaryOpType::BitXor, Val::Num(v2)) => {
 			Val::Num(((*v1 as i32) ^ (*v2 as i32)) as f64)
 		}
-		(a, BinaryOpType::Eq, b) => Val::Bool(a == b),
-		(a, BinaryOpType::Ne, b) => Val::Bool(a != b),
+		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
+			Val::Num(((*v1 as i32) << (*v2 as i32)) as f64)
+		}
+		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
+			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
+		}
+
+		// Arr X Arr
+		(Val::Arr(a), BinaryOpType::Eq, Val::Arr(b)) => {
+			if a.len() != b.len() {
+				Val::Bool(false)
+			} else {
+				for i in 0..a.len() {
+					if let Val::Bool(v) = evaluate_binary_op_normal(
+						context.clone(),
+						&a[i].clone().unwrap_if_lazy()?,
+						op,
+						&b[i].clone().unwrap_if_lazy()?,
+					)? {
+						if !v {
+							return Ok(Val::Bool(false));
+						}
+					} else {
+						unreachable!()
+					}
+				}
+				return Ok(Val::Bool(true));
+			}
+		}
 		_ => panic!("no rules for binary operation: {:?} {:?} {:?}", a, op, b),
 	})
 }
@@ -212,7 +239,7 @@ pub fn evaluate_comp(
 				Val::Arr(list) => {
 					let mut out = Vec::new();
 					for item in list {
-						let item = item.clone();
+						let item = item.clone().unwrap_if_lazy()?;
 						out.push(evaluate_comp(
 							context.with_var(var.clone(), item)?,
 							value,
@@ -372,7 +399,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Arr(v), Val::Num(n)) => v
 					.get(n as usize)
 					.unwrap_or_else(|| panic!("out of bounds"))
-					.clone(),
+					.clone()
+					.unwrap_if_lazy()?,
 				(Val::Str(s), Val::Num(n)) => {
 					Val::Str(s.chars().skip(n as usize).take(1).collect())
 				}
@@ -402,7 +430,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Arr(items) => {
 			let mut out = Vec::with_capacity(items.len());
 			for item in items {
-				out.push(evaluate(context.clone(), item)?);
+				out.push(Val::Lazy(lazy_val!(
+					closure!(clone context, clone item, || {
+						evaluate(context.clone(), &item)
+					})
+				)));
 			}
 			Val::Arr(out)
 		}
