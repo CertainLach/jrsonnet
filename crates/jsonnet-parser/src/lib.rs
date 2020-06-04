@@ -134,7 +134,7 @@ parser! {
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
 			= keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
-			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} )+ {s}
+			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
 		pub rule local_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }>)
 		pub rule string_expr(s: &ParserSettings) -> LocExpr
@@ -248,10 +248,11 @@ parser! {
 				a:(@) _ "/" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
 				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mod, b))}
 				--
+						"-" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
+						"!" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
+						"~" _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
+				--
 				e:expr_basic_with_suffix(s) {e}
-				"-" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, expr)) }
-				"!" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, expr)) }
-				"~" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, expr)) }
 				"(" _ e:expr(s) _ ")" {loc_expr_todo!(Expr::Parened(e))}
 			} end:position!() {
 				let LocExpr(e, _) = a;
@@ -480,6 +481,19 @@ pub mod tests {
 	}
 
 	#[test]
+	fn infix_precedence_division() {
+		use Expr::*;
+		assert_eq!(
+			parse!("!a / !b"),
+			el!(BinaryOp(
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned())))),
+				BinaryOpType::Div,
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".to_owned()))))
+			))
+		);
+	}
+
+	#[test]
 	fn double_negation() {
 		use Expr::*;
 		assert_eq!(
@@ -489,6 +503,12 @@ pub mod tests {
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned()))))
 			))
 		)
+	}
+
+	#[test]
+	fn array_test_error() {
+		parse!("[a for a in b if c for e in f]");
+		//                    ^^^^ failed code
 	}
 
 	#[test]
