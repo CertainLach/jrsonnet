@@ -27,7 +27,11 @@ parser! {
 		use peg::ParseLiteral;
 
 		/// Standard C-like comments
-		rule comment() = "//" (!['\n'][_])* "\n" / "/*" ((!("*/")[_][_])/("\\" "*/"))* "*/"
+		rule comment()
+			= "//" (!['\n'][_])* "\n"
+			/ "/*" ((!("*/")[_][_])/("\\" "*/"))* "*/"
+			/ "#" (!['\n'][_])* "\n"
+
 		rule _() = ([' ' | '\n' | '\t'] / comment())*
 
 		/// For comma-delimited elements
@@ -245,8 +249,9 @@ parser! {
 				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mod, b))}
 				--
 				e:expr_basic_with_suffix(s) {e}
-				"-" _ expr:expr_basic_with_suffix(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, expr)) }
-				"!" _ expr:expr_basic_with_suffix(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, expr)) }
+				"-" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, expr)) }
+				"!" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, expr)) }
+				"~" _ expr:expr(s) { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, expr)) }
 				"(" _ e:expr(s) _ ")" {loc_expr_todo!(Expr::Parened(e))}
 			} end:position!() {
 				let LocExpr(e, _) = a;
@@ -472,6 +477,18 @@ pub mod tests {
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".to_owned()))))
 			))
 		);
+	}
+
+	#[test]
+	fn double_negation() {
+		use Expr::*;
+		assert_eq!(
+			parse!("!!a"),
+			el!(UnaryOp(
+				UnaryOpType::Not,
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned()))))
+			))
+		)
 	}
 
 	#[test]
