@@ -246,7 +246,12 @@ parser! {
 				--
 				a:(@) _ "*" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
 				a:(@) _ "/" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
-				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mod, b))}
+				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("mod".to_owned()))
+					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+				))}
 				--
 						"-" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
 						"!" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}

@@ -50,8 +50,8 @@ pub enum UnaryOpType {
 pub enum BinaryOpType {
 	Mul,
 	Div,
-	Mod,
-
+	// Mod is desugared to stdlib
+	// Mod,
 	Add,
 	Sub,
 
