@@ -3,7 +3,7 @@ use crate::{
 	ObjValue, Result,
 };
 use closure::closure;
-use jsonnet_parser::ParamsDesc;
+use jsonnet_parser::{Param, ParamsDesc};
 use std::{
 	cell::RefCell,
 	collections::HashMap,
@@ -70,19 +70,15 @@ impl FuncDesc {
 		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
 		let future_ctx = Context::new_future();
 
-		// self.params
-		// 	.with_defaults()
-		// 	.into_iter()
-		// 	.for_each(|Param(name, default)| {
-		// 		let default = Rc::new(*default.unwrap());
-		// 		new_bindings.insert(
-		// 			name,
-		// 			binding!(move |_, _| Val::Lazy(lazy_val!(|| self
-		// 				.eval_default
-		// 				.0
-		// 				.default(future_ctx.unwrap(), *default.clone())))),
-		// 		);
-		// 	});
+		for Param(name, default) in self.params.with_defaults() {
+			let default = default.unwrap();
+			let eval_default = self.eval_default.clone();
+			new_bindings.insert(
+				name,
+				lazy_binding!(closure!(clone future_ctx, clone default, clone eval_default, |_, _| Ok(lazy_val!(closure!(clone future_ctx, clone eval_default, clone default, || (eval_default.clone()).0
+					(future_ctx.clone().unwrap(), default.clone())))))),
+			);
+		}
 		for (name, val) in args.clone().into_iter().filter(|e| e.0.is_some()) {
 			new_bindings.insert(
 				name.as_ref().unwrap().clone(),

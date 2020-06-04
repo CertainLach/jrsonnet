@@ -83,7 +83,7 @@ impl ObjValue {
 			Ok(None)
 		}
 	}
-	fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
+	pub(crate) fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
 			(Some(k), None) => Ok(Some(k.invoke.0(
 				Some(real_this.clone()),

@@ -54,11 +54,16 @@ pub fn evaluate_method(ctx: Context, expr: &LocExpr, arg_spec: ParamsDesc) -> Va
 pub fn evaluate_field_name(
 	context: Context,
 	field_name: &jsonnet_parser::FieldName,
-) -> Result<String> {
+) -> Result<Option<String>> {
 	Ok(match field_name {
-		jsonnet_parser::FieldName::Fixed(n) => n.clone(),
+		jsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jsonnet_parser::FieldName::Dyn(expr) => {
-			evaluate(context, expr)?.try_cast_str("dynamic field name")?
+			let value = evaluate(context, expr)?.unwrap_if_lazy()?;
+			if matches!(value, Val::Null) {
+				None
+			} else {
+				Some(value.try_cast_str("dynamic field name")?)
+			}
 		}
 	})
 }
@@ -234,6 +239,10 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 						value,
 					}) => {
 						let name = evaluate_field_name(context.clone(), &name)?;
+						if name.is_none() {
+							continue;
+						}
+						let name = name.unwrap();
 						new_members.insert(
 							name.clone(),
 							ObjMember {
@@ -260,6 +269,10 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 						..
 					}) => {
 						let name = evaluate_field_name(context.clone(), &name)?;
+						if name.is_none() {
+							continue;
+						}
+						let name = name.unwrap();
 						new_members.insert(
 							name,
 							ObjMember {
@@ -299,12 +312,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.clone()
 				.unwrap_or_else(|| panic!("this not found")),
 		),
-		Literal(LiteralType::Super) => Val::Obj(
-			context
-				.super_obj()
-				.clone()
-				.unwrap_or_else(|| panic!("super not found")),
-		),
 		Literal(LiteralType::Dollar) => Val::Obj(
 			context
 				.dollar()
@@ -320,6 +327,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy()?,
+		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
+			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
+			context
+				.super_obj()
+				.clone()
+				.expect("no super found")
+				.get_raw(&name, &context.this().clone().expect("no this found"))?
+				.expect("value not found")
+		}
 		Index(value, index) => {
 			match (
 				evaluate(context.clone(), value)?.unwrap_if_lazy()?,
@@ -381,6 +397,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate_comp(context, expr, compspecs)?.unwrap(),
 		),
 		Obj(body) => Val::Obj(evaluate_object(context, body.clone())?),
+		ObjExtend(s, t) => evaluate_add_op(
+			&evaluate(context.clone(), s)?,
+			&Val::Obj(evaluate_object(context, t.clone())?),
+		)?,
 		Apply(value, ArgsDesc(args)) => {
 			let value = evaluate(context.clone(), value)?.unwrap_if_lazy()?;
 			match value {
@@ -408,7 +428,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							evaluate(context.clone(), &args[0].1)?,
 							evaluate(context, &args[1].1)?,
 						) {
-							assert!(v > 0.0);
+							assert!(v >= 0.0);
 							let mut out = Vec::with_capacity(v as usize);
 							for i in 0..v as usize {
 								out.push(d.evaluate(vec![(None, Val::Num(i as f64))])?)
@@ -451,6 +471,25 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							evaluate(context, &args[1].1)?,
 						);
 						Val::Bool(a == b)
+					}
+					("std", "modulo") => {
+						assert_eq!(args.len(), 2);
+						if let (Val::Num(a), Val::Num(b)) = (
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context, &args[1].1)?,
+						) {
+							Val::Num(a % b)
+						} else {
+							panic!("bad modulo call");
+						}
+					}
+					("std", "floor") => {
+						assert_eq!(args.len(), 1);
+						if let Val::Num(a) = evaluate(context, &args[0].1)? {
+							Val::Num(a.floor())
+						} else {
+							panic!("bad floor call");
+						}
 					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
@@ -516,7 +555,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					Some(v) => push(v.clone(), "if condition 'else' branch".to_owned(), || {
 						evaluate(context, v)
 					})?,
-					None => Val::Bool(false),
+					None => Val::Null,
 				}
 			}
 		}
