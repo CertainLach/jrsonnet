@@ -145,6 +145,10 @@ impl EvaluationState {
 		value
 	}
 
+	pub fn add_global(&self, name: String, value: Val) {
+		self.0.globals.borrow_mut().insert(name, value);
+	}
+
 	pub fn add_stdlib(&self) {
 		self.begin_state();
 		use jsonnet_stdlib::STDLIB_STR;
@@ -152,14 +156,16 @@ impl EvaluationState {
 			self.add_parsed_file(
 				"std.jsonnet".to_owned(),
 				STDLIB_STR.to_owned(),
-				bincode::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/stdlib.bincode"))).expect("deserialize stdlib"),
-			).unwrap();
+				bincode::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/stdlib.bincode")))
+					.expect("deserialize stdlib"),
+			)
+			.unwrap();
 		} else {
 			self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
 				.unwrap();
 		}
 		let val = self.evaluate_file("std.jsonnet").unwrap();
-		self.0.globals.borrow_mut().insert("std".to_owned(), val);
+		self.add_global("std".to_owned(), val);
 		self.end_state();
 	}
 
