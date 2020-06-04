@@ -68,6 +68,8 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	Ok(match (op, b) {
 		(o, Val::Lazy(l)) => evaluate_unary_op(o, &l.evaluate()?)?,
 		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
+		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
+		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
 		(op, o) => panic!("unary op not implemented: {:?} {:?}", op, o),
 	})
 }
@@ -85,11 +87,33 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_binary_op(context: Context, a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
-	Ok(match (a, op, b) {
-		(Val::Lazy(a), o, b) => evaluate_binary_op(context, &a.evaluate()?, o, b)?,
-		(a, o, Val::Lazy(b)) => evaluate_binary_op(context, a, o, &b.evaluate()?)?,
+pub fn evaluate_binary_op_special(
+	context: Context,
+	a: &LocExpr,
+	op: BinaryOpType,
+	b: &LocExpr,
+) -> Result<Val> {
+	Ok(
+		match (evaluate(context.clone(), &a)?.unwrap_if_lazy()?, op, b) {
+			(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
+			(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
+			(a, op, eb) => evaluate_binary_op_normal(
+				context.clone(),
+				&a,
+				op,
+				&evaluate(context, eb)?.unwrap_if_lazy()?,
+			)?,
+		},
+	)
+}
 
+pub fn evaluate_binary_op_normal(
+	context: Context,
+	a: &Val,
+	op: BinaryOpType,
+	b: &Val,
+) -> Result<Val> {
+	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
 
 		(Val::Str(v1), BinaryOpType::Ne, Val::Str(v2)) => Val::Bool(v1 != v2),
@@ -306,18 +330,19 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.clone()
 				.unwrap_or_else(|| panic!("super not found")),
 		),
+		Literal(LiteralType::Dollar) => Val::Obj(
+			context
+				.dollar()
+				.clone()
+				.unwrap_or_else(|| panic!("dollar not found")),
+		),
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(context, e)?,
 		Str(v) => Val::Str(v.clone()),
 		Num(v) => Val::Num(*v),
-		BinaryOp(v1, o, v2) => {
-			let a = evaluate(context.clone(), v1)?.unwrap_if_lazy()?;
-			let op = *o;
-			let b = evaluate(context.clone(), v2)?.unwrap_if_lazy()?;
-			evaluate_binary_op(context, &a, op, &b)?
-		}
+		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy()?,
 		Index(value, index) => {
