@@ -1,5 +1,22 @@
 use clap::Clap;
 use jsonnet_evaluator::Val;
+use std::str::FromStr;
+
+enum Format {
+	None,
+	Json,
+}
+
+impl FromStr for Format {
+	type Err = &'static str;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		Ok(match s {
+			"none" => Format::None,
+			"json" => Format::Json,
+			_ => return Err("no such format"),
+		})
+	}
+}
 
 #[derive(Clap)]
 #[clap(version = "0.1.0", author = "Lach <iam@lach.pw>")]
@@ -8,6 +25,8 @@ struct Opts {
 	input: String,
 	#[clap(long, about = "Disable global std variable")]
 	no_stdlib: bool,
+	#[clap(long, short = "f", default_value = "none", possible_values = &["none", "json"])]
+	format: Format,
 }
 
 fn main() {
@@ -24,13 +43,24 @@ fn main() {
 		.unwrap();
 	let result = evaluator.evaluate_file(&opts.input);
 	match result {
-		Ok(v) => match v {
+		Ok(mut v) => {
+			if let Format::Json = opts.format {
+				if opts.no_stdlib {
+					evaluator.add_stdlib();
+				}
+				evaluator.add_global("__tmp__to_json__".to_owned(), v);
+				v = evaluator
+					.parse_evaluate_raw("std.manifestJson(__tmp__to_json__)")
+					.expect("json serialization");
+			}
+			match v {
 			Val::Str(s) => println!("{}", s),
 			Val::Num(n) => println!("{}", n),
 			_v => eprintln!(
 				"jsonnet output is not a string.\nDid you forgot to set --format, or wrap your data with std.manifestJson?"
 			),
-		},
+		}
+		}
 		Err(err) => {
 			println!("Error: {:?}", err.0);
 			use annotate_snippets::{
