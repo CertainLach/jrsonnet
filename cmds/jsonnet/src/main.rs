@@ -1,5 +1,8 @@
+pub mod location;
+
 use clap::Clap;
 use jsonnet_evaluator::{EvaluationState, LocError, StackTrace, Val};
+use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
 use std::str::FromStr;
 
@@ -145,38 +148,6 @@ fn print_error(err: &LocError, evaluator: EvaluationState, opts: &Opts) {
 	print_trace(&(err.1), evaluator, &opts);
 }
 
-fn line_columns(file: &str, offsets: &[usize]) -> Vec<(usize, usize)> {
-	if offsets.is_empty() {
-		return vec![];
-	}
-	let mut line = 0;
-	let mut column = 0;
-	let max_offset = *offsets.iter().max().unwrap();
-
-	let mut offset_map = offsets
-		.iter()
-		.enumerate()
-		.map(|(pos, offset)| (*offset, pos))
-		.collect::<Vec<_>>();
-	offset_map.sort_by_key(|v| v.0);
-	offset_map.reverse();
-
-	let mut out = vec![(0usize, 0usize); offsets.len()];
-	for (pos, ch) in (0..max_offset + 1).zip(file.chars()) {
-		column += 1;
-		if offset_map.last().unwrap().0 == pos {
-			out[offset_map.last().unwrap().1] = (line, column);
-			offset_map.pop();
-		}
-		if ch == '\n' {
-			line += 1;
-			column = 0;
-		}
-	}
-
-	out
-}
-
 fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 	use annotate_snippets::{
 		display_list::{DisplayList, FormatOptions},
@@ -193,8 +164,13 @@ fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 			continue;
 		}
 		let code = code.unwrap();
-		let start_end = line_columns(&code, &[source.1, source.2]);
+		let start_end = offset_to_location(&code, &[source.1, source.2]);
 		if opts.trace_format == TraceFormat::Custom {
+			let source_fragment: String = code
+				.chars()
+				.skip(start_end[0].line_start_offset)
+				.take(start_end[1].line_end_offset - start_end[0].line_start_offset)
+				.collect();
 			let snippet = Snippet {
 				opt: FormatOptions {
 					color: true,
@@ -207,14 +183,17 @@ fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 				}),
 				footer: vec![],
 				slices: vec![Slice {
-					source: &code,
-					line_start: 1,
+					source: &source_fragment,
+					line_start: start_end[0].line,
 					origin: Some(&source.0.to_str().unwrap()),
 					fold: false,
 					annotations: vec![SourceAnnotation {
 						label: desc,
 						annotation_type: AnnotationType::Error,
-						range: (source.1, source.2),
+						range: (
+							source.1 - start_end[0].line_start_offset,
+							source.2 - start_end[0].line_start_offset,
+						),
 					}],
 				}],
 			};
@@ -222,36 +201,34 @@ fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 			let dl = DisplayList::from(snippet);
 			println!("{}", dl);
 		} else {
-			if opts.trace_format == TraceFormat::CppJsonnet {
-				print!("  ");
-			} else {
-				print!("        ");
-			}
-			print!("{}:", source.0.to_str().unwrap());
-			if start_end[0].0 == start_end[1].0 {
-				// IDK why, but this is the behavior original jsonnet shows
-				if start_end[0].1 == start_end[1].1
-					|| opts.trace_format == TraceFormat::CppJsonnet
-						&& start_end[0].1 + 1 == start_end[1].1
-				{
-					println!("{}:{}", start_end[0].0 + 1, start_end[0].1)
-				} else {
-					println!(
-						"{}:{}-{}",
-						start_end[0].0 + 1,
-						start_end[0].1,
-						start_end[1].1
-					);
-				}
-			} else {
-				println!(
-					"({}:{})-({}:{})",
-					start_end[0].0 + 1,
-					start_end[0].1,
-					start_end[1].0 + 1,
-					start_end[1].1
-				);
-			}
+			print_jsonnet_pair(
+				source.0.to_str().unwrap(),
+				&start_end[0],
+				&start_end[1],
+				opts.trace_format == TraceFormat::GoJsonnet,
+			);
 		}
+	}
+}
+
+fn print_jsonnet_pair(file: &str, start: &CodeLocation, end: &CodeLocation, is_go: bool) {
+	if is_go {
+		print!("        ");
+	} else {
+		print!("  ");
+	}
+	print!("{}:", file);
+	if start.line == end.line {
+		// IDK why, but this is the behavior original jsonnet cpp impl shows
+		if start.column == end.column || !is_go && start.column + 1 == end.column {
+			println!("{}:{}", start.line, end.column)
+		} else {
+			println!("{}:{}-{}", start.line, start.column, end.column);
+		}
+	} else {
+		println!(
+			"({}:{})-({}:{})",
+			start.line, end.column, start.line, end.column
+		);
 	}
 }
