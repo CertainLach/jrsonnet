@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, rc::Rc};
+use std::{fmt::Debug, path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FieldName {
@@ -50,8 +50,7 @@ pub enum UnaryOpType {
 pub enum BinaryOpType {
 	Mul,
 	Div,
-	// Mod is desugared to std.mod
-	// Mod,
+
 	Add,
 	Sub,
 
@@ -64,10 +63,6 @@ pub enum BinaryOpType {
 	Gte,
 
 	In,
-
-	// Eq/Ne is desugared to std.equals
-	// Eq,
-	// Ne,
 
 	BitAnd,
 	BitOr,
@@ -120,7 +115,6 @@ pub enum ObjBody {
 		key: LocExpr,
 		value: LocExpr,
 		post_locals: Vec<BindSpec>,
-		first: ForSpecData,
 		rest: Vec<CompSpec>,
 	},
 }
@@ -225,10 +219,10 @@ pub enum Expr {
 
 /// file, begin offset, end offset
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExprLocation(pub String, pub usize, pub usize);
+pub struct ExprLocation(pub PathBuf, pub usize, pub usize);
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}:{:?}-{:?}", self.0, self.1, self.2)
+		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)
 	}
 }
 

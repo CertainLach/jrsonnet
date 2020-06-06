@@ -4,7 +4,7 @@
 extern crate test;
 
 use peg::parser;
-use std::rc::Rc;
+use std::{path::PathBuf, rc::Rc};
 mod expr;
 pub use expr::*;
 
@@ -19,7 +19,7 @@ struct LocSuffix(Suffix, ExprLocation);
 
 pub struct ParserSettings {
 	pub loc_data: bool,
-	pub file_name: String,
+	pub file_name: PathBuf,
 }
 
 parser! {
@@ -118,14 +118,13 @@ parser! {
 			/ assertion:assertion(s) {expr::Member::AssertStmt(assertion)}
 			/ field:field(s) {expr::Member::Field(field)}
 		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
-			= pre_locals:(b: obj_local(s) comma() {b})* "[" _ key:expr(s) _ "]" _ ":" _ value:expr(s) post_locals:(comma() b:obj_local(s) {b})* _ first:forspec(s) rest:(_ rest:compspec(s) {rest})? {
+			= pre_locals:(b: obj_local(s) comma() {b})* "[" _ key:expr(s) _ "]" _ ":" _ value:expr(s) post_locals:(comma() b:obj_local(s) {b})* _ forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
 				expr::ObjBody::ObjComp {
 					pre_locals,
 					key,
 					value,
 					post_locals,
-					first,
-					rest: rest.unwrap_or_default(),
+					rest: [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat(),
 				}
 			}
 			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}
@@ -301,6 +300,7 @@ macro_rules! el {
 pub mod tests {
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
+	use std::path::PathBuf;
 
 	macro_rules! parse {
 		($s:expr) => {
@@ -308,7 +308,7 @@ pub mod tests {
 				$s,
 				&ParserSettings {
 					loc_data: false,
-					file_name: "test.jsonnet".to_owned(),
+					file_name: PathBuf::from("/test.jsonnet"),
 					},
 				)
 			.unwrap()
