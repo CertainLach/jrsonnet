@@ -496,6 +496,18 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad floor call");
 						}
 					}
+					("std", "trace") => {
+						assert_eq!(args.len(), 2);
+						if let (Val::Str(a), b) = (
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context, &args[1].1)?,
+						) {
+							println!("{}", a);
+							b
+						} else {
+							panic!("bad trace call");
+						}
+					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
 				Val::Func(f) => push(locexpr, "function call".to_owned(), || {
