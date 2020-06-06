@@ -7,6 +7,7 @@ use peg::parser;
 use std::{path::PathBuf, rc::Rc};
 mod expr;
 pub use expr::*;
+pub use peg;
 
 enum Suffix {
 	String(String),
@@ -282,10 +283,8 @@ parser! {
 	}
 }
 
-pub fn parse(
-	str: &str,
-	settings: &ParserSettings,
-) -> Result<LocExpr, peg::error::ParseError<peg::str::LineCol>> {
+pub type ParseError = peg::error::ParseError<peg::str::LineCol>;
+pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError> {
 	jsonnet_parser::jsonnet(str, settings)
 }
 
