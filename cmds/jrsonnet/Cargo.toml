@@ -1,5 +1,5 @@
 [package]
-name = "jsonnet"
+name = "jrsonnet"
 version = "0.1.0"
 authors = ["Лач <iam@lach.pw>"]
 edition = "2018"
