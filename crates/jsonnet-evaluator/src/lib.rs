@@ -16,7 +16,7 @@ pub use error::*;
 pub use evaluate::*;
 use jsonnet_parser::*;
 pub use obj::*;
-use std::{cell::RefCell, collections::HashMap, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
 pub use val::*;
 
 rc_fn_helper!(
@@ -43,7 +43,7 @@ pub struct EvaluationStateInternals {
 	stack: RefCell<Vec<StackTraceElement>>,
 	/// Contains file source codes and evaluated results for imports and pretty
 	/// printing stacktraces
-	files: RefCell<HashMap<String, FileData>>,
+	files: RefCell<HashMap<PathBuf, FileData>>,
 	globals: RefCell<HashMap<String, Val>>,
 }
 
@@ -56,7 +56,7 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 pub(crate) fn create_error<T>(err: Error) -> Result<T> {
 	with_state(|s| s.error(err))
 }
-pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
+pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 	with_state(|s| s.push(e, comment, f))
 }
 
@@ -65,7 +65,7 @@ pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
 	pub fn add_file(
 		&self,
-		name: String,
+		name: PathBuf,
 		code: String,
 	) -> std::result::Result<(), Box<dyn std::error::Error>> {
 		self.0.files.borrow_mut().insert(
@@ -87,7 +87,7 @@ impl EvaluationState {
 	}
 	pub fn add_parsed_file(
 		&self,
-		name: String,
+		name: PathBuf,
 		code: String,
 		parsed: LocExpr,
 	) -> std::result::Result<(), Box<dyn std::error::Error>> {
@@ -98,14 +98,13 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &str) -> String {
+	pub fn get_source(&self, name: &PathBuf) -> Option<String> {
 		let ro_map = self.0.files.borrow();
-		let value = ro_map
+		ro_map
 			.get(name)
-			.unwrap_or_else(|| panic!("file not added: {:?}", name));
-		value.0.clone()
+			.map(|value|value.0.clone())
 	}
-	pub fn evaluate_file(&self, name: &str) -> Result<Val> {
+	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
 		self.begin_state();
 		let expr: LocExpr = {
 			let ro_map = self.0.files.borrow();
@@ -135,7 +134,7 @@ impl EvaluationState {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
-				file_name: "raw.jsonnet".to_owned(),
+				file_name: PathBuf::from("raw.jsonnet"),
 				loc_data: true,
 			},
 		);
@@ -154,17 +153,17 @@ impl EvaluationState {
 		use jsonnet_stdlib::STDLIB_STR;
 		if cfg!(feature = "serialized-stdlib") {
 			self.add_parsed_file(
-				"std.jsonnet".to_owned(),
+				PathBuf::from("std.jsonnet"),
 				STDLIB_STR.to_owned(),
 				bincode::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/stdlib.bincode")))
 					.expect("deserialize stdlib"),
 			)
 			.unwrap();
 		} else {
-			self.add_file("std.jsonnet".to_owned(), STDLIB_STR.to_owned())
+			self.add_file(PathBuf::from("std.jsonnet"), STDLIB_STR.to_owned())
 				.unwrap();
 		}
-		let val = self.evaluate_file("std.jsonnet").unwrap();
+		let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
 		self.add_global("std".to_owned(), val);
 		self.end_state();
 	}
@@ -183,11 +182,16 @@ impl EvaluationState {
 		Context::new().extend(new_bindings, None, None, None)
 	}
 
-	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> T) -> T {
-		self.0
-			.stack
-			.borrow_mut()
-			.push(StackTraceElement(e, comment));
+	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
+		{
+			let mut stack = self.0.stack.borrow_mut();
+			if stack.len() > 5000 {
+				drop(stack);
+				return self.error(Error::StackOverflow);
+			} else {
+				stack.push(StackTraceElement(e, comment));
+			}
+		}
 		let result = f();
 		self.0.stack.borrow_mut().pop();
 		result
@@ -217,21 +221,36 @@ pub mod tests {
 	use super::Val;
 	use crate::EvaluationState;
 	use jsonnet_parser::*;
+	use std::path::PathBuf;
 
 	#[test]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
-		state.push(
-			loc_expr!(Expr::Num(0.0), true, ("test1.jsonnet".to_owned(), 10, 20)),
-			"outer".to_owned(),
-			|| {
-				state.push(
-					loc_expr!(Expr::Num(0.0), true, ("test2.jsonnet".to_owned(), 30, 40)),
-					"inner".to_owned(),
-					|| state.print_stack_trace(),
-				);
-			},
-		);
+		state
+			.push(
+				loc_expr!(
+					Expr::Num(0.0),
+					true,
+					(PathBuf::from("test1.jsonnet"), 10, 20)
+				),
+				"outer".to_owned(),
+				|| {
+					state.push(
+						loc_expr!(
+							Expr::Num(0.0),
+							true,
+							(PathBuf::from("test2.jsonnet"), 30, 40)
+						),
+						"inner".to_owned(),
+						|| {
+							state.print_stack_trace();
+							Ok(())
+						},
+					)?;
+					Ok(())
+				},
+			)
+			.unwrap();
 	}
 
 	#[test]
@@ -240,7 +259,7 @@ pub mod tests {
 		state.add_stdlib();
 		assert_eq!(
 			state
-				.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==w")"#)
+				.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#)
 				.unwrap(),
 			Val::Bool(true)
 		);

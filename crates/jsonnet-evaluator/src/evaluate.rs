@@ -31,12 +31,14 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 		(
 			b.name.clone(),
 			lazy_binding!(move |this, super_obj| {
-				Ok(lazy_val!(
-					closure!(clone context_creator, clone b, || evaluate(
-						context_creator.0(this.clone(), super_obj.clone())?,
-						&b.value
-					))
-				))
+				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
+					push(b.value.clone(), "thunk".to_owned(), ||{
+						evaluate(
+							context_creator.0(this.clone(), super_obj.clone())?,
+							&b.value
+						)
+					})
+				)))
 			}),
 		)
 	}
@@ -326,7 +328,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Num(v) => Val::Num(*v),
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
-		Var(name) => Val::Lazy(context.binding(&name)).unwrap_if_lazy()?,
+		Var(name) => push(locexpr, "var".to_owned(), || {
+			Val::Lazy(context.binding(&name)).unwrap_if_lazy()
+		})?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
 			context
@@ -412,6 +416,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						match evaluate(context, expr)? {
 							Val::Str(n) => Val::Num(n.chars().count() as f64),
 							Val::Arr(i) => Val::Num(i.len() as f64),
+							Val::Obj(o) => Val::Num(o.fields().len() as f64),
 							v => panic!("can't get length of {:?}", v),
 						}
 					}

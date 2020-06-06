@@ -1,13 +1,18 @@
 use bincode::serialize;
 use jsonnet_parser::{parse, ParserSettings};
 use jsonnet_stdlib::STDLIB_STR;
-use std::{env, fs::File, io::Write, path::Path};
+use std::{
+	env,
+	fs::File,
+	io::Write,
+	path::{Path, PathBuf},
+};
 
 fn main() {
 	let parsed = parse(
 		STDLIB_STR,
 		&ParserSettings {
-			file_name: "std.jsonnet".to_owned(),
+			file_name: PathBuf::from("std.jsonnet"),
 			loc_data: true,
 		},
 	)

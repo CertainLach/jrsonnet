@@ -8,6 +8,7 @@ pub enum Error {
 	NoSuchField(String),
 
 	RuntimeError(String),
+	StackOverflow,
 }
 
 #[derive(Clone, Debug)]
