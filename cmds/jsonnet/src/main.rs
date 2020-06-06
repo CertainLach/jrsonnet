@@ -4,7 +4,7 @@ use clap::Clap;
 use jsonnet_evaluator::{EvaluationState, LocError, StackTrace, Val};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 enum Format {
 	None,
@@ -87,12 +87,11 @@ fn main() {
 	}
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());
-	evaluator
-		.add_file(
-			input.clone(),
-			String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap(),
-		)
-		.unwrap();
+	let code_string = String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap();
+	if let Err(e) = evaluator.add_file(input.clone(), code_string.clone()) {
+		print_syntax_error(e, &input, &code_string);
+		std::process::exit(2);
+	}
 	let result = evaluator.evaluate_file(&input);
 	match result {
 		Ok(v) => {
@@ -146,6 +145,42 @@ fn main() {
 fn print_error(err: &LocError, evaluator: EvaluationState, opts: &Opts) {
 	println!("Error: {:?}", err.0);
 	print_trace(&(err.1), evaluator, &opts);
+}
+
+fn print_syntax_error(error: jsonnet_parser::ParseError, file: &PathBuf, code: &str) {
+	use annotate_snippets::{
+		display_list::{DisplayList, FormatOptions},
+		snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
+	};
+	//&("Expected: ".to_owned() + error.expected)
+	let origin = file.to_str().unwrap();
+	let error_message = format!("Expected: {}", error.expected);
+	let snippet = Snippet {
+		opt: FormatOptions {
+			color: true,
+			..Default::default()
+		},
+		title: Some(Annotation {
+			label: Some(&error_message),
+			id: None,
+			annotation_type: AnnotationType::Error,
+		}),
+		footer: vec![],
+		slices: vec![Slice {
+			source: &code,
+			line_start: 1,
+			origin: Some(origin),
+			fold: false,
+			annotations: vec![SourceAnnotation {
+				label: "At this position",
+				annotation_type: AnnotationType::Error,
+				range: (error.location.offset, error.location.offset + 1),
+			}],
+		}],
+	};
+
+	let dl = DisplayList::from(snippet);
+	println!("{}", dl);
 }
 
 fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
