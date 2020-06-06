@@ -63,11 +63,7 @@ pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
-	pub fn add_file(
-		&self,
-		name: PathBuf,
-		code: String,
-	) -> std::result::Result<(), Box<dyn std::error::Error>> {
+	pub fn add_file(&self, name: PathBuf, code: String) -> std::result::Result<(), ParseError> {
 		self.0.files.borrow_mut().insert(
 			name.clone(),
 			FileData(
@@ -90,7 +86,7 @@ impl EvaluationState {
 		name: PathBuf,
 		code: String,
 		parsed: LocExpr,
-	) -> std::result::Result<(), Box<dyn std::error::Error>> {
+	) -> std::result::Result<(), ()> {
 		self.0
 			.files
 			.borrow_mut()
@@ -100,9 +96,7 @@ impl EvaluationState {
 	}
 	pub fn get_source(&self, name: &PathBuf) -> Option<String> {
 		let ro_map = self.0.files.borrow();
-		ro_map
-			.get(name)
-			.map(|value|value.0.clone())
+		ro_map.get(name).map(|value| value.0.clone())
 	}
 	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
 		self.begin_state();
