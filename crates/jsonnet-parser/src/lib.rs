@@ -9,15 +9,6 @@ mod expr;
 pub use expr::*;
 pub use peg;
 
-enum Suffix {
-	String(String),
-	Slice(SliceDesc),
-	Expression(LocExpr),
-	Apply(expr::ArgsDesc),
-	Extend(expr::ObjBody),
-}
-struct LocSuffix(Suffix, ExprLocation);
-
 pub struct ParserSettings {
 	pub loc_data: bool,
 	pub file_name: PathBuf,
@@ -41,7 +32,7 @@ parser! {
 		rule digit() -> char = d:$(['0'..='9']) {d.chars().next().unwrap()}
 		rule end_of_ident() = !['0'..='9' | '_' | 'a'..='z' | 'A'..='Z']
 		/// Sequence of digits
-		rule uint() -> u32 = a:$(digit()+) { a.parse().unwrap() }
+		rule uint() -> u64 = a:$(digit()+) { a.parse().unwrap() }
 		/// Number in scientific notation format
 		rule number() -> f64 = quiet!{a:$(uint() ("." uint())? (['e'|'E'] (s:['+'|'-'])? uint())?) { a.parse().unwrap() }} / expected!("<number>")
 
@@ -184,22 +175,6 @@ parser! {
 
 			/ l(s,<keyword("error") _ expr:expr(s) { Expr::Error(expr) }>)
 
-		rule expr_basic_with_suffix(s: &ParserSettings) -> LocExpr
-			= a:expr_basic(s) suffixes:(_ suffix:l_expr_suffix(s) {suffix})* {
-				let mut cur = a;
-				for suffix in suffixes {
-					let LocSuffix(suffix, location) = suffix;
-					cur = LocExpr(Rc::new(match suffix {
-						Suffix::String(index) => Expr::Index(cur, loc_expr!(Expr::Str(index), s.loc_data, (s.file_name.clone(), location.1, location.2))),
-						Suffix::Slice(desc) => Expr::Slice(cur, desc),
-						Suffix::Expression(index) => Expr::Index(cur, index),
-						Suffix::Apply(args) => Expr::Apply(cur, args),
-						Suffix::Extend(body) => Expr::ObjExtend(cur, body),
-					}), if s.loc_data { Some(Rc::new(location)) } else { None })
-				}
-				cur
-			}
-
 		pub rule slice_desc(s: &ParserSettings) -> SliceDesc
 			= start:expr(s)? _ ":" _ pair:(end:expr(s)? _ step:(":" _ e:expr(s) {e})? {(end, step)})? {
 				if let Some((end, step)) = pair {
@@ -208,15 +183,6 @@ parser! {
 					SliceDesc { start, end: None, step: None }
 				}
 			}
-
-		rule expr_suffix(s: &ParserSettings) -> Suffix
-			= "." _ s:id() { Suffix::String(s) }
-			/ "[" _ s:slice_desc(s) _ "]" { Suffix::Slice(s) }
-			/ "[" _ s:expr(s) _ "]" { Suffix::Expression(s) }
-			/ "(" _ args:args(s) _ ")" (_ keyword("tailstrict"))? { Suffix::Apply(args) }
-			/ "{" _ body:objinside(s) _ "}" { Suffix::Extend(body) }
-		rule l_expr_suffix(s: &ParserSettings) -> LocSuffix
-			= start:position!() suffix:expr_suffix(s) end:position!() {LocSuffix(suffix, ExprLocation(s.file_name.clone(), start, end))}
 
 		rule expr(s: &ParserSettings) -> LocExpr
 			= start:position!() a:precedence! {
@@ -267,7 +233,13 @@ parser! {
 						"!" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
 						"~" _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
 				--
-				e:expr_basic_with_suffix(s) {e}
+				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Slice(a, s))}
+				a:(@) _ "." _ s:id() {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s))))}
+				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
+				a:(@) _ "(" _ args:args(s) _ ")" (_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args))}
+				a:(@) _ "{" _ body:objinside(s) _ "}" {loc_expr_todo!(Expr::ObjExtend(a, body))}
+				--
+				e:expr_basic(s) {e}
 				"(" _ e:expr(s) _ ")" {loc_expr_todo!(Expr::Parened(e))}
 			} end:position!() {
 				let LocExpr(e, _) = a;
@@ -277,7 +249,7 @@ parser! {
 					None
 				})
 			}
-			/ e:expr_basic_with_suffix(s) {e}
+			/ e:expr_basic(s) {e}
 
 		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
 	}
@@ -396,6 +368,14 @@ pub mod tests {
 				el!(Expr::Num(22.0))
 			))
 		);
+	}
+
+	#[test]
+	fn suffix() {
+		// assert_eq!(parse!("std.test"), el!(Expr::Num(2.2)));
+		// assert_eq!(parse!("std(2)"), el!(Expr::Num(2.2)));
+		// assert_eq!(parse!("std.test(2)"), el!(Expr::Num(2.2)));
+		// assert_eq!(parse!("a[b]"), el!(Expr::Num(2.2)))
 	}
 
 	#[test]
