@@ -6,8 +6,10 @@ extern crate test;
 use peg::parser;
 use std::{path::PathBuf, rc::Rc};
 mod expr;
+mod string_processing;
 pub use expr::*;
 pub use peg;
+use string_processing::deent;
 
 pub struct ParserSettings {
 	pub loc_data: bool,
@@ -77,9 +79,26 @@ parser! {
 			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec{name, params: Some(params), value: expr}}
 		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
 			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
+
+		pub rule whole_line() -> String
+			= str:$((!['\n'][_])* "\n") {str.to_owned()}
 		pub rule string() -> String
-			= v:("\"" str:$(("\\\"" / !['"'][_])*) "\"" {str.to_owned()}
-			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}) {v.replace("\\n", "\n")}
+			= "\"" str:$(("\\\"" / !['"'][_])*) "\"" {str.to_owned()}
+			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}
+			// TODO: This is temporary workaround, i still dont know how to write this correctly btw.
+			/ "|||" "\n" str:$((" "*<1, 1> whole_line())+) " "*<0, 0> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<2, 2> whole_line())+) " "*<1, 1> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<3, 3> whole_line())+) " "*<2, 2> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<4, 4> whole_line())+) " "*<3, 3> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<5, 5> whole_line())+) " "*<4, 4> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<6, 6> whole_line())+) " "*<5, 5> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<7, 7> whole_line())+) " "*<6, 6> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<8, 8> whole_line())+) " "*<7, 7> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<9, 9> whole_line())+) " "*<8, 8> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<10, 10> whole_line())+) " "*<9, 9> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<11, 11> whole_line())+) " "*<10, 10> "|||" {deent(str)}
+			/ "|||" "\n" str:$((" "*<12, 12> whole_line())+) " "*<11, 10> "|||" {deent(str)}
+
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
 			/ name:string() {expr::FieldName::Fixed(name)}
@@ -200,13 +219,17 @@ parser! {
 					el!(Expr::Index(
 						el!(Expr::Var("std".to_owned())),
 						el!(Expr::Str("equals".to_owned()))
-					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+					)),
+					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
+					true
 				))}
 				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
 					el!(Expr::Index(
 						el!(Expr::Var("std".to_owned())),
 						el!(Expr::Str("equals".to_owned()))
-					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+					)),
+					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
+					true
 				))))}
 				--
 				a:(@) _ "<" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
@@ -226,7 +249,8 @@ parser! {
 					el!(Expr::Index(
 						el!(Expr::Var("std".to_owned())),
 						el!(Expr::Str("mod".to_owned()))
-					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)])
+					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
+					true
 				))}
 				--
 						"-" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
@@ -236,7 +260,7 @@ parser! {
 				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Slice(a, s))}
 				a:(@) _ "." _ s:id() {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s))))}
 				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
-				a:(@) _ "(" _ args:args(s) _ ")" (_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args))}
+				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args, ts.is_some()))}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {loc_expr_todo!(Expr::ObjExtend(a, body))}
 				--
 				e:expr_basic(s) {e}
@@ -300,6 +324,14 @@ pub mod tests {
 				)),
 			))
 		}
+	}
+
+	#[test]
+	fn multiline_string() {
+		assert_eq!(
+			parse!("|||\n      Hello world!\n  a\n|||"),
+			el!(Expr::Str("    Hello world!\na\n".to_owned())),
+		)
 	}
 
 	#[test]
@@ -389,7 +421,8 @@ pub mod tests {
 						el!(Var("std".to_owned())),
 						el!(Str("deepJoin".to_owned()))
 					)),
-					ArgsDesc(vec![Arg(None, el!(Var("x".to_owned())))])
+					ArgsDesc(vec![Arg(None, el!(Var("x".to_owned())))]),
+					false,
 				)),
 				vec![CompSpec::ForSpec(ForSpecData(
 					"x".to_owned(),

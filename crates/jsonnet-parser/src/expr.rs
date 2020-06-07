@@ -196,7 +196,7 @@ pub enum Expr {
 	/// error "I'm broken"
 	Error(LocExpr),
 	/// a(b, c)
-	Apply(LocExpr, ArgsDesc),
+	Apply(LocExpr, ArgsDesc, bool),
 	///
 	Select(LocExpr, String),
 	/// a[b]
