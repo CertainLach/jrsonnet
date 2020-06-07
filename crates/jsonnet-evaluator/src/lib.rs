@@ -6,17 +6,17 @@ mod ctx;
 mod dynamic;
 mod error;
 mod evaluate;
+mod function;
 mod obj;
 mod val;
 
-use closure::closure;
 pub use ctx::*;
 pub use dynamic::*;
 pub use error::*;
 pub use evaluate::*;
 use jsonnet_parser::*;
 pub use obj::*;
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 pub use val::*;
 
 rc_fn_helper!(
@@ -24,17 +24,32 @@ rc_fn_helper!(
 	binding,
 	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Val>
 );
-rc_fn_helper!(
-	LazyBinding,
-	lazy_binding,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>
-);
 rc_fn_helper!(FunctionRhs, function_rhs, dyn Fn(Context) -> Result<Val>);
 rc_fn_helper!(
 	FunctionDefault,
 	function_default,
 	dyn Fn(Context, LocExpr) -> Result<Val>
 );
+
+#[derive(Clone)]
+pub enum LazyBinding {
+	Bindable(Rc<dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>>),
+	Bound(LazyVal),
+}
+
+impl Debug for LazyBinding {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "LazyBinding")
+	}
+}
+impl LazyBinding {
+	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
+		match self {
+			LazyBinding::Bindable(v) => v(this, super_obj),
+			LazyBinding::Bound(v) => Ok(v.clone()),
+		}
+	}
+}
 
 pub struct FileData(String, LocExpr, Option<Val>);
 #[derive(Default)]
@@ -168,9 +183,7 @@ impl EvaluationState {
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
-				lazy_binding!(
-					closure!(clone value, |_self, _super_obj| Ok(lazy_val!(closure!(clone value, ||Ok(value.clone())))))
-				),
+				LazyBinding::Bound(resolved_lazy_val!(value.clone())),
 			);
 		}
 		Context::new().extend(new_bindings, None, None, None)
@@ -179,7 +192,7 @@ impl EvaluationState {
 	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 		{
 			let mut stack = self.0.stack.borrow_mut();
-			if stack.len() > 5000 {
+			if stack.len() > 500 {
 				drop(stack);
 				return self.error(Error::StackOverflow);
 			} else {

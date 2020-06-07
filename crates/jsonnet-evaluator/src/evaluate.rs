@@ -1,7 +1,7 @@
 use crate::{
 	binding, context_creator, create_error, function_default, function_rhs, future_wrapper,
-	lazy_binding, lazy_val, push, Context, ContextCreator, FuncDesc, LazyBinding, ObjMember,
-	ObjValue, Result, Val,
+	lazy_val, push, Context, ContextCreator, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue,
+	Result, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -19,18 +19,20 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 		let args = args.clone();
 		(
 			b.name.clone(),
-			lazy_binding!(move |this, super_obj| Ok(lazy_val!(
-				closure!(clone b, clone args, clone context_creator, || Ok(evaluate_method(
-					context_creator.0(this.clone(), super_obj.clone())?,
-					&b.value,
-					args.clone()
-				)))
-			))),
+			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
+				Ok(lazy_val!(
+					closure!(clone b, clone args, clone context_creator, || Ok(evaluate_method(
+						context_creator.0(this.clone(), super_obj.clone())?,
+						&b.value,
+						args.clone()
+					)))
+				))
+			})),
 		)
 	} else {
 		(
 			b.name.clone(),
-			lazy_binding!(move |this, super_obj| {
+			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
 					push(b.value.clone(), "thunk".to_owned(), ||{
 						evaluate(
@@ -39,7 +41,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 						)
 					})
 				)))
-			}),
+			})),
 		)
 	}
 }
@@ -405,7 +407,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t.clone())?),
 		)?,
-		Apply(value, ArgsDesc(args)) => {
+		Apply(value, ArgsDesc(args), tailstrict) => {
 			let value = evaluate(context.clone(), value)?.unwrap_if_lazy()?;
 			match value {
 				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
@@ -502,7 +504,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							evaluate(context.clone(), &args[0].1)?,
 							evaluate(context, &args[1].1)?,
 						) {
-							println!("{}", a);
+							// TODO: Line numbers as in original jsonnet
+							println!("TRACE: {}", a);
 							b
 						} else {
 							panic!("bad trace call");
@@ -517,9 +520,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							.map(move |a| {
 								(
 									a.clone().0,
-									Val::Lazy(lazy_val!(
-										closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
-									)),
+									if *tailstrict {
+										Val::Lazy(LazyVal::new_resolved(
+											evaluate(context.clone(), &a.1).unwrap(),
+										))
+									} else {
+										Val::Lazy(lazy_val!(
+											closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
+										))
+									},
 								)
 							})
 							.collect(),

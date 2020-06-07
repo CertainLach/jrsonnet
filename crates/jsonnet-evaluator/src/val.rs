@@ -1,6 +1,5 @@
 use crate::{
-	create_error, lazy_binding, Context, Error, FunctionDefault, FunctionRhs, LazyBinding,
-	ObjValue, Result,
+	create_error, Context, Error, FunctionDefault, FunctionRhs, LazyBinding, ObjValue, Result,
 };
 use closure::closure;
 use jsonnet_parser::{Param, ParamsDesc};
@@ -12,7 +11,7 @@ use std::{
 };
 
 struct LazyValInternals {
-	pub f: Box<dyn Fn() -> Result<Val>>,
+	pub f: Option<Box<dyn Fn() -> Result<Val>>>,
 	pub cached: RefCell<Option<Val>>,
 }
 #[derive(Clone)]
@@ -20,8 +19,14 @@ pub struct LazyVal(Rc<LazyValInternals>);
 impl LazyVal {
 	pub fn new(f: Box<dyn Fn() -> Result<Val>>) -> Self {
 		LazyVal(Rc::new(LazyValInternals {
-			f,
+			f: Some(f),
 			cached: RefCell::new(None),
+		}))
+	}
+	pub fn new_resolved(val: Val) -> Self {
+		LazyVal(Rc::new(LazyValInternals {
+			f: None,
+			cached: RefCell::new(Some(val)),
 		}))
 	}
 	pub fn evaluate(&self) -> Result<Val> {
@@ -31,15 +36,22 @@ impl LazyVal {
 				return Ok(cached.clone().unwrap());
 			}
 		}
-		let result = (self.0.f)()?;
+		let result = (self.0.f.as_ref().unwrap())()?;
 		self.0.cached.borrow_mut().replace(result.clone());
 		Ok(result)
 	}
 }
+
 #[macro_export]
 macro_rules! lazy_val {
 	($f: expr) => {
 		$crate::LazyVal::new(Box::new($f))
+	};
+}
+#[macro_export]
+macro_rules! resolved_lazy_val {
+	($f: expr) => {
+		$crate::LazyVal::new_resolved($f)
 	};
 }
 impl Debug for LazyVal {
@@ -75,25 +87,23 @@ impl FuncDesc {
 			let eval_default = self.eval_default.clone();
 			new_bindings.insert(
 				name,
-				lazy_binding!(closure!(clone future_ctx, clone default, clone eval_default, |_, _| Ok(lazy_val!(closure!(clone future_ctx, clone eval_default, clone default, || (eval_default.clone()).0
-					(future_ctx.clone().unwrap(), default.clone())))))),
+				LazyBinding::Bound(lazy_val!(
+					closure!(clone future_ctx, clone eval_default, clone default, || (eval_default.clone()).0
+					(future_ctx.clone().unwrap(), default.clone()))
+				)),
 			);
 		}
 		for (name, val) in args.clone().into_iter().filter(|e| e.0.is_some()) {
 			new_bindings.insert(
 				name.as_ref().unwrap().clone(),
-				lazy_binding!(
-					closure!(clone val, |_, _| Ok(lazy_val!(closure!(clone val, || Ok(val.clone())))))
-				),
+				LazyBinding::Bound(resolved_lazy_val!(val.clone())),
 			);
 		}
 		for (i, param) in self.params.0.iter().enumerate() {
 			if let Some((None, val)) = args.get(i) {
 				new_bindings.insert(
 					param.0.clone(),
-					lazy_binding!(
-						closure!(clone val, |_, _| Ok(lazy_val!(closure!(clone val, || Ok(val.clone())))))
-					),
+					LazyBinding::Bound(resolved_lazy_val!(val.clone())),
 				);
 			}
 		}
