@@ -23,10 +23,11 @@ parser! {
 		/// Standard C-like comments
 		rule comment()
 			= "//" (!['\n'][_])* "\n"
-			/ "/*" ((!("*/")[_][_])/("\\" "*/"))* "*/"
+			/ "/*" (!("*/")[_])* "*/"
 			/ "#" (!['\n'][_])* "\n"
 
-		rule _() = ([' ' | '\n' | '\t'] / comment())*
+		rule single_whitespace() = quiet!{([' ' | '\r' | '\n' | '\t'] / comment())} / expected!("<whitespace>")
+		rule _() = single_whitespace()*
 
 		/// For comma-delimited elements
 		rule comma() = quiet!{_ "," _} / expected!("<comma>")
@@ -83,21 +84,23 @@ parser! {
 		pub rule whole_line() -> String
 			= str:$((!['\n'][_])* "\n") {str.to_owned()}
 		pub rule string() -> String
-			= "\"" str:$(("\\\"" / !['"'][_])*) "\"" {str.to_owned()}
-			/ "'" str:$((!['\''][_])*) "'" {str.to_owned()}
+			= "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
+			/ "'" str:$(("\\'" / "\\\\" / (!['\''][_]))*) "'" {unescape::unescape(str).unwrap()}
+			/ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
+			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
 			// TODO: This is temporary workaround, i still dont know how to write this correctly btw.
-			/ "|||" "\n" str:$((" "*<1, 1> whole_line())+) " "*<0, 0> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<2, 2> whole_line())+) " "*<1, 1> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<3, 3> whole_line())+) " "*<2, 2> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<4, 4> whole_line())+) " "*<3, 3> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<5, 5> whole_line())+) " "*<4, 4> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<6, 6> whole_line())+) " "*<5, 5> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<7, 7> whole_line())+) " "*<6, 6> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<8, 8> whole_line())+) " "*<7, 7> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<9, 9> whole_line())+) " "*<8, 8> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<10, 10> whole_line())+) " "*<9, 9> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<11, 11> whole_line())+) " "*<10, 10> "|||" {deent(str)}
-			/ "|||" "\n" str:$((" "*<12, 12> whole_line())+) " "*<11, 10> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<1, 1> whole_line())+) " "*<0, 0> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<2, 2> whole_line())+) " "*<1, 1> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<3, 3> whole_line())+) " "*<2, 2> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<4, 4> whole_line())+) " "*<3, 3> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<5, 5> whole_line())+) " "*<4, 4> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<6, 6> whole_line())+) " "*<5, 5> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<7, 7> whole_line())+) " "*<6, 6> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<8, 8> whole_line())+) " "*<7, 7> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<9, 9> whole_line())+) " "*<8, 8> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<10, 10> whole_line())+) " "*<9, 9> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<11, 11> whole_line())+) " "*<10, 10> "|||" {deent(str)}
+			/ "|||" (!['\n']single_whitespace())+ "\n" str:$((" "*<12, 12> whole_line())+) " "*<11, 10> "|||" {deent(str)}
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
@@ -332,6 +335,35 @@ pub mod tests {
 			parse!("|||\n      Hello world!\n  a\n|||"),
 			el!(Expr::Str("    Hello world!\na\n".to_owned())),
 		)
+	}
+
+	#[test]
+	fn string_escaping() {
+		assert_eq!(
+			parse!(r#""Hello, \"world\"!""#),
+			el!(Expr::Str(r#"Hello, "world"!"#.to_owned())),
+		);
+		assert_eq!(
+			parse!(r#"'Hello \'world\'!'"#),
+			el!(Expr::Str("Hello 'world'!".to_owned())),
+		);
+		assert_eq!(parse!(r#"'\\\\'"#), el!(Expr::Str("\\\\".to_owned())),);
+	}
+
+	#[test]
+	fn string_unescaping() {
+		assert_eq!(
+			parse!(r#""Hello\nWorld""#),
+			el!(Expr::Str("Hello\nWorld".to_owned())),
+		);
+	}
+
+	#[test]
+	fn string_verbantim() {
+		assert_eq!(
+			parse!(r#"@"Hello\n""World""""#),
+			el!(Expr::Str("Hello\\n\"World\"".to_owned())),
+		);
 	}
 
 	#[test]
