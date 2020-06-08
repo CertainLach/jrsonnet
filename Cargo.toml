@@ -3,7 +3,7 @@ members = [
 	"crates/jsonnet-parser",
 	"crates/jsonnet-evaluator",
 	"crates/jsonnet-stdlib",
-	"cmds/jsonnet"
+	"cmds/jrsonnet"
 ]
 
 [profile.release]
