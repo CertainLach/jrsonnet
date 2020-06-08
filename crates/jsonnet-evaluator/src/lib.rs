@@ -2,6 +2,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(debug_non_exhaustive)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
+#![feature(stmt_expr_attributes)]
 mod ctx;
 mod dynamic;
 mod error;
@@ -51,6 +52,19 @@ impl LazyBinding {
 	}
 }
 
+pub struct EvaluationSettings {
+	max_stack_frames: usize,
+	max_stack_trace_size: usize,
+}
+impl Default for EvaluationSettings {
+	fn default() -> Self {
+		EvaluationSettings {
+			max_stack_frames: 500,
+			max_stack_trace_size: 20,
+		}
+	}
+}
+
 pub struct FileData(String, LocExpr, Option<Val>);
 #[derive(Default)]
 pub struct EvaluationStateInternals {
@@ -60,21 +74,31 @@ pub struct EvaluationStateInternals {
 	/// printing stacktraces
 	files: RefCell<HashMap<PathBuf, FileData>>,
 	globals: RefCell<HashMap<String, Val>>,
+
+	settings: EvaluationSettings,
 }
 
 thread_local! {
-	pub static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
+	/// Contains state for currently executing file
+	/// Global state is fine there
+	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
+#[inline(always)]
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
-	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
+	EVAL_STATE.with(
+		#[inline(always)]
+		|s| f(s.borrow().as_ref().unwrap()),
+	)
 }
 pub(crate) fn create_error<T>(err: Error) -> Result<T> {
 	with_state(|s| s.error(err))
 }
+#[inline(always)]
 pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 	with_state(|s| s.push(e, comment, f))
 }
 
+/// Maintains stack trace and import resolution
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
@@ -189,10 +213,11 @@ impl EvaluationState {
 		Context::new().extend(new_bindings, None, None, None)
 	}
 
+	#[inline(always)]
 	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 		{
 			let mut stack = self.0.stack.borrow_mut();
-			if stack.len() > 500 {
+			if stack.len() > self.0.settings.max_stack_frames {
 				drop(stack);
 				return self.error(Error::StackOverflow);
 			} else {
@@ -209,7 +234,16 @@ impl EvaluationState {
 		}
 	}
 	pub fn stack_trace(&self) -> StackTrace {
-		StackTrace(self.0.stack.borrow().iter().rev().cloned().collect())
+		StackTrace(
+			self.0
+				.stack
+				.borrow()
+				.iter()
+				.rev()
+				.take(self.0.settings.max_stack_trace_size)
+				.cloned()
+				.collect(),
+		)
 	}
 	pub fn error<T>(&self, err: Error) -> Result<T> {
 		Err(LocError(err, self.stack_trace()))

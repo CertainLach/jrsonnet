@@ -135,7 +135,12 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		// Num X Num
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
-		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => Val::Num(v1 / v2),
+		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => {
+			if *v2 <= f64::EPSILON {
+				create_error(crate::Error::DivisionByZero)?
+			}
+			Val::Num(v1 / v2)
+		}
 
 		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::Num(v1 - v2),
 
@@ -305,6 +310,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 	})
 }
 
+#[inline(always)]
 pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let locexpr = expr.clone();
@@ -356,11 +362,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						create_error(crate::Error::NoSuchField(s))?
 					}
 				}
-				(Val::Arr(v), Val::Num(n)) => v
-					.get(n as usize)
-					.unwrap_or_else(|| panic!("out of bounds"))
-					.clone()
-					.unwrap_if_lazy()?,
+				(Val::Arr(v), Val::Num(n)) => {
+					if n.fract() > f64::EPSILON {
+						create_error(crate::Error::FractionalIndex)?
+					}
+					v.get(n as usize)
+						.unwrap_or_else(|| panic!("out of bounds"))
+						.clone()
+						.unwrap_if_lazy()?
+				}
 				(Val::Str(s), Val::Num(n)) => {
 					Val::Str(s.chars().skip(n as usize).take(1).collect())
 				}
@@ -511,29 +521,52 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad trace call");
 						}
 					}
+					("std", "pow") => {
+						assert_eq!(args.len(), 2);
+						if let (Val::Num(a), Val::Num(b)) = (
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context, &args[1].1)?,
+						) {
+							Val::Num(a.powf(b))
+						} else {
+							panic!("bad pow call");
+						}
+					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
-				Val::Func(f) => push(locexpr, "function call".to_owned(), || {
-					f.evaluate(
-						args.clone()
-							.into_iter()
-							.map(move |a| {
-								(
-									a.clone().0,
-									if *tailstrict {
-										Val::Lazy(LazyVal::new_resolved(
-											evaluate(context.clone(), &a.1).unwrap(),
-										))
-									} else {
-										Val::Lazy(lazy_val!(
-											closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
+				Val::Func(f) => {
+					let body = #[inline(always)]
+					|| {
+						f.evaluate(
+							args.clone()
+								.into_iter()
+								.map(
+									#[inline(always)]
+									move |a| {
+										Ok((
+											a.clone().0,
+											if *tailstrict {
+												Val::Lazy(LazyVal::new_resolved(evaluate(
+													context.clone(),
+													&a.1,
+												)?))
+											} else {
+												Val::Lazy(lazy_val!(
+													closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
+												))
+											},
 										))
 									},
 								)
-							})
-							.collect(),
-					)
-				})?,
+								.collect::<Result<Vec<_>>>()?,
+						)
+					};
+					if *tailstrict {
+						body()?
+					} else {
+						push(locexpr, "function call".to_owned(), body)?
+					}
+				}
 				_ => panic!("{:?} is not a function", value),
 			}
 		}
@@ -578,9 +611,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				)?
 			} else {
 				match cond_else {
-					Some(v) => push(v.clone(), "if condition 'else' branch".to_owned(), || {
-						evaluate(context, v)
-					})?,
+					Some(v) => evaluate(context, v)?,
 					None => Val::Null,
 				}
 			}

@@ -78,6 +78,8 @@ pub struct FuncDesc {
 }
 impl FuncDesc {
 	// TODO: Check for unset variables
+	/// This function is always inlined to make tailstrict work
+	#[inline(always)]
 	pub fn evaluate(&self, args: Vec<(Option<String>, Val)>) -> Result<Val> {
 		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
 		let future_ctx = Context::new_future();

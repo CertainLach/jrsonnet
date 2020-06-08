@@ -9,6 +9,8 @@ pub enum Error {
 
 	RuntimeError(String),
 	StackOverflow,
+	FractionalIndex,
+	DivisionByZero,
 }
 
 #[derive(Clone, Debug)]
