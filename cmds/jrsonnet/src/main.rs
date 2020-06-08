@@ -75,6 +75,13 @@ struct Opts {
 	)]
 	max_trace: usize,
 
+	#[clap(
+		long,
+		default_value = "3",
+		about = "When using --format, this option specifies string to pad output with"
+	)]
+	line_padding: usize,
+
 	#[clap(about = "File to compile", index = 1)]
 	input: String,
 }
@@ -90,7 +97,7 @@ fn main() {
 	let code_string = String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap();
 	if let Err(e) = evaluator.add_file(input.clone(), code_string.clone()) {
 		print_syntax_error(e, &input, &code_string);
-		std::process::exit(2);
+		std::process::exit(1);
 	}
 	let result = evaluator.evaluate_file(&input);
 	match result {
@@ -101,13 +108,15 @@ fn main() {
 						evaluator.add_stdlib();
 					}
 					evaluator.add_global("__tmp__to_json__".to_owned(), v);
-					let v = evaluator
-						.parse_evaluate_raw("std.manifestJsonEx(__tmp__to_json__, \"  \")");
+					let v = evaluator.parse_evaluate_raw(&format!(
+						"std.manifestJsonEx(__tmp__to_json__, \"{}\")",
+						" ".repeat(opts.line_padding),
+					));
 					match v {
 						Ok(v) => v,
 						Err(err) => {
 							print_error(&err, evaluator, &opts);
-							std::process::exit(2);
+							std::process::exit(1);
 						}
 					}
 				}
@@ -122,7 +131,7 @@ fn main() {
 						Ok(v) => v,
 						Err(err) => {
 							print_error(&err, evaluator, &opts);
-							std::process::exit(2);
+							std::process::exit(1);
 						}
 					}
 				}
@@ -138,6 +147,7 @@ fn main() {
 		}
 		Err(err) => {
 			print_error(&err, evaluator, &opts);
+			std::process::exit(1);
 		}
 	}
 }
