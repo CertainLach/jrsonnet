@@ -12,3 +12,6 @@ lto = "fat"
 codegen-units = 1
 debug = 0
 panic = "abort"
+
+[profile.test]
+opt-level = 1
