@@ -1,5 +1,5 @@
 use serde::{Deserialize, Serialize};
-use std::{fmt::Debug, path::PathBuf, rc::Rc};
+use std::{fmt::Debug, ops::Deref, path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub enum FieldName {
@@ -78,9 +78,10 @@ pub struct Param(pub String, pub Option<LocExpr>);
 /// Defined function parameters
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ParamsDesc(pub Vec<Param>);
-impl ParamsDesc {
-	pub fn with_defaults(&self) -> Vec<Param> {
-		self.0.iter().filter(|e| e.1.is_some()).cloned().collect()
+impl Deref for ParamsDesc {
+	type Target = Vec<Param>;
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }
 
@@ -88,6 +89,12 @@ impl ParamsDesc {
 pub struct Arg(pub Option<String>, pub LocExpr);
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct ArgsDesc(pub Vec<Arg>);
+impl Deref for ArgsDesc {
+	type Target = Vec<Arg>;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BindSpec {
