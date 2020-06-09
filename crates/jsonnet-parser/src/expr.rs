@@ -197,9 +197,9 @@ pub enum Expr {
 	/// a = 3
 	Bind(BindSpec),
 	/// import "hello"
-	Import(String),
+	Import(PathBuf),
 	/// importStr "file.txt"
-	ImportStr(String),
+	ImportStr(PathBuf),
 	/// error "I'm broken"
 	Error(LocExpr),
 	/// a(b, c)
