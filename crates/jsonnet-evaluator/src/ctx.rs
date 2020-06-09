@@ -1,5 +1,6 @@
 use crate::{
-	future_wrapper, rc_fn_helper, resolved_lazy_val, LazyBinding, LazyVal, ObjValue, Result, Val,
+	future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, LazyBinding, LazyVal,
+	ObjValue, Result, Val,
 };
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -11,12 +12,11 @@ rc_fn_helper!(
 
 future_wrapper!(Context, FutureContext);
 
-#[derive(Debug)]
 struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: Rc<HashMap<String, LazyVal>>,
+	bindings: LayeredHashMap<String, LazyVal>,
 }
 pub struct Context(Rc<ContextInternals>);
 impl Debug for Context {
@@ -48,7 +48,7 @@ impl Context {
 			dollar: None,
 			this: None,
 			super_obj: None,
-			bindings: Rc::new(HashMap::new()),
+			bindings: LayeredHashMap::default(),
 		}))
 	}
 
@@ -65,14 +65,14 @@ impl Context {
 	}
 
 	pub fn with_var(&self, name: String, value: Val) -> Result<Context> {
-		let mut new_bindings: HashMap<_, LazyBinding> = HashMap::new();
-		new_bindings.insert(name, LazyBinding::Bound(resolved_lazy_val!(value.clone())));
+		let mut new_bindings = HashMap::new();
+		new_bindings.insert(name, resolved_lazy_val!(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
 	pub fn extend(
 		&self,
-		new_bindings: HashMap<String, LazyBinding>,
+		new_bindings: HashMap<String, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -83,14 +83,7 @@ impl Context {
 		let bindings = if new_bindings.is_empty() {
 			self.0.bindings.clone()
 		} else {
-			let mut new = HashMap::new(); // = self.0.bindings.clone();
-			for (k, v) in self.0.bindings.iter() {
-				new.insert(k.clone(), v.clone());
-			}
-			for (k, v) in new_bindings.into_iter() {
-				new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
-			}
-			Rc::new(new)
+			self.0.bindings.extend(new_bindings)
 		};
 		Ok(Context(Rc::new(ContextInternals {
 			dollar,
@@ -98,6 +91,21 @@ impl Context {
 			super_obj,
 			bindings,
 		})))
+	}
+	pub fn extend_unbound(
+		&self,
+		new_bindings: HashMap<String, LazyBinding>,
+		new_dollar: Option<ObjValue>,
+		new_this: Option<ObjValue>,
+		new_super_obj: Option<ObjValue>,
+	) -> Result<Context> {
+		let this = new_this.or_else(|| self.0.this.clone());
+		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
+		let mut new = HashMap::new();
+		for (k, v) in new_bindings.into_iter() {
+			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
+		}
+		self.extend(new, new_dollar, this, super_obj)
 	}
 }
 

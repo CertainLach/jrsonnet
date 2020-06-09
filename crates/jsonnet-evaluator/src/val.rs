@@ -1,11 +1,9 @@
 use crate::{
-	create_error, Context, Error, FunctionDefault, FunctionRhs, LazyBinding, ObjValue, Result,
+	create_error, evaluate, function::inline_parse_function_call, Context, Error, ObjValue, Result,
 };
-use closure::closure;
-use jsonnet_parser::{Param, ParamsDesc};
+use jsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
-	collections::HashMap,
 	fmt::{Debug, Display},
 	rc::Rc,
 };
@@ -73,47 +71,21 @@ impl PartialEq for LazyVal {
 pub struct FuncDesc {
 	pub ctx: Context,
 	pub params: ParamsDesc,
-	pub eval_rhs: FunctionRhs,
-	pub eval_default: FunctionDefault,
+	pub body: LocExpr,
 }
 impl FuncDesc {
 	// TODO: Check for unset variables
 	/// This function is always inlined to make tailstrict work
 	#[inline(always)]
-	pub fn evaluate(&self, args: Vec<(Option<String>, Val)>) -> Result<Val> {
-		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
-		let future_ctx = Context::new_future();
-
-		for Param(name, default) in self.params.with_defaults() {
-			let default = default.unwrap();
-			let eval_default = self.eval_default.clone();
-			new_bindings.insert(
-				name,
-				LazyBinding::Bound(lazy_val!(
-					closure!(clone future_ctx, clone eval_default, clone default, || (eval_default.clone()).0
-					(future_ctx.clone().unwrap(), default.clone()))
-				)),
-			);
-		}
-		for (name, val) in args.clone().into_iter().filter(|e| e.0.is_some()) {
-			new_bindings.insert(
-				name.as_ref().unwrap().clone(),
-				LazyBinding::Bound(resolved_lazy_val!(val.clone())),
-			);
-		}
-		for (i, param) in self.params.0.iter().enumerate() {
-			if let Some((None, val)) = args.get(i) {
-				new_bindings.insert(
-					param.0.clone(),
-					LazyBinding::Bound(resolved_lazy_val!(val.clone())),
-				);
-			}
-		}
-		let ctx = self
-			.ctx
-			.extend(new_bindings, None, None, None)?
-			.into_future(future_ctx);
-		self.eval_rhs.0(ctx)
+	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
+		let ctx = inline_parse_function_call(
+			call_ctx,
+			Some(self.ctx.clone()),
+			&self.params,
+			args,
+			tailstrict,
+		)?;
+		evaluate(ctx, &self.body)
 	}
 }
 

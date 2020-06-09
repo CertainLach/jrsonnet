@@ -1,12 +1,12 @@
 use crate::{
-	binding, context_creator, create_error, function_default, function_rhs, future_wrapper,
-	lazy_val, push, Context, ContextCreator, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue,
-	Result, Val,
+	binding, context_creator, create_error, future_wrapper, lazy_val, push, Context,
+	ContextCreator, FuncDesc, LazyBinding, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
-	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType, Visibility,
+	el, Arg, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember,
+	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
+	Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -15,16 +15,16 @@ use std::{
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (String, LazyBinding) {
 	let b = b.clone();
-	if let Some(args) = &b.params {
-		let args = args.clone();
+	if let Some(params) = &b.params {
+		let params = params.clone();
 		(
 			b.name.clone(),
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(
-					closure!(clone b, clone args, clone context_creator, || Ok(evaluate_method(
+					closure!(clone b, clone params, clone context_creator, || Ok(evaluate_method(
 						context_creator.0(this.clone(), super_obj.clone())?,
-						&b.value,
-						args.clone()
+						params.clone(),
+						b.value.clone(),
 					)))
 				))
 			})),
@@ -46,13 +46,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 	}
 }
 
-pub fn evaluate_method(ctx: Context, expr: &LocExpr, arg_spec: ParamsDesc) -> Val {
-	Val::Func(FuncDesc {
-		ctx,
-		params: arg_spec,
-		eval_rhs: function_rhs!(closure!(clone expr, |ctx| evaluate(ctx, &expr))),
-		eval_default: function_default!(closure!(|ctx, default| evaluate(ctx, &default))),
-	})
+pub fn evaluate_method(ctx: Context, params: ParamsDesc, body: LocExpr) -> Val {
+	Val::Func(FuncDesc { ctx, params, body })
 }
 
 pub fn evaluate_field_name(
@@ -214,7 +209,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 			let future_this = FutureObjValue::new();
 			let context_creator = context_creator!(
 				closure!(clone context, clone new_bindings, clone future_this, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-					Ok(context.clone().extend(
+					Ok(context.clone().extend_unbound(
 						new_bindings.clone().unwrap(),
 						context.clone().dollar().clone().or_else(||this.clone()),
 						Some(this.unwrap()),
@@ -292,8 +287,8 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 										// TODO: Assert
 										Ok(evaluate_method(
 											context_creator.0(this, super_obj)?,
-											&value.clone(),
 											params.clone(),
+											value.clone(),
 										))
 									})
 								),
@@ -393,7 +388,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 
 			let context = context
-				.extend(new_bindings, None, None, None)?
+				.extend_unbound(new_bindings, None, None, None)?
 				.into_future(future_context);
 			evaluate(context, &returned.clone())?
 		}
@@ -417,7 +412,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t.clone())?),
 		)?,
-		Apply(value, ArgsDesc(args), tailstrict) => {
+		Apply(value, args, tailstrict) => {
 			let value = evaluate(context.clone(), value)?.unwrap_if_lazy()?;
 			match value {
 				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
@@ -448,7 +443,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							assert!(v >= 0.0);
 							let mut out = Vec::with_capacity(v as usize);
 							for i in 0..v as usize {
-								out.push(d.evaluate(vec![(None, Val::Num(i as f64))])?)
+								let call_ctx =
+									Context::new().with_var("v".to_owned(), Val::Num(i as f64))?;
+								out.push(d.evaluate(
+									call_ctx,
+									&ArgsDesc(vec![Arg(None, el!(Expr::Var("v".to_owned())))]),
+									true,
+								)?)
 							}
 							Val::Arr(out)
 						} else {
@@ -536,31 +537,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				},
 				Val::Func(f) => {
 					let body = #[inline(always)]
-					|| {
-						f.evaluate(
-							args.clone()
-								.into_iter()
-								.map(
-									#[inline(always)]
-									move |a| {
-										Ok((
-											a.clone().0,
-											if *tailstrict {
-												Val::Lazy(LazyVal::new_resolved(evaluate(
-													context.clone(),
-													&a.1,
-												)?))
-											} else {
-												Val::Lazy(lazy_val!(
-													closure!(clone context, clone a, || evaluate(context.clone(), &a.clone().1))
-												))
-											},
-										))
-									},
-								)
-								.collect::<Result<Vec<_>>>()?,
-						)
-					};
+					|| f.evaluate(context, args, *tailstrict);
 					if *tailstrict {
 						body()?
 					} else {
@@ -570,7 +547,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				_ => panic!("{:?} is not a function", value),
 			}
 		}
-		Function(params, body) => evaluate_method(context, body, params.clone()),
+		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(value.clone(), "assertion condition".to_owned(), || {
 				evaluate(context.clone(), &value)?

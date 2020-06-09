@@ -90,7 +90,7 @@ fn main() {
 	let opts: Opts = Opts::parse();
 	let evaluator = jsonnet_evaluator::EvaluationState::default();
 	if !opts.no_stdlib {
-		evaluator.add_stdlib();
+		evaluator.with_stdlib();
 	}
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());
@@ -105,7 +105,7 @@ fn main() {
 			let v = match opts.format {
 				Format::Json => {
 					if opts.no_stdlib {
-						evaluator.add_stdlib();
+						evaluator.with_stdlib();
 					}
 					evaluator.add_global("__tmp__to_json__".to_owned(), v);
 					let v = evaluator.parse_evaluate_raw(&format!(
@@ -122,7 +122,7 @@ fn main() {
 				}
 				Format::Yaml => {
 					if opts.no_stdlib {
-						evaluator.add_stdlib();
+						evaluator.with_stdlib();
 					}
 					evaluator.add_global("__tmp__to_yaml__".to_owned(), v);
 					let v = evaluator

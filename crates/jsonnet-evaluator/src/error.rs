@@ -7,6 +7,11 @@ pub enum Error {
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	NoSuchField(String),
 
+	UnknownFunctionParameter(String),
+	BindingParameterASecondTime(String),
+	TooManyArgsFunctionHas(usize),
+	FunctionParameterNotBoundInCall(String),
+
 	RuntimeError(String),
 	StackOverflow,
 	FractionalIndex,
