@@ -2,9 +2,10 @@ pub mod location;
 
 use clap::Clap;
 use jsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
+use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
-use std::{path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr};
 
 enum Format {
 	None,
@@ -134,6 +135,36 @@ fn main() {
 	let result = evaluator.evaluate_file(&input);
 	match result {
 		Ok(v) => {
+			let v = match v {
+				Val::Func(f) => {
+					let mut desc_map = HashMap::new();
+					for ExtStr { name, value } in opts.tla_str.iter().cloned() {
+						desc_map.insert(name, el!(Expr::Str(value)));
+					}
+					for ExtStr { name, value } in opts.tla_code.iter().cloned() {
+						desc_map.insert(
+							name,
+							jsonnet_parser::parse(
+								&value,
+								&ParserSettings {
+									file_name: PathBuf::new(),
+									loc_data: false,
+								},
+							)
+							.unwrap(),
+						);
+					}
+					evaluator.add_global("__tmp__tlf__".to_owned(), Val::Func(f));
+					evaluator
+						.evaluate_raw(el!(Expr::Apply(
+							el!(Expr::Var("__tmp__tlf__".to_owned())),
+							ArgsDesc(desc_map.into_iter().map(|(k, v)| Arg(Some(k), v)).collect()),
+							false,
+						)))
+						.unwrap()
+				}
+				v => v,
+			};
 			let v = match opts.format {
 				Format::Json => {
 					if opts.no_stdlib {

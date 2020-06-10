@@ -191,9 +191,14 @@ impl EvaluationState {
 				file_name: PathBuf::from("raw.jsonnet"),
 				loc_data: true,
 			},
-		);
+		)
+		.unwrap();
+		self.evaluate_raw(parsed)
+	}
+
+	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
 		self.begin_state();
-		let value = evaluate(self.create_default_context()?, &parsed.unwrap());
+		let value = evaluate(self.create_default_context()?, &code);
 		self.end_state();
 		value
 	}
