@@ -68,17 +68,18 @@ impl ObjValue {
 	pub fn fields_visibility(&self) -> IndexMap<String, bool> {
 		let out = Rc::new(RefCell::new(IndexMap::new()));
 		self.enum_fields(&|name, visibility| {
+			let mut out = out.borrow_mut();
 			match visibility {
 				Visibility::Normal => {
-					if !out.borrow_mut().contains_key(name) {
-						out.borrow_mut().insert(name.to_owned(), true);
+					if !out.contains_key(name) {
+						out.insert(name.to_owned(), true);
 					}
 				}
 				Visibility::Hidden => {
-					out.borrow_mut().insert(name.to_owned(), false);
+					out.insert(name.to_owned(), false);
 				}
 				Visibility::Unhide => {
-					out.borrow_mut().insert(name.to_owned(), true);
+					out.insert(name.to_owned(), true);
 				}
 			};
 		});
