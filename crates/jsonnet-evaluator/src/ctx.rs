@@ -65,7 +65,7 @@ impl Context {
 	}
 
 	pub fn with_var(&self, name: String, value: Val) -> Result<Context> {
-		let mut new_bindings = HashMap::new();
+		let mut new_bindings = HashMap::with_capacity(1);
 		new_bindings.insert(name, resolved_lazy_val!(value));
 		self.extend(new_bindings, None, None, None)
 	}
@@ -101,7 +101,7 @@ impl Context {
 	) -> Result<Context> {
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
-		let mut new = HashMap::new();
+		let mut new = HashMap::with_capacity(new_bindings.len());
 		for (k, v) in new_bindings.into_iter() {
 			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
 		}
