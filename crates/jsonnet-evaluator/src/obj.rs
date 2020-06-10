@@ -1,8 +1,9 @@
 use crate::{evaluate_add_op, Binding, Result, Val};
+use indexmap::IndexMap;
 use jsonnet_parser::Visibility;
 use std::{
 	cell::RefCell,
-	collections::{BTreeMap, BTreeSet, HashMap},
+	collections::{BTreeMap, HashMap},
 	fmt::Debug,
 	rc::Rc,
 };
@@ -56,17 +57,28 @@ impl ObjValue {
 			Some(v) => ObjValue::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
 		}
 	}
-	pub fn fields(&self) -> BTreeSet<String> {
-		let mut fields = BTreeSet::new();
-		self.0.this_entries.keys().for_each(|k| {
-			fields.insert(k.clone());
-		});
-		if self.0.super_obj.is_some() {
-			for field in self.0.super_obj.clone().unwrap().fields() {
-				fields.insert(field);
-			}
+	pub fn enum_fields(&self, handler: &impl Fn(&str, &Visibility)) {
+		if let Some(s) = &self.0.super_obj {
+			s.enum_fields(handler);
 		}
-		fields
+		for (name, member) in self.0.this_entries.iter() {
+			handler(&name, &member.visibility);
+		}
+	}
+	pub fn fields_visibility(&self) -> IndexMap<String, bool> {
+		let out = Rc::new(RefCell::new(IndexMap::new()));
+		self.enum_fields(&|name, visibility| {
+			match visibility {
+				Visibility::Normal => {}
+				Visibility::Hidden => {
+					out.borrow_mut().insert(name.to_owned(), false);
+				}
+				Visibility::Unhide => {
+					out.borrow_mut().insert(name.to_owned(), true);
+				}
+			};
+		});
+		Rc::try_unwrap(out).unwrap().into_inner()
 	}
 	pub fn get(&self, key: &str) -> Result<Option<Val>> {
 		if let Some(v) = self.0.value_cache.borrow().get(key) {
