@@ -74,7 +74,6 @@ pub struct FuncDesc {
 	pub body: LocExpr,
 }
 impl FuncDesc {
-	// TODO: Check for unset variables
 	/// This function is always inlined to make tailstrict work
 	#[inline(always)]
 	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
