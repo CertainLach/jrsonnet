@@ -188,12 +188,12 @@ parser! {
 			/ array_expr(s)
 			/ array_comp_expr(s)
 
+			/ l(s,<keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}>)
+			/ l(s,<keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}>)
+
 			/ var_expr(s)
 			/ local_expr(s)
 			/ if_then_else_expr(s)
-
-			/ l(s,<keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}>)
-			/ l(s,<keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}>)
 
 			/ l(s,<keyword("function") _ "(" _ params:params(s) _ ")" _ expr:expr(s) {Expr::Function(params, expr)}>)
 			/ l(s,<assertion:assertion(s) _ ";" _ expr:expr(s) { Expr::AssertExpr(assertion, expr) }>)
@@ -374,6 +374,10 @@ pub mod tests {
 		assert_eq!(
 			parse!("import \"hello\""),
 			el!(Expr::Import(PathBuf::from("hello"))),
+		);
+		assert_eq!(
+			parse!("importstr \"garnish.txt\""),
+			el!(Expr::ImportStr(PathBuf::from("garnish.txt")))
 		);
 	}
 
