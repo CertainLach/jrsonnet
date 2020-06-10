@@ -50,14 +50,18 @@ impl LazyBinding {
 }
 
 pub struct EvaluationSettings {
-	max_stack_frames: usize,
-	max_stack_trace_size: usize,
+	pub max_stack_frames: usize,
+	pub max_stack_trace_size: usize,
+	pub import_resolver: Box<dyn Fn(&PathBuf) -> String>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		EvaluationSettings {
 			max_stack_frames: 200,
 			max_stack_trace_size: 20,
+			import_resolver: Box::new(|path| {
+				panic!("default EvaluationSettings have no support for import resolution, can't import {:?}", path)
+			}),
 		}
 	}
 }
@@ -102,6 +106,12 @@ pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
+	pub fn new(settings: EvaluationSettings) -> Self {
+		EvaluationState(Rc::new(EvaluationStateInternals {
+			settings,
+			..Default::default()
+		}))
+	}
 	pub fn add_file(&self, name: PathBuf, code: String) -> std::result::Result<(), ParseError> {
 		self.0.files.borrow_mut().insert(
 			name.clone(),
@@ -139,6 +149,11 @@ impl EvaluationState {
 	}
 	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
 		self.begin_state();
+		let value = self.evaluate_file_in_current_state(name)?;
+		self.end_state();
+		Ok(value)
+	}
+	pub(crate) fn evaluate_file_in_current_state(&self, name: &PathBuf) -> Result<Val> {
 		let expr: LocExpr = {
 			let ro_map = self.0.files.borrow();
 			let value = ro_map
@@ -159,8 +174,14 @@ impl EvaluationState {
 				.2
 				.replace(value.clone());
 		}
-		self.end_state();
 		Ok(value)
+	}
+	pub(crate) fn import_file(&self, path: &PathBuf) -> Result<Val> {
+		if !self.0.files.borrow().contains_key(path) {
+			let file_str = (self.0.settings.import_resolver)(path);
+			self.add_file(path.clone(), file_str).unwrap();
+		}
+		self.evaluate_file_in_current_state(path)
 	}
 
 	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {

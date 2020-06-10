@@ -1,5 +1,5 @@
 use crate::{
-	binding, context_creator, create_error, future_wrapper, lazy_val, push, Context,
+	binding, context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
 	ContextCreator, FuncDesc, LazyBinding, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
@@ -606,6 +606,16 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					None => Val::Null,
 				}
 			}
+		}
+		Import(path) => {
+			let mut lib_path = loc
+				.clone()
+				.expect("imports can't be used without loc_data")
+				.0
+				.clone();
+			lib_path.pop();
+			lib_path.push(path);
+			with_state(|s| s.import_file(&lib_path))?
 		}
 		_ => panic!(
 			"evaluation not implemented: {:?}",

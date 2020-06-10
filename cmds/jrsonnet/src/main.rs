@@ -1,7 +1,7 @@
 pub mod location;
 
 use clap::Clap;
-use jsonnet_evaluator::{EvaluationState, LocError, StackTrace, Val};
+use jsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
 use std::{path::PathBuf, str::FromStr};
@@ -111,7 +111,10 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
-	let evaluator = jsonnet_evaluator::EvaluationState::default();
+	let evaluator = jsonnet_evaluator::EvaluationState::new(EvaluationSettings {
+		import_resolver: Box::new(|path| String::from_utf8(std::fs::read(path).unwrap()).unwrap()),
+		..Default::default()
+	});
 	if !opts.no_stdlib {
 		evaluator.with_stdlib();
 	}
