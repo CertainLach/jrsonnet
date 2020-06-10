@@ -12,6 +12,8 @@ pub enum Error {
 	TooManyArgsFunctionHas(usize),
 	FunctionParameterNotBoundInCall(String),
 
+	UndefinedExternalVariable(String),
+
 	RuntimeError(String),
 	StackOverflow,
 	FractionalIndex,

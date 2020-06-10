@@ -42,19 +42,42 @@ impl FromStr for TraceFormat {
 	}
 }
 
+#[derive(Clone)]
+struct ExtStr {
+	name: String,
+	value: String,
+}
+impl FromStr for ExtStr {
+	type Err = &'static str;
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		let out: Vec<_> = s.split('=').collect();
+		match out.len() {
+			1 => Ok(ExtStr {
+				name: out[0].to_owned(),
+				value: std::env::var(out[0]).or(Err("missing env var"))?,
+			}),
+			2 => Ok(ExtStr {
+				name: out[0].to_owned(),
+				value: out[1].to_owned(),
+			}),
+			_ => Err("bad ext-str syntax"),
+		}
+	}
+}
+
 #[derive(Clap)]
 #[clap(version = "0.1.0", author = "Lach <iam@lach.pw>")]
 struct Opts {
 	#[clap(long, about = "Disable global std variable")]
 	no_stdlib: bool,
 	#[clap(long, about = "Add external string")]
-	ext_str: Option<Vec<String>>,
+	ext_str: Vec<ExtStr>,
 	#[clap(long, about = "Add external string from code")]
-	ext_code: Option<Vec<String>>,
+	ext_code: Vec<ExtStr>,
 	#[clap(long, about = "Add TLA")]
-	tla_str: Option<Vec<String>>,
+	tla_str: Vec<ExtStr>,
 	#[clap(long, about = "Add TLA from code")]
-	tla_code: Option<Vec<String>>,
+	tla_code: Vec<ExtStr>,
 	#[clap(long, short = "f", default_value = "json", possible_values = &["none", "json", "yaml"], about = "Output format, wraps resulting value to corresponding std.manifest call")]
 	format: Format,
 	#[clap(long, default_value = "default", possible_values = &["cpp", "go", "default"], about = "Emulated needed stacktrace display")]
@@ -91,6 +114,12 @@ fn main() {
 	let evaluator = jsonnet_evaluator::EvaluationState::default();
 	if !opts.no_stdlib {
 		evaluator.with_stdlib();
+	}
+	for ExtStr { name, value } in opts.ext_str.iter().cloned() {
+		evaluator.add_ext_var(name, Val::Str(value));
+	}
+	for ExtStr { name, value } in opts.ext_code.iter().cloned() {
+		evaluator.add_ext_var(name, evaluator.parse_evaluate_raw(&value).unwrap());
 	}
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());

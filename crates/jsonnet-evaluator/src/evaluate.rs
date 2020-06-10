@@ -533,6 +533,20 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad pow call");
 						}
 					}
+					("std", "extVar") => {
+						assert_eq!(args.len(), 1);
+						if let Val::Str(a) = evaluate(context, &args[0].1)? {
+							with_state(|s| s.0.ext_vars.borrow().get(&a).cloned()).ok_or_else(
+								|| {
+									create_error::<()>(crate::Error::UndefinedExternalVariable(a))
+										.err()
+										.unwrap()
+								},
+							)?
+						} else {
+							panic!("bad extVar call");
+						}
+					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
 				Val::Func(f) => {

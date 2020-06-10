@@ -72,6 +72,9 @@ pub struct EvaluationStateInternals {
 	files: RefCell<HashMap<PathBuf, FileData>>,
 	globals: RefCell<HashMap<String, Val>>,
 
+	/// Values to use with std.extVar
+	ext_vars: RefCell<HashMap<String, Val>>,
+
 	settings: EvaluationSettings,
 }
 
@@ -176,6 +179,9 @@ impl EvaluationState {
 
 	pub fn add_global(&self, name: String, value: Val) {
 		self.0.globals.borrow_mut().insert(name, value);
+	}
+	pub fn add_ext_var(&self, name: String, value: Val) {
+		self.0.ext_vars.borrow_mut().insert(name, value);
 	}
 
 	pub fn with_stdlib(&self) -> &Self {
