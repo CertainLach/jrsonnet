@@ -62,8 +62,6 @@ pub enum BinaryOpType {
 	Lte,
 	Gte,
 
-	In,
-
 	BitAnd,
 	BitOr,
 	BitXor,

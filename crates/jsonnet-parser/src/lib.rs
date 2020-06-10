@@ -242,6 +242,13 @@ parser! {
 				a:(@) _ ">" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
 				a:(@) _ "<=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lte, b))}
 				a:(@) _ ">=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
+				a:(@) _ keyword("in") _ b:@ {loc_expr_todo!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("objectHasEx".to_owned()))
+					)), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
+					true
+				))}
 				--
 				a:(@) _ "<<" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lhs, b))}
 				a:(@) _ ">>" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Rhs, b))}
