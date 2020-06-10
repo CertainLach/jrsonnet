@@ -423,7 +423,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						match evaluate(context, expr)? {
 							Val::Str(n) => Val::Num(n.chars().count() as f64),
 							Val::Arr(i) => Val::Num(i.len() as f64),
-							Val::Obj(o) => Val::Num(o.fields().len() as f64),
+							Val::Obj(o) => Val::Num(
+								o.fields_visibility()
+									.into_iter()
+									.filter(|(_k, v)| *v)
+									.count() as f64,
+							),
 							v => panic!("can't get length of {:?}", v),
 						}
 					}
@@ -472,12 +477,17 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					// object, includeHidden
 					("std", "objectFieldsEx") => {
 						assert_eq!(args.len(), 2);
-						if let (Val::Obj(body), Val::Bool(_include_hidden)) = (
+						if let (Val::Obj(body), Val::Bool(include_hidden)) = (
 							evaluate(context.clone(), &args[0].1)?,
 							evaluate(context, &args[1].1)?,
 						) {
-							// TODO: handle visibility (_include_hidden)
-							Val::Arr(body.fields().into_iter().map(Val::Str).collect())
+							Val::Arr(
+								body.fields_visibility()
+									.into_iter()
+									.filter(|(_k, v)| *v || include_hidden)
+									.map(|(k, _v)| Val::Str(k))
+									.collect(),
+							)
 						} else {
 							panic!("bad objectFieldsEx call");
 						}
