@@ -556,6 +556,24 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad objectFieldsEx call");
 						}
 					}
+					// object, field, includeHidden
+					("std", "objectHasEx") => {
+						assert_eq!(args.len(), 3);
+						if let (Val::Obj(body), Val::Str(name), Val::Bool(include_hidden)) = (
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context.clone(), &args[1].1)?,
+							evaluate(context, &args[2].1)?,
+						) {
+							Val::Bool(
+								body.fields_visibility()
+									.into_iter()
+									.filter(|(_k, v)| *v || include_hidden)
+									.any(|(k, _v)| k == name),
+							)
+						} else {
+							panic!("bad objectHasEx call");
+						}
+					}
 					("std", "primitiveEquals") => {
 						assert_eq!(args.len(), 2);
 						let (a, b) = (
