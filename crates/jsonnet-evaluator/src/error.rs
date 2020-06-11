@@ -16,6 +16,10 @@ pub enum Error {
 
 	FieldMustBeStringGot(ValType),
 
+	AttemptedIndexAnArrayWithString(String),
+	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
+	CantIndexInto(ValType),
+
 	RuntimeError(String),
 	StackOverflow,
 	FractionalIndex,

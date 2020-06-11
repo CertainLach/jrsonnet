@@ -421,6 +421,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						create_error(crate::Error::NoSuchField(s))?
 					}
 				}
+				(Val::Obj(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+					ValType::Obj,
+					ValType::Str,
+					n.value_type()?,
+				))?,
+
 				(Val::Arr(v), Val::Num(n)) => {
 					if n.fract() > f64::EPSILON {
 						create_error(crate::Error::FractionalIndex)?
@@ -430,10 +436,25 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						.clone()
 						.unwrap_if_lazy()?
 				}
+				(Val::Arr(_), Val::Str(n)) => {
+					create_error(crate::Error::AttemptedIndexAnArrayWithString(n))?
+				}
+				(Val::Arr(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+					ValType::Arr,
+					ValType::Num,
+					n.value_type()?,
+				))?,
+
 				(Val::Str(s), Val::Num(n)) => {
 					Val::Str(s.chars().skip(n as usize).take(1).collect())
 				}
-				(v, i) => todo!("not implemented: {:?}[{:?}]", v, i.unwrap_if_lazy()),
+				(Val::Str(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+					ValType::Str,
+					ValType::Num,
+					n.value_type()?,
+				))?,
+
+				(v, _) => create_error(crate::Error::CantIndexInto(v.value_type()?))?,
 			}
 		}
 		LocalExpr(bindings, returned) => {
