@@ -22,12 +22,6 @@ pub use obj::*;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 pub use val::*;
 
-rc_fn_helper!(
-	Binding,
-	binding,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Val>
-);
-
 type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
 #[derive(Clone)]
 pub enum LazyBinding {

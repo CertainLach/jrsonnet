@@ -1,6 +1,6 @@
 use crate::{
-	binding, context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
-	ContextCreator, FuncDesc, LazyBinding, ObjMember, ObjValue, Result, Val,
+	context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
+	ContextCreator, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -252,17 +252,17 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 							ObjMember {
 								add: plus,
 								visibility: visibility.clone(),
-								invoke: binding!(
+								invoke: LazyBinding::Bindable(Rc::new(
 									closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-										push(value.clone(), "object ".to_owned()+&name+" field", ||{
+										Ok(LazyVal::new_resolved(push(value.clone(), "object ".to_owned()+&name+" field", ||{
 											let context = context_creator.0(this, super_obj)?;
 											evaluate(
 												context,
 												&value,
 											)?.unwrap_if_lazy()
-										})
-									})
-								),
+										})?))
+									}),
+								)),
 							},
 						);
 					}
@@ -282,16 +282,16 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 							ObjMember {
 								add: false,
 								visibility: Visibility::Hidden,
-								invoke: binding!(
+								invoke: LazyBinding::Bindable(Rc::new(
 									closure!(clone value, clone context_creator, |this, super_obj| {
 										// TODO: Assert
-										Ok(evaluate_method(
+										Ok(LazyVal::new_resolved(evaluate_method(
 											context_creator.0(this, super_obj)?,
 											params.clone(),
 											value.clone(),
-										))
-									})
-								),
+										)))
+									}),
+								)),
 							},
 						);
 					}

@@ -1,4 +1,4 @@
-use crate::{evaluate_add_op, Binding, Result, Val};
+use crate::{evaluate_add_op, LazyBinding, Result, Val};
 use indexmap::IndexMap;
 use jsonnet_parser::Visibility;
 use std::{
@@ -12,7 +12,7 @@ use std::{
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
-	pub invoke: Binding,
+	pub invoke: LazyBinding,
 }
 
 #[derive(Debug)]
@@ -102,12 +102,16 @@ impl ObjValue {
 	}
 	pub(crate) fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
-			(Some(k), None) => Ok(Some(k.invoke.0(
-				Some(real_this.clone()),
-				self.0.super_obj.clone(),
-			)?)),
+			(Some(k), None) => Ok(Some(
+				k.invoke
+					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
+					.evaluate()?,
+			)),
 			(Some(k), Some(s)) => {
-				let our = k.invoke.0(Some(real_this.clone()), self.0.super_obj.clone())?;
+				let our = k
+					.invoke
+					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
+					.evaluate()?;
 				if k.add {
 					s.get_raw(key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
