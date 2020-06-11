@@ -138,7 +138,7 @@ parser! {
 					key,
 					value,
 					post_locals,
-					rest: [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat(),
+					compspecs: [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat(),
 				}
 			}
 			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}

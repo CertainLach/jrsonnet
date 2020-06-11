@@ -14,6 +14,8 @@ pub enum Error {
 
 	UndefinedExternalVariable(String),
 
+	FieldMustBeStringGot(ValType),
+
 	RuntimeError(String),
 	StackOverflow,
 	FractionalIndex,

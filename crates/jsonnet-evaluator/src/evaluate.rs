@@ -1,6 +1,6 @@
 use crate::{
 	context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
-	ContextCreator, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -167,13 +167,14 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
-pub fn evaluate_comp(
+#[inline(always)]
+pub fn evaluate_comp<T>(
 	context: Context,
-	value: &LocExpr,
+	value: &impl Fn(Context) -> Result<T>,
 	specs: &[CompSpec],
-) -> Result<Option<Vec<Val>>> {
+) -> Result<Option<Vec<T>>> {
 	Ok(match specs.get(0) {
-		None => Some(vec![evaluate(context, &value)?]),
+		None => Some(vec![value(context)?]),
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
 			if evaluate(context.clone(), &cond)?.try_cast_bool("if spec")? {
 				evaluate_comp(context, value, &specs[1..])?
@@ -193,7 +194,7 @@ pub fn evaluate_comp(
 							&specs[1..],
 						)?);
 					}
-					Some(out.iter().flatten().flatten().cloned().collect())
+					Some(out.into_iter().flatten().flatten().collect())
 				}
 				_ => panic!("for expression evaluated to non-iterable value"),
 			}
@@ -208,7 +209,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 			let new_bindings = FutureNewBindings::new();
 			let future_this = FutureObjValue::new();
 			let context_creator = context_creator!(
-				closure!(clone context, clone new_bindings, clone future_this, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
+				closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
 					Ok(context.clone().extend_unbound(
 						new_bindings.clone().unwrap(),
 						context.clone().dollar().clone().or_else(||this.clone()),
@@ -301,7 +302,70 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 			}
 			future_this.fill(ObjValue::new(None, Rc::new(new_members)))
 		}
-		_ => todo!(),
+		ObjBody::ObjComp {
+			pre_locals,
+			key,
+			value,
+			post_locals,
+			compspecs,
+		} => {
+			let future_this = FutureObjValue::new();
+			let mut new_members = BTreeMap::new();
+			for (k, v) in evaluate_comp(
+				context.clone(),
+				&|ctx| {
+					let new_bindings = FutureNewBindings::new();
+					let context_creator = context_creator!(
+						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
+							Ok(context.clone().extend_unbound(
+								new_bindings.clone().unwrap(),
+								context.clone().dollar().clone().or_else(||this.clone()),
+								None,
+								super_obj
+							)?)
+						})
+					);
+					let mut bindings: HashMap<String, LazyBinding> = HashMap::new();
+					for (n, b) in pre_locals
+						.iter()
+						.chain(post_locals.iter())
+						.map(|b| evaluate_binding(b, context_creator.clone()))
+					{
+						bindings.insert(n, b);
+					}
+					let bindings = new_bindings.fill(bindings);
+					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
+					let key = evaluate(ctx.clone(), &key)?;
+					let value = LazyBinding::Bindable(Rc::new(
+						closure!(clone ctx, clone value, |this, _super_obj| {
+							Ok(LazyVal::new_resolved(evaluate(ctx.extend(HashMap::new(), None, this, None)?, &value)?))
+						}),
+					));
+
+					Ok((key, value))
+				},
+				&compspecs,
+			)?
+			.unwrap()
+			{
+				match k {
+					Val::Null => {}
+					Val::Str(n) => {
+						new_members.insert(
+							n,
+							ObjMember {
+								add: false,
+								visibility: Visibility::Normal,
+								invoke: v,
+							},
+						);
+					}
+					v => create_error(Error::FieldMustBeStringGot(v.value_type()?))?,
+				}
+			}
+
+			future_this.fill(ObjValue::new(None, Rc::new(new_members)))
+		}
 	})
 }
 
@@ -405,7 +469,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		ArrComp(expr, compspecs) => Val::Arr(
 			// First compspec should be forspec, so no "None" possible here
-			evaluate_comp(context, expr, compspecs)?.unwrap(),
+			evaluate_comp(context, &|ctx| evaluate(ctx, expr), compspecs)?.unwrap(),
 		),
 		Obj(body) => Val::Obj(evaluate_object(context, body.clone())?),
 		ObjExtend(s, t) => evaluate_add_op(

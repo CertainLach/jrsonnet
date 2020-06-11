@@ -120,7 +120,7 @@ pub enum ObjBody {
 		key: LocExpr,
 		value: LocExpr,
 		post_locals: Vec<BindSpec>,
-		rest: Vec<CompSpec>,
+		compspecs: Vec<CompSpec>,
 	},
 }
 

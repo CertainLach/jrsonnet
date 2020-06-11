@@ -493,6 +493,14 @@ pub mod tests {
 	}
 
 	#[test]
+	fn object_comp() {
+		assert_json!(
+			r#"{local t = "a", ["h"+i+"_"+z]: if "h"+(i-1)+"_"+z in self then t+1 else 0+t for i in [1,2,3] for z in [2,3,4] if z != i}"#,
+			"{\"h1_2\": \"0a\",\"h1_3\": \"0a\",\"h1_4\": \"0a\",\"h2_3\": \"a1\",\"h2_4\": \"a1\",\"h3_2\": \"0a\",\"h3_4\": \"a1\"}"
+		)
+	}
+
+	#[test]
 	fn direct_self() {
 		println!(
 			"{:#?}",
