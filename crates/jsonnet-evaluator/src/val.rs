@@ -1,7 +1,7 @@
 use crate::{
 	create_error, evaluate, function::inline_parse_function_call, Context, Error, ObjValue, Result,
 };
-use jsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
+use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	fmt::{Debug, Display},
@@ -172,5 +172,26 @@ impl Val {
 			Val::Intristic(_, _) => ValType::Func,
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
+	}
+	pub fn into_json(self, padding: usize) -> Result<String> {
+		let ctx = Context::new().with_var("__tmp__to_json__".to_owned(), self)?;
+		if let Val::Str(result) = evaluate(
+			ctx,
+			&el!(Expr::Apply(
+				el!(Expr::Index(
+					el!(Expr::Var("std".to_owned())),
+					el!(Expr::Str("manifestJsonEx".to_owned()))
+				)),
+				ArgsDesc(vec![
+					Arg(None, el!(Expr::Var("__tmp__to_json__".to_owned()))),
+					Arg(None, el!(Expr::Str(" ".repeat(padding))))
+				]),
+				false
+			)),
+		)? {
+			Ok(result)
+		} else {
+			unreachable!()
+		}
 	}
 }
