@@ -81,12 +81,8 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
 
-		(Val::Str(v1), Val::Num(v2)) => Val::Str(format!("{}{}", v1, v2)),
-		(Val::Num(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
-		(Val::Str(v1), Val::Bool(v2)) => Val::Str(format!("{}{}", v1, v2)),
-		(Val::Bool(v1), Val::Str(v2)) => Val::Str(format!("{}{}", v1, v2)),
-		(Val::Str(v1), Val::Null) => Val::Str(format!("{}null", v1)),
-		(Val::Null, Val::Str(v2)) => Val::Str(format!("null{}", v2)),
+		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_json(0)?)),
+		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_json(0)?, s)),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
