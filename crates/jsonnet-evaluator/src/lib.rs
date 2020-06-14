@@ -68,6 +68,7 @@ pub struct EvaluationStateInternals {
 	/// Contains file source codes and evaluated results for imports and pretty
 	/// printing stacktraces
 	files: RefCell<HashMap<PathBuf, FileData>>,
+	str_files: RefCell<HashMap<PathBuf, String>>,
 	globals: RefCell<HashMap<String, Val>>,
 
 	/// Values to use with std.extVar
@@ -176,6 +177,13 @@ impl EvaluationState {
 			self.add_file(path.clone(), file_str).unwrap();
 		}
 		self.evaluate_file_in_current_state(path)
+	}
+	pub(crate) fn import_file_str(&self, path: &PathBuf) -> Result<String> {
+		if !self.0.str_files.borrow().contains_key(path) {
+			let file_str = (self.0.settings.import_resolver)(path);
+			self.0.str_files.borrow_mut().insert(path.clone(), file_str);
+		}
+		Ok(self.0.str_files.borrow().get(path).cloned().unwrap())
 	}
 
 	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {

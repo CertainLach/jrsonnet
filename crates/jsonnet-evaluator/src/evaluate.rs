@@ -1,6 +1,7 @@
 use crate::{
 	context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
 	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	ValType,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -726,9 +727,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			lib_path.push(path);
 			with_state(|s| s.import_file(&lib_path))?
 		}
-		_ => panic!(
-			"evaluation not implemented: {:?}",
-			LocExpr(expr.clone(), loc.clone())
-		),
+		ImportStr(path) => {
+			let mut file_path = loc
+				.clone()
+				.expect("imports can't be used without loc_data")
+				.0
+				.clone();
+			file_path.pop();
+			file_path.push(path);
+			Val::Str(with_state(|s| s.import_file_str(&file_path))?)
+		}
 	})
 }
