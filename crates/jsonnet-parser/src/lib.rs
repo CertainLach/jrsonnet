@@ -6,10 +6,8 @@ extern crate test;
 use peg::parser;
 use std::{path::PathBuf, rc::Rc};
 mod expr;
-mod string_processing;
 pub use expr::*;
 pub use peg;
-use string_processing::deent;
 
 pub struct ParserSettings {
 	pub loc_data: bool,
@@ -81,26 +79,20 @@ parser! {
 		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
 			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
 
-		pub rule whole_line() -> String
-			= str:$((!['\n'][_])* "\n") {str.to_owned()}
+		pub rule whole_line() -> &'input str
+			= str:$((!['\n'][_])* "\n") {str}
+		pub rule string_block() -> String
+			= "|||" (!['\n']single_whitespace())* "\n"
+			  prefix:[' ']+ first_line:whole_line()
+			  lines:([' ']*<{prefix.len()}> s:whole_line() {s})*
+			  [' ']*<, {prefix.len() - 1}> "|||"
+			  {let mut l = first_line.to_owned(); l.extend(lines); l}
 		pub rule string() -> String
 			= "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
 			/ "'" str:$(("\\'" / "\\\\" / (!['\''][_]))*) "'" {unescape::unescape(str).unwrap()}
 			/ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
 			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
-			// TODO: This is temporary workaround, i still dont know how to write this correctly btw.
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<1, 1> whole_line())+) " "*<0, 0> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<2, 2> whole_line())+) " "*<1, 1> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<3, 3> whole_line())+) " "*<2, 2> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<4, 4> whole_line())+) " "*<3, 3> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<5, 5> whole_line())+) " "*<4, 4> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<6, 6> whole_line())+) " "*<5, 5> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<7, 7> whole_line())+) " "*<6, 6> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<8, 8> whole_line())+) " "*<7, 7> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<9, 9> whole_line())+) " "*<8, 8> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<10, 10> whole_line())+) " "*<9, 9> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<11, 11> whole_line())+) " "*<10, 10> "|||" {deent(str)}
-			/ "|||" (!['\n']single_whitespace())* "\n" str:$((" "*<12, 12> whole_line())+) " "*<11, 10> "|||" {deent(str)}
+			/ string_block()
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
@@ -342,8 +334,8 @@ pub mod tests {
 	#[test]
 	fn multiline_string() {
 		assert_eq!(
-			parse!("|||\n      Hello world!\n  a\n|||"),
-			el!(Expr::Str("    Hello world!\na\n".to_owned())),
+			parse!("|||\n    Hello world!\n     a\n|||"),
+			el!(Expr::Str("Hello world!\n a\n".to_owned())),
 		)
 	}
 
