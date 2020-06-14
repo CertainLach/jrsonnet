@@ -192,13 +192,17 @@ parser! {
 
 			/ l(s,<keyword("error") _ expr:expr(s) { Expr::Error(expr) }>)
 
+		rule slice_part(s: &ParserSettings) -> Option<LocExpr>
+			= e:(_ e:expr(s) _{e})? {e}
 		pub rule slice_desc(s: &ParserSettings) -> SliceDesc
-			= start:expr(s)? _ ":" _ pair:(end:expr(s)? _ step:(":" _ e:expr(s) {e})? {(end, step)})? {
-				if let Some((end, step)) = pair {
-					SliceDesc { start, end, step }
+			= start:slice_part(s) ":" pair:(end:slice_part(s) ":" step:slice_part(s) {(end, step)})? {
+				let (end, step) = if let Some((end, step)) = pair {
+					(end, step)
 				}else{
-					SliceDesc { start, end: None, step: None }
-				}
+					(None, None)
+				};
+
+				SliceDesc { start, end, step }
 			}
 
 		rule expr(s: &ParserSettings) -> LocExpr
@@ -262,7 +266,19 @@ parser! {
 						"!" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
 						"~" _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
 				--
-				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Slice(a, s))}
+				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("slice".to_owned())),
+					)),
+					ArgsDesc(vec![
+						Arg(None, a),
+						Arg(None, s.start.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
+						Arg(None, s.end.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
+						Arg(None, s.step.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
+					]),
+					true,
+				))}
 				a:(@) _ "." _ s:id() {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s))))}
 				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args, ts.is_some()))}
@@ -337,6 +353,14 @@ pub mod tests {
 			parse!("|||\n    Hello world!\n     a\n|||"),
 			el!(Expr::Str("Hello world!\n a\n".to_owned())),
 		)
+	}
+
+	#[test]
+	fn slice() {
+		println!("{:?}", parse!("a[1:]"));
+		println!("{:?}", parse!("a[1::]"));
+		println!("{:?}", parse!("a[:1:]"));
+		println!("{:?}", parse!("a[::1]"));
 	}
 
 	#[test]
