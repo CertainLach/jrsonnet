@@ -176,13 +176,6 @@ pub enum Expr {
 	/// (obj)
 	Parened(LocExpr),
 
-	/// Params in function definition
-	/// hello, world, test = 2
-	Params(ParamsDesc),
-	/// Args in function call
-	/// 2 + 2, 3, named = 6
-	Args(ArgsDesc),
-
 	/// -2
 	UnaryOp(UnaryOpType, LocExpr),
 	/// 2 - 2
@@ -192,8 +185,6 @@ pub enum Expr {
 	/// local a = 2; { b: a }
 	LocalExpr(Vec<BindSpec>, LocExpr),
 
-	/// a = 3
-	Bind(BindSpec),
 	/// import "hello"
 	Import(PathBuf),
 	/// importStr "file.txt"
@@ -202,12 +193,8 @@ pub enum Expr {
 	Error(LocExpr),
 	/// a(b, c)
 	Apply(LocExpr, ArgsDesc, bool),
-	///
-	Select(LocExpr, String),
 	/// a[b]
 	Index(LocExpr, LocExpr),
-	/// a[1::2]
-	Slice(LocExpr, SliceDesc),
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
 	/// if true == false then 1 else 2
@@ -216,10 +203,6 @@ pub enum Expr {
 		cond_then: LocExpr,
 		cond_else: Option<LocExpr>,
 	},
-	/// if 2 = 3
-	IfSpec(IfSpecData),
-	/// for elem in array
-	ForSpec(ForSpecData),
 }
 
 /// file, begin offset, end offset
