@@ -174,24 +174,28 @@ impl Val {
 		})
 	}
 	pub fn into_json(self, padding: usize) -> Result<String> {
-		let ctx = Context::new().with_var("__tmp__to_json__".to_owned(), self)?;
-		if let Val::Str(result) = evaluate(
-			ctx,
-			&el!(Expr::Apply(
-				el!(Expr::Index(
-					el!(Expr::Var("std".to_owned())),
-					el!(Expr::Str("manifestJsonEx".to_owned()))
+		with_state(|s| {
+			let ctx = s
+				.create_default_context()?
+				.with_var("__tmp__to_json__".to_owned(), self)?;
+			if let Val::Str(result) = evaluate(
+				&ctx,
+				&el!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".to_owned())),
+						el!(Expr::Str("manifestJsonEx".to_owned()))
+					)),
+					ArgsDesc(vec![
+						Arg(None, el!(Expr::Var("__tmp__to_json__".to_owned()))),
+						Arg(None, el!(Expr::Str(" ".repeat(padding))))
+					]),
+					false
 				)),
-				ArgsDesc(vec![
-					Arg(None, el!(Expr::Var("__tmp__to_json__".to_owned()))),
-					Arg(None, el!(Expr::Str(" ".repeat(padding))))
-				]),
-				false
-			)),
-		)? {
-			Ok(result)
-		} else {
-			unreachable!()
-		}
+			)? {
+				Ok(result)
+			} else {
+				unreachable!()
+			}
+		})
 	}
 }
