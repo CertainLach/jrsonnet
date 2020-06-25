@@ -22,6 +22,8 @@ pub enum Error {
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
 	CantIndexInto(ValType),
 
+	StandaloneSuper,
+
 	RuntimeError(String),
 	StackOverflow,
 	FractionalIndex,

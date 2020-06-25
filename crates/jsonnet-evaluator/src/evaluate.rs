@@ -811,5 +811,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			file_path.push(path);
 			Val::Str(with_state(|s| s.import_file_str(&file_path))?)
 		}
+		Literal(LiteralType::Super) => return create_error(crate::error::Error::StandaloneSuper),
 	})
 }
