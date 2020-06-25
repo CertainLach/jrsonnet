@@ -271,10 +271,7 @@ fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 	};
 	for item in trace.0.iter() {
 		let desc = &item.1;
-		if (item.0).1.is_none() {
-			continue;
-		}
-		let source = (item.0).1.clone().unwrap();
+		let source = item.0.clone();
 		let code = evaluator.get_source(&source.0);
 		if code.is_none() {
 			continue;

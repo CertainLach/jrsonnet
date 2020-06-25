@@ -81,15 +81,21 @@ thread_local! {
 	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
-	EVAL_STATE.with(
-		|s| f(s.borrow().as_ref().unwrap()),
-	)
+	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
 pub(crate) fn create_error<T>(err: Error) -> Result<T> {
 	with_state(|s| s.error(err))
 }
-pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
-	with_state(|s| s.push(e, comment, f))
+pub(crate) fn push<T>(
+	e: &Option<Rc<ExprLocation>>,
+	comment: &str,
+	f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+	if e.is_some() {
+		with_state(|s| s.push(e.clone().unwrap(), comment.to_owned(), f))
+	} else {
+		f()
+	}
 }
 
 /// Maintains stack trace and import resolution
@@ -247,7 +253,12 @@ impl EvaluationState {
 		Context::new().extend_unbound(new_bindings, None, None, None)
 	}
 
-	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
+	pub fn push<T>(
+		&self,
+		e: Rc<ExprLocation>,
+		comment: String,
+		f: impl FnOnce() -> Result<T>,
+	) -> Result<T> {
 		{
 			let mut stack = self.0.stack.borrow_mut();
 			if stack.len() > self.0.settings.max_stack_frames {
@@ -302,26 +313,18 @@ pub mod tests {
 	use super::Val;
 	use crate::EvaluationState;
 	use jsonnet_parser::*;
-	use std::path::PathBuf;
+	use std::{path::PathBuf, rc::Rc};
 
 	#[test]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
 		state
 			.push(
-				loc_expr!(
-					Expr::Num(0.0),
-					true,
-					(PathBuf::from("test1.jsonnet"), 10, 20)
-				),
+				Rc::new(ExprLocation(PathBuf::from("test1.jsonnet"), 10, 20)),
 				"outer".to_owned(),
 				|| {
 					state.push(
-						loc_expr!(
-							Expr::Num(0.0),
-							true,
-							(PathBuf::from("test2.jsonnet"), 30, 40)
-						),
+						Rc::new(ExprLocation(PathBuf::from("test2.jsonnet"), 30, 40)),
 						"inner".to_owned(),
 						|| {
 							state.print_stack_trace();

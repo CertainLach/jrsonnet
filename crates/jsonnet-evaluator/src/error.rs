@@ -1,6 +1,6 @@
 use crate::ValType;
-use jsonnet_parser::LocExpr;
-use std::path::PathBuf;
+use jsonnet_parser::ExprLocation;
+use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum Error {
@@ -38,7 +38,7 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug)]
-pub struct StackTraceElement(pub LocExpr, pub String);
+pub struct StackTraceElement(pub Rc<ExprLocation>, pub String);
 #[derive(Debug, Clone)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 

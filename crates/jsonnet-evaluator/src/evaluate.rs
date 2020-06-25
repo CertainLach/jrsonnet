@@ -35,7 +35,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Strin
 			b.name.clone(),
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
-					push(b.value.clone(), "thunk".to_owned(), ||{
+					push(&b.value.1, "thunk", ||{
 						evaluate(
 							context_creator.0(this.clone(), super_obj.clone())?,
 							&b.value
@@ -255,7 +255,7 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 								visibility: visibility.clone(),
 								invoke: LazyBinding::Bindable(Rc::new(
 									closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-										Ok(LazyVal::new_resolved(push(value.clone(), "object ".to_owned()+&name+" field", ||{
+										Ok(LazyVal::new_resolved(push(&value.1, "object field", ||{
 											let context = context_creator.0(this, super_obj)?;
 											evaluate(
 												context,
@@ -371,7 +371,6 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 
 pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
-	let locexpr = expr.clone();
 	let LocExpr(expr, loc) = expr;
 	Ok(match &**expr {
 		Literal(LiteralType::This) => Val::Obj(
@@ -394,7 +393,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Num(v) => Val::Num(*v),
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
-		Var(name) => push(locexpr, "var".to_owned(), || {
+		Var(name) => push(loc, "var", || {
 			Val::Lazy(context.binding(&name)?).unwrap_if_lazy()
 		})?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
@@ -733,7 +732,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					if *tailstrict {
 						body()?
 					} else {
-						push(locexpr, "function call".to_owned(), body)?
+						push(loc, "function call", body)?
 					}
 				}
 				_ => panic!("{:?} is not a function", value),
@@ -741,16 +740,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
 		AssertExpr(AssertStmt(value, msg), returned) => {
-			let assertion_result = push(value.clone(), "assertion condition".to_owned(), || {
+			let assertion_result = push(&value.1, "assertion condition", || {
 				evaluate(context.clone(), &value)?
 					.try_cast_bool("assertion condition should be boolean")
 			})?;
 			if assertion_result {
-				push(
-					returned.clone(),
-					"assert 'return' branch".to_owned(),
-					|| evaluate(context, returned),
-				)?
+				evaluate(context, returned)?
 			} else if let Some(msg) = msg {
 				panic!(
 					"assertion failed ({:?}): {}",
