@@ -24,7 +24,6 @@ pub fn parse_function_call(
 ///
 /// ## Notes
 /// This function is always inlined for tailstrict
-#[inline(always)]
 pub(crate) fn inline_parse_function_call(
 	ctx: Context,
 	body_ctx: Option<Context>,
@@ -79,7 +78,6 @@ pub(crate) fn inline_parse_function_call(
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
 }
 
-#[inline(always)]
 pub(crate) fn place_args(
 	ctx: Context,
 	body_ctx: Option<Context>,

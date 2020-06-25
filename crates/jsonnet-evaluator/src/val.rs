@@ -77,7 +77,6 @@ pub struct FuncDesc {
 }
 impl FuncDesc {
 	/// This function is always inlined to make tailstrict work
-	#[inline(always)]
 	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
 		let ctx = inline_parse_function_call(
 			call_ctx,
@@ -89,7 +88,6 @@ impl FuncDesc {
 		evaluate(ctx, &self.body)
 	}
 
-	#[inline(always)]
 	pub fn evaluate_values(&self, call_ctx: Context, args: &[Val]) -> Result<Val> {
 		let ctx = place_args(call_ctx, Some(self.ctx.clone()), &self.params, args)?;
 		evaluate(ctx, &self.body)

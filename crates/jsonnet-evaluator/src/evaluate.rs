@@ -168,7 +168,6 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
-#[inline(always)]
 pub fn evaluate_comp<T>(
 	context: Context,
 	value: &impl Fn(Context) -> Result<T>,
@@ -370,7 +369,6 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 	})
 }
 
-#[inline(always)]
 pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let locexpr = expr.clone();
@@ -731,8 +729,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
 				Val::Func(f) => {
-					let body = #[inline(always)]
-					|| f.evaluate(context, args, *tailstrict);
+					let body = || f.evaluate(context, args, *tailstrict);
 					if *tailstrict {
 						body()?
 					} else {

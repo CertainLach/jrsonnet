@@ -18,7 +18,6 @@ impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
 		}))
 	}
 
-	#[inline(always)]
 	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
 	where
 		K: Borrow<Q>,

@@ -2,7 +2,6 @@
 #![feature(type_alias_impl_trait)]
 #![feature(debug_non_exhaustive)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
-#![feature(stmt_expr_attributes)]
 mod ctx;
 mod dynamic;
 mod error;
@@ -81,17 +80,14 @@ thread_local! {
 	/// Global state is fine there
 	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
-#[inline(always)]
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(
-		#[inline(always)]
 		|s| f(s.borrow().as_ref().unwrap()),
 	)
 }
 pub(crate) fn create_error<T>(err: Error) -> Result<T> {
 	with_state(|s| s.error(err))
 }
-#[inline(always)]
 pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 	with_state(|s| s.push(e, comment, f))
 }
@@ -251,7 +247,6 @@ impl EvaluationState {
 		Context::new().extend_unbound(new_bindings, None, None, None)
 	}
 
-	#[inline(always)]
 	pub fn push<T>(&self, e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>) -> Result<T> {
 		{
 			let mut stack = self.0.stack.borrow_mut();
@@ -287,7 +282,6 @@ impl EvaluationState {
 		Err(LocError(err, self.stack_trace()))
 	}
 
-	#[inline(always)]
 	fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
 		EVAL_STATE.with(|v| {
 			let has_state = v.borrow().is_some();
