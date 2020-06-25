@@ -143,33 +143,29 @@ impl EvaluationState {
 		ro_map.get(name).map(|value| value.0.clone())
 	}
 	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
-		self.begin_state();
-		let value = self.evaluate_file_in_current_state(name)?;
-		self.end_state();
-		Ok(value)
-	}
-	pub(crate) fn evaluate_file_in_current_state(&self, name: &PathBuf) -> Result<Val> {
-		let expr: LocExpr = {
-			let ro_map = self.0.files.borrow();
-			let value = ro_map
-				.get(name)
-				.unwrap_or_else(|| panic!("file not added: {:?}", name));
-			if value.2.is_some() {
-				return Ok(value.2.clone().unwrap());
+		self.run_in_state(|| {
+			let expr: LocExpr = {
+				let ro_map = self.0.files.borrow();
+				let value = ro_map
+					.get(name)
+					.unwrap_or_else(|| panic!("file not added: {:?}", name));
+				if value.2.is_some() {
+					return Ok(value.2.clone().unwrap());
+				}
+				value.1.clone()
+			};
+			let value = evaluate(&self.create_default_context()?, &expr)?;
+			{
+				self.0
+					.files
+					.borrow_mut()
+					.get_mut(name)
+					.unwrap()
+					.2
+					.replace(value.clone());
 			}
-			value.1.clone()
-		};
-		let value = evaluate(self.create_default_context()?, &expr)?;
-		{
-			self.0
-				.files
-				.borrow_mut()
-				.get_mut(name)
-				.unwrap()
-				.2
-				.replace(value.clone());
-		}
-		Ok(value)
+			Ok(value)
+		})
 	}
 	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
 		let file_path = self.0.import_resolver.resolve_file(from, path)?;
@@ -209,10 +205,7 @@ impl EvaluationState {
 	}
 
 	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
-		self.begin_state();
-		let value = evaluate(self.create_default_context()?, &code);
-		self.end_state();
-		value
+		self.run_in_state(|| evaluate(&self.create_default_context()?, &code))
 	}
 
 	pub fn add_global(&self, name: String, value: Val) {
@@ -223,23 +216,26 @@ impl EvaluationState {
 	}
 
 	pub fn with_stdlib(&self) -> &Self {
-		self.begin_state();
-		use jsonnet_stdlib::STDLIB_STR;
-		if cfg!(feature = "serialized-stdlib") {
-			self.add_parsed_file(
-				PathBuf::from("std.jsonnet"),
-				STDLIB_STR.to_owned(),
-				bincode::deserialize(include_bytes!(concat!(env!("OUT_DIR"), "/stdlib.bincode")))
+		self.run_in_state(|| {
+			use jsonnet_stdlib::STDLIB_STR;
+			if cfg!(feature = "serialized-stdlib") {
+				self.add_parsed_file(
+					PathBuf::from("std.jsonnet"),
+					STDLIB_STR.to_owned(),
+					bincode::deserialize(include_bytes!(concat!(
+						env!("OUT_DIR"),
+						"/stdlib.bincode"
+					)))
 					.expect("deserialize stdlib"),
-			)
-			.unwrap();
-		} else {
-			self.add_file(PathBuf::from("std.jsonnet"), STDLIB_STR.to_owned())
+				)
 				.unwrap();
-		}
-		let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
-		self.add_global("std".to_owned(), val);
-		self.end_state();
+			} else {
+				self.add_file(PathBuf::from("std.jsonnet"), STDLIB_STR.to_owned())
+					.unwrap();
+			}
+			let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
+			self.add_global("std".to_owned(), val);
+		});
 		self
 	}
 
@@ -291,11 +287,21 @@ impl EvaluationState {
 		Err(LocError(err, self.stack_trace()))
 	}
 
-	fn begin_state(&self) {
-		EVAL_STATE.with(|v| v.borrow_mut().replace(self.clone()));
-	}
-	fn end_state(&self) {
-		EVAL_STATE.with(|v| v.borrow_mut().take());
+	#[inline(always)]
+	fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
+		EVAL_STATE.with(|v| {
+			let has_state = v.borrow().is_some();
+			if !has_state {
+				println!("Begin state");
+				v.borrow_mut().replace(self.clone());
+			}
+			let result = f();
+			if !has_state {
+				println!("End state");
+				v.borrow_mut().take();
+			}
+			result
+		})
 	}
 }
 
