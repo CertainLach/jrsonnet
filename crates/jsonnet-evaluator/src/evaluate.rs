@@ -82,6 +82,10 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
 
+		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
+		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o)),
+		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n)),
+
 		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_json(0)?)),
 		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_json(0)?, s)),
 
