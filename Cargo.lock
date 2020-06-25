@@ -14,9 +14,9 @@ checksum = "f8aac770f1885fd7e387acedd76065302551364496e46b3dd00860b2f8359b9d"
 
 [[package]]
 name = "bincode"
-version = "1.2.1"
+version = "1.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5753e2a71534719bf3f4e57006c3a4f0d2c672a4b676eec84161f763eca87dbf"
+checksum = "f30d3a39baa26f9651f17b375061f3233dde33424a8b72b0dbe93a68a0bc896d"
 dependencies = [
  "byteorder",
  "serde",
@@ -33,6 +33,12 @@ name = "byteorder"
 version = "1.3.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08c48aae112d48ed9f069b33538ea9e3e90aa263cfa3d1c24309612b1f7472de"
+
+[[package]]
+name = "cc"
+version = "1.0.54"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "7bbb73db36c1246e9034e307d0fba23f9a2e251faa47ade70c1bd252220c8311"
 
 [[package]]
 name = "clap"
@@ -70,6 +76,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
 
 [[package]]
+name = "fs_extra"
+version = "1.1.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "5f2a4a2034423744d2cc7ca2068453168dcdb82c438419e639a26bd87839c674"
+
+[[package]]
 name = "heck"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -88,11 +100,33 @@ dependencies = [
 ]
 
 [[package]]
+name = "jemalloc-sys"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "0d3b9f3f5c9b31aa0f5ed3260385ac205db665baa41d49bb8338008ae94ede45"
+dependencies = [
+ "cc",
+ "fs_extra",
+ "libc",
+]
+
+[[package]]
+name = "jemallocator"
+version = "0.3.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "43ae63fcfc45e99ab3d1b29a46782ad679e98436c3169d15a167a1108a724b69"
+dependencies = [
+ "jemalloc-sys",
+ "libc",
+]
+
+[[package]]
 name = "jrsonnet"
 version = "0.1.0"
 dependencies = [
  "annotate-snippets",
  "clap",
+ "jemallocator",
  "jsonnet-evaluator",
  "jsonnet-parser",
 ]
@@ -129,6 +163,12 @@ name = "lazy_static"
 version = "1.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
+
+[[package]]
+name = "libc"
+version = "0.2.71"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "9457b06509d27052635f90d6466700c65095fdf75409b3fbdd903e988b886f49"
 
 [[package]]
 name = "os_str_bytes"
@@ -191,9 +231,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.12"
+version = "1.0.18"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8872cf6f48eee44265156c111456a700ab3483686b3f96df4cf5481c89157319"
+checksum = "beae6331a816b1f65d04c45b078fd8e6c93e8071771f41b8163255bbd8d7c8fa"
 dependencies = [
  "unicode-xid",
 ]
@@ -209,18 +249,18 @@ dependencies = [
 
 [[package]]
 name = "serde"
-version = "1.0.111"
+version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c9124df5b40cbd380080b2cc6ab894c040a3070d995f5c9dc77e18c34a8ae37d"
+checksum = "5317f7588f0a5078ee60ef675ef96735a1442132dc645eb1d12c018620ed8cd3"
 dependencies = [
  "serde_derive",
 ]
 
 [[package]]
 name = "serde_derive"
-version = "1.0.111"
+version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3f2c3ac8e6ca1e9c80b8be1023940162bf81ae3cffbb1809474152f2ce1eb250"
+checksum = "2a0be94b04690fbaed37cddffc5c134bf537c8e3329d53e982fe04c374978f8e"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -229,9 +269,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.21"
+version = "1.0.33"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "4696caa4048ac7ce2bcd2e484b3cef88c1004e41b8e945a277e2c25dc0b72060"
+checksum = "e8d5d96e8cbb005d6959f119f773bfaebb5684296108fb32600c00cde305b2cd"
 dependencies = [
  "proc-macro2",
  "quote",

@@ -10,6 +10,7 @@ edition = "2018"
 jsonnet-evaluator = { path = "../../crates/jsonnet-evaluator" }
 jsonnet-parser = { path = "../../crates/jsonnet-parser" }
 annotate-snippets = "0.8.0"
+jemallocator = "0.3.2"
 
 [dependencies.clap]
 version = "3.0.0-beta.1"

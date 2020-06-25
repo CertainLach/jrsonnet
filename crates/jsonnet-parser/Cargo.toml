@@ -13,9 +13,9 @@ default = []
 
 [dependencies]
 peg = "0.6.2"
-serde = { version = "1.0.111", features = ["derive", "rc"] }
+serde = { version = "1.0.114", features = ["derive", "rc"] }
 unescape = "0.1.0"
 
 [dev-dependencies]
 jsonnet-stdlib = { version = "0.1.0", path = "../jsonnet-stdlib" }
-bincode = "1.2.1"
+bincode = "1.3.1"
