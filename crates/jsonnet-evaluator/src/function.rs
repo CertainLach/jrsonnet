@@ -69,7 +69,7 @@ pub(crate) fn inline_parse_function_call(
 			unreachable!()
 		};
 		let val = if tailstrict {
-			resolved_lazy_val!(evaluate(ctx.clone(), expr)?)
+			resolved_lazy_val!(evaluate(ctx, expr)?)
 		} else {
 			lazy_val!(closure!(clone ctx, clone expr, ||evaluate(ctx.clone(), &expr)))
 		};

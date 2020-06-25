@@ -211,9 +211,9 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 			let future_this = FutureObjValue::new();
 			let context_creator = context_creator!(
 				closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-					Ok(context.clone().extend_unbound(
+					Ok(context.extend_unbound(
 						new_bindings.clone().unwrap(),
-						context.clone().dollar().clone().or_else(||this.clone()),
+						context.dollar().clone().or_else(||this.clone()),
 						Some(this.unwrap()),
 						super_obj
 					)?)
@@ -318,9 +318,9 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 					let new_bindings = FutureNewBindings::new();
 					let context_creator = context_creator!(
 						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-							Ok(context.clone().extend_unbound(
+							Ok(context.extend_unbound(
 								new_bindings.clone().unwrap(),
-								context.clone().dollar().clone().or_else(||this.clone()),
+								context.dollar().clone().or_else(||this.clone()),
 								None,
 								super_obj
 							)?)
@@ -664,14 +664,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					("std", "filter") => {
 						assert_eq!(args.len(), 2);
 						if let (Val::Func(predicate), Val::Arr(arr)) = (
-							evaluate(context, &args[0].1)?,
-							evaluate(context, &args[1].1)?,
+							evaluate(context.clone(), &args[0].1)?,
+							evaluate(context.clone(), &args[1].1)?,
 						) {
 							Val::Arr(
 								arr.into_iter()
 									.filter(|e| {
 										predicate
-											.evaluate_values(&context, &[e.clone()])
+											.evaluate_values(context.clone(), &[e.clone()])
 											.unwrap()
 											.try_cast_bool("filter predicate")
 											.unwrap()
@@ -685,7 +685,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					// faster
 					("std", "join") => {
 						assert_eq!(args.len(), 2);
-						let joiner = evaluate(context, &args[0].1)?.unwrap_if_lazy()?;
+						let joiner = evaluate(context.clone(), &args[0].1)?.unwrap_if_lazy()?;
 						let items = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
 						println!("Before");
 						let result = match (joiner, items) {
@@ -775,7 +775,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if evaluate(context, &cond.0)?.try_cast_bool("if condition should be boolean")? {
+			if evaluate(context.clone(), &cond.0)?
+				.try_cast_bool("if condition should be boolean")?
+			{
 				evaluate(context, cond_then)?
 			} else {
 				match cond_else {

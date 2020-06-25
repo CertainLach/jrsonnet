@@ -154,7 +154,7 @@ impl EvaluationState {
 				}
 				value.1.clone()
 			};
-			let value = evaluate(&self.create_default_context()?, &expr)?;
+			let value = evaluate(self.create_default_context()?, &expr)?;
 			{
 				self.0
 					.files
@@ -205,7 +205,7 @@ impl EvaluationState {
 	}
 
 	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
-		self.run_in_state(|| evaluate(&self.create_default_context()?, &code))
+		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}
 
 	pub fn add_global(&self, name: String, value: Val) {

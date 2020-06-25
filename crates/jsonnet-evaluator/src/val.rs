@@ -179,7 +179,7 @@ impl Val {
 				.create_default_context()?
 				.with_var("__tmp__to_json__".to_owned(), self)?;
 			if let Val::Str(result) = evaluate(
-				&ctx,
+				ctx,
 				&el!(Expr::Apply(
 					el!(Expr::Index(
 						el!(Expr::Var("std".to_owned())),
