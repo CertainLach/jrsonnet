@@ -1,4 +1,4 @@
-use crate::{create_error, evaluate, lazy_val, resolved_lazy_val, Context, Error, Result};
+use crate::{create_error, evaluate, lazy_val, resolved_lazy_val, Context, Error, Result, Val};
 use closure::closure;
 use jsonnet_parser::{ArgsDesc, ParamsDesc};
 use std::collections::HashMap;
@@ -74,6 +74,37 @@ pub(crate) fn inline_parse_function_call(
 			lazy_val!(closure!(clone ctx, clone expr, ||evaluate(ctx.clone(), &expr)))
 		};
 		out.insert(p.0.clone(), val);
+	}
+
+	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
+}
+
+#[inline(always)]
+pub(crate) fn place_args(
+	ctx: Context,
+	body_ctx: Option<Context>,
+	params: &ParamsDesc,
+	args: &[Val],
+) -> Result<Context> {
+	let mut out = HashMap::new();
+	let mut positioned_args = vec![None; params.0.len()];
+	for (id, arg) in args.iter().enumerate() {
+		if id >= params.len() {
+			create_error(Error::TooManyArgsFunctionHas(params.len()))?;
+		}
+		positioned_args[id] = Some(arg);
+	}
+	// Fill defaults
+	for (id, p) in params.iter().enumerate() {
+		let val = if let Some(arg) = &positioned_args[id] {
+			(*arg).clone()
+		} else if let Some(default) = &p.1 {
+			evaluate(ctx.clone(), default)?
+		} else {
+			create_error(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
+			unreachable!()
+		};
+		out.insert(p.0.clone(), resolved_lazy_val!(val));
 	}
 
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)

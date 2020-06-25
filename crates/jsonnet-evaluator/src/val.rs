@@ -1,5 +1,7 @@
 use crate::{
-	create_error, evaluate, function::inline_parse_function_call, Context, Error, ObjValue, Result,
+	create_error, evaluate,
+	function::{inline_parse_function_call, place_args},
+	with_state, Context, Error, ObjValue, Result,
 };
 use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
 use std::{
@@ -84,6 +86,12 @@ impl FuncDesc {
 			args,
 			tailstrict,
 		)?;
+		evaluate(ctx, &self.body)
+	}
+
+	#[inline(always)]
+	pub fn evaluate_values(&self, call_ctx: Context, args: &[Val]) -> Result<Val> {
+		let ctx = place_args(call_ctx, Some(self.ctx.clone()), &self.params, args)?;
 		evaluate(ctx, &self.body)
 	}
 }
