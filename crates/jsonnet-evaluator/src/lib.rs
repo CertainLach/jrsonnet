@@ -457,6 +457,22 @@ pub mod tests {
 	fn object_assertion_error() {
 		eval!("{assert \"a\" in self}");
 	}
+
+	#[test]
+	fn lazy_args() {
+		eval!("local test(a) = 2; test(error '3')");
+	}
+
+	#[test]
+	fn tailstrict_args() {
+		eval!("local test(a) = 2; test(error '3') tailstrict");
+	}
+
+	#[test]
+	fn no_binding_error() {
+		eval!("a");
+	}
+
 	#[test]
 	fn test_object() {
 		assert_json!("{a:2}", r#"{"a": 2}"#);
