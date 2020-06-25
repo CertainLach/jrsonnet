@@ -687,8 +687,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						assert_eq!(args.len(), 2);
 						let joiner = evaluate(context.clone(), &args[0].1)?.unwrap_if_lazy()?;
 						let items = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
-						println!("Before");
-						let result = match (joiner, items) {
+						match (joiner, items) {
 							(Val::Arr(joiner_items), Val::Arr(items)) => {
 								// TODO: Minimal size should be known
 								let mut out = Vec::new();
@@ -727,9 +726,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 								Val::Str(out)
 							}
 							(joiner, items) => panic!("bad join call: {:?} {:?}", joiner, items),
-						};
-						println!("After");
-						result
+						}
 					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},

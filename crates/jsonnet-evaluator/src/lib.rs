@@ -292,12 +292,10 @@ impl EvaluationState {
 		EVAL_STATE.with(|v| {
 			let has_state = v.borrow().is_some();
 			if !has_state {
-				println!("Begin state");
 				v.borrow_mut().replace(self.clone());
 			}
 			let result = f();
 			if !has_state {
-				println!("End state");
 				v.borrow_mut().take();
 			}
 			result
