@@ -449,6 +449,15 @@ pub mod tests {
 	}
 
 	#[test]
+	fn object_assertion_success() {
+		eval!("{assert \"a\" in self} + {a:2}");
+	}
+
+	#[test]
+	fn object_assertion_error() {
+		eval!("{assert \"a\" in self}");
+	}
+	#[test]
 	fn test_object() {
 		assert_json!("{a:2}", r#"{"a": 2}"#);
 		assert_json!("{a:2+2}", r#"{"a": 4}"#);
