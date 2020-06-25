@@ -7,6 +7,8 @@ pub enum Error {
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	NoSuchField(String),
 
+	UnknownVariable(String),
+
 	UnknownFunctionParameter(String),
 	BindingParameterASecondTime(String),
 	TooManyArgsFunctionHas(usize),

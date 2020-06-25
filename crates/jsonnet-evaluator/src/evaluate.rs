@@ -397,7 +397,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(locexpr, "var".to_owned(), || {
-			Val::Lazy(context.binding(&name)).unwrap_if_lazy()
+			Val::Lazy(context.binding(&name)?).unwrap_if_lazy()
 		})?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;

@@ -52,9 +52,11 @@ impl Context {
 		}))
 	}
 
-	pub fn binding(&self, name: &str) -> LazyVal {
-		self.0.bindings.get(name).cloned().unwrap_or_else(|| {
-			panic!("can't find {} in {:?}", name, self);
+	pub fn binding(&self, name: &str) -> Result<LazyVal> {
+		self.0.bindings.get(name).cloned().ok_or_else(|| {
+			create_error::<()>(Error::UnknownVariable(name.to_owned()))
+				.err()
+				.unwrap()
 		})
 	}
 	pub fn into_future(self, ctx: FutureContext) -> Context {
