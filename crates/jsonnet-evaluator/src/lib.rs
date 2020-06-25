@@ -8,6 +8,7 @@ mod dynamic;
 mod error;
 mod evaluate;
 mod function;
+mod import;
 mod map;
 mod obj;
 mod val;
@@ -17,6 +18,7 @@ pub use dynamic::*;
 pub use error::*;
 pub use evaluate::*;
 pub use function::parse_function_call;
+pub use import::*;
 use jsonnet_parser::*;
 pub use obj::*;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
@@ -46,16 +48,12 @@ impl LazyBinding {
 pub struct EvaluationSettings {
 	pub max_stack_frames: usize,
 	pub max_stack_trace_size: usize,
-	pub import_resolver: Box<dyn Fn(&PathBuf) -> String>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		EvaluationSettings {
 			max_stack_frames: 200,
 			max_stack_trace_size: 20,
-			import_resolver: Box::new(|path| {
-				panic!("default EvaluationSettings have no support for import resolution, can't import {:?}", path)
-			}),
 		}
 	}
 }
@@ -75,6 +73,7 @@ pub struct EvaluationStateInternals {
 	ext_vars: RefCell<HashMap<String, Val>>,
 
 	settings: EvaluationSettings,
+	import_resolver: Box<dyn ImportResolver>,
 }
 
 thread_local! {
@@ -101,9 +100,10 @@ pub(crate) fn push<T>(e: LocExpr, comment: String, f: impl FnOnce() -> Result<T>
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 impl EvaluationState {
-	pub fn new(settings: EvaluationSettings) -> Self {
+	pub fn new(settings: EvaluationSettings, import_resolver: Box<dyn ImportResolver>) -> Self {
 		EvaluationState(Rc::new(EvaluationStateInternals {
 			settings,
+			import_resolver,
 			..Default::default()
 		}))
 	}
@@ -171,19 +171,29 @@ impl EvaluationState {
 		}
 		Ok(value)
 	}
-	pub(crate) fn import_file(&self, path: &PathBuf) -> Result<Val> {
-		if !self.0.files.borrow().contains_key(path) {
-			let file_str = (self.0.settings.import_resolver)(path);
-			self.add_file(path.clone(), file_str).unwrap();
+	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
+		let file_path = self.0.import_resolver.resolve_file(from, path)?;
+		{
+			let files = self.0.files.borrow();
+			if files.contains_key(&file_path) {
+				return self.evaluate_file(&file_path);
+			}
 		}
-		self.evaluate_file_in_current_state(path)
+		let contents = self.0.import_resolver.load_file_contents(&file_path)?;
+		self.add_file(file_path.clone(), contents).map_err(|e| {
+			create_error::<()>(Error::ImportSyntaxError(e))
+				.err()
+				.unwrap()
+		})?;
+		self.evaluate_file(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, path: &PathBuf) -> Result<String> {
-		if !self.0.str_files.borrow().contains_key(path) {
-			let file_str = (self.0.settings.import_resolver)(path);
+	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<String> {
+		let path = self.0.import_resolver.resolve_file(from, path)?;
+		if !self.0.str_files.borrow().contains_key(&path) {
+			let file_str = self.0.import_resolver.load_file_contents(&path)?;
 			self.0.str_files.borrow_mut().insert(path.clone(), file_str);
 		}
-		Ok(self.0.str_files.borrow().get(path).cloned().unwrap())
+		Ok(self.0.str_files.borrow().get(&path).cloned().unwrap())
 	}
 
 	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {

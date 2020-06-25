@@ -1,5 +1,6 @@
 use crate::ValType;
 use jsonnet_parser::LocExpr;
+use std::path::PathBuf;
 
 #[derive(Debug)]
 pub enum Error {
@@ -23,6 +24,12 @@ pub enum Error {
 	CantIndexInto(ValType),
 
 	StandaloneSuper,
+
+	ImportFileNotFound(PathBuf, PathBuf),
+	ResolvedFileNotFound(PathBuf),
+	ImportBadFileUtf8(PathBuf),
+	ImportNotSupported(PathBuf, PathBuf),
+	ImportSyntaxError(jsonnet_parser::ParseError),
 
 	RuntimeError(String),
 	StackOverflow,

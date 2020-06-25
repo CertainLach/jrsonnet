@@ -785,24 +785,22 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		Import(path) => {
-			let mut lib_path = loc
+			let mut import_location = loc
 				.clone()
 				.expect("imports can't be used without loc_data")
 				.0
 				.clone();
-			lib_path.pop();
-			lib_path.push(path);
-			with_state(|s| s.import_file(&lib_path))?
+			import_location.pop();
+			with_state(|s| s.import_file(&import_location, path))?
 		}
 		ImportStr(path) => {
-			let mut file_path = loc
+			let mut import_location = loc
 				.clone()
 				.expect("imports can't be used without loc_data")
 				.0
 				.clone();
-			file_path.pop();
-			file_path.push(path);
-			Val::Str(with_state(|s| s.import_file_str(&file_path))?)
+			import_location.pop();
+			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
 		Literal(LiteralType::Super) => return create_error(crate::error::Error::StandaloneSuper),
 	})

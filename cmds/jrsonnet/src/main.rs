@@ -99,6 +99,9 @@ struct Opts {
 	)]
 	max_trace: usize,
 
+	#[clap(long, short = "J", about = "Library search dir")]
+	jpath: Vec<PathBuf>,
+
 	#[clap(
 		long,
 		default_value = "3",
@@ -112,10 +115,15 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
-	let evaluator = jsonnet_evaluator::EvaluationState::new(EvaluationSettings {
-		import_resolver: Box::new(|path| String::from_utf8(std::fs::read(path).unwrap()).unwrap()),
-		..Default::default()
-	});
+	let evaluator = jsonnet_evaluator::EvaluationState::new(
+		EvaluationSettings {
+			max_stack_trace_size: opts.max_trace,
+			max_stack_frames: opts.max_stack,
+		},
+		Box::new(jsonnet_evaluator::FileImportResolver {
+			library_paths: opts.jpath.clone(),
+		}),
+	);
 	if !opts.no_stdlib {
 		evaluator.with_stdlib();
 	}
