@@ -661,6 +661,76 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad extVar call");
 						}
 					}
+					("std", "filter") => {
+						assert_eq!(args.len(), 2);
+						if let (Val::Func(predicate), Val::Arr(arr)) = (
+							evaluate(context, &args[0].1)?,
+							evaluate(context, &args[1].1)?,
+						) {
+							Val::Arr(
+								arr.into_iter()
+									.filter(|e| {
+										predicate
+											.evaluate_values(&context, &[e.clone()])
+											.unwrap()
+											.try_cast_bool("filter predicate")
+											.unwrap()
+									})
+									.collect(),
+							)
+						} else {
+							panic!("bad filter call");
+						}
+					}
+					// faster
+					("std", "join") => {
+						assert_eq!(args.len(), 2);
+						let joiner = evaluate(context, &args[0].1)?.unwrap_if_lazy()?;
+						let items = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
+						println!("Before");
+						let result = match (joiner, items) {
+							(Val::Arr(joiner_items), Val::Arr(items)) => {
+								// TODO: Minimal size should be known
+								let mut out = Vec::new();
+
+								let mut first = true;
+								for item in items {
+									if let Val::Arr(items) = item.unwrap_if_lazy()? {
+										if !first {
+											out.extend(joiner_items.iter().cloned());
+										}
+										first = false;
+										out.extend(items);
+									} else {
+										panic!("all array items should be arrays")
+									}
+								}
+
+								Val::Arr(out)
+							}
+							(Val::Str(joiner), Val::Arr(items)) => {
+								let mut out = String::new();
+
+								let mut first = true;
+								for item in items {
+									if let Val::Str(item) = item.unwrap_if_lazy()? {
+										if !first {
+											out += &joiner;
+										}
+										first = false;
+										out += &item;
+									} else {
+										panic!("all array items should be strings")
+									}
+								}
+
+								Val::Str(out)
+							}
+							(joiner, items) => panic!("bad join call: {:?} {:?}", joiner, items),
+						};
+						println!("After");
+						result
+					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},
 				Val::Func(f) => {
