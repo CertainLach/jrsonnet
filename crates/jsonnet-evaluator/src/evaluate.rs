@@ -775,15 +775,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			let condition_result = push(cond.0.clone(), "if condition".to_owned(), || {
-				evaluate(context.clone(), &cond.0)?.try_cast_bool("if condition should be boolean")
-			})?;
-			if condition_result {
-				push(
-					cond_then.clone(),
-					"if condition 'then' branch".to_owned(),
-					|| evaluate(context, cond_then),
-				)?
+			if evaluate(context, &cond.0)?.try_cast_bool("if condition should be boolean")? {
+				evaluate(context, cond_then)?
 			} else {
 				match cond_else {
 					Some(v) => evaluate(context, v)?,
