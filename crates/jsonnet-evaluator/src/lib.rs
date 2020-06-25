@@ -458,7 +458,6 @@ pub mod tests {
 		assert_json!("local a = {a:error 'test'}; {}", r#"{}"#);
 	}
 
-	/// FIXME: This test gets stackoverflow in debug build
 	#[test]
 	fn object_inheritance() {
 		assert_json!("{a: self.b} + {b:3}", r#"{"a": 3,"b": 3}"#);
