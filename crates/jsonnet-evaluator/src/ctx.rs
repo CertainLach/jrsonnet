@@ -1,6 +1,6 @@
 use crate::{
-	future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, LazyBinding, LazyVal,
-	ObjValue, Result, Val,
+	create_error, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, Error,
+	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -22,7 +22,8 @@ pub struct Context(Rc<ContextInternals>);
 impl Debug for Context {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Context")
-			.field("this", &self.0.this.clone().map(|e| Rc::as_ptr(&e.0)))
+			.field("this", &self.0.this.as_ref().map(|e| Rc::as_ptr(&e.0)))
+			.field("bindings", &self.0.bindings)
 			.finish()
 	}
 }
