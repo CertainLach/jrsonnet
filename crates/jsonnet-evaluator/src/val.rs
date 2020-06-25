@@ -96,7 +96,7 @@ impl FuncDesc {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum ValType {
 	Bool,
 	Null,
