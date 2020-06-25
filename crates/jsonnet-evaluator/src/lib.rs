@@ -408,6 +408,12 @@ pub mod tests {
 	}
 
 	#[test]
+	fn faster_join() {
+		assert_eval!("std.join([0,0], [[1,2],[3,4],[5,6]]) == [1,2,0,0,3,4,0,0,5,6]");
+		assert_eval!("std.join(',', ['1','2','3','4']) == '1,2,3,4'");
+	}
+
+	#[test]
 	fn function_contexts() {
 		assert_eval!(
 			r#"
