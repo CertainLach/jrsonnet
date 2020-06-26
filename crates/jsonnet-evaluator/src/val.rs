@@ -10,35 +10,26 @@ use std::{
 	rc::Rc,
 };
 
-struct LazyValInternals {
-	pub f: Option<Box<dyn Fn() -> Result<Val>>>,
-	pub cached: RefCell<Option<Val>>,
+enum LazyValInternals {
+	Computed(Val),
+	Waiting(Box<dyn Fn() -> Result<Val>>),
 }
 #[derive(Clone)]
-pub struct LazyVal(Rc<LazyValInternals>);
+pub struct LazyVal(Rc<RefCell<LazyValInternals>>);
 impl LazyVal {
 	pub fn new(f: Box<dyn Fn() -> Result<Val>>) -> Self {
-		LazyVal(Rc::new(LazyValInternals {
-			f: Some(f),
-			cached: RefCell::new(None),
-		}))
+		LazyVal(Rc::new(RefCell::new(LazyValInternals::Waiting(f))))
 	}
 	pub fn new_resolved(val: Val) -> Self {
-		LazyVal(Rc::new(LazyValInternals {
-			f: None,
-			cached: RefCell::new(Some(val)),
-		}))
+		LazyVal(Rc::new(RefCell::new(LazyValInternals::Computed(val))))
 	}
 	pub fn evaluate(&self) -> Result<Val> {
-		{
-			let cached = self.0.cached.borrow();
-			if cached.is_some() {
-				return Ok(cached.clone().unwrap());
-			}
-		}
-		let result = (self.0.f.as_ref().unwrap())()?;
-		self.0.cached.borrow_mut().replace(result.clone());
-		Ok(result)
+		let new_value = match &*self.0.borrow() {
+			LazyValInternals::Computed(v) => return Ok(v.clone()),
+			LazyValInternals::Waiting(f) => f()?,
+		};
+		*self.0.borrow_mut() = LazyValInternals::Computed(new_value.clone());
+		Ok(new_value)
 	}
 }
 
@@ -56,11 +47,7 @@ macro_rules! resolved_lazy_val {
 }
 impl Debug for LazyVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if self.0.cached.borrow().is_some() {
-			write!(f, "{:?}", self.0.cached.borrow().clone().unwrap())
-		} else {
-			write!(f, "Lazy")
-		}
+		write!(f, "Lazy")
 	}
 }
 impl PartialEq for LazyVal {
