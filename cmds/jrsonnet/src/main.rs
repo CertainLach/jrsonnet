@@ -136,7 +136,7 @@ fn main() {
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());
 	let code_string = String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap();
-	if let Err(e) = evaluator.add_file(input.clone(), code_string.clone()) {
+	if let Err(e) = evaluator.add_file(Rc::new(input.clone()), code_string.clone().into()) {
 		print_syntax_error(e, &input, &code_string);
 		std::process::exit(1);
 	}

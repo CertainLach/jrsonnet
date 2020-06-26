@@ -57,15 +57,15 @@ impl Default for EvaluationSettings {
 	}
 }
 
-pub struct FileData(String, LocExpr, Option<Val>);
+pub struct FileData(Rc<str>, LocExpr, Option<Val>);
 #[derive(Default)]
 pub struct EvaluationStateInternals {
 	/// Used for stack-overflows and stacktraces
 	stack: RefCell<Vec<StackTraceElement>>,
 	/// Contains file source codes and evaluated results for imports and pretty
 	/// printing stacktraces
-	files: RefCell<HashMap<PathBuf, FileData>>,
-	str_files: RefCell<HashMap<PathBuf, Rc<str>>>,
+	files: RefCell<HashMap<Rc<PathBuf>, FileData>>,
+	str_files: RefCell<HashMap<Rc<PathBuf>, Rc<str>>>,
 	globals: RefCell<HashMap<Rc<str>, Val>>,
 
 	/// Values to use with std.extVar
@@ -109,7 +109,11 @@ impl EvaluationState {
 			..Default::default()
 		}))
 	}
-	pub fn add_file(&self, name: PathBuf, code: String) -> std::result::Result<(), ParseError> {
+	pub fn add_file(
+		&self,
+		name: Rc<PathBuf>,
+		code: Rc<str>,
+	) -> std::result::Result<(), ParseError> {
 		self.0.files.borrow_mut().insert(
 			name.clone(),
 			FileData(
@@ -117,7 +121,7 @@ impl EvaluationState {
 				parse(
 					&code,
 					&ParserSettings {
-						file_name: Rc::new(name),
+						file_name: name,
 						loc_data: true,
 					},
 				)?,
@@ -129,8 +133,8 @@ impl EvaluationState {
 	}
 	pub fn add_parsed_file(
 		&self,
-		name: PathBuf,
-		code: String,
+		name: Rc<PathBuf>,
+		code: Rc<str>,
 		parsed: LocExpr,
 	) -> std::result::Result<(), ()> {
 		self.0
@@ -140,7 +144,7 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &PathBuf) -> Option<String> {
+	pub fn get_source(&self, name: &PathBuf) -> Option<Rc<str>> {
 		let ro_map = self.0.files.borrow();
 		ro_map.get(name).map(|value| value.0.clone())
 	}
@@ -221,12 +225,13 @@ impl EvaluationState {
 	}
 
 	pub fn with_stdlib(&self) -> &Self {
+		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
 		self.run_in_state(|| {
 			use jsonnet_stdlib::STDLIB_STR;
 			if cfg!(feature = "serialized-stdlib") {
 				self.add_parsed_file(
-					PathBuf::from("std.jsonnet"),
-					STDLIB_STR.to_owned(),
+					std_path,
+					STDLIB_STR.to_owned().into(),
 					bincode::deserialize(include_bytes!(concat!(
 						env!("OUT_DIR"),
 						"/stdlib.bincode"
@@ -235,7 +240,7 @@ impl EvaluationState {
 				)
 				.unwrap();
 			} else {
-				self.add_file(PathBuf::from("std.jsonnet"), STDLIB_STR.to_owned())
+				self.add_file(std_path, STDLIB_STR.to_owned().into())
 					.unwrap();
 			}
 			let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
