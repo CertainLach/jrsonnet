@@ -18,9 +18,10 @@ pub struct ObjMember {
 #[derive(Debug)]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
-	this_entries: Rc<BTreeMap<String, ObjMember>>,
-	value_cache: RefCell<HashMap<String, Val>>,
+	this_entries: Rc<BTreeMap<Rc<str>, ObjMember>>,
+	value_cache: RefCell<HashMap<Rc<str>, Val>>,
 }
+#[derive(Clone)]
 pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -43,7 +44,7 @@ impl Debug for ObjValue {
 impl ObjValue {
 	pub fn new(
 		super_obj: Option<ObjValue>,
-		this_entries: Rc<BTreeMap<String, ObjMember>>,
+		this_entries: Rc<BTreeMap<Rc<str>, ObjMember>>,
 	) -> ObjValue {
 		ObjValue(Rc::new(ObjValueInternals {
 			super_obj,
@@ -57,7 +58,7 @@ impl ObjValue {
 			Some(v) => ObjValue::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
 		}
 	}
-	pub fn enum_fields(&self, handler: &impl Fn(&str, &Visibility)) {
+	pub fn enum_fields(&self, handler: &impl Fn(&Rc<str>, &Visibility)) {
 		if let Some(s) = &self.0.super_obj {
 			s.enum_fields(handler);
 		}
@@ -65,7 +66,7 @@ impl ObjValue {
 			handler(&name, &member.visibility);
 		}
 	}
-	pub fn fields_visibility(&self) -> IndexMap<String, bool> {
+	pub fn fields_visibility(&self) -> IndexMap<Rc<str>, bool> {
 		let out = Rc::new(RefCell::new(IndexMap::new()));
 		self.enum_fields(&|name, visibility| {
 			let mut out = out.borrow_mut();
@@ -85,16 +86,20 @@ impl ObjValue {
 		});
 		Rc::try_unwrap(out).unwrap().into_inner()
 	}
-	pub fn get(&self, key: &str) -> Result<Option<Val>> {
-		if let Some(v) = self.0.value_cache.borrow().get(key) {
+	pub fn visible_fields(&self) -> Vec<Rc<str>> {
+		self.fields_visibility()
+			.into_iter()
+			.filter(|(_k, v)| *v)
+			.map(|(k, _)| k)
+			.collect()
+	}
+	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
+		if let Some(v) = self.0.value_cache.borrow().get(&key) {
 			return Ok(Some(v.clone()));
 		}
-		if let Some(v) = self.get_raw(key, self)? {
+		if let Some(v) = self.get_raw(&key, self)? {
 			let v = v.unwrap_if_lazy()?;
-			self.0
-				.value_cache
-				.borrow_mut()
-				.insert(key.to_owned(), v.clone());
+			self.0.value_cache.borrow_mut().insert(key, v.clone());
 			Ok(Some(v))
 		} else {
 			Ok(None)
@@ -108,10 +113,10 @@ impl ObjValue {
 					.evaluate()?,
 			)),
 			(Some(k), Some(s)) => {
-				let our = k
+				let lazy = k
 					.invoke
-					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
-					.evaluate()?;
+					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?;
+				let our = lazy.evaluate()?;
 				if k.add {
 					s.get_raw(key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
@@ -124,11 +129,6 @@ impl ObjValue {
 			(None, Some(s)) => s.get_raw(key, real_this),
 			(None, None) => Ok(None),
 		}
-	}
-}
-impl Clone for ObjValue {
-	fn clone(&self) -> Self {
-		ObjValue(self.0.clone())
 	}
 }
 impl PartialEq for ObjValue {

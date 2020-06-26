@@ -5,7 +5,7 @@ use jsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrac
 use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
-use std::{collections::HashMap, path::PathBuf, str::FromStr};
+use std::{collections::HashMap, path::PathBuf, str::FromStr, rc::Rc};
 
 enum Format {
 	None,
@@ -128,10 +128,10 @@ fn main() {
 		evaluator.with_stdlib();
 	}
 	for ExtStr { name, value } in opts.ext_str.iter().cloned() {
-		evaluator.add_ext_var(name, Val::Str(value));
+		evaluator.add_ext_var(name.into(), Val::Str(value.into()));
 	}
 	for ExtStr { name, value } in opts.ext_code.iter().cloned() {
-		evaluator.add_ext_var(name, evaluator.parse_evaluate_raw(&value).unwrap());
+		evaluator.add_ext_var(name.into(), evaluator.parse_evaluate_raw(&value).unwrap());
 	}
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());
@@ -147,7 +147,7 @@ fn main() {
 				Val::Func(f) => {
 					let mut desc_map = HashMap::new();
 					for ExtStr { name, value } in opts.tla_str.iter().cloned() {
-						desc_map.insert(name, el!(Expr::Str(value)));
+						desc_map.insert(name, el!(Expr::Str(value.into())));
 					}
 					for ExtStr { name, value } in opts.tla_code.iter().cloned() {
 						desc_map.insert(
@@ -155,17 +155,17 @@ fn main() {
 							jsonnet_parser::parse(
 								&value,
 								&ParserSettings {
-									file_name: PathBuf::new(),
+									file_name: Rc::new(PathBuf::new()),
 									loc_data: false,
 								},
 							)
 							.unwrap(),
 						);
 					}
-					evaluator.add_global("__tmp__tlf__".to_owned(), Val::Func(f));
+					evaluator.add_global("__tmp__tlf__".into(), Val::Func(f));
 					evaluator
 						.evaluate_raw(el!(Expr::Apply(
-							el!(Expr::Var("__tmp__tlf__".to_owned())),
+							el!(Expr::Var("__tmp__tlf__".into())),
 							ArgsDesc(desc_map.into_iter().map(|(k, v)| Arg(Some(k), v)).collect()),
 							false,
 						)))
@@ -178,7 +178,7 @@ fn main() {
 					if opts.no_stdlib {
 						evaluator.with_stdlib();
 					}
-					evaluator.add_global("__tmp__to_json__".to_owned(), v);
+					evaluator.add_global("__tmp__to_json__".into(), v);
 					let v = evaluator.parse_evaluate_raw(&format!(
 						"std.manifestJsonEx(__tmp__to_json__, \"{}\")",
 						" ".repeat(opts.line_padding),
@@ -195,7 +195,7 @@ fn main() {
 					if opts.no_stdlib {
 						evaluator.with_stdlib();
 					}
-					evaluator.add_global("__tmp__to_yaml__".to_owned(), v);
+					evaluator.add_global("__tmp__to_yaml__".into(), v);
 					let v = evaluator
 						.parse_evaluate_raw("std.manifestYamlDoc(__tmp__to_yaml__, \"  \")");
 					match v {

@@ -39,7 +39,7 @@ parser! {
 
 		/// Reserved word followed by any non-alphanumberic
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
-		rule id() -> String = quiet!{ !reserved() s:$(alpha() (alpha() / digit())*) {s.to_owned()}} / expected!("<identifier>")
+		rule id() = quiet!{ !reserved() alpha() (alpha() / digit())*} / expected!("<identifier>")
 
 		rule keyword(id: &'static str)
 			= ##parse_string_literal(id) end_of_ident()
@@ -47,7 +47,7 @@ parser! {
 		rule l(s: &ParserSettings, x: rule<Expr>) -> LocExpr
 			= start:position!() v:x() end:position!() {loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end))}
 
-		pub rule param(s: &ParserSettings) -> expr::Param = name:id() expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
+		pub rule param(s: &ParserSettings) -> expr::Param = name:$(id()) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name.into(), expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
 			= params:(param(s) ** comma()) {
 				let mut defaults_started = false;
@@ -55,12 +55,12 @@ parser! {
 					defaults_started = defaults_started || param.1.is_some();
 					assert_eq!(defaults_started, param.1.is_some(), "defauld parameters should be used after all positionals");
 				}
-				expr::ParamsDesc(params)
+				expr::ParamsDesc(Rc::new(params))
 			}
-			/ { expr::ParamsDesc(Vec::new()) }
+			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
 
 		pub rule arg(s: &ParserSettings) -> expr::Arg
-			= name:id() _ "=" _ expr:expr(s) {expr::Arg(Some(name), expr)}
+			= name:$(id()) _ "=" _ expr:expr(s) {expr::Arg(Some(name.into()), expr)}
 			/ expr:expr(s) {expr::Arg(None, expr)}
 		pub rule args(s: &ParserSettings) -> expr::ArgsDesc
 			= args:arg(s) ** comma() comma()? {
@@ -74,8 +74,8 @@ parser! {
 			/ { expr::ArgsDesc(Vec::new()) }
 
 		pub rule bind(s: &ParserSettings) -> expr::BindSpec
-			= name:id() _ "=" _ expr:expr(s) {expr::BindSpec{name, params: None, value: expr}}
-			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec{name, params: Some(params), value: expr}}
+			= name:$(id()) _ "=" _ expr:expr(s) {expr::BindSpec{name:name.into(), params: None, value: expr}}
+			/ name:$(id()) _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec{name:name.into(), params: Some(params), value: expr}}
 		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
 			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
 
@@ -95,8 +95,8 @@ parser! {
 			/ string_block()
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
-			= name:id() {expr::FieldName::Fixed(name)}
-			/ name:string() {expr::FieldName::Fixed(name)}
+			= name:$(id()) {expr::FieldName::Fixed(name.into())}
+			/ name:string() {expr::FieldName::Fixed(name.into())}
 			/ "[" _ expr:expr(s) _ "]" {expr::FieldName::Dyn(expr)}
 		pub rule visibility() -> expr::Visibility
 			= ":::" {expr::Visibility::Unhide}
@@ -125,35 +125,41 @@ parser! {
 			/ field:field(s) {expr::Member::Field(field)}
 		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
 			= pre_locals:(b: obj_local(s) comma() {b})* "[" _ key:expr(s) _ "]" _ ":" _ value:expr(s) post_locals:(comma() b:obj_local(s) {b})* _ forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
-				expr::ObjBody::ObjComp {
+				let mut compspecs = vec![CompSpec::ForSpec(forspec)];
+				compspecs.extend(others.unwrap_or_default());
+				expr::ObjBody::ObjComp(expr::ObjComp{
 					pre_locals,
 					key,
 					value,
 					post_locals,
-					compspecs: [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat(),
-				}
+					compspecs,
+				})
 			}
 			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}
 		pub rule ifspec(s: &ParserSettings) -> IfSpecData
 			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
-			= keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
+			= keyword("for") _ id:$(id()) _ keyword("in") _ cond:expr(s) {ForSpecData(id.into(), cond)}
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
 			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
 		pub rule local_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }>)
 		pub rule string_expr(s: &ParserSettings) -> LocExpr
-			= l(s, <s:string() {Expr::Str(s)}>)
+			= l(s, <s:string() {Expr::Str(s.into())}>)
 		pub rule obj_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<"{" _ body:objinside(s) _ "}" {Expr::Obj(body)}>)
 		pub rule array_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<"[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}>)
 		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {Expr::ArrComp(expr, [vec![CompSpec::ForSpec(forspec)], others.unwrap_or_default()].concat())}>)
+			= l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {
+				let mut specs = vec![CompSpec::ForSpec(forspec)];
+				specs.extend(others.unwrap_or_default());
+				Expr::ArrComp(expr, specs)
+			}>)
 		pub rule number_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<n:number() { expr::Expr::Num(n) }>)
 		pub rule var_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<n:id() { expr::Expr::Var(n) }>)
+			= l(s,<n:$(id()) { expr::Expr::Var(n.into()) }>)
 		pub rule if_then_else_expr(s: &ParserSettings) -> LocExpr
 			= l(s,<cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -219,16 +225,16 @@ parser! {
 				--
 				a:(@) _ "==" _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("equals".to_owned()))
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("equals".into()))
 					)),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))}
 				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("equals".to_owned()))
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("equals".into()))
 					)),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
@@ -240,8 +246,8 @@ parser! {
 				a:(@) _ ">=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
 				a:(@) _ keyword("in") _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("objectHasEx".to_owned()))
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("objectHasEx".into()))
 					)), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
 					true
 				))}
@@ -256,8 +262,8 @@ parser! {
 				a:(@) _ "/" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
 				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("mod".to_owned()))
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("mod".into()))
 					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))}
@@ -268,8 +274,8 @@ parser! {
 				--
 				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("slice".to_owned())),
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("slice".into())),
 					)),
 					ArgsDesc(vec![
 						Arg(None, a),
@@ -279,7 +285,7 @@ parser! {
 					]),
 					true,
 				))}
-				a:(@) _ "." _ s:id() {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s))))}
+				a:(@) _ "." _ s:$(id()) {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s.into()))))}
 				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args, ts.is_some()))}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {loc_expr_todo!(Expr::ObjExtend(a, body))}
@@ -352,7 +358,7 @@ pub mod tests {
 	fn multiline_string() {
 		assert_eq!(
 			parse!("|||\n    Hello world!\n     a\n|||"),
-			el!(Expr::Str("Hello world!\n a\n".to_owned())),
+			el!(Expr::Str("Hello world!\n a\n".into())),
 		)
 	}
 
@@ -369,20 +375,20 @@ pub mod tests {
 	fn string_escaping() {
 		assert_eq!(
 			parse!(r#""Hello, \"world\"!""#),
-			el!(Expr::Str(r#"Hello, "world"!"#.to_owned())),
+			el!(Expr::Str(r#"Hello, "world"!"#.into())),
 		);
 		assert_eq!(
 			parse!(r#"'Hello \'world\'!'"#),
-			el!(Expr::Str("Hello 'world'!".to_owned())),
+			el!(Expr::Str("Hello 'world'!".into())),
 		);
-		assert_eq!(parse!(r#"'\\\\'"#), el!(Expr::Str("\\\\".to_owned())),);
+		assert_eq!(parse!(r#"'\\\\'"#), el!(Expr::Str("\\\\".into())),);
 	}
 
 	#[test]
 	fn string_unescaping() {
 		assert_eq!(
 			parse!(r#""Hello\nWorld""#),
-			el!(Expr::Str("Hello\nWorld".to_owned())),
+			el!(Expr::Str("Hello\nWorld".into())),
 		);
 	}
 
@@ -390,7 +396,7 @@ pub mod tests {
 	fn string_verbantim() {
 		assert_eq!(
 			parse!(r#"@"Hello\n""World""""#),
-			el!(Expr::Str("Hello\\n\"World\"".to_owned())),
+			el!(Expr::Str("Hello\\n\"World\"".into())),
 		);
 	}
 
@@ -489,16 +495,13 @@ pub mod tests {
 			parse!("[std.deepJoin(x) for x in arr]"),
 			el!(ArrComp(
 				el!(Apply(
-					el!(Index(
-						el!(Var("std".to_owned())),
-						el!(Str("deepJoin".to_owned()))
-					)),
-					ArgsDesc(vec![Arg(None, el!(Var("x".to_owned())))]),
+					el!(Index(el!(Var("std".into())), el!(Str("deepJoin".into())))),
+					ArgsDesc(vec![Arg(None, el!(Var("x".into())))]),
 					false,
 				)),
 				vec![CompSpec::ForSpec(ForSpecData(
-					"x".to_owned(),
-					el!(Var("arr".to_owned()))
+					"x".into(),
+					el!(Var("arr".into()))
 				))]
 			)),
 		)
@@ -508,7 +511,7 @@ pub mod tests {
 	fn reserved() {
 		use Expr::*;
 		assert_eq!(parse!("null"), el!(Literal(LiteralType::Null)));
-		assert_eq!(parse!("nulla"), el!(Var("nulla".to_owned())));
+		assert_eq!(parse!("nulla"), el!(Var("nulla".into())));
 	}
 
 	#[test]
@@ -522,9 +525,9 @@ pub mod tests {
 		assert_eq!(
 			parse!("!a && !b"),
 			el!(BinaryOp(
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned())))),
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
 				BinaryOpType::And,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".to_owned()))))
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
 			))
 		);
 	}
@@ -535,9 +538,9 @@ pub mod tests {
 		assert_eq!(
 			parse!("!a / !b"),
 			el!(BinaryOp(
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned())))),
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
 				BinaryOpType::Div,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".to_owned()))))
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
 			))
 		);
 	}
@@ -549,7 +552,7 @@ pub mod tests {
 			parse!("!!a"),
 			el!(UnaryOp(
 				UnaryOpType::Not,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".to_owned()))))
+				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into()))))
 			))
 		)
 	}

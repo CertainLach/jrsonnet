@@ -14,7 +14,7 @@ use std::{
 	rc::Rc,
 };
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (String, LazyBinding) {
+pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
 	if let Some(params) = &b.params {
 		let params = params.clone();
@@ -54,11 +54,12 @@ pub fn evaluate_method(ctx: Context, params: ParamsDesc, body: LocExpr) -> Val {
 pub fn evaluate_field_name(
 	context: Context,
 	field_name: &jsonnet_parser::FieldName,
-) -> Result<Option<String>> {
+) -> Result<Option<Rc<str>>> {
 	Ok(match field_name {
 		jsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jsonnet_parser::FieldName::Dyn(expr) => {
-			let value = evaluate(context, expr)?.unwrap_if_lazy()?;
+			let lazy = evaluate(context, expr)?;
+			let value = lazy.unwrap_if_lazy()?;
 			if matches!(value, Val::Null) {
 				None
 			} else {
@@ -80,17 +81,17 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 
 pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
-		(Val::Str(v1), Val::Str(v2)) => Val::Str(v1.to_owned() + &v2),
+		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + &v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
-		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o)),
-		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n)),
+		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o).into()),
+		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n).into()),
 
-		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_json(0)?)),
-		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_json(0)?, s)),
+		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_json(0)?).into()),
+		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_json(0)?, s).into()),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
-		(Val::Arr(a), Val::Arr(b)) => Val::Arr([&a[..], &b[..]].concat()),
+		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
 		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
 		_ => panic!("can't add: {:?} and {:?}", a, b),
 	})
@@ -117,7 +118,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
 
-		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize)),
+		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize).into()),
 
 		// Bool X Bool
 		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
@@ -165,7 +166,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	})
 }
 
-future_wrapper!(HashMap<String, LazyBinding>, FutureNewBindings);
+future_wrapper!(HashMap<Rc<str>, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 pub fn evaluate_comp<T>(
@@ -186,10 +187,10 @@ pub fn evaluate_comp<T>(
 			match evaluate(context.clone(), &expr)?.unwrap_if_lazy()? {
 				Val::Arr(list) => {
 					let mut out = Vec::new();
-					for item in list {
-						let item = item.clone().unwrap_if_lazy()?;
+					for item in list.iter() {
+						let item = item.unwrap_if_lazy()?;
 						out.push(evaluate_comp(
-							context.with_var(var.clone(), item)?,
+							context.with_var(var.clone(), item.clone())?,
 							value,
 							&specs[1..],
 						)?);
@@ -202,113 +203,108 @@ pub fn evaluate_comp<T>(
 	})
 }
 
-// TODO: Asserts
-pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
-	Ok(match object {
-		ObjBody::MemberList(members) => {
-			let new_bindings = FutureNewBindings::new();
-			let future_this = FutureObjValue::new();
-			let context_creator = context_creator!(
-				closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-					Ok(context.extend_unbound(
-						new_bindings.clone().unwrap(),
-						context.dollar().clone().or_else(||this.clone()),
-						Some(this.unwrap()),
-						super_obj
-					)?)
-				})
-			);
-			{
-				let mut bindings: HashMap<String, LazyBinding> = HashMap::new();
-				for (n, b) in members
-					.iter()
-					.filter_map(|m| match m {
-						Member::BindStmt(b) => Some(b.clone()),
-						_ => None,
-					})
-					.map(|b| evaluate_binding(&b, context_creator.clone()))
-				{
-					bindings.insert(n, b);
-				}
-				new_bindings.fill(bindings);
-			}
-
-			let mut new_members = BTreeMap::new();
-			for member in members.into_iter() {
-				match member {
-					Member::Field(FieldMember {
-						name,
-						plus,
-						params: None,
-						visibility,
-						value,
-					}) => {
-						let name = evaluate_field_name(context.clone(), &name)?;
-						if name.is_none() {
-							continue;
-						}
-						let name = name.unwrap();
-						new_members.insert(
-							name.clone(),
-							ObjMember {
-								add: plus,
-								visibility: visibility.clone(),
-								invoke: LazyBinding::Bindable(Rc::new(
-									closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-										Ok(LazyVal::new_resolved(push(&value.1, "object field", ||{
-											let context = context_creator.0(this, super_obj)?;
-											evaluate(
-												context,
-												&value,
-											)?.unwrap_if_lazy()
-										})?))
-									}),
-								)),
-							},
-						);
-					}
-					Member::Field(FieldMember {
-						name,
-						params: Some(params),
-						value,
-						..
-					}) => {
-						let name = evaluate_field_name(context.clone(), &name)?;
-						if name.is_none() {
-							continue;
-						}
-						let name = name.unwrap();
-						new_members.insert(
-							name,
-							ObjMember {
-								add: false,
-								visibility: Visibility::Hidden,
-								invoke: LazyBinding::Bindable(Rc::new(
-									closure!(clone value, clone context_creator, |this, super_obj| {
-										// TODO: Assert
-										Ok(LazyVal::new_resolved(evaluate_method(
-											context_creator.0(this, super_obj)?,
-											params.clone(),
-											value.clone(),
-										)))
-									}),
-								)),
-							},
-						);
-					}
-					Member::BindStmt(_) => {}
-					Member::AssertStmt(_) => {}
-				}
-			}
-			future_this.fill(ObjValue::new(None, Rc::new(new_members)))
+pub fn evaluate_member_list_object(context: Context, members: &Vec<Member>) -> Result<ObjValue> {
+	let new_bindings = FutureNewBindings::new();
+	let future_this = FutureObjValue::new();
+	let context_creator = context_creator!(
+		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
+			Ok(context.extend_unbound(
+				new_bindings.clone().unwrap(),
+				context.dollar().clone().or_else(||this.clone()),
+				Some(this.unwrap()),
+				super_obj
+			)?)
+		})
+	);
+	{
+		let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		for (n, b) in members
+			.iter()
+			.filter_map(|m| match m {
+				Member::BindStmt(b) => Some(b.clone()),
+				_ => None,
+			})
+			.map(|b| evaluate_binding(&b, context_creator.clone()))
+		{
+			bindings.insert(n, b);
 		}
-		ObjBody::ObjComp {
-			pre_locals,
-			key,
-			value,
-			post_locals,
-			compspecs,
-		} => {
+		new_bindings.fill(bindings);
+	}
+
+	let mut new_members = BTreeMap::new();
+	for member in members.iter() {
+		match member {
+			Member::Field(FieldMember {
+				name,
+				plus,
+				params: None,
+				visibility,
+				value,
+			}) => {
+				let name = evaluate_field_name(context.clone(), &name)?;
+				if name.is_none() {
+					continue;
+				}
+				let name = name.unwrap();
+				new_members.insert(
+					name.clone(),
+					ObjMember {
+						add: *plus,
+						visibility: *visibility,
+						invoke: LazyBinding::Bindable(Rc::new(
+							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
+								Ok(LazyVal::new_resolved(push(&value.1, "object field", ||{
+									let context = context_creator.0(this, super_obj)?;
+									evaluate(
+										context,
+										&value,
+									)
+								})?))
+							}),
+						)),
+					},
+				);
+			}
+			Member::Field(FieldMember {
+				name,
+				params: Some(params),
+				value,
+				..
+			}) => {
+				let name = evaluate_field_name(context.clone(), &name)?;
+				if name.is_none() {
+					continue;
+				}
+				let name = name.unwrap();
+				new_members.insert(
+					name,
+					ObjMember {
+						add: false,
+						visibility: Visibility::Hidden,
+						invoke: LazyBinding::Bindable(Rc::new(
+							closure!(clone value, clone context_creator, clone params, |this, super_obj| {
+								// TODO: Assert
+								Ok(LazyVal::new_resolved(evaluate_method(
+									context_creator.0(this, super_obj)?,
+									params.clone(),
+									value.clone(),
+								)))
+							}),
+						)),
+					},
+				);
+			}
+			Member::BindStmt(_) => {}
+			Member::AssertStmt(_) => {}
+		}
+	}
+	Ok(future_this.fill(ObjValue::new(None, Rc::new(new_members))))
+}
+
+pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
+	Ok(match object {
+		ObjBody::MemberList(members) => evaluate_member_list_object(context, &members)?,
+		ObjBody::ObjComp(obj) => {
 			let future_this = FutureObjValue::new();
 			let mut new_members = BTreeMap::new();
 			for (k, v) in evaluate_comp(
@@ -325,26 +321,27 @@ pub fn evaluate_object(context: Context, object: ObjBody) -> Result<ObjValue> {
 							)?)
 						})
 					);
-					let mut bindings: HashMap<String, LazyBinding> = HashMap::new();
-					for (n, b) in pre_locals
+					let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+					for (n, b) in obj
+						.pre_locals
 						.iter()
-						.chain(post_locals.iter())
+						.chain(obj.post_locals.iter())
 						.map(|b| evaluate_binding(b, context_creator.clone()))
 					{
 						bindings.insert(n, b);
 					}
 					let bindings = new_bindings.fill(bindings);
 					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
-					let key = evaluate(ctx.clone(), &key)?;
+					let key = evaluate(ctx.clone(), &obj.key)?;
 					let value = LazyBinding::Bindable(Rc::new(
-						closure!(clone ctx, clone value, |this, _super_obj| {
+						closure!(clone ctx, clone obj.value, |this, _super_obj| {
 							Ok(LazyVal::new_resolved(evaluate(ctx.extend(HashMap::new(), None, this, None)?, &value)?))
 						}),
 					));
 
 					Ok((key, value))
 				},
-				&compspecs,
+				&obj.compspecs,
 			)?
 			.unwrap()
 			{
@@ -394,7 +391,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(loc, "var", || {
-			Val::Lazy(context.binding(&name)?).unwrap_if_lazy()
+			Ok(Val::Lazy(context.binding(name.clone())?).unwrap_if_lazy()?)
 		})?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
@@ -411,9 +408,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				evaluate(context, index)?,
 			) {
 				(Val::Obj(v), Val::Str(s)) => {
-					if let Some(v) = v.get(&s)? {
+					if let Some(v) = v.get(s.clone())? {
 						v.unwrap_if_lazy()?
-					} else if let Some(Val::Str(n)) = v.get("__intristic_namespace__")? {
+					} else if let Some(Val::Str(n)) = v.get("__intristic_namespace__".into())? {
 						Val::Intristic(n, s)
 					} else {
 						create_error(crate::Error::NoSuchField(s))?
@@ -443,9 +440,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					n.value_type()?,
 				))?,
 
-				(Val::Str(s), Val::Num(n)) => {
-					Val::Str(s.chars().skip(n as usize).take(1).collect())
-				}
+				(Val::Str(s), Val::Num(n)) => Val::Str(
+					s.chars()
+						.skip(n as usize)
+						.take(1)
+						.collect::<String>()
+						.into(),
+				),
 				(Val::Str(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
 					ValType::Str,
 					ValType::Num,
@@ -456,7 +457,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
+			let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
 			let context_creator = context_creator!(
@@ -484,19 +485,20 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					})
 				)));
 			}
-			Val::Arr(out)
+			Val::Arr(Rc::new(out))
 		}
 		ArrComp(expr, compspecs) => Val::Arr(
 			// First compspec should be forspec, so no "None" possible here
-			evaluate_comp(context, &|ctx| evaluate(ctx, expr), compspecs)?.unwrap(),
+			Rc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), compspecs)?.unwrap()),
 		),
-		Obj(body) => Val::Obj(evaluate_object(context, body.clone())?),
+		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
 			&evaluate(context.clone(), s)?,
-			&Val::Obj(evaluate_object(context, t.clone())?),
+			&Val::Obj(evaluate_object(context, t)?),
 		)?,
 		Apply(value, args, tailstrict) => {
-			let value = evaluate(context.clone(), value)?.unwrap_if_lazy()?;
+			let lazy = evaluate(context.clone(), value)?;
+			let value = lazy.unwrap_if_lazy()?;
 			match value {
 				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
 					// arr/string/function
@@ -519,7 +521,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					("std", "type") => {
 						assert_eq!(args.len(), 1);
 						let expr = &args.get(0).unwrap().1;
-						Val::Str(evaluate(context, expr)?.value_type()?.name().to_owned())
+						Val::Str(evaluate(context, expr)?.value_type()?.name().into())
 					}
 					// length, idx=>any
 					("std", "makeArray") => {
@@ -532,14 +534,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							let mut out = Vec::with_capacity(v as usize);
 							for i in 0..v as usize {
 								let call_ctx =
-									Context::new().with_var("v".to_owned(), Val::Num(i as f64))?;
+									Context::new().with_var("v".into(), Val::Num(i as f64))?;
 								out.push(d.evaluate(
 									call_ctx,
-									&ArgsDesc(vec![Arg(None, el!(Expr::Var("v".to_owned())))]),
+									&ArgsDesc(vec![Arg(None, el!(Expr::Var("v".into())))]),
 									true,
 								)?)
 							}
-							Val::Arr(out)
+							Val::Arr(Rc::new(out))
 						} else {
 							panic!("bad makeArray call");
 						}
@@ -564,13 +566,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							evaluate(context.clone(), &args[0].1)?,
 							evaluate(context, &args[1].1)?,
 						) {
-							Val::Arr(
+							Val::Arr(Rc::new(
 								body.fields_visibility()
 									.into_iter()
 									.filter(|(_k, v)| *v || include_hidden)
 									.map(|(k, _v)| Val::Str(k))
 									.collect(),
-							)
+							))
 						} else {
 							panic!("bad objectFieldsEx call");
 						}
@@ -587,7 +589,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 								body.fields_visibility()
 									.into_iter()
 									.filter(|(_k, v)| *v || include_hidden)
-									.any(|(k, _v)| k == name),
+									.any(|(k, _v)| *k == *name),
 							)
 						} else {
 							panic!("bad objectHasEx call");
@@ -664,8 +666,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							evaluate(context.clone(), &args[0].1)?,
 							evaluate(context.clone(), &args[1].1)?,
 						) {
-							Val::Arr(
-								arr.into_iter()
+							Val::Arr(Rc::new(
+								arr.iter()
 									.filter(|e| {
 										predicate
 											.evaluate_values(context.clone(), &[e.clone()])
@@ -673,8 +675,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 											.try_cast_bool("filter predicate")
 											.unwrap()
 									})
+									.cloned()
 									.collect(),
-							)
+							))
 						} else {
 							panic!("bad filter call");
 						}
@@ -682,33 +685,35 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					// faster
 					("std", "join") => {
 						assert_eq!(args.len(), 2);
-						let joiner = evaluate(context.clone(), &args[0].1)?.unwrap_if_lazy()?;
-						let items = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
-						match (joiner, items) {
+						let joiner = evaluate(context.clone(), &args[0].1)?;
+						let items = evaluate(context, &args[1].1)?;
+						match (joiner.unwrap_if_lazy()?, items.unwrap_if_lazy()?) {
 							(Val::Arr(joiner_items), Val::Arr(items)) => {
 								// TODO: Minimal size should be known
 								let mut out = Vec::new();
 
 								let mut first = true;
-								for item in items {
+								for item in items.iter().cloned() {
 									if let Val::Arr(items) = item.unwrap_if_lazy()? {
 										if !first {
+											out.reserve(joiner_items.len());
 											out.extend(joiner_items.iter().cloned());
 										}
 										first = false;
-										out.extend(items);
+										out.reserve(items.len());
+										out.extend(items.iter().cloned());
 									} else {
 										panic!("all array items should be arrays")
 									}
 								}
 
-								Val::Arr(out)
+								Val::Arr(Rc::new(out))
 							}
 							(Val::Str(joiner), Val::Arr(items)) => {
 								let mut out = String::new();
 
 								let mut first = true;
-								for item in items {
+								for item in items.iter().cloned() {
 									if let Val::Str(item) = item.unwrap_if_lazy()? {
 										if !first {
 											out += &joiner;
@@ -720,7 +725,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 									}
 								}
 
-								Val::Str(out)
+								Val::Str(out.into())
 							}
 							(joiner, items) => panic!("bad join call: {:?} {:?}", joiner, items),
 						}
@@ -776,20 +781,20 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		Import(path) => {
-			let mut import_location = loc
+			let mut tmp = loc
 				.clone()
 				.expect("imports can't be used without loc_data")
-				.0
-				.clone();
+				.0;
+			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
 			with_state(|s| s.import_file(&import_location, path))?
 		}
 		ImportStr(path) => {
-			let mut import_location = loc
+			let mut tmp = loc
 				.clone()
 				.expect("imports can't be used without loc_data")
-				.0
-				.clone();
+				.0;
+			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}

@@ -81,7 +81,7 @@ impl FuncDesc {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Copy, PartialEq)]
 pub enum ValType {
 	Bool,
 	Null,
@@ -115,42 +115,46 @@ impl Display for ValType {
 pub enum Val {
 	Bool(bool),
 	Null,
-	Str(String),
+	Str(Rc<str>),
 	Num(f64),
 	Lazy(LazyVal),
-	Arr(Vec<Val>),
+	Arr(Rc<Vec<Val>>),
 	Obj(ObjValue),
 	Func(FuncDesc),
 
 	// Library functions implemented in native
-	Intristic(String, String),
+	Intristic(Rc<str>, Rc<str>),
+}
+macro_rules! matches_unwrap {
+	($e: expr, $p: pat, $r: expr) => {
+		match $e {
+			$p => $r,
+			_ => panic!("no match"),
+			}
+	};
 }
 impl Val {
+	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
+		let this_type = self.value_type()?;
+		if this_type != val_type {
+			create_error(Error::TypeMismatch(context, vec![val_type], this_type))
+		} else {
+			Ok(())
+		}
+	}
 	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {
-		match self.unwrap_if_lazy()? {
-			Val::Bool(v) => Ok(v),
-			v => create_error(Error::TypeMismatch(
-				context,
-				vec![ValType::Bool],
-				v.value_type()?,
-			)),
-		}
+		self.assert_type(context, ValType::Bool)?;
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Bool(v), v))
 	}
-	pub fn try_cast_str(self, context: &'static str) -> Result<String> {
-		match self.unwrap_if_lazy()? {
-			Val::Str(v) => Ok(v),
-			v => create_error(Error::TypeMismatch(
-				context,
-				vec![ValType::Str],
-				v.value_type()?,
-			)),
-		}
+	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
+		self.assert_type(context, ValType::Str)?;
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Str(v), v))
 	}
-	pub fn unwrap_if_lazy(self) -> Result<Self> {
+	pub fn unwrap_if_lazy(&self) -> Result<Self> {
 		Ok(if let Val::Lazy(v) = self {
 			v.evaluate()?.unwrap_if_lazy()?
 		} else {
-			self
+			self.clone()
 		})
 	}
 	pub fn value_type(&self) -> Result<ValType> {
@@ -166,26 +170,30 @@ impl Val {
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
-	pub fn into_json(self, padding: usize) -> Result<String> {
+	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
-				.with_var("__tmp__to_json__".to_owned(), self)?;
-			if let Val::Str(result) = evaluate(
+				.with_var("__tmp__to_json__".into(), self)?;
+			Ok(evaluate(
 				ctx,
 				&el!(Expr::Apply(
 					el!(Expr::Index(
-						el!(Expr::Var("std".to_owned())),
-						el!(Expr::Str("manifestJsonEx".to_owned()))
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("manifestJsonEx".into()))
 					)),
 					ArgsDesc(vec![
-						Arg(None, el!(Expr::Var("__tmp__to_json__".to_owned()))),
-						Arg(None, el!(Expr::Str(" ".repeat(padding))))
+						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
+						Arg(None, el!(Expr::Str(" ".repeat(padding).into())))
 					]),
 					false
 				)),
-			)? {
-				Ok(result)
+			)?
+			.try_cast_str("to json")?)
+		})
+	}
+}
+
 			} else {
 				unreachable!()
 			}

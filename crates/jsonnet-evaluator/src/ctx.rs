@@ -16,7 +16,7 @@ struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: LayeredHashMap<String, LazyVal>,
+	bindings: LayeredHashMap<Rc<str>, LazyVal>,
 }
 pub struct Context(Rc<ContextInternals>);
 impl Debug for Context {
@@ -53,9 +53,9 @@ impl Context {
 		}))
 	}
 
-	pub fn binding(&self, name: &str) -> Result<LazyVal> {
-		self.0.bindings.get(name).cloned().ok_or_else(|| {
-			create_error::<()>(Error::UnknownVariable(name.to_owned()))
+	pub fn binding(&self, name: Rc<str>) -> Result<LazyVal> {
+		self.0.bindings.get(&name).cloned().ok_or_else(|| {
+			create_error::<()>(Error::UnknownVariable(name))
 				.err()
 				.unwrap()
 		})
@@ -67,7 +67,7 @@ impl Context {
 		ctx.unwrap()
 	}
 
-	pub fn with_var(&self, name: String, value: Val) -> Result<Context> {
+	pub fn with_var(&self, name: Rc<str>, value: Val) -> Result<Context> {
 		let mut new_bindings = HashMap::with_capacity(1);
 		new_bindings.insert(name, resolved_lazy_val!(value));
 		self.extend(new_bindings, None, None, None)
@@ -75,7 +75,7 @@ impl Context {
 
 	pub fn extend(
 		&self,
-		new_bindings: HashMap<String, LazyVal>,
+		new_bindings: HashMap<Rc<str>, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -97,7 +97,7 @@ impl Context {
 	}
 	pub fn extend_unbound(
 		&self,
-		new_bindings: HashMap<String, LazyBinding>,
+		new_bindings: HashMap<Rc<str>, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,

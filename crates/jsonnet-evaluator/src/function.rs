@@ -35,7 +35,7 @@ pub(crate) fn inline_parse_function_call(
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		let idx = if let Some(name) = &arg.0 {
-			params.iter().position(|p| &p.0 == name).ok_or_else(|| {
+			params.iter().position(|p| *p.0 == *name).ok_or_else(|| {
 				create_error::<()>(Error::UnknownFunctionParameter(name.clone()))
 					.err()
 					.unwrap()

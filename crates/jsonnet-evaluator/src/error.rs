@@ -6,20 +6,20 @@ use std::{path::PathBuf, rc::Rc};
 pub enum Error {
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
-	NoSuchField(String),
+	NoSuchField(Rc<str>),
 
-	UnknownVariable(String),
+	UnknownVariable(Rc<str>),
 
 	UnknownFunctionParameter(String),
-	BindingParameterASecondTime(String),
+	BindingParameterASecondTime(Rc<str>),
 	TooManyArgsFunctionHas(usize),
-	FunctionParameterNotBoundInCall(String),
+	FunctionParameterNotBoundInCall(Rc<str>),
 
-	UndefinedExternalVariable(String),
+	UndefinedExternalVariable(Rc<str>),
 
 	FieldMustBeStringGot(ValType),
 
-	AttemptedIndexAnArrayWithString(String),
+	AttemptedIndexAnArrayWithString(Rc<str>),
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
 	CantIndexInto(ValType),
 
@@ -31,7 +31,7 @@ pub enum Error {
 	ImportNotSupported(PathBuf, PathBuf),
 	ImportSyntaxError(jsonnet_parser::ParseError),
 
-	RuntimeError(String),
+	RuntimeError(Rc<str>),
 	StackOverflow,
 	FractionalIndex,
 	DivisionByZero,

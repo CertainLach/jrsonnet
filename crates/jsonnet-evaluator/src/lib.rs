@@ -65,11 +65,11 @@ pub struct EvaluationStateInternals {
 	/// Contains file source codes and evaluated results for imports and pretty
 	/// printing stacktraces
 	files: RefCell<HashMap<PathBuf, FileData>>,
-	str_files: RefCell<HashMap<PathBuf, String>>,
-	globals: RefCell<HashMap<String, Val>>,
+	str_files: RefCell<HashMap<PathBuf, Rc<str>>>,
+	globals: RefCell<HashMap<Rc<str>, Val>>,
 
 	/// Values to use with std.extVar
-	ext_vars: RefCell<HashMap<String, Val>>,
+	ext_vars: RefCell<HashMap<Rc<str>, Val>>,
 
 	settings: EvaluationSettings,
 	import_resolver: Box<dyn ImportResolver>,
@@ -87,7 +87,7 @@ pub(crate) fn create_error<T>(err: Error) -> Result<T> {
 	with_state(|s| s.error(err))
 }
 pub(crate) fn push<T>(
-	e: &Option<Rc<ExprLocation>>,
+	e: &Option<ExprLocation>,
 	comment: &str,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
@@ -185,11 +185,14 @@ impl EvaluationState {
 		})?;
 		self.evaluate_file(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<String> {
+	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<str>> {
 		let path = self.0.import_resolver.resolve_file(from, path)?;
 		if !self.0.str_files.borrow().contains_key(&path) {
 			let file_str = self.0.import_resolver.load_file_contents(&path)?;
-			self.0.str_files.borrow_mut().insert(path.clone(), file_str);
+			self.0
+				.str_files
+				.borrow_mut()
+				.insert(path.clone(), file_str.into());
 		}
 		Ok(self.0.str_files.borrow().get(&path).cloned().unwrap())
 	}
@@ -210,10 +213,10 @@ impl EvaluationState {
 		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}
 
-	pub fn add_global(&self, name: String, value: Val) {
+	pub fn add_global(&self, name: Rc<str>, value: Val) {
 		self.0.globals.borrow_mut().insert(name, value);
 	}
-	pub fn add_ext_var(&self, name: String, value: Val) {
+	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
 		self.0.ext_vars.borrow_mut().insert(name, value);
 	}
 
@@ -236,14 +239,14 @@ impl EvaluationState {
 					.unwrap();
 			}
 			let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
-			self.add_global("std".to_owned(), val);
+			self.add_global("std".into(), val);
 		});
 		self
 	}
 
 	pub fn create_default_context(&self) -> Result<Context> {
 		let globals = self.0.globals.borrow();
-		let mut new_bindings: HashMap<String, LazyBinding> = HashMap::new();
+		let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
@@ -255,7 +258,7 @@ impl EvaluationState {
 
 	pub fn push<T>(
 		&self,
-		e: Rc<ExprLocation>,
+		e: ExprLocation,
 		comment: String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -362,7 +365,7 @@ pub mod tests {
 			let evaluator = EvaluationState::default();
 			evaluator.with_stdlib();
 			let val = evaluator.parse_evaluate_raw($str).unwrap();
-			evaluator.add_global("__tmp__to_yaml__".to_owned(), val);
+			evaluator.add_global("__tmp__to_yaml__".into(), val);
 			evaluator
 				.parse_evaluate_raw("std.manifestJsonEx(__tmp__to_yaml__, \"\")")
 				.unwrap()

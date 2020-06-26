@@ -1,15 +1,15 @@
 use serde::{Deserialize, Serialize};
 use std::{fmt::Debug, ops::Deref, path::PathBuf, rc::Rc};
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum FieldName {
 	/// {fixed: 2}
-	Fixed(String),
+	Fixed(Rc<str>),
 	/// {["dyn"+"amic"]: 3}
 	Dyn(LocExpr),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Serialize, Deserialize)]
 pub enum Visibility {
 	/// :
 	Normal,
@@ -19,10 +19,10 @@ pub enum Visibility {
 	Unhide,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
@@ -31,7 +31,7 @@ pub struct FieldMember {
 	pub value: LocExpr,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
@@ -71,11 +71,11 @@ pub enum BinaryOpType {
 }
 
 /// name, default value
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct Param(pub String, pub Option<LocExpr>);
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct Param(pub Rc<str>, pub Option<LocExpr>);
 /// Defined function parameters
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ParamsDesc(pub Vec<Param>);
+pub struct ParamsDesc(pub Rc<Vec<Param>>);
 impl Deref for ParamsDesc {
 	type Target = Vec<Param>;
 	fn deref(&self) -> &Self::Target {
@@ -83,9 +83,9 @@ impl Deref for ParamsDesc {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct Arg(pub Option<String>, pub LocExpr);
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct ArgsDesc(pub Vec<Arg>);
 impl Deref for ArgsDesc {
 	type Target = Vec<Arg>;
@@ -96,35 +96,38 @@ impl Deref for ArgsDesc {
 
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct BindSpec {
-	pub name: String,
+	pub name: Rc<str>,
 	pub params: Option<ParamsDesc>,
 	pub value: LocExpr,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct IfSpecData(pub LocExpr);
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub struct ForSpecData(pub String, pub LocExpr);
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct ForSpecData(pub Rc<str>, pub LocExpr);
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
-pub enum ObjBody {
-	MemberList(Vec<Member>),
-	ObjComp {
-		pre_locals: Vec<BindSpec>,
-		key: LocExpr,
-		value: LocExpr,
-		post_locals: Vec<BindSpec>,
-		compspecs: Vec<CompSpec>,
-	},
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub struct ObjComp {
+	pub pre_locals: Vec<BindSpec>,
+	pub key: LocExpr,
+	pub value: LocExpr,
+	pub post_locals: Vec<BindSpec>,
+	pub compspecs: Vec<CompSpec>,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
+pub enum ObjBody {
+	MemberList(Vec<Member>),
+	ObjComp(ObjComp),
+}
+
+#[derive(Debug, PartialEq, Serialize, Deserialize, Clone, Copy)]
 pub enum LiteralType {
 	This,
 	Super,
@@ -134,7 +137,7 @@ pub enum LiteralType {
 	False,
 }
 
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
 	pub end: Option<LocExpr>,
@@ -142,16 +145,16 @@ pub struct SliceDesc {
 }
 
 /// Syntax base
-#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+#[derive(Debug, PartialEq, Serialize, Deserialize)]
 pub enum Expr {
 	Literal(LiteralType),
 
 	/// String value: "hello"
-	Str(String),
+	Str(Rc<str>),
 	/// Number: 1, 2.0, 2e+20
 	Num(f64),
 	/// Variable name: test
-	Var(String),
+	Var(Rc<str>),
 
 	/// Array of expressions: [1, 2, "Hello"]
 	Arr(Vec<LocExpr>),
