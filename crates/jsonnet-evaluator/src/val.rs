@@ -1,6 +1,6 @@
 use crate::{
 	create_error, evaluate,
-	function::{inline_parse_function_call, place_args},
+	function::{parse_function_call, place_args},
 	Context, Error, ObjValue, Result,
 };
 use jsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
@@ -65,7 +65,7 @@ pub struct FuncDesc {
 impl FuncDesc {
 	/// This function is always inlined to make tailstrict work
 	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
-		let ctx = inline_parse_function_call(
+		let ctx = parse_function_call(
 			call_ctx,
 			Some(self.ctx.clone()),
 			&self.params,

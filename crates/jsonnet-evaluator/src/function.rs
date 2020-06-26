@@ -17,20 +17,6 @@ pub fn parse_function_call(
 	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
-	inline_parse_function_call(ctx, body_ctx, params, args, tailstrict)
-}
-
-/// See [parse_function_call](parse_function_call)
-///
-/// ## Notes
-/// This function is always inlined for tailstrict
-pub(crate) fn inline_parse_function_call(
-	ctx: Context,
-	body_ctx: Option<Context>,
-	params: &ParamsDesc,
-	args: &ArgsDesc,
-	tailstrict: bool,
-) -> Result<Context> {
 	let mut out = HashMap::new();
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
