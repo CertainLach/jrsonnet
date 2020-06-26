@@ -8,6 +8,7 @@ edition = "2018"
 
 [features]
 default = ["serialized-stdlib", "faster"]
+# Serializes standard library AST instead of parsing them every run
 serialized-stdlib = ["serde", "bincode"]
 # Replace some standard library functions with faster implementations
 # Library works fine without this feature, but requires more memory and time for std function calls
