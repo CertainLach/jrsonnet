@@ -682,6 +682,29 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							panic!("bad filter call");
 						}
 					}
+					("std", "char") => {
+						assert_eq!(args.len(), 1);
+						let ch = evaluate(context, &args[0].1)?
+							.unwrap_if_lazy()?
+							.try_cast_num("std.char first argument")?;
+						let mut out = String::new();
+						out.push(std::char::from_u32(ch as u32).unwrap());
+						Val::Str(out.into())
+					}
+					("std", "encodeUTF8") => {
+						assert_eq!(args.len(), 1);
+						let s = evaluate(context, &args[0].1)?
+							.unwrap_if_lazy()?
+							.try_cast_str("std.encodeUTF8 first argument")?;
+						Val::Arr(Rc::new(s.bytes().map(|b| Val::Num(b as f64)).collect()))
+					}
+					("std", "md5") => {
+						assert_eq!(args.len(), 1);
+						let s = evaluate(context, &args[0].1)?
+							.unwrap_if_lazy()?
+							.try_cast_str("std.md5 first argument")?;
+						Val::Str(format!("{:x}", md5::compute(s.as_bytes())).into())
+					}
 					// faster
 					("std", "join") => {
 						assert_eq!(args.len(), 2);

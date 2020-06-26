@@ -18,6 +18,7 @@ jsonnet-parser = { path = "../jsonnet-parser" }
 closure = "0.3.0"
 jsonnet-stdlib = { path = "../jsonnet-stdlib" }
 indexmap = "1.4.0"
+md5 = "0.7.0"
 
 [dependencies.serde]
 version = "1.0.114"

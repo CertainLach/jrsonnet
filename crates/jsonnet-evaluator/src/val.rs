@@ -150,6 +150,10 @@ impl Val {
 		self.assert_type(context, ValType::Str)?;
 		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Str(v), v))
 	}
+	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
+		self.assert_type(context, ValType::Num)?;
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Num(v), v))
+	}
 	pub fn unwrap_if_lazy(&self) -> Result<Self> {
 		Ok(if let Val::Lazy(v) = self {
 			v.evaluate()?.unwrap_if_lazy()?
