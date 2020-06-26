@@ -49,7 +49,7 @@ parser! {
 
 		pub rule param(s: &ParserSettings) -> expr::Param = name:$(id()) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name.into(), expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
-			= params:(param(s) ** comma()) {
+			= params:param(s) ** comma() comma()? {
 				let mut defaults_started = false;
 				for param in &params {
 					defaults_started = defaults_started || param.1.is_some();
