@@ -34,7 +34,7 @@ fn main() {
 								Member::Field(FieldMember {
 									name: FieldName::Fixed(name),
 									..
-								}) if **name == *"join"
+								}) if **name == *"join" || **name == *"manifestJsonEx" || **name == *"escapeStringJson"
 							)
 						})
 						.collect(),

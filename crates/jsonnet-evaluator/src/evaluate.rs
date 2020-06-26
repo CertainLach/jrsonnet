@@ -1,7 +1,7 @@
 use crate::{
-	context_creator, create_error, future_wrapper, lazy_val, push, with_state, Context,
-	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
-	ValType,
+	context_creator, create_error, escape_string_json, future_wrapper, lazy_val, manifest_json_ex,
+	push, with_state, Context, ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember,
+	ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -728,6 +728,24 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 								Val::Str(out.into())
 							}
 							(joiner, items) => panic!("bad join call: {:?} {:?}", joiner, items),
+						}
+					}
+					// Faster
+					("std", "escapeStringJson") => {
+						assert_eq!(args.len(), 1);
+						match evaluate(context, &args[0].1)?.unwrap_if_lazy()? {
+							Val::Str(s) => Val::Str(escape_string_json(&s).into()),
+							_ => panic!("bad escapeStringJson call"),
+						}
+					}
+					// Faster
+					("std", "manifestJsonEx") => {
+						assert_eq!(args.len(), 2);
+						let value = evaluate(context.clone(), &args[0].1)?.unwrap_if_lazy()?;
+						let ident = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
+						match (value, ident) {
+							(o, Val::Str(s)) => Val::Str(manifest_json_ex(&o, &s)?.into()),
+							_ => panic!("bad escapeStringJson call"),
 						}
 					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),

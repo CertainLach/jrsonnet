@@ -194,9 +194,97 @@ impl Val {
 	}
 }
 
+pub fn manifest_json_ex(val: &Val, padding: &str) -> Result<String> {
+	let mut out = String::new();
+	manifest_json_ex_buf(val, &mut out, padding, &mut String::new())?;
+	Ok(out)
+}
+fn manifest_json_ex_buf(
+	val: &Val,
+	buf: &mut String,
+	padding: &str,
+	cur_padding: &mut String,
+) -> Result<()> {
+	use std::fmt::Write;
+	match val.unwrap_if_lazy()? {
+		Val::Bool(v) => {
+			if v {
+				buf.push_str("true");
 			} else {
-				unreachable!()
+				buf.push_str("false");
 			}
-		})
+		}
+		Val::Null => buf.push_str("null"),
+		Val::Str(s) => buf.push_str(&escape_string_json(&s)),
+		Val::Num(n) => write!(buf, "{}", n).unwrap(),
+		Val::Arr(items) => {
+			buf.push_str("[\n");
+			if !items.is_empty() {
+				let old_len = cur_padding.len();
+				cur_padding.push_str(padding);
+				for (i, item) in items.iter().enumerate() {
+					if i != 0 {
+						buf.push_str(",\n")
+					}
+					buf.push_str(cur_padding);
+					manifest_json_ex_buf(item, buf, padding, cur_padding)?;
+				}
+				cur_padding.truncate(old_len);
+			}
+			buf.push('\n');
+			buf.push_str(cur_padding);
+			buf.push(']');
+		}
+		Val::Obj(obj) => {
+			buf.push_str("{\n");
+			let fields = obj.visible_fields();
+			if !fields.is_empty() {
+				let old_len = cur_padding.len();
+				cur_padding.push_str(padding);
+				for (i, field) in fields.into_iter().enumerate() {
+					if i != 0 {
+						buf.push_str(",\n")
+					}
+					buf.push_str(cur_padding);
+					buf.push_str(&escape_string_json(&field));
+					buf.push_str(": ");
+					manifest_json_ex_buf(&obj.get(field)?.unwrap(), buf, padding, cur_padding)?;
+				}
+				cur_padding.truncate(old_len);
+			}
+			buf.push('\n');
+			buf.push_str(cur_padding);
+			buf.push('}');
+		}
+		Val::Func(_) | Val::Intristic(_, _) => panic!("tried to manifest function"),
+		Val::Lazy(_) => unreachable!(),
+	};
+	Ok(())
+}
+pub fn escape_string_json(s: &str) -> String {
+	use std::fmt::Write;
+	let mut out = String::new();
+	out.push('"');
+	for c in s.chars() {
+		match c {
+			'"' => out.push_str("\\\""),
+			'\\' => out.push_str("\\\\"),
+			'\u{0008}' => out.push_str("\\b"),
+			'\u{000c}' => out.push_str("\\f"),
+			'\n' => out.push_str("\\n"),
+			'\r' => out.push_str("\\r"),
+			'\t' => out.push_str("\\t"),
+			c if c < 32 as char || (c >= 127 as char && c <= 159 as char) => {
+				write!(out, "\\u{:04x}", c as u32).unwrap()
+			}
+			c => out.push(c),
+		}
 	}
+	out.push('"');
+	out
+}
+
+#[test]
+fn json_test() {
+	assert_eq!(escape_string_json("\u{001f}"), "\"\\u001f\"")
 }
