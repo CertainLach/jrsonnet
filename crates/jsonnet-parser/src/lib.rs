@@ -11,7 +11,7 @@ pub use peg;
 
 pub struct ParserSettings {
 	pub loc_data: bool,
-	pub file_name: PathBuf,
+	pub file_name: Rc<PathBuf>,
 }
 
 parser! {
@@ -289,7 +289,7 @@ parser! {
 			} end:position!() {
 				let LocExpr(e, _) = a;
 				LocExpr(e, if s.loc_data {
-					Some(Rc::new(ExprLocation(s.file_name.to_owned(), start, end)))
+					Some(ExprLocation(s.file_name.clone(), start, end))
 				} else {
 					None
 				})
@@ -317,6 +317,7 @@ pub mod tests {
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
 	use std::path::PathBuf;
+	use std::rc::Rc;
 
 	macro_rules! parse {
 		($s:expr) => {
@@ -324,7 +325,7 @@ pub mod tests {
 				$s,
 				&ParserSettings {
 					loc_data: false,
-					file_name: PathBuf::from("/test.jsonnet"),
+					file_name: Rc::new(PathBuf::from("/test.jsonnet")),
 					},
 				)
 			.unwrap()

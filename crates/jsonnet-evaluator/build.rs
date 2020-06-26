@@ -15,7 +15,7 @@ fn main() {
 	let parsed = parse(
 		STDLIB_STR,
 		&ParserSettings {
-			file_name: PathBuf::from("std.jsonnet"),
+			file_name: Rc::new(PathBuf::from("std.jsonnet")),
 			loc_data: true,
 		},
 	)

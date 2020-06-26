@@ -38,7 +38,7 @@ pub enum Error {
 }
 
 #[derive(Clone, Debug)]
-pub struct StackTraceElement(pub Rc<ExprLocation>, pub String);
+pub struct StackTraceElement(pub ExprLocation, pub String);
 #[derive(Debug, Clone)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 

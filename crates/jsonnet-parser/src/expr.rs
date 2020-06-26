@@ -207,7 +207,7 @@ pub enum Expr {
 
 /// file, begin offset, end offset
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct ExprLocation(pub PathBuf, pub usize, pub usize);
+pub struct ExprLocation(pub Rc<PathBuf>, pub usize, pub usize);
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)
@@ -216,7 +216,7 @@ impl Debug for ExprLocation {
 
 /// Holds AST expression and its location in source file+
 #[derive(Clone, PartialEq, Serialize, Deserialize)]
-pub struct LocExpr(pub Rc<Expr>, pub Option<Rc<ExprLocation>>);
+pub struct LocExpr(pub Rc<Expr>, pub Option<ExprLocation>);
 impl Debug for LocExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?} from {:?}", self.0, self.1)
@@ -230,11 +230,7 @@ macro_rules! loc_expr {
 		LocExpr(
 			std::rc::Rc::new($expr),
 			if $need_loc {
-				Some(std::rc::Rc::new(ExprLocation(
-					$name.to_owned(),
-					$start,
-					$end,
-				)))
+				Some(ExprLocation($name, $start, $end))
 			} else {
 				None
 				},

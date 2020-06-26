@@ -117,7 +117,7 @@ impl EvaluationState {
 				parse(
 					&code,
 					&ParserSettings {
-						file_name: name,
+						file_name: Rc::new(name),
 						loc_data: true,
 					},
 				)?,
@@ -198,7 +198,7 @@ impl EvaluationState {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
-				file_name: PathBuf::from("raw.jsonnet"),
+				file_name: Rc::new(PathBuf::from("raw.jsonnet")),
 				loc_data: true,
 			},
 		)
@@ -320,11 +320,11 @@ pub mod tests {
 		let state = EvaluationState::default();
 		state
 			.push(
-				Rc::new(ExprLocation(PathBuf::from("test1.jsonnet"), 10, 20)),
+				ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
 				"outer".to_owned(),
 				|| {
 					state.push(
-						Rc::new(ExprLocation(PathBuf::from("test2.jsonnet"), 30, 40)),
+						ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
 						"inner".to_owned(),
 						|| {
 							state.print_stack_trace();
