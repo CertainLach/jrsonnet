@@ -668,6 +668,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						) {
 							Val::Arr(Rc::new(
 								arr.iter()
+									.cloned()
 									.filter(|e| {
 										predicate
 											.evaluate_values(context.clone(), &[e.clone()])
@@ -675,7 +676,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 											.try_cast_bool("filter predicate")
 											.unwrap()
 									})
-									.cloned()
 									.collect(),
 							))
 						} else {

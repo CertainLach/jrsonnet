@@ -1,9 +1,9 @@
 use crate::{
 	create_error, evaluate,
 	function::{inline_parse_function_call, place_args},
-	with_state, Context, Error, ObjValue, Result,
+	Context, Error, ObjValue, Result,
 };
-use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
+use jsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	fmt::{Debug, Display},
@@ -170,6 +170,11 @@ impl Val {
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
+	#[cfg(feature = "faster")]
+	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
+		manifest_json_ex(&self, &" ".repeat(padding)).map(|s| s.into())
+	}
+	#[cfg(not(feature = "faster"))]
 	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
 			let ctx = s

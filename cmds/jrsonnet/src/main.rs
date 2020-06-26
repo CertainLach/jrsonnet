@@ -5,7 +5,7 @@ use jsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrac
 use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
-use std::{collections::HashMap, path::PathBuf, str::FromStr, rc::Rc};
+use std::{collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
 enum Format {
 	None,
@@ -173,40 +173,20 @@ fn main() {
 				}
 				v => v,
 			};
-			let v = match opts.format {
-				Format::Json => {
-					if opts.no_stdlib {
-						evaluator.with_stdlib();
-					}
-					evaluator.add_global("__tmp__to_json__".into(), v);
-					let v = evaluator.parse_evaluate_raw(&format!(
-						"std.manifestJsonEx(__tmp__to_json__, \"{}\")",
-						" ".repeat(opts.line_padding),
-					));
-					match v {
-						Ok(v) => v,
-						Err(err) => {
-							print_error(&err, evaluator, &opts);
-							std::process::exit(1);
-						}
-					}
-				}
+			let v = evaluator.run_in_state(|| match opts.format {
+				Format::Json => Ok(Val::Str(v.into_json(opts.line_padding)?)),
 				Format::Yaml => {
-					if opts.no_stdlib {
-						evaluator.with_stdlib();
-					}
 					evaluator.add_global("__tmp__to_yaml__".into(), v);
-					let v = evaluator
-						.parse_evaluate_raw("std.manifestYamlDoc(__tmp__to_yaml__, \"  \")");
-					match v {
-						Ok(v) => v,
-						Err(err) => {
-							print_error(&err, evaluator, &opts);
-							std::process::exit(1);
-						}
-					}
+					evaluator.parse_evaluate_raw("std.manifestYamlDoc(__tmp__to_yaml__, \"  \")")
 				}
-				_ => v,
+				_ => Ok(v),
+			});
+			let v = match v {
+				Ok(v) => v,
+				Err(err) => {
+					print_error(&err, evaluator, &opts);
+					std::process::exit(1);
+				}
 			};
 			match v {
 				Val::Str(s) => println!("{}", s),

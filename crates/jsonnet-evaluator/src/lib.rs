@@ -296,7 +296,7 @@ impl EvaluationState {
 		Err(LocError(err, self.stack_trace()))
 	}
 
-	fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
+	pub fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
 		EVAL_STATE.with(|v| {
 			let has_state = v.borrow().is_some();
 			if !has_state {
@@ -364,14 +364,11 @@ pub mod tests {
 		($str: expr) => {{
 			let evaluator = EvaluationState::default();
 			evaluator.with_stdlib();
-			let val = evaluator.parse_evaluate_raw($str).unwrap();
-			evaluator.add_global("__tmp__to_yaml__".into(), val);
 			evaluator
-				.parse_evaluate_raw("std.manifestJsonEx(__tmp__to_yaml__, \"\")")
+				.parse_evaluate_raw($str)
 				.unwrap()
-				.try_cast_str("there should be json string")
+				.into_json(0)
 				.unwrap()
-				.clone()
 				.replace("\n", "")
 			}};
 	}
