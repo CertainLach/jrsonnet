@@ -575,11 +575,4 @@ pub mod tests {
 	fn bench_parse_peg(b: &mut Bencher) {
 		b.iter(|| parse!(jsonnet_stdlib::STDLIB_STR))
 	}
-
-	// From serialized blob
-	#[bench]
-	fn bench_parse_serde_bincode(b: &mut Bencher) {
-		let serialized = bincode::serialize(&parse!(jsonnet_stdlib::STDLIB_STR)).unwrap();
-		b.iter(|| bincode::deserialize::<LocExpr>(&serialized))
-	}
 }

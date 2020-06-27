@@ -6,16 +6,18 @@ edition = "2018"
 
 [features]
 default = []
-# Trace peg token parsing
-# trace = ["peg/trace"]
-# TODO:
-# serialize = ["serde"]
+serialize = ["serde"]
+deserialize = ["serde"]
+# Adds ability to dump AST as source code for easy embedding
+dump = ["structdump", "structdump-derive"]
 
 [dependencies]
 peg = "0.6.2"
-serde = { version = "1.0.114", features = ["derive", "rc"] }
 unescape = "0.1.0"
+
+serde = { version = "1.0.114", features = ["derive", "rc"], optional = true }
+structdump = { version = "0.1.2", optional = true }
+structdump-derive = { version = "0.1.2", optional = true }
 
 [dev-dependencies]
 jsonnet-stdlib = { version = "0.1.0", path = "../jsonnet-stdlib" }
-bincode = "1.3.1"
