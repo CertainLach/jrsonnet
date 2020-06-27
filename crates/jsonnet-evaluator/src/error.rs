@@ -1,4 +1,4 @@
-use crate::ValType;
+use crate::{Val, ValType};
 use jsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
@@ -9,6 +9,16 @@ pub enum Error {
 
 	UnaryOperatorDoesNotOperateOnType(UnaryOpType, ValType),
 	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
+
+	NoTopLevelObjectFound,
+	CantUseSelfOutsideOfObject,
+	CantUseSuperOutsideOfObject,
+
+	InComprehensionCanOnlyIterateOverArray,
+
+	ArrayBoundsError(usize, usize),
+
+	AssertionFailed(Val),
 
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),

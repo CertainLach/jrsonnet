@@ -265,7 +265,7 @@ fn manifest_json_ex_buf(
 			buf.push_str(cur_padding);
 			buf.push('}');
 		}
-		Val::Func(_) | Val::Intristic(_, _) => panic!("tried to manifest function"),
+		Val::Func(_) | Val::Intristic(_, _) => create_error_result(Error::RuntimeError("tried to manifest function".into()))?,
 		Val::Lazy(_) => unreachable!(),
 	};
 	Ok(())

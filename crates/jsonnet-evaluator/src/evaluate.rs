@@ -207,7 +207,7 @@ pub fn evaluate_comp<T>(
 					}
 					Some(out.into_iter().flatten().flatten().collect())
 				}
-				_ => panic!("for expression evaluated to non-iterable value"),
+				_ => create_error_result(Error::InComprehensionCanOnlyIterateOverArray)?,
 			}
 		}
 	})
@@ -384,13 +384,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			context
 				.this()
 				.clone()
-				.unwrap_or_else(|| panic!("this not found")),
+				.ok_or_else(|| create_error(crate::Error::CantUseSelfOutsideOfObject))?,
 		),
 		Literal(LiteralType::Dollar) => Val::Obj(
 			context
 				.dollar()
 				.clone()
-				.unwrap_or_else(|| panic!("dollar not found")),
+				.ok_or_else(|| create_error(crate::Error::NoTopLevelObjectFound))?,
 		),
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
@@ -682,7 +682,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 										out.reserve(items.len());
 										out.extend(items.iter().cloned());
 									} else {
-										panic!("all array items should be arrays")
+										create_error_result(crate::Error::RuntimeError("in std.join all items should be arrays".into()))?;
 									}
 								}
 
@@ -700,7 +700,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 										first = false;
 										out += &item;
 									} else {
-										panic!("all array items should be strings")
+										create_error_result(crate::Error::RuntimeError("in std.join all items should be strings".into()))?;
 									}
 								}
 
@@ -753,13 +753,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			if assertion_result {
 				evaluate(context, returned)?
 			} else if let Some(msg) = msg {
-				panic!(
-					"assertion failed ({:?}): {}",
-					value,
-					evaluate(context, msg)?.try_cast_str("assertion message should be string")?
-				);
+				create_error_result(crate::Error::AssertionFailed(evaluate(context, msg)?))?
 			} else {
-				panic!("assertion failed ({:?}): no message", value);
+				create_error_result(crate::Error::AssertionFailed(Val::Null))?
 			}
 		}
 		Error(e) => create_error_result(crate::Error::RuntimeError(
