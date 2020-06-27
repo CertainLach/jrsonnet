@@ -3,6 +3,7 @@ members = [
 	"crates/jrsonnet-parser",
 	"crates/jrsonnet-evaluator",
 	"crates/jrsonnet-stdlib",
+	"bindings/jsonnet",
 	"cmds/jrsonnet"
 ]
 
@@ -12,6 +13,3 @@ lto = "fat"
 codegen-units = 1
 debug = 0
 panic = "abort"
-
-[profile.test]
-opt-level = 1

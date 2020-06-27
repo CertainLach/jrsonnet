@@ -19,7 +19,11 @@ It is fun to write one in Rust :D
 
 ## Bindings
 
-Currently no language bindings are implemented
+C bindings (libjsonnet.so) are WIP
+
+Something is implemented, but mostly unusable for now
+
+See them in `./bindings/jsonnet/`
 
 ## Benchmark
 
