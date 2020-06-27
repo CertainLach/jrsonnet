@@ -116,6 +116,12 @@ impl EvaluationState {
 			..Default::default()
 		}))
 	}
+	pub fn evaluate_file_to_json(
+		&self,
+		path: &PathBuf,
+	) -> std::result::Result<Rc<str>, LocError> {
+		self.import_file(&PathBuf::new(), &path).and_then(|v|v.into_json(4))
+	}
 	pub fn add_file(
 		&self,
 		name: Rc<PathBuf>,

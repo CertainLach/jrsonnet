@@ -52,6 +52,9 @@ impl ObjValue {
 			value_cache: RefCell::new(HashMap::new()),
 		}))
 	}
+	pub fn new_empty() -> ObjValue {
+		Self::new(None, Rc::new(BTreeMap::new()))
+	}
 	pub fn with_super(&self, super_obj: ObjValue) -> ObjValue {
 		match &self.0.super_obj {
 			None => ObjValue::new(Some(super_obj), self.0.this_entries.clone()),
