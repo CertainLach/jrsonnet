@@ -718,7 +718,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							Val::Str(manifest_json_ex(&value, &indent)?.into())
 						})
 					}
-					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
+					(ns, name) => create_error(crate::error::Error::IntristicNotFound(
+						ns.into(),
+						name.into(),
+					))?,
 				},
 				Val::Func(f) => {
 					let body = || f.evaluate(context, args, *tailstrict);
@@ -728,7 +731,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						push(loc, "function call", body)?
 					}
 				}
-				_ => panic!("{:?} is not a function", value),
+				v => create_error(crate::error::Error::OnlyFunctionsCanBeCalledGot(
+					v.value_type()?,
+				))?,
 			}
 		}
 		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
