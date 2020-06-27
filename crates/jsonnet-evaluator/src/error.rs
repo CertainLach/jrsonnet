@@ -1,11 +1,14 @@
 use crate::ValType;
-use jsonnet_parser::ExprLocation;
+use jsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum Error {
 	IntristicNotFound(Rc<str>, Rc<str>),
 	IntristicArgumentReorderingIsNotSupportedYet,
+
+	UnaryOperatorDoesNotOperateOnType(UnaryOpType, ValType),
+	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
 
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),

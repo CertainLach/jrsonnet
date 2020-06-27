@@ -74,7 +74,10 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
 		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
 		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
-		(op, o) => panic!("unary op not implemented: {:?} {:?}", op, o),
+		(op, o) => create_error(Error::UnaryOperatorDoesNotOperateOnType(
+			op,
+			o.value_type()?,
+		))?,
 	})
 }
 
@@ -92,7 +95,11 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
 		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
-		_ => panic!("can't add: {:?} and {:?}", a, b),
+		_ => create_error(Error::BinaryOperatorDoesNotOperateOnValues(
+			BinaryOpType::Add,
+			a.value_type()?,
+			b.value_type()?,
+		))?,
 	})
 }
 
@@ -161,7 +168,11 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
 
-		_ => panic!("no rules for binary operation: {:?} {:?} {:?}", a, op, b),
+		_ => create_error(Error::BinaryOperatorDoesNotOperateOnValues(
+			op,
+			a.value_type()?,
+			b.value_type()?,
+		))?,
 	})
 }
 
