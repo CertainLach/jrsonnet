@@ -2,7 +2,7 @@ pub mod location;
 
 use clap::Clap;
 use jrsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
-use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
+use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
@@ -155,7 +155,7 @@ fn main() {
 					for ExtStr { name, value } in opts.tla_code.iter().cloned() {
 						desc_map.insert(
 							name,
-							jsonnet_parser::parse(
+							jrsonnet_parser::parse(
 								&value,
 								&ParserSettings {
 									file_name: Rc::new(PathBuf::new()),
@@ -211,7 +211,7 @@ fn print_error(err: &LocError, evaluator: EvaluationState, opts: &Opts) {
 	print_trace(&(err.1), evaluator, &opts);
 }
 
-fn print_syntax_error(error: jsonnet_parser::ParseError, file: &PathBuf, code: &str) {
+fn print_syntax_error(error: jrsonnet_parser::ParseError, file: &PathBuf, code: &str) {
 	use annotate_snippets::{
 		display_list::{DisplayList, FormatOptions},
 		snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
