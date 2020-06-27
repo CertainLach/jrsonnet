@@ -7,6 +7,9 @@ use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
+#[global_allocator]
+static ALLOC: jemallocator::Jemalloc = jemallocator::Jemalloc;
+
 enum Format {
 	None,
 	Json,
