@@ -1,7 +1,7 @@
 use crate::{
 	context_creator, create_error, escape_string_json, future_wrapper, lazy_val, manifest_json_ex,
-	push, with_state, Context, ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember,
-	ObjValue, Result, Val, ValType,
+	parse_args, push, with_state, Context, ContextCreator, Error, FuncDesc, LazyBinding, LazyVal,
+	ObjMember, ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -502,10 +502,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			match value {
 				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
 					// arr/string/function
-					("std", "length") => {
-						assert_eq!(args.len(), 1);
-						let expr = &args.get(0).unwrap().1;
-						match evaluate(context, expr)? {
+					("std", "length") => parse_args!(context, "std.length", args, 1, [
+						0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
+					], {
+						match x {
 							Val::Str(n) => Val::Num(n.chars().count() as f64),
 							Val::Arr(i) => Val::Num(i.len() as f64),
 							Val::Obj(o) => Val::Num(
@@ -514,209 +514,157 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 									.filter(|(_k, v)| *v)
 									.count() as f64,
 							),
-							v => panic!("can't get length of {:?}", v),
+							_ => unreachable!(),
 						}
-					}
+					}),
 					// any
-					("std", "type") => {
-						assert_eq!(args.len(), 1);
-						let expr = &args.get(0).unwrap().1;
-						Val::Str(evaluate(context, expr)?.value_type()?.name().into())
-					}
+					("std", "type") => parse_args!(context, "std.type", args, 1, [
+						0, x, vec![];
+					], {
+						Val::Str(x.value_type()?.name().into())
+					}),
 					// length, idx=>any
-					("std", "makeArray") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Num(v), Val::Func(d)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						) {
-							assert!(v >= 0.0);
-							let mut out = Vec::with_capacity(v as usize);
-							for i in 0..v as usize {
-								let call_ctx =
-									Context::new().with_var("v".into(), Val::Num(i as f64))?;
-								out.push(d.evaluate(
-									call_ctx,
-									&ArgsDesc(vec![Arg(None, el!(Expr::Var("v".into())))]),
-									true,
-								)?)
-							}
-							Val::Arr(Rc::new(out))
-						} else {
-							panic!("bad makeArray call");
+					("std", "makeArray") => parse_args!(context, "std.makeArray", args, 2, [
+						0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
+						1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+					], {
+						assert!(sz >= 0.0);
+						let mut out = Vec::with_capacity(sz as usize);
+						for i in 0..sz as usize {
+							out.push(func.evaluate_values(
+								Context::new(),
+								&[Val::Num(i as f64)]
+							)?)
 						}
-					}
+						Val::Arr(Rc::new(out))
+					}),
 					// string
-					("std", "codepoint") => {
-						assert_eq!(args.len(), 1);
-						if let Val::Str(s) = evaluate(context, &args[0].1)? {
-							assert!(
-								s.chars().count() == 1,
-								"std.codepoint should receive single char string"
-							);
-							Val::Num(s.chars().take(1).next().unwrap() as u32 as f64)
-						} else {
-							panic!("bad codepoint call");
-						}
-					}
+					("std", "codepoint") => parse_args!(context, "std.codepoint", args, 1, [
+						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+					], {
+						assert!(
+							str.chars().count() == 1,
+							"std.codepoint should receive single char string"
+						);
+						Val::Num(str.chars().take(1).next().unwrap() as u32 as f64)
+					}),
 					// object, includeHidden
 					("std", "objectFieldsEx") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Obj(body), Val::Bool(include_hidden)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						) {
+						parse_args!(context, "std.objectFieldsEx",args, 2, [
+							0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
+							1, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
+						], {
 							Val::Arr(Rc::new(
-								body.fields_visibility()
+								obj.fields_visibility()
 									.into_iter()
-									.filter(|(_k, v)| *v || include_hidden)
+									.filter(|(_k, v)| *v || inc_hidden)
 									.map(|(k, _v)| Val::Str(k))
 									.collect(),
 							))
-						} else {
-							panic!("bad objectFieldsEx call");
-						}
+						})
 					}
 					// object, field, includeHidden
-					("std", "objectHasEx") => {
-						assert_eq!(args.len(), 3);
-						if let (Val::Obj(body), Val::Str(name), Val::Bool(include_hidden)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context.clone(), &args[1].1)?,
-							evaluate(context, &args[2].1)?,
-						) {
-							Val::Bool(
-								body.fields_visibility()
-									.into_iter()
-									.filter(|(_k, v)| *v || include_hidden)
-									.any(|(k, _v)| *k == *name),
-							)
-						} else {
-							panic!("bad objectHasEx call");
-						}
-					}
+					("std", "objectHasEx") => parse_args!(context, "std.objectHasEx", args, 3, [
+						0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
+						1, f: [Val::Str]!!Val::Str, vec![ValType::Str];
+						2, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
+					], {
+						Val::Bool(
+							obj.fields_visibility()
+								.into_iter()
+								.filter(|(_k, v)| *v || inc_hidden)
+								.any(|(k, _v)| *k == *f),
+						)
+					}),
 					("std", "primitiveEquals") => {
-						assert_eq!(args.len(), 2);
-						let (a, b) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						);
-						Val::Bool(a == b)
+						parse_args!(context, "std.primitiveEquals", args, 2, [
+							0, a, vec![];
+							1, b, vec![];
+						], {
+							Val::Bool(a == b)
+						})
 					}
-					("std", "modulo") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Num(a), Val::Num(b)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						) {
-							Val::Num(a % b)
-						} else {
-							panic!("bad modulo call");
-						}
-					}
-					("std", "floor") => {
-						assert_eq!(args.len(), 1);
-						if let Val::Num(a) = evaluate(context, &args[0].1)? {
-							Val::Num(a.floor())
-						} else {
-							panic!("bad floor call");
-						}
-					}
-					("std", "trace") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Str(a), b) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						) {
-							// TODO: Line numbers as in original jsonnet
-							println!("TRACE: {}", a);
-							b
-						} else {
-							panic!("bad trace call");
-						}
-					}
-					("std", "pow") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Num(a), Val::Num(b)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context, &args[1].1)?,
-						) {
-							Val::Num(a.powf(b))
-						} else {
-							panic!("bad pow call");
-						}
-					}
-					("std", "extVar") => {
-						assert_eq!(args.len(), 1);
-						if let Val::Str(a) = evaluate(context, &args[0].1)? {
-							with_state(|s| s.0.ext_vars.borrow().get(&a).cloned()).ok_or_else(
-								|| {
-									create_error::<()>(crate::Error::UndefinedExternalVariable(a))
-										.err()
+					("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
+						0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
+						1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
+					], {
+						Val::Num(a % b)
+					}),
+					("std", "floor") => parse_args!(context, "std.floor", args, 1, [
+						0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
+					], {
+						Val::Num(x.floor())
+					}),
+					("std", "trace") => parse_args!(context, "std.trace", args, 2, [
+						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+						1, rest, vec![];
+					], {
+						// TODO: Line numbers as in original jsonnet
+						println!("TRACE: {}", str);
+						rest
+					}),
+					("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
+						0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
+						1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
+					], {
+						Val::Num(x.powf(n))
+					}),
+					("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
+						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
+					], {
+						with_state(|s| s.0.ext_vars.borrow().get(&x).cloned()).ok_or_else(
+							|| {
+								create_error::<()>(crate::Error::UndefinedExternalVariable(x))
+									.err()
+									.unwrap()
+							},
+						)?
+					}),
+					("std", "filter") => parse_args!(context, "std.filter", args, 2, [
+						0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+						1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+					], {
+						Val::Arr(Rc::new(
+							arr.iter()
+								.cloned()
+								.filter(|e| {
+									func
+										.evaluate_values(context.clone(), &[e.clone()])
 										.unwrap()
-								},
-							)?
-						} else {
-							panic!("bad extVar call");
-						}
-					}
-					("std", "filter") => {
-						assert_eq!(args.len(), 2);
-						if let (Val::Func(predicate), Val::Arr(arr)) = (
-							evaluate(context.clone(), &args[0].1)?,
-							evaluate(context.clone(), &args[1].1)?,
-						) {
-							Val::Arr(Rc::new(
-								arr.iter()
-									.cloned()
-									.filter(|e| {
-										predicate
-											.evaluate_values(context.clone(), &[e.clone()])
-											.unwrap()
-											.try_cast_bool("filter predicate")
-											.unwrap()
-									})
-									.collect(),
-							))
-						} else {
-							panic!("bad filter call");
-						}
-					}
-					("std", "char") => {
-						assert_eq!(args.len(), 1);
-						let ch = evaluate(context, &args[0].1)?
-							.unwrap_if_lazy()?
-							.try_cast_num("std.char first argument")?;
+										.try_cast_bool("filter predicate")
+										.unwrap()
+								})
+								.collect(),
+						))
+					}),
+					("std", "char") => parse_args!(context, "std.char", args, 1, [
+						0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
+					], {
 						let mut out = String::new();
-						out.push(std::char::from_u32(ch as u32).unwrap());
+						out.push(std::char::from_u32(n as u32).unwrap());
 						Val::Str(out.into())
-					}
-					("std", "encodeUTF8") => {
-						assert_eq!(args.len(), 1);
-						let s = evaluate(context, &args[0].1)?
-							.unwrap_if_lazy()?
-							.try_cast_str("std.encodeUTF8 first argument")?;
-						Val::Arr(Rc::new(s.bytes().map(|b| Val::Num(b as f64)).collect()))
-					}
-					("std", "md5") => {
-						assert_eq!(args.len(), 1);
-						let s = evaluate(context, &args[0].1)?
-							.unwrap_if_lazy()?
-							.try_cast_str("std.md5 first argument")?;
-						Val::Str(format!("{:x}", md5::compute(s.as_bytes())).into())
-					}
+					}),
+					("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
+						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+					], {
+						Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect()))
+					}),
+					("std", "md5") => parse_args!(context, "std.md5", args, 1, [
+						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+					], {
+						Val::Str(format!("{:x}", md5::compute(str.as_bytes())).into())
+					}),
 					// faster
-					("std", "join") => {
-						assert_eq!(args.len(), 2);
-						let joiner = evaluate(context.clone(), &args[0].1)?;
-						let items = evaluate(context, &args[1].1)?;
-						match (joiner.unwrap_if_lazy()?, items.unwrap_if_lazy()?) {
-							(Val::Arr(joiner_items), Val::Arr(items)) => {
-								// TODO: Minimal size should be known
+					("std", "join") => parse_args!(context, "std.join", args, 2, [
+						0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
+						1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+					], {
+						match sep {
+							Val::Arr(joiner_items) => {
 								let mut out = Vec::new();
 
 								let mut first = true;
-								for item in items.iter().cloned() {
+								for item in arr.iter().cloned() {
 									if let Val::Arr(items) = item.unwrap_if_lazy()? {
 										if !first {
 											out.reserve(joiner_items.len());
@@ -731,15 +679,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 								}
 
 								Val::Arr(Rc::new(out))
-							}
-							(Val::Str(joiner), Val::Arr(items)) => {
+							},
+							Val::Str(sep) => {
 								let mut out = String::new();
 
 								let mut first = true;
-								for item in items.iter().cloned() {
+								for item in arr.iter().cloned() {
 									if let Val::Str(item) = item.unwrap_if_lazy()? {
 										if !first {
-											out += &joiner;
+											out += &sep;
 										}
 										first = false;
 										out += &item;
@@ -749,27 +697,26 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 								}
 
 								Val::Str(out.into())
-							}
-							(joiner, items) => panic!("bad join call: {:?} {:?}", joiner, items),
+							},
+							_ => unreachable!()
 						}
-					}
+					}),
 					// Faster
 					("std", "escapeStringJson") => {
-						assert_eq!(args.len(), 1);
-						match evaluate(context, &args[0].1)?.unwrap_if_lazy()? {
-							Val::Str(s) => Val::Str(escape_string_json(&s).into()),
-							_ => panic!("bad escapeStringJson call"),
-						}
+						parse_args!(context, "std.escapeStringJson", args, 1, [
+							0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
+						], {
+							Val::Str(escape_string_json(&str_).into())
+						})
 					}
 					// Faster
 					("std", "manifestJsonEx") => {
-						assert_eq!(args.len(), 2);
-						let value = evaluate(context.clone(), &args[0].1)?.unwrap_if_lazy()?;
-						let ident = evaluate(context, &args[1].1)?.unwrap_if_lazy()?;
-						match (value, ident) {
-							(o, Val::Str(s)) => Val::Str(manifest_json_ex(&o, &s)?.into()),
-							_ => panic!("bad escapeStringJson call"),
-						}
+						parse_args!(context, "std.manifestJsonEx", args, 2, [
+							0, value, vec![];
+							1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
+						], {
+							Val::Str(manifest_json_ex(&value, &indent)?.into())
+						})
 					}
 					(ns, name) => panic!("Intristic not found: {}.{}", ns, name),
 				},

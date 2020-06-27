@@ -4,13 +4,16 @@ use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum Error {
+	IntristicNotFound(Rc<str>, Rc<str>),
+	IntristicArgumentReorderingIsNotSupportedYet,
+
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
-	IntristicArgumentReorderingIsNotSupportedYet,
 	NoSuchField(Rc<str>),
 
 	UnknownVariable(Rc<str>),
 
+	OnlyFunctionsCanBeCalledGot(ValType),
 	UnknownFunctionParameter(String),
 	BindingParameterASecondTime(Rc<str>),
 	TooManyArgsFunctionHas(usize),
