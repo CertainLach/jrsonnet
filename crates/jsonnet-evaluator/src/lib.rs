@@ -390,13 +390,15 @@ pub mod tests {
 		($str: expr) => {{
 			let evaluator = EvaluationState::default();
 			evaluator.with_stdlib();
-			evaluator
-				.parse_evaluate_raw($str)
-				.unwrap()
-				.into_json(0)
-				.unwrap()
-				.replace("\n", "")
-			}};
+			evaluator.run_in_state(||{
+				evaluator
+					.parse_evaluate_raw($str)
+					.unwrap()
+					.into_json(0)
+					.unwrap()
+					.replace("\n", "")
+			})
+		}}
 	}
 
 	/// Asserts given code returns `true`
@@ -500,11 +502,13 @@ pub mod tests {
 	}
 
 	#[test]
+	#[should_panic]
 	fn tailstrict_args() {
 		eval!("local test(a) = 2; test(error '3') tailstrict");
 	}
 
 	#[test]
+	#[should_panic]
 	fn no_binding_error() {
 		eval!("a");
 	}

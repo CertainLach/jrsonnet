@@ -84,13 +84,13 @@ pub mod tests {
 				CodeLocation {
 					line: 1,
 					column: 1,
-					line_start_offset: 0,
+					line_start_offset: 1,
 					line_end_offset: 11
 				},
 				CodeLocation {
 					line: 2,
 					column: 3,
-					line_start_offset: 11,
+					line_start_offset: 12,
 					line_end_offset: 67
 				}
 			]
