@@ -1,8 +1,8 @@
 [workspace]
 members = [
-	"crates/jsonnet-parser",
-	"crates/jsonnet-evaluator",
-	"crates/jsonnet-stdlib",
+	"crates/jrsonnet-parser",
+	"crates/jrsonnet-evaluator",
+	"crates/jrsonnet-stdlib",
 	"cmds/jrsonnet"
 ]
 

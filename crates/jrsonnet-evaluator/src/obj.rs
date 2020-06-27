@@ -1,6 +1,6 @@
 use crate::{evaluate_add_op, LazyBinding, Result, Val};
 use indexmap::IndexMap;
-use jsonnet_parser::Visibility;
+use jrsonnet_parser::Visibility;
 use std::{
 	cell::RefCell,
 	collections::{BTreeMap, HashMap},

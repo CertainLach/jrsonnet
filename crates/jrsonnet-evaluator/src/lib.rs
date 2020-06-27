@@ -22,7 +22,7 @@ pub use error::*;
 pub use evaluate::*;
 pub use function::parse_function_call;
 pub use import::*;
-use jsonnet_parser::*;
+use jrsonnet_parser::*;
 pub use obj::*;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 pub use val::*;
@@ -232,14 +232,14 @@ impl EvaluationState {
 	pub fn with_stdlib(&self) -> &Self {
 		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
 		self.run_in_state(|| {
-			use jsonnet_stdlib::STDLIB_STR;
+			use jrsonnet_stdlib::STDLIB_STR;
 			let mut parsed = false;
 			#[cfg(feature = "codegenerated-stdlib")]
 			if !parsed {
 				parsed = true;
 				#[allow(clippy::all)]
 				let stdlib = {
-					use jsonnet_parser::*;
+					use jrsonnet_parser::*;
 					include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
 				};
 				self.add_parsed_file(std_path.clone(), STDLIB_STR.to_owned().into(), stdlib)
@@ -342,7 +342,7 @@ impl EvaluationState {
 pub mod tests {
 	use super::Val;
 	use crate::EvaluationState;
-	use jsonnet_parser::*;
+	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
 
 	#[test]
@@ -697,7 +697,7 @@ pub mod tests {
 	// 	b.iter(|| {
 	// 		#[allow(clippy::all)]
 	// 		let stdlib = {
-	// 			use jsonnet_parser::*;
+	// 			use jrsonnet_parser::*;
 	// 			include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
 	// 		};
 	// 		stdlib
@@ -707,7 +707,7 @@ pub mod tests {
 	#[bench]
 	fn bench_serialize(b: &mut Bencher) {
 		b.iter(|| {
-			bincode::deserialize::<jsonnet_parser::LocExpr>(include_bytes!(concat!(
+			bincode::deserialize::<jrsonnet_parser::LocExpr>(include_bytes!(concat!(
 				env!("OUT_DIR"),
 				"/stdlib.bincode"
 			)))
@@ -718,9 +718,9 @@ pub mod tests {
 	#[bench]
 	fn bench_parse(b: &mut Bencher) {
 		b.iter(|| {
-			jsonnet_parser::parse(
-				jsonnet_stdlib::STDLIB_STR,
-				&jsonnet_parser::ParserSettings {
+			jrsonnet_parser::parse(
+				jrsonnet_stdlib::STDLIB_STR,
+				&jrsonnet_parser::ParserSettings {
 					loc_data: true,
 					file_name: Rc::new(PathBuf::from("std.jsonnet")),
 				},

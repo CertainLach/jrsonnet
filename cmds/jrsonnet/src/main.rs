@@ -1,7 +1,7 @@
 pub mod location;
 
 use clap::Clap;
-use jsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
+use jrsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
 use jsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
@@ -118,12 +118,12 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
-	let evaluator = jsonnet_evaluator::EvaluationState::new(
+	let evaluator = jrsonnet_evaluator::EvaluationState::new(
 		EvaluationSettings {
 			max_stack_trace_size: opts.max_trace,
 			max_stack_frames: opts.max_stack,
 		},
-		Box::new(jsonnet_evaluator::FileImportResolver {
+		Box::new(jrsonnet_evaluator::FileImportResolver {
 			library_paths: opts.jpath.clone(),
 		}),
 	);

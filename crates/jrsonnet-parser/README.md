@@ -1,3 +1,3 @@
-# jsonnet-parser
+# jrsonnet-parser
 
 Parser for jsonnet language

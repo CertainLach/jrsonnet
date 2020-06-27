@@ -1,8 +1,8 @@
 use bincode::serialize;
-use jsonnet_parser::{
+use jrsonnet_parser::{
 	parse, Expr, FieldMember, FieldName, LocExpr, Member, ObjBody, ParserSettings,
 };
-use jsonnet_stdlib::STDLIB_STR;
+use jrsonnet_stdlib::STDLIB_STR;
 use std::{
 	env,
 	fs::File,

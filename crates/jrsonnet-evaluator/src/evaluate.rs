@@ -4,7 +4,7 @@ use crate::{
 	FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val, ValType,
 };
 use closure::closure;
-use jsonnet_parser::{
+use jrsonnet_parser::{
 	AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
 	LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType, Visibility,
 };
@@ -52,11 +52,11 @@ pub fn evaluate_method(ctx: Context, params: ParamsDesc, body: LocExpr) -> Val {
 
 pub fn evaluate_field_name(
 	context: Context,
-	field_name: &jsonnet_parser::FieldName,
+	field_name: &jrsonnet_parser::FieldName,
 ) -> Result<Option<Rc<str>>> {
 	Ok(match field_name {
-		jsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
-		jsonnet_parser::FieldName::Dyn(expr) => {
+		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
+		jrsonnet_parser::FieldName::Dyn(expr) => {
 			let lazy = evaluate(context, expr)?;
 			let value = lazy.unwrap_if_lazy()?;
 			if matches!(value, Val::Null) {

@@ -3,7 +3,7 @@ use crate::{
 	function::{parse_function_call, place_args},
 	Context, Error, ObjValue, Result,
 };
-use jsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
+use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	fmt::{Debug, Display},

@@ -1,5 +1,5 @@
 [package]
-name = "jsonnet-evaluator"
+name = "jrsonnet-evaluator"
 version = "0.1.0"
 authors = ["Лач <iam@lach.pw>"]
 edition = "2018"
@@ -9,7 +9,7 @@ edition = "2018"
 [features]
 default = ["serialized-stdlib", "faster"]
 # Serializes standard library AST instead of parsing them every run
-serialized-stdlib = ["serde", "bincode", "jsonnet-parser/deserialize"]
+serialized-stdlib = ["serde", "bincode", "jrsonnet-parser/deserialize"]
 # Same as above, but with generated code instead of serde. Reduces memory usage, but increases binary size and compilation time
 codegenerated-stdlib = []
 # Replace some standard library functions with faster implementations (I.e manifestJsonEx)
@@ -17,9 +17,9 @@ codegenerated-stdlib = []
 faster = []
 
 [dependencies]
-jsonnet-parser = { path = "../jsonnet-parser" }
+jrsonnet-parser = { path = "../jrsonnet-parser" }
 closure = "0.3.0"
-jsonnet-stdlib = { path = "../jsonnet-stdlib" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib" }
 indexmap = "1.4.0"
 md5 = "0.7.0"
 
@@ -27,8 +27,8 @@ serde = { version = "1.0.114", optional = true }
 bincode = { version = "1.3.1", optional = true }
 
 [build-dependencies]
-jsonnet-parser = { path = "../jsonnet-parser", features = ["dump", "serialize", "deserialize"] }
-jsonnet-stdlib = { path = "../jsonnet-stdlib" }
+jrsonnet-parser = { path = "../jrsonnet-parser", features = ["dump", "serialize", "deserialize"] }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib" }
 structdump = "0.1.2"
 serde = "1.0.114"
 bincode = "1.3.1"

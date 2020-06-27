@@ -565,7 +565,7 @@ pub mod tests {
 
 	#[test]
 	fn can_parse_stdlib() {
-		parse!(jsonnet_stdlib::STDLIB_STR);
+		parse!(jrsonnet_stdlib::STDLIB_STR);
 	}
 
 	use test::Bencher;
@@ -573,6 +573,6 @@ pub mod tests {
 	// From source code
 	#[bench]
 	fn bench_parse_peg(b: &mut Bencher) {
-		b.iter(|| parse!(jsonnet_stdlib::STDLIB_STR))
+		b.iter(|| parse!(jrsonnet_stdlib::STDLIB_STR))
 	}
 }

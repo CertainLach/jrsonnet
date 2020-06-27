@@ -3,7 +3,7 @@ use crate::{
 	Result, Val,
 };
 use closure::closure;
-use jsonnet_parser::{ArgsDesc, ParamsDesc};
+use jrsonnet_parser::{ArgsDesc, ParamsDesc};
 use std::collections::HashMap;
 
 /// Creates correct [context](Context) for function body evaluation, returning error on invalid call
@@ -136,7 +136,7 @@ macro_rules! parse_args {
 
 #[test]
 fn test() -> Result<()> {
-	use jsonnet_parser::*;
+	use jrsonnet_parser::*;
 	use crate::val::ValType;
 	let state = crate::EvaluationState::default();
 	let evaluator = state.with_stdlib();

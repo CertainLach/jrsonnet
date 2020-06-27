@@ -1,5 +1,5 @@
 use crate::{Val, ValType};
-use jsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone)]
@@ -46,7 +46,7 @@ pub enum Error {
 	ResolvedFileNotFound(PathBuf),
 	ImportBadFileUtf8(PathBuf),
 	ImportNotSupported(PathBuf, PathBuf),
-	ImportSyntaxError(jsonnet_parser::ParseError),
+	ImportSyntaxError(jrsonnet_parser::ParseError),
 
 	RuntimeError(Rc<str>),
 	StackOverflow,
