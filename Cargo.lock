@@ -122,7 +122,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "annotate-snippets",
  "clap",
@@ -133,7 +133,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "bincode",
  "closure",
@@ -147,7 +147,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.1.0"
+version = "1.0.0"
 dependencies = [
  "jrsonnet-stdlib",
  "peg",
@@ -159,7 +159,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.1.0"
+version = "1.0.0"
 
 [[package]]
 name = "lazy_static"

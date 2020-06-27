@@ -1,7 +1,9 @@
 [package]
 name = "jrsonnet"
+description = "Rust jsonnet implementation"
 version = "1.0.0"
 authors = ["Лач <iam@lach.pw>"]
+license = "MIT"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
