@@ -93,3 +93,63 @@ pub(crate) fn place_args(
 
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
 }
+
+#[macro_export]
+macro_rules! parse_args {
+	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
+		$($id: expr, $name: ident $(: [$($p: path)|+] $(!! $a: path)?)?, $nt: expr);+ $(;)?
+	], $handler:block) => {{
+		use crate::error::Error;
+		let args = $args;
+		if args.len() > $total_args {
+			create_error(Error::TooManyArgsFunctionHas($total_args))?;
+		}
+		$(
+			if args.len() <= $id {
+				create_error(Error::FunctionParameterNotBoundInCall(stringify!($name).into()))?;
+			}
+			let $name = &args[$id];
+			if $name.0.is_some() {
+				if $name.0.as_ref().unwrap() != stringify!($name) {
+					create_error(Error::IntristicArgumentReorderingIsNotSupportedYet)?;
+				}
+			}
+			let $name = evaluate($ctx.clone(), &$name.1)?;
+			$(
+				match $name {
+					$($p(_))|+ => {},
+					_ => create_error(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd argument"), $nt, $name.value_type()?))?,
+				};
+				$(
+					let $name = match $name {
+						$a(v) => v,
+						_ => create_error(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd argument"), $nt, $name.value_type()?))?,
+					};
+				)*
+			)*
+		)+
+		$handler
+	}};
+}
+
+#[test]
+fn test() -> Result<()> {
+	use jsonnet_parser::*;
+	use crate::val::ValType;
+	let state = crate::EvaluationState::default();
+	let evaluator = state.with_stdlib();
+	let ctx = evaluator.create_default_context()?;
+	evaluator.run_in_state(|| {
+		parse_args!(ctx, "test", ArgsDesc(vec![
+			Arg(None, el!(Expr::Num(2.0))),
+			Arg(Some("b".into()), el!(Expr::Num(1.0))),
+		]), 2, [
+			0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
+			1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
+		], {
+			assert!((a - 2.0).abs() <= f64::EPSILON);
+			assert!((b - 1.0).abs() <= f64::EPSILON);
+		});
+		Ok(())
+	})
+}

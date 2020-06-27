@@ -6,6 +6,7 @@ use std::{path::PathBuf, rc::Rc};
 pub enum Error {
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
+	IntristicArgumentReorderingIsNotSupportedYet,
 	NoSuchField(Rc<str>),
 
 	UnknownVariable(Rc<str>),
