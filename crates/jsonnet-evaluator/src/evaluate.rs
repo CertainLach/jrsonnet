@@ -5,9 +5,8 @@ use crate::{
 };
 use closure::closure;
 use jsonnet_parser::{
-	el, Arg, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember,
-	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
-	Visibility,
+	AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
+	LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType, Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -203,7 +202,7 @@ pub fn evaluate_comp<T>(
 	})
 }
 
-pub fn evaluate_member_list_object(context: Context, members: &Vec<Member>) -> Result<ObjValue> {
+pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Result<ObjValue> {
 	let new_bindings = FutureNewBindings::new();
 	let future_this = FutureObjValue::new();
 	let context_creator = context_creator!(

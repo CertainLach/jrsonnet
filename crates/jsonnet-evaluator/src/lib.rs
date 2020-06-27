@@ -200,7 +200,7 @@ impl EvaluationState {
 			self.0
 				.str_files
 				.borrow_mut()
-				.insert(path.clone(), file_str.into());
+				.insert(path.clone(), file_str);
 		}
 		Ok(self.0.str_files.borrow().get(&path).cloned().unwrap())
 	}

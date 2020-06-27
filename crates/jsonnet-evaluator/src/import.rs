@@ -62,8 +62,9 @@ impl ImportResolver for FileImportResolver {
 	}
 }
 
+type ResolutionData = (PathBuf, PathBuf);
 pub struct CachingImportResolver {
-	resolution_cache: RefCell<HashMap<(PathBuf, PathBuf), Result<Rc<PathBuf>>>>,
+	resolution_cache: RefCell<HashMap<ResolutionData, Result<Rc<PathBuf>>>>,
 	loading_cache: RefCell<HashMap<PathBuf, Result<Rc<str>>>>,
 	inner: Box<dyn ImportResolver>,
 }
