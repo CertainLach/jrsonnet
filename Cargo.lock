@@ -142,16 +142,18 @@ dependencies = [
  "jsonnet-stdlib",
  "md5",
  "serde",
+ "structdump",
 ]
 
 [[package]]
 name = "jsonnet-parser"
 version = "0.1.0"
 dependencies = [
- "bincode",
  "jsonnet-stdlib",
  "peg",
  "serde",
+ "structdump",
+ "structdump-derive",
  "unescape",
 ]
 
@@ -247,9 +249,9 @@ dependencies = [
 
 [[package]]
 name = "quote"
-version = "1.0.5"
+version = "1.0.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "42934bc9c8ab0d3b273a16d8551c8f0fcff46be73276ca083ec2414c15c4ba5e"
+checksum = "aa563d17ecb180e500da1cfd2b028310ac758de548efdd203e18f283af693f37"
 dependencies = [
  "proc-macro2",
 ]
@@ -268,6 +270,23 @@ name = "serde_derive"
 version = "1.0.114"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2a0be94b04690fbaed37cddffc5c134bf537c8e3329d53e982fe04c374978f8e"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+]
+
+[[package]]
+name = "structdump"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "2e16ec33a0342fdb67d13913b4ffae6527ebccfa04b5d7da174bdc7a31db29b8"
+
+[[package]]
+name = "structdump-derive"
+version = "0.1.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "06c337fdc077e02ccbfcc62af0090564a4af342975c3b7be09705efab90c1888"
 dependencies = [
  "proc-macro2",
  "quote",

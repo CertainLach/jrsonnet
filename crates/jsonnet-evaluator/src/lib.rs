@@ -1,7 +1,11 @@
 #![feature(box_syntax, box_patterns)]
 #![feature(type_alias_impl_trait)]
 #![feature(debug_non_exhaustive)]
+#![feature(test)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
+
+extern crate test;
+
 mod ctx;
 mod dynamic;
 mod error;
@@ -228,9 +232,24 @@ impl EvaluationState {
 		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
 		self.run_in_state(|| {
 			use jsonnet_stdlib::STDLIB_STR;
-			if cfg!(feature = "serialized-stdlib") {
+			let mut parsed = false;
+			#[cfg(feature = "codegenerated-stdlib")]
+			if !parsed {
+				parsed = true;
+				#[allow(clippy::all)]
+				let stdlib = {
+					use jsonnet_parser::*;
+					include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
+				};
+				self.add_parsed_file(std_path.clone(), STDLIB_STR.to_owned().into(), stdlib)
+					.unwrap();
+			}
+
+			#[cfg(feature = "serialized-stdlib")]
+			if !parsed {
+				parsed = true;
 				self.add_parsed_file(
-					std_path,
+					std_path.clone(),
 					STDLIB_STR.to_owned().into(),
 					bincode::deserialize(include_bytes!(concat!(
 						env!("OUT_DIR"),
@@ -239,7 +258,9 @@ impl EvaluationState {
 					.expect("deserialize stdlib"),
 				)
 				.unwrap();
-			} else {
+			}
+
+			if !parsed {
 				self.add_file(std_path, STDLIB_STR.to_owned().into())
 					.unwrap();
 			}
@@ -661,5 +682,44 @@ pub mod tests {
 			x21.k
 		"#
 		);
+	}
+
+	use test::Bencher;
+
+	// This test is commented out by default, because of huge compilation slowdown
+	// #[bench]
+	// fn bench_codegen(b: &mut Bencher) {
+	// 	b.iter(|| {
+	// 		#[allow(clippy::all)]
+	// 		let stdlib = {
+	// 			use jsonnet_parser::*;
+	// 			include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
+	// 		};
+	// 		stdlib
+	// 	})
+	// }
+
+	#[bench]
+	fn bench_serialize(b: &mut Bencher) {
+		b.iter(|| {
+			bincode::deserialize::<jsonnet_parser::LocExpr>(include_bytes!(concat!(
+				env!("OUT_DIR"),
+				"/stdlib.bincode"
+			)))
+			.expect("deserialize stdlib")
+		})
+	}
+
+	#[bench]
+	fn bench_parse(b: &mut Bencher) {
+		b.iter(|| {
+			jsonnet_parser::parse(
+				jsonnet_stdlib::STDLIB_STR,
+				&jsonnet_parser::ParserSettings {
+					loc_data: true,
+					file_name: Rc::new(PathBuf::from("std.jsonnet")),
+				},
+			)
+		})
 	}
 }

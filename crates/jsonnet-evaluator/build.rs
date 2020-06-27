@@ -10,6 +10,7 @@ use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 };
+use structdump::CodegenResult;
 
 fn main() {
 	let parsed = parse(
@@ -46,10 +47,19 @@ fn main() {
 	} else {
 		parsed
 	};
+	{
+		let mut codegen = CodegenResult::default();
+		let code = codegen.codegen(&parsed);
 
-	let out_dir = env::var("OUT_DIR").unwrap();
-	let dest_path = Path::new(&out_dir).join("stdlib.bincode");
-	let mut f = File::create(&dest_path).unwrap();
-	f.write_all(&serialize(&parsed).expect("serialize"))
-		.unwrap();
+		let out_dir = env::var("OUT_DIR").unwrap();
+		let dest_path = Path::new(&out_dir).join("stdlib.rs");
+		let mut f = File::create(&dest_path).unwrap();
+		f.write_all(&code.as_bytes()).unwrap();
+	}
+	{
+		let out_dir = env::var("OUT_DIR").unwrap();
+		let dest_path = Path::new(&out_dir).join("stdlib.bincode");
+		let mut f = File::create(&dest_path).unwrap();
+		f.write_all(&serialize(&parsed).unwrap()).unwrap();
+	}
 }
