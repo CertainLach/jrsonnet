@@ -30,7 +30,7 @@ Mine configuration contains two manifests, first one contains a lot of plain val
 - `gojsonnet` - golang impl
 - `../../../../jsonnet-rs/target/release/jrsonnet` - this repo impl
 
-```md
+```markdown
 # Manifest 1 (plain values)
 
 Benchmark #1: gojsonnet 02-prepare.jsonnet -J ../vendor/

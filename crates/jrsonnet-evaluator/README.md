@@ -22,7 +22,7 @@ Because of `codegenerated-stdlib` compilation slowdown, `serialized-stdlib` is u
 
 Can also be run via `cargo bench`
 
-```md
+```markdown
 # codegenerated-stdlib
 test tests::bench_codegen   ... bench:     401,696 ns/iter (+/- 38,521)
 # serialized-stdlib
