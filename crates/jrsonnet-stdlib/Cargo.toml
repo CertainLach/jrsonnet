@@ -1,6 +1,6 @@
 [package]
 name = "jrsonnet-stdlib"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Лач <iam@lach.pw>"]
 edition = "2018"
 

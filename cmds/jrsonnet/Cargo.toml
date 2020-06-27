@@ -1,14 +1,14 @@
 [package]
 name = "jrsonnet"
-version = "0.1.0"
+version = "1.0.0"
 authors = ["Лач <iam@lach.pw>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator" }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser" }
+jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "1.0.0" }
+jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "1.0.0" }
 annotate-snippets = "0.8.0"
 jemallocator = "0.3.2"
 
