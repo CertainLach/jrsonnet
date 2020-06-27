@@ -17,11 +17,6 @@ It is fun to write one in Rust :D
 - Can pass all of original `examples` tests
 - Can pass all of original `test_suite` tests, expect those, which checks golden output for stacktraces (vanilla-like stacktraces are implemented, but look is not 100% identical): ![Example output](./traces.png)
 
-## Production usage
-
-It can be used within scripts, but i won't recommend embedding it into applications,
-because currently not all errors are thrown as errors, panic possible on incorrect input.
-
 ## Bindings
 
 Currently no language bindings are implemented
