@@ -54,11 +54,11 @@ impl Context {
 	}
 
 	pub fn binding(&self, name: Rc<str>) -> Result<LazyVal> {
-		self.0.bindings.get(&name).cloned().ok_or_else(|| {
-			create_error::<()>(Error::UnknownVariable(name))
-				.err()
-				.unwrap()
-		})
+		self.0
+			.bindings
+			.get(&name)
+			.cloned()
+			.ok_or_else(|| create_error(Error::UnknownVariable(name)))
 	}
 	pub fn into_future(self, ctx: FutureContext) -> Context {
 		{

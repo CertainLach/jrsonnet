@@ -1,5 +1,8 @@
-use crate::create_error;
-use crate::error::{Error, Result};
+use crate::create_error_result;
+use crate::{
+	create_error,
+	error::{Error, Result},
+};
 use fs::File;
 use std::fs;
 use std::io::Read;
@@ -13,7 +16,7 @@ pub trait ImportResolver {
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		create_error(Error::ImportNotSupported(from.clone(), path.clone()))
+		create_error_result(Error::ImportNotSupported(from.clone(), path.clone()))
 	}
 	fn load_file_contents(&self, _resolved: &PathBuf) -> Result<Rc<str>> {
 		// Can be only caused by library direct consumer, not by supplied jsonnet
@@ -43,21 +46,15 @@ impl ImportResolver for FileImportResolver {
 					return Ok(Rc::new(cloned));
 				}
 			}
-			create_error(Error::ImportFileNotFound(from.clone(), path.clone()))
+			create_error_result(Error::ImportFileNotFound(from.clone(), path.clone()))
 		}
 	}
 	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
-		let mut file = File::open(id).map_err(|_e| {
-			create_error::<()>(Error::ResolvedFileNotFound(id.clone()))
-				.err()
-				.unwrap()
-		})?;
+		let mut file =
+			File::open(id).map_err(|_e| create_error(Error::ResolvedFileNotFound(id.clone())))?;
 		let mut out = String::new();
-		file.read_to_string(&mut out).map_err(|_e| {
-			create_error::<()>(Error::ImportBadFileUtf8(id.clone()))
-				.err()
-				.unwrap()
-		})?;
+		file.read_to_string(&mut out)
+			.map_err(|_e| create_error(Error::ImportBadFileUtf8(id.clone())))?;
 		Ok(out.into())
 	}
 }

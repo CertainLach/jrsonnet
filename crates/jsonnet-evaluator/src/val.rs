@@ -1,5 +1,5 @@
 use crate::{
-	create_error, evaluate,
+	create_error_result, evaluate,
 	function::{parse_function_call, place_args},
 	Context, Error, ObjValue, Result,
 };
@@ -137,7 +137,7 @@ impl Val {
 	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
 		let this_type = self.value_type()?;
 		if this_type != val_type {
-			create_error(Error::TypeMismatch(context, vec![val_type], this_type))
+			create_error_result(Error::TypeMismatch(context, vec![val_type], this_type))
 		} else {
 			Ok(())
 		}

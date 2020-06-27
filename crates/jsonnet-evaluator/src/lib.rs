@@ -87,8 +87,11 @@ thread_local! {
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
-pub(crate) fn create_error<T>(err: Error) -> Result<T> {
+pub(crate) fn create_error(err: Error) -> LocError {
 	with_state(|s| s.error(err))
+}
+pub(crate) fn create_error_result<T>(err: Error) -> Result<T> {
+	Err(with_state(|s| s.error(err)))
 }
 pub(crate) fn push<T>(
 	e: &Option<ExprLocation>,
@@ -187,9 +190,7 @@ impl EvaluationState {
 		}
 		let contents = self.0.import_resolver.load_file_contents(&file_path)?;
 		self.add_file(file_path.clone(), contents).map_err(|e| {
-			create_error::<()>(Error::ImportSyntaxError(e))
-				.err()
-				.unwrap()
+			create_error(Error::ImportSyntaxError(e))
 		})?;
 		self.evaluate_file(&file_path)
 	}
@@ -292,7 +293,7 @@ impl EvaluationState {
 			let mut stack = self.0.stack.borrow_mut();
 			if stack.len() > self.0.settings.max_stack_frames {
 				drop(stack);
-				return self.error(Error::StackOverflow);
+				return Err(self.error(Error::StackOverflow));
 			} else {
 				stack.push(StackTraceElement(e, comment));
 			}
@@ -318,8 +319,8 @@ impl EvaluationState {
 				.collect(),
 		)
 	}
-	pub fn error<T>(&self, err: Error) -> Result<T> {
-		Err(LocError(err, self.stack_trace()))
+	pub fn error(&self, err: Error) -> LocError {
+		LocError(err, self.stack_trace())
 	}
 
 	pub fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {

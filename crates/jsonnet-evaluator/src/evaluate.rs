@@ -1,7 +1,7 @@
 use crate::{
-	context_creator, create_error, escape_string_json, future_wrapper, lazy_val, manifest_json_ex,
-	parse_args, push, with_state, Context, ContextCreator, Error, FuncDesc, LazyBinding, LazyVal,
-	ObjMember, ObjValue, Result, Val, ValType,
+	context_creator, create_error, create_error_result, escape_string_json, future_wrapper,
+	lazy_val, manifest_json_ex, parse_args, push, with_state, Context, ContextCreator, Error,
+	FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jsonnet_parser::{
@@ -74,7 +74,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
 		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
 		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
-		(op, o) => create_error(Error::UnaryOperatorDoesNotOperateOnType(
+		(op, o) => create_error_result(Error::UnaryOperatorDoesNotOperateOnType(
 			op,
 			o.value_type()?,
 		))?,
@@ -95,7 +95,7 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
 		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
-		_ => create_error(Error::BinaryOperatorDoesNotOperateOnValues(
+		_ => create_error_result(Error::BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type()?,
 			b.value_type()?,
@@ -140,7 +140,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => {
 			if *v2 <= f64::EPSILON {
-				create_error(crate::Error::DivisionByZero)?
+				create_error_result(crate::Error::DivisionByZero)?
 			}
 			Val::Num(v1 / v2)
 		}
@@ -168,7 +168,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
 
-		_ => create_error(Error::BinaryOperatorDoesNotOperateOnValues(
+		_ => create_error_result(Error::BinaryOperatorDoesNotOperateOnValues(
 			op,
 			a.value_type()?,
 			b.value_type()?,
@@ -367,7 +367,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							},
 						);
 					}
-					v => create_error(Error::FieldMustBeStringGot(v.value_type()?))?,
+					v => create_error_result(Error::FieldMustBeStringGot(v.value_type()?))?,
 				}
 			}
 
@@ -423,10 +423,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					} else if let Some(Val::Str(n)) = v.get("__intristic_namespace__".into())? {
 						Val::Intristic(n, s)
 					} else {
-						create_error(crate::Error::NoSuchField(s))?
+						create_error_result(crate::Error::NoSuchField(s))?
 					}
 				}
-				(Val::Obj(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Obj(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
 					ValType::Obj,
 					ValType::Str,
 					n.value_type()?,
@@ -434,17 +434,19 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 
 				(Val::Arr(v), Val::Num(n)) => {
 					if n.fract() > f64::EPSILON {
-						create_error(crate::Error::FractionalIndex)?
+						create_error_result(crate::Error::FractionalIndex)?
 					}
 					v.get(n as usize)
-						.unwrap_or_else(|| panic!("out of bounds"))
+						.ok_or_else(|| {
+							create_error(crate::Error::ArrayBoundsError(n as usize, v.len()))
+						})?
 						.clone()
 						.unwrap_if_lazy()?
 				}
 				(Val::Arr(_), Val::Str(n)) => {
-					create_error(crate::Error::AttemptedIndexAnArrayWithString(n))?
+					create_error_result(crate::Error::AttemptedIndexAnArrayWithString(n))?
 				}
-				(Val::Arr(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Arr(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
 					ValType::Arr,
 					ValType::Num,
 					n.value_type()?,
@@ -457,13 +459,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						.collect::<String>()
 						.into(),
 				),
-				(Val::Str(_), n) => create_error(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Str(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
 					ValType::Str,
 					ValType::Num,
 					n.value_type()?,
 				))?,
 
-				(v, _) => create_error(crate::Error::CantIndexInto(v.value_type()?))?,
+				(v, _) => create_error_result(crate::Error::CantIndexInto(v.value_type()?))?,
 			}
 		}
 		LocalExpr(bindings, returned) => {
@@ -623,11 +625,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 					], {
 						with_state(|s| s.0.ext_vars.borrow().get(&x).cloned()).ok_or_else(
-							|| {
-								create_error::<()>(crate::Error::UndefinedExternalVariable(x))
-									.err()
-									.unwrap()
-							},
+							|| create_error(crate::Error::UndefinedExternalVariable(x)),
 						)?
 					}),
 					("std", "filter") => parse_args!(context, "std.filter", args, 2, [
@@ -728,7 +726,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							Val::Str(manifest_json_ex(&value, &indent)?.into())
 						})
 					}
-					(ns, name) => create_error(crate::error::Error::IntristicNotFound(
+					(ns, name) => create_error_result(crate::Error::IntristicNotFound(
 						ns.into(),
 						name.into(),
 					))?,
@@ -741,7 +739,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						push(loc, "function call", body)?
 					}
 				}
-				v => create_error(crate::error::Error::OnlyFunctionsCanBeCalledGot(
+				v => create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(
 					v.value_type()?,
 				))?,
 			}
@@ -764,7 +762,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				panic!("assertion failed ({:?}): no message", value);
 			}
 		}
-		Error(e) => create_error(crate::Error::RuntimeError(
+		Error(e) => create_error_result(crate::Error::RuntimeError(
 			evaluate(context, e)?.try_cast_str("error text should be string")?,
 		))?,
 		IfElse {
@@ -801,6 +799,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
-		Literal(LiteralType::Super) => return create_error(crate::error::Error::StandaloneSuper),
+		Literal(LiteralType::Super) => {
+			return create_error_result(crate::Error::StandaloneSuper)
+		}
 	})
 }
