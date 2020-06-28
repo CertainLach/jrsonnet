@@ -157,6 +157,7 @@ pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> Box<Val> {
 pub extern "C" fn jsonnet_json_array_append(_vm: &EvaluationState, arr: &mut Val, val: &Val) {
 	match arr {
 		Val::Arr(old) => {
+			// TODO: Mutate array, instead of recreating them
 			let mut new = Vec::new();
 			new.extend(old.iter().cloned());
 			new.push(val.clone());
@@ -171,14 +172,32 @@ pub extern "C" fn jsonnet_json_make_object(_vm: &EvaluationState) -> Box<Val> {
 	Box::new(Val::Obj(ObjValue::new_empty()))
 }
 
+/// # Safety
+///
+/// This function is safe if passed name is ok
 #[no_mangle]
-pub extern "C" fn jsonnet_json_object_append(
+pub unsafe extern "C" fn jsonnet_json_object_append(
 	_vm: &EvaluationState,
-	_obj: &mut Val,
-	_name: *const c_char,
-	_val: &Val,
+	obj: &mut Val,
+	name: *const c_char,
+	val: &Val,
 ) {
-	todo!()
+	match obj {
+		Val::Obj(old) => {
+			let mut new = BTreeMap::new();
+			new.insert(
+				CStr::from_ptr(name).to_str().unwrap().into(),
+				ObjMember {
+					add: false,
+					visibility: Visibility::Normal,
+					invoke: LazyBinding::Bound(LazyVal::new_resolved(val.clone())),
+				},
+			);
+			let new_obj = ObjValue::new(Some(old.clone()), Rc::new(new));
+			*obj = Val::Obj(new_obj);
+		}
+		_ => panic!("should receive array"),
+	}
 }
 
 /// # Safety
