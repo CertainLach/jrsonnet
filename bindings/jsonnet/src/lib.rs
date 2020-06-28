@@ -181,9 +181,29 @@ pub extern "C" fn jsonnet_json_object_append(
 	todo!()
 }
 
+/// # Safety
+///
+/// This function is most definitely broken, but it works somehow, see TODO inside
 #[no_mangle]
-pub extern "C" fn jsonnet_realloc(_vm: &EvaluationState, _buf: *const u8, _sz: usize) -> *const u8 {
-	todo!()
+pub unsafe extern "C" fn jsonnet_realloc(
+	_vm: &EvaluationState,
+	buf: *mut u8,
+	sz: usize,
+) -> *mut u8 {
+	if buf.is_null() {
+		assert!(sz != 0);
+		return std::alloc::alloc(Layout::from_size_align(sz, std::mem::align_of::<u8>()).unwrap());
+	}
+	// TODO: Somehow store size of allocation, because its real size is probally not 16 :D
+	// OR (Alternative way of fixing this TODO)
+	// TODO: Standard allocator uses malloc, and it doesn't uses allocation size,
+	// TODO: so it should work in normal cases. Maybe force allocator for this library?
+	let old_layout = Layout::from_size_align(16, std::mem::align_of::<u8>()).unwrap();
+	if sz == 0 {
+		std::alloc::dealloc(buf, old_layout);
+		return std::ptr::null_mut();
+	}
+	std::alloc::realloc(buf, old_layout, sz)
 }
 
 #[no_mangle]
