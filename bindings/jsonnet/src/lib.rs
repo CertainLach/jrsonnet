@@ -306,10 +306,42 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 		}
 	})
 }
+
+/// # Safety
+///
+/// This function is safe, if received v is a pointer to normal C string
 #[no_mangle]
-pub extern "C" fn jsonnet_evaluate_snippet() {
-	todo!()
+pub unsafe extern "C" fn jsonnet_evaluate_snippet(
+	vm: &EvaluationState,
+	filename: *const c_char,
+	snippet: *const c_char,
+	error: &mut c_int,
+) -> *const c_char {
+	vm.run_in_state(|| {
+		use std::fmt::Write;
+		let filename = CStr::from_ptr(filename);
+		let snippet = CStr::from_ptr(snippet);
+		match vm.evaluate_snippet_to_json(
+			&PathBuf::from(filename.to_str().unwrap()),
+			&snippet.to_str().unwrap(),
+		) {
+			Ok(v) => {
+				*error = 0;
+				CString::new(&*v as &str).unwrap().into_raw()
+			}
+			Err(e) => {
+				*error = 1;
+				let mut out = String::new();
+				writeln!(out, "{:?}", e.0).unwrap();
+				for i in (e.1).0.iter() {
+					writeln!(out, "{:?} ---- {}", i.0, i.1).unwrap();
+				}
+				CString::new(&out as &str).unwrap().into_raw()
+			}
+		}
+	})
 }
+
 #[no_mangle]
 pub extern "C" fn jsonnet_evaluate_file_multi() {
 	todo!()

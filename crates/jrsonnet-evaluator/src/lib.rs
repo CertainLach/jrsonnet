@@ -140,6 +140,14 @@ impl EvaluationState {
 	) -> std::result::Result<Rc<str>, LocError> {
 		self.import_file(&PathBuf::new(), &path).and_then(|v|v.into_json(4))
 	}
+	pub fn evaluate_snippet_to_json(
+		&self,
+		path: &PathBuf,
+		snippet: &str,
+	) -> std::result::Result<Rc<str>, LocError> {
+		self.parse_evaluate_raw_with_source(Rc::new(path.clone()), snippet).and_then(|v|v.into_json(4))
+	}
+
 	pub fn add_file(
 		&self,
 		name: Rc<PathBuf>,
@@ -228,16 +236,19 @@ impl EvaluationState {
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
 	}
 
-	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {
+	pub fn parse_evaluate_raw_with_source(&self, source: Rc<PathBuf>, code: &str) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
-				file_name: Rc::new(PathBuf::from("raw.jsonnet")),
+				file_name: source,
 				loc_data: true,
 			},
 		)
 		.unwrap();
 		self.evaluate_raw(parsed)
+	}
+	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {
+		self.parse_evaluate_raw_with_source(Rc::new(PathBuf::from("raw.jsonnet")), code)
 	}
 
 	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
