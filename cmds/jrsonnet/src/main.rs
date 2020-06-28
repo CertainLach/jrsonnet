@@ -1,7 +1,7 @@
 pub mod location;
 
 use clap::Clap;
-use jrsonnet_evaluator::{EvaluationSettings, EvaluationState, LocError, StackTrace, Val};
+use jrsonnet_evaluator::{EvaluationState, LocError, StackTrace, Val};
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
 use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;

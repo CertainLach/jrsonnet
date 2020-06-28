@@ -739,9 +739,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						push(loc, "function call", body)?
 					}
 				}
-				v => create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(
-					v.value_type()?,
-				))?,
+				v => {
+					create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(v.value_type()?))?
+				}
 			}
 		}
 		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
@@ -795,8 +795,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
-		Literal(LiteralType::Super) => {
-			return create_error_result(crate::Error::StandaloneSuper)
-		}
+		Literal(LiteralType::Super) => return create_error_result(crate::Error::StandaloneSuper),
 	})
 }
