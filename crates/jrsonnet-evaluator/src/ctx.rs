@@ -2,7 +2,12 @@ use crate::{
 	create_error, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, Error,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
+use std::{
+	cell::RefCell,
+	collections::HashMap,
+	fmt::Debug,
+	rc::{Rc, Weak},
+};
 
 rc_fn_helper!(
 	ContextCreator,
@@ -18,15 +23,17 @@ struct ContextInternals {
 	super_obj: Option<ObjValue>,
 	bindings: LayeredHashMap<Rc<str>, LazyVal>,
 }
-pub struct Context(Rc<ContextInternals>);
-impl Debug for Context {
+impl Debug for ContextInternals {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("Context")
-			.field("this", &self.0.this.as_ref().map(|e| Rc::as_ptr(&e.0)))
-			.field("bindings", &self.0.bindings)
+			.field("this", &self.this.as_ref().map(|e| Rc::as_ptr(&e.0)))
+			.field("bindings", &self.bindings)
 			.finish()
 	}
 }
+
+#[derive(Debug, Clone)]
+pub struct Context(Rc<ContextInternals>);
 impl Context {
 	pub fn new_future() -> FutureContext {
 		FutureContext(Rc::new(RefCell::new(None)))
@@ -110,6 +117,9 @@ impl Context {
 		}
 		self.extend(new, new_dollar, this, super_obj)
 	}
+	pub fn into_weak(self) -> WeakContext {
+		WeakContext(Rc::downgrade(&self.0))
+	}
 }
 
 impl Default for Context {
@@ -124,8 +134,15 @@ impl PartialEq for Context {
 	}
 }
 
-impl Clone for Context {
-	fn clone(&self) -> Self {
-		Context(self.0.clone())
+#[derive(Debug, Clone)]
+pub struct WeakContext(Weak<ContextInternals>);
+impl WeakContext {
+	pub fn upgrade(&self) -> Context {
+		Context(self.0.upgrade().expect("context is removed"))
+	}
+}
+impl PartialEq for WeakContext {
+	fn eq(&self, other: &Self) -> bool {
+		self.0.ptr_eq(&other.0)
 	}
 }
