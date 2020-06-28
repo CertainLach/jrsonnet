@@ -6,11 +6,12 @@ use crate::{
 use fs::File;
 use std::fs;
 use std::io::Read;
-use std::{cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
+use std::{any::Any, cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
 
 pub trait ImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>>;
 	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>>;
+	unsafe fn as_any(&self) -> &dyn Any;
 }
 
 pub struct DummyImportResolver;
@@ -21,6 +22,9 @@ impl ImportResolver for DummyImportResolver {
 	fn load_file_contents(&self, _resolved: &PathBuf) -> Result<Rc<str>> {
 		// Can be only caused by library direct consumer, not by supplied jsonnet
 		panic!("dummy resolver can't load any file")
+	}
+	unsafe fn as_any(&self) -> &dyn Any {
+		panic!("this resolver can't be used as any")
 	}
 }
 impl Default for Box<dyn ImportResolver> {
@@ -57,6 +61,9 @@ impl ImportResolver for FileImportResolver {
 			.map_err(|_e| create_error(Error::ImportBadFileUtf8(id.clone())))?;
 		Ok(out.into())
 	}
+	unsafe fn as_any(&self) -> &dyn Any {
+		panic!("this resolver can't be used as any")
+	}
 }
 
 type ResolutionData = (PathBuf, PathBuf);
@@ -79,5 +86,8 @@ impl ImportResolver for CachingImportResolver {
 			.entry(resolved.clone())
 			.or_insert_with(|| self.inner.load_file_contents(resolved))
 			.clone()
+	}
+	unsafe fn as_any(&self) -> &dyn Any {
+		panic!("this resolver can't be used as any")
 	}
 }
