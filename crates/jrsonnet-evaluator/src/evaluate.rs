@@ -5,8 +5,9 @@ use crate::{
 };
 use closure::closure;
 use jrsonnet_parser::{
-	AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
-	LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType, Visibility,
+	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
+	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
+	Visibility,
 };
 use std::{
 	collections::{BTreeMap, HashMap},
@@ -376,6 +377,249 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 	})
 }
 
+/// Extracts code block and disables inlining for them
+/// Fixes WASM to java bytecode compilation failing because of very large method
+macro_rules! noinline {
+	($e:expr) => {
+		(#[inline(never)]
+		move || $e)()
+	};
+}
+
+pub fn evaluate_apply(
+	context: Context,
+	value: &LocExpr,
+	args: &ArgsDesc,
+	loc: &Option<ExprLocation>,
+	tailstrict: bool,
+) -> Result<Val> {
+	let lazy = evaluate(context.clone(), value)?;
+	let value = lazy.unwrap_if_lazy()?;
+	Ok(match value {
+		Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
+			// arr/string/function
+			("std", "length") => noinline!(parse_args!(context, "std.length", args, 1, [
+				0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
+			], {
+				Ok(match x {
+					Val::Str(n) => Val::Num(n.chars().count() as f64),
+					Val::Arr(i) => Val::Num(i.len() as f64),
+					Val::Obj(o) => Val::Num(
+						o.fields_visibility()
+							.into_iter()
+							.filter(|(_k, v)| *v)
+							.count() as f64,
+					),
+					_ => unreachable!(),
+				})
+			}))?,
+			// any
+			("std", "type") => parse_args!(context, "std.type", args, 1, [
+				0, x, vec![];
+			], {
+				Val::Str(x.value_type()?.name().into())
+			}),
+			// length, idx=>any
+			("std", "makeArray") => noinline!(parse_args!(context, "std.makeArray", args, 2, [
+				0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
+				1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+			], {
+				assert!(sz >= 0.0);
+				let mut out = Vec::with_capacity(sz as usize);
+				for i in 0..sz as usize {
+					out.push(func.evaluate_values(
+						Context::new(),
+						&[Val::Num(i as f64)]
+					)?)
+				}
+				Ok(Val::Arr(Rc::new(out)))
+			}))?,
+			// string
+			("std", "codepoint") => parse_args!(context, "std.codepoint", args, 1, [
+				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				assert!(
+					str.chars().count() == 1,
+					"std.codepoint should receive single char string"
+				);
+				Val::Num(str.chars().take(1).next().unwrap() as u32 as f64)
+			}),
+			// object, includeHidden
+			("std", "objectFieldsEx") => {
+				noinline!(parse_args!(context, "std.objectFieldsEx",args, 2, [
+					0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
+					1, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
+				], {
+					Ok(Val::Arr(Rc::new(
+						obj.fields_visibility()
+							.into_iter()
+							.filter(|(_k, v)| *v || inc_hidden)
+							.map(|(k, _v)| Val::Str(k))
+							.collect(),
+					)))
+				}))?
+			}
+			// object, field, includeHidden
+			("std", "objectHasEx") => parse_args!(context, "std.objectHasEx", args, 3, [
+				0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
+				1, f: [Val::Str]!!Val::Str, vec![ValType::Str];
+				2, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
+			], {
+				Val::Bool(
+					obj.fields_visibility()
+						.into_iter()
+						.filter(|(_k, v)| *v || inc_hidden)
+						.any(|(k, _v)| *k == *f),
+				)
+			}),
+			("std", "primitiveEquals") => parse_args!(context, "std.primitiveEquals", args, 2, [
+				0, a, vec![];
+				1, b, vec![];
+			], {
+				Val::Bool(a == b)
+			}),
+			("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
+				0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
+				1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				Val::Num(a % b)
+			}),
+			("std", "floor") => parse_args!(context, "std.floor", args, 1, [
+				0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				Val::Num(x.floor())
+			}),
+			("std", "trace") => parse_args!(context, "std.trace", args, 2, [
+				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+				1, rest, vec![];
+			], {
+				// TODO: Line numbers as in original jsonnet
+				println!("TRACE: {}", str);
+				rest
+			}),
+			("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
+				0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
+				1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				Val::Num(x.powf(n))
+			}),
+			("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
+				0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
+					|| create_error(crate::Error::UndefinedExternalVariable(x)),
+				)?
+			}),
+			("std", "filter") => noinline!(parse_args!(context, "std.filter", args, 2, [
+				0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+			], {
+				Ok(Val::Arr(Rc::new(
+					arr.iter()
+						.cloned()
+						.filter(|e| {
+							func
+								.evaluate_values(context.clone(), &[e.clone()])
+								.unwrap()
+								.try_cast_bool("filter predicate")
+								.unwrap()
+						})
+						.collect(),
+				)))
+			}))?,
+			("std", "char") => parse_args!(context, "std.char", args, 1, [
+				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				let mut out = String::new();
+				out.push(std::char::from_u32(n as u32).unwrap());
+				Val::Str(out.into())
+			}),
+			("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
+				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect()))
+			}),
+			("std", "md5") => noinline!(parse_args!(context, "std.md5", args, 1, [
+				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				Ok(Val::Str(format!("{:x}", md5::compute(&str.as_bytes())).into()))
+			}))?,
+			// faster
+			("std", "join") => noinline!(parse_args!(context, "std.join", args, 2, [
+				0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
+				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+			], {
+				Ok(match sep {
+					Val::Arr(joiner_items) => {
+						let mut out = Vec::new();
+
+						let mut first = true;
+						for item in arr.iter().cloned() {
+							if let Val::Arr(items) = item.unwrap_if_lazy()? {
+								if !first {
+									out.reserve(joiner_items.len());
+									out.extend(joiner_items.iter().cloned());
+								}
+								first = false;
+								out.reserve(items.len());
+								out.extend(items.iter().cloned());
+							} else {
+								create_error_result(crate::Error::RuntimeError("in std.join all items should be arrays".into()))?;
+							}
+						}
+
+						Val::Arr(Rc::new(out))
+					},
+					Val::Str(sep) => {
+						let mut out = String::new();
+
+						let mut first = true;
+						for item in arr.iter().cloned() {
+							if let Val::Str(item) = item.unwrap_if_lazy()? {
+								if !first {
+									out += &sep;
+								}
+								first = false;
+								out += &item;
+							} else {
+								create_error_result(crate::Error::RuntimeError("in std.join all items should be strings".into()))?;
+							}
+						}
+
+						Val::Str(out.into())
+					},
+					_ => unreachable!()
+				})
+			}))?,
+			// Faster
+			("std", "escapeStringJson") => parse_args!(context, "std.escapeStringJson", args, 1, [
+				0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				Val::Str(escape_string_json(&str_).into())
+			}),
+			// Faster
+			("std", "manifestJsonEx") => parse_args!(context, "std.manifestJsonEx", args, 2, [
+				0, value, vec![];
+				1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
+			], {
+				Val::Str(manifest_json_ex(&value, &indent)?.into())
+			}),
+			(ns, name) => {
+				create_error_result(crate::Error::IntristicNotFound(ns.into(), name.into()))?
+			}
+		},
+		Val::Func(f) => {
+			let body = || f.evaluate(context, args, tailstrict);
+			if tailstrict {
+				body()?
+			} else {
+				push(loc, "function call", body)?
+			}
+		}
+		v => create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(v.value_type()?))?,
+	})
+}
+
 pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
@@ -508,242 +752,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
-		Apply(value, args, tailstrict) => {
-			let lazy = evaluate(context.clone(), value)?;
-			let value = lazy.unwrap_if_lazy()?;
-			match value {
-				Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
-					// arr/string/function
-					("std", "length") => parse_args!(context, "std.length", args, 1, [
-						0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
-					], {
-						match x {
-							Val::Str(n) => Val::Num(n.chars().count() as f64),
-							Val::Arr(i) => Val::Num(i.len() as f64),
-							Val::Obj(o) => Val::Num(
-								o.fields_visibility()
-									.into_iter()
-									.filter(|(_k, v)| *v)
-									.count() as f64,
-							),
-							_ => unreachable!(),
-						}
-					}),
-					// any
-					("std", "type") => parse_args!(context, "std.type", args, 1, [
-						0, x, vec![];
-					], {
-						Val::Str(x.value_type()?.name().into())
-					}),
-					// length, idx=>any
-					("std", "makeArray") => parse_args!(context, "std.makeArray", args, 2, [
-						0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
-						1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
-					], {
-						assert!(sz >= 0.0);
-						let mut out = Vec::with_capacity(sz as usize);
-						for i in 0..sz as usize {
-							out.push(func.evaluate_values(
-								Context::new(),
-								&[Val::Num(i as f64)]
-							)?)
-						}
-						Val::Arr(Rc::new(out))
-					}),
-					// string
-					("std", "codepoint") => parse_args!(context, "std.codepoint", args, 1, [
-						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
-					], {
-						assert!(
-							str.chars().count() == 1,
-							"std.codepoint should receive single char string"
-						);
-						Val::Num(str.chars().take(1).next().unwrap() as u32 as f64)
-					}),
-					// object, includeHidden
-					("std", "objectFieldsEx") => {
-						parse_args!(context, "std.objectFieldsEx",args, 2, [
-							0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
-							1, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
-						], {
-							Val::Arr(Rc::new(
-								obj.fields_visibility()
-									.into_iter()
-									.filter(|(_k, v)| *v || inc_hidden)
-									.map(|(k, _v)| Val::Str(k))
-									.collect(),
-							))
-						})
-					}
-					// object, field, includeHidden
-					("std", "objectHasEx") => parse_args!(context, "std.objectHasEx", args, 3, [
-						0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
-						1, f: [Val::Str]!!Val::Str, vec![ValType::Str];
-						2, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
-					], {
-						Val::Bool(
-							obj.fields_visibility()
-								.into_iter()
-								.filter(|(_k, v)| *v || inc_hidden)
-								.any(|(k, _v)| *k == *f),
-						)
-					}),
-					("std", "primitiveEquals") => {
-						parse_args!(context, "std.primitiveEquals", args, 2, [
-							0, a, vec![];
-							1, b, vec![];
-						], {
-							Val::Bool(a == b)
-						})
-					}
-					("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
-						0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
-						1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
-					], {
-						Val::Num(a % b)
-					}),
-					("std", "floor") => parse_args!(context, "std.floor", args, 1, [
-						0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
-					], {
-						Val::Num(x.floor())
-					}),
-					("std", "trace") => parse_args!(context, "std.trace", args, 2, [
-						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
-						1, rest, vec![];
-					], {
-						// TODO: Line numbers as in original jsonnet
-						println!("TRACE: {}", str);
-						rest
-					}),
-					("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
-						0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
-						1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
-					], {
-						Val::Num(x.powf(n))
-					}),
-					("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
-						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
-					], {
-						with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
-							|| create_error(crate::Error::UndefinedExternalVariable(x)),
-						)?
-					}),
-					("std", "filter") => parse_args!(context, "std.filter", args, 2, [
-						0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
-						1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
-					], {
-						Val::Arr(Rc::new(
-							arr.iter()
-								.cloned()
-								.filter(|e| {
-									func
-										.evaluate_values(context.clone(), &[e.clone()])
-										.unwrap()
-										.try_cast_bool("filter predicate")
-										.unwrap()
-								})
-								.collect(),
-						))
-					}),
-					("std", "char") => parse_args!(context, "std.char", args, 1, [
-						0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
-					], {
-						let mut out = String::new();
-						out.push(std::char::from_u32(n as u32).unwrap());
-						Val::Str(out.into())
-					}),
-					("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
-						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
-					], {
-						Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect()))
-					}),
-					("std", "md5") => parse_args!(context, "std.md5", args, 1, [
-						0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
-					], {
-						Val::Str(format!("{:x}", md5::compute(str.as_bytes())).into())
-					}),
-					// faster
-					("std", "join") => parse_args!(context, "std.join", args, 2, [
-						0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
-						1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
-					], {
-						match sep {
-							Val::Arr(joiner_items) => {
-								let mut out = Vec::new();
-
-								let mut first = true;
-								for item in arr.iter().cloned() {
-									if let Val::Arr(items) = item.unwrap_if_lazy()? {
-										if !first {
-											out.reserve(joiner_items.len());
-											out.extend(joiner_items.iter().cloned());
-										}
-										first = false;
-										out.reserve(items.len());
-										out.extend(items.iter().cloned());
-									} else {
-										create_error_result(crate::Error::RuntimeError("in std.join all items should be arrays".into()))?;
-									}
-								}
-
-								Val::Arr(Rc::new(out))
-							},
-							Val::Str(sep) => {
-								let mut out = String::new();
-
-								let mut first = true;
-								for item in arr.iter().cloned() {
-									if let Val::Str(item) = item.unwrap_if_lazy()? {
-										if !first {
-											out += &sep;
-										}
-										first = false;
-										out += &item;
-									} else {
-										create_error_result(crate::Error::RuntimeError("in std.join all items should be strings".into()))?;
-									}
-								}
-
-								Val::Str(out.into())
-							},
-							_ => unreachable!()
-						}
-					}),
-					// Faster
-					("std", "escapeStringJson") => {
-						parse_args!(context, "std.escapeStringJson", args, 1, [
-							0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
-						], {
-							Val::Str(escape_string_json(&str_).into())
-						})
-					}
-					// Faster
-					("std", "manifestJsonEx") => {
-						parse_args!(context, "std.manifestJsonEx", args, 2, [
-							0, value, vec![];
-							1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
-						], {
-							Val::Str(manifest_json_ex(&value, &indent)?.into())
-						})
-					}
-					(ns, name) => create_error_result(crate::Error::IntristicNotFound(
-						ns.into(),
-						name.into(),
-					))?,
-				},
-				Val::Func(f) => {
-					let body = || f.evaluate(context, args, *tailstrict);
-					if *tailstrict {
-						body()?
-					} else {
-						push(loc, "function call", body)?
-					}
-				}
-				v => {
-					create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(v.value_type()?))?
-				}
-			}
-		}
+		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
 		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(&value.1, "assertion condition", || {

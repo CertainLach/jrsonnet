@@ -2,6 +2,7 @@
 #![feature(type_alias_impl_trait)]
 #![feature(debug_non_exhaustive)]
 #![feature(test)]
+#![feature(stmt_expr_attributes)]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 
 extern crate test;
