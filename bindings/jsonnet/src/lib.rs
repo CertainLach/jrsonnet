@@ -68,9 +68,10 @@ pub extern "C" fn jsonnet_make() -> Box<EvaluationState> {
 	Box::new(state)
 }
 
-// TODO
 #[no_mangle]
-pub extern "C" fn jsonnet_max_stack(_vm: &EvaluationState, _v: c_uint) {}
+pub extern "C" fn jsonnet_max_stack(vm: &EvaluationState, v: c_uint) {
+	vm.set_max_stack(v as usize);
+}
 
 // jrsonnet currently have no GC, so these functions is no-op
 #[no_mangle]
