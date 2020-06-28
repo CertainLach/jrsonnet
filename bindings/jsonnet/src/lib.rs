@@ -17,6 +17,7 @@ use std::{
 };
 
 #[no_mangle]
+#[cfg(target = "wasm32-wasi")]
 pub extern "C" fn _start() {}
 
 #[no_mangle]
@@ -84,7 +85,9 @@ pub extern "C" fn jsonnet_gc_growth_trigger(_vm: &EvaluationState, _v: c_double)
 
 // TODO
 #[no_mangle]
-pub extern "C" fn jsonnet_string_output(_vm: &EvaluationState, _v: c_int) {}
+pub extern "C" fn jsonnet_string_output(_vm: &EvaluationState, _v: c_int) {
+	todo!()
+}
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &EvaluationState, v: &Val) -> *mut c_char {
@@ -299,7 +302,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 				let mut out = String::new();
 				writeln!(out, "{:?}", e.0).unwrap();
 				for i in (e.1).0.iter() {
-					writeln!(out, "{:?}", i).unwrap();
+					writeln!(out, "{:?}", i.0).unwrap();
 				}
 				CString::new(&out as &str).unwrap().into_raw()
 			}
