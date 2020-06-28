@@ -30,7 +30,7 @@ build-linux:
   image: $CI_REGISTRY_IMAGE:build
   stage: build
   script:
-    - make build-native
+    - make build
   cache:
     key: linux
     paths:
