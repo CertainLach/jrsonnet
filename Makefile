@@ -1,10 +1,7 @@
-jsonnet-cpp:
-	git clone https://github.com/google/jsonnet jsonnet-cpp
-
-.ONESHELL:
-test-examples: jsonnet-cpp
-	cargo build --release
-	export JSONNET_BIN="$(PWD)/target/release/jsonnet"
-	export EXAMPLES_DIR="$(PWD)/jsonnet-cpp/examples/"
-	cd ./jsonnet-cpp/examples/
-	./check.sh
+.PHONY: test build build-wasi
+test:
+	cargo test
+build:
+	RUSTFLAGS="-Zmutable-noalias=yes -C link-arg=-s" cargo build --release -p jrsonnet
+build-wasi:
+	cd ./bindings/ && cargo build --release -p jsonnet --target wasm32-wasi

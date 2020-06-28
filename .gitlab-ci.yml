@@ -1,6 +1,57 @@
-image: "rustlang/rust:nightly"
+variables:
+  CARGO_HOME: $CI_PROJECT_DIR/cache
 
-test:cargo:
+stages:
+  - prepare
+  - build
+
+build-container:
+  image: docker:19.03.11
+  stage: prepare
+  services:
+    - docker:19.03.11-dind
+  before_script:
+    - docker login -u $CI_REGISTRY_USER -p $CI_REGISTRY_PASSWORD $CI_REGISTRY
   script:
-    - rustc --version && cargo --version
-    - cargo test --all --verbose
+    - docker build -t $CI_REGISTRY_IMAGE:build .
+    - docker push $CI_REGISTRY_IMAGE:build
+
+test-library:
+  image: $CI_REGISTRY_IMAGE:build
+  stage: build
+  script:
+    - make test
+  cache:
+    key: test
+    paths:
+      - ./cache
+
+build-linux:
+  image: $CI_REGISTRY_IMAGE:build
+  stage: build
+  script:
+    - make build-native
+  cache:
+    key: linux
+    paths:
+      - ./cache
+      - ./target
+  artifacts:
+    paths:
+      - ./target/release/jrsonnet
+    expire_in: 30 days
+
+build-wasm:
+  image: $CI_REGISTRY_IMAGE:build
+  stage: build
+  script:
+    - make build-wasi
+  cache:
+    key: wasm
+    paths:
+      - ./cache
+      - ./target
+  artifacts:
+    paths:
+      - ./target/wasm32-wasi/release/jsonnet.wasm
+    expire_in: 30 days
