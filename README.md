@@ -20,8 +20,7 @@ It is fun to write one in Rust :D
 ## Bindings
 
 C bindings (libjsonnet.so) are WIP
-
-Something is implemented, but mostly unusable for now
+JS bindings are WIP too, but also available in WASM form
 
 See them in `./bindings/jsonnet/`
 

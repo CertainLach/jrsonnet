@@ -17,6 +17,9 @@ use std::{
 };
 
 #[no_mangle]
+pub extern "C" fn _start() {}
+
+#[no_mangle]
 pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.16.0\0"
 }
