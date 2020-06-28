@@ -624,7 +624,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
 						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 					], {
-						with_state(|s| s.0.ext_vars.borrow().get(&x).cloned()).ok_or_else(
+						with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
 							|| create_error(crate::Error::UndefinedExternalVariable(x)),
 						)?
 					}),

@@ -118,15 +118,12 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
-	let evaluator = jrsonnet_evaluator::EvaluationState::new(
-		EvaluationSettings {
-			max_stack_trace_size: opts.max_trace,
-			max_stack_frames: opts.max_stack,
-		},
-		Box::new(jrsonnet_evaluator::FileImportResolver {
-			library_paths: opts.jpath.clone(),
-		}),
-	);
+	let evaluator = jrsonnet_evaluator::EvaluationState::default();
+	evaluator.set_max_trace(opts.max_trace);
+	evaluator.set_max_stack(opts.max_stack);
+	evaluator.set_import_resolver(Box::new(jrsonnet_evaluator::FileImportResolver {
+		library_paths: opts.jpath.clone(),
+	}));
 	if !opts.no_stdlib {
 		evaluator.with_stdlib();
 	}

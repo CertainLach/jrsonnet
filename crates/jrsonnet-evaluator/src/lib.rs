@@ -250,6 +250,12 @@ impl EvaluationState {
 	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
 		self.settings_mut().ext_vars.insert(name, value);
 	}
+	pub fn set_max_trace(&self, max_trace: usize) {
+		self.settings_mut().max_stack_trace_size = max_trace;
+	}
+	pub fn set_max_stack(&self, max_stack: usize) {
+		self.settings_mut().max_stack_frames = max_stack;
+	}
 
 	pub fn with_stdlib(&self) -> &Self {
 		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
