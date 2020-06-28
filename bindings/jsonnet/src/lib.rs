@@ -1,7 +1,17 @@
-use jrsonnet_evaluator::{EvaluationState, ObjValue, Val};
+use jrsonnet_evaluator::{
+	create_error, create_error_result, Error, EvaluationState, ImportResolver, LazyBinding,
+	LazyVal, ObjMember, ObjValue, Result, Val,
+};
+use jrsonnet_parser::Visibility;
 use libc::{c_char, c_double, c_int, c_uint};
 use std::{
+	alloc::Layout,
+	any::Any,
+	cell::RefCell,
+	collections::BTreeMap,
 	ffi::{CStr, CString},
+	fs::File,
+	io::Read,
 	path::PathBuf,
 	rc::Rc,
 };
@@ -11,9 +21,51 @@ pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.16.0\0"
 }
 
+#[derive(Default)]
+struct NativeImportResolver {
+	library_paths: RefCell<Vec<PathBuf>>,
+}
+impl NativeImportResolver {
+	fn add_jpath(&self, path: PathBuf) {
+		self.library_paths.borrow_mut().push(path);
+	}
+}
+impl ImportResolver for NativeImportResolver {
+	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+		let mut new_path = from.clone();
+		new_path.push(path);
+		if new_path.exists() {
+			Ok(Rc::new(new_path))
+		} else {
+			for library_path in self.library_paths.borrow().iter() {
+				let mut cloned = library_path.clone();
+				cloned.push(path);
+				if cloned.exists() {
+					return Ok(Rc::new(cloned));
+				}
+			}
+			create_error_result(Error::ImportFileNotFound(from.clone(), path.clone()))
+		}
+	}
+	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
+		let mut file =
+			File::open(id).map_err(|_e| create_error(Error::ResolvedFileNotFound(id.clone())))?;
+		let mut out = String::new();
+		file.read_to_string(&mut out)
+			.map_err(|_e| create_error(Error::ImportBadFileUtf8(id.clone())))?;
+		Ok(out.into())
+	}
+	unsafe fn as_any(&self) -> &dyn Any {
+		self
+	}
+}
+
 #[no_mangle]
 pub extern "C" fn jsonnet_make() -> Box<EvaluationState> {
-	Box::new(EvaluationState::default())
+	let state = EvaluationState::default();
+	state.with_stdlib();
+	state.set_import_resolver(Box::new(NativeImportResolver::default()));
+	Box::new(state)
 }
 
 // TODO
@@ -166,9 +218,20 @@ pub extern "C" fn jsonnet_tla_code() {
 pub extern "C" fn jsonnet_max_trace() {
 	todo!()
 }
+
+/// # Safety
+///
+/// This function is safe, if received v is a pointer to normal C string
 #[no_mangle]
-pub extern "C" fn jsonnet_jpath_add() {
-	todo!()
+pub unsafe extern "C" fn jsonnet_jpath_add(vm: &EvaluationState, v: *const c_char) {
+	let cstr = CStr::from_ptr(v);
+	let path = PathBuf::from(cstr.to_str().unwrap());
+	let any_resolver = vm.import_resolver();
+	let resolver = any_resolver
+		.as_any()
+		.downcast_ref::<NativeImportResolver>()
+		.unwrap();
+	resolver.add_jpath(path);
 }
 
 /// # Safety
