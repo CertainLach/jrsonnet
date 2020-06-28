@@ -311,6 +311,7 @@ impl EvaluationState {
 		Context::new().extend_unbound(new_bindings, None, None, None)
 	}
 
+	/// Executes code, creating new stack frame
 	pub fn push<T>(
 		&self,
 		e: ExprLocation,
@@ -332,11 +333,8 @@ impl EvaluationState {
 		self.data_mut().stack.pop();
 		result
 	}
-	pub fn print_stack_trace(&self) {
-		for e in self.stack_trace().0 {
-			println!("{:?} - {:?}", e.0, e.1)
-		}
-	}
+
+	/// Returns current stack trace
 	pub fn stack_trace(&self) -> StackTrace {
 		StackTrace(
 			self.data()
@@ -348,10 +346,13 @@ impl EvaluationState {
 				.collect(),
 		)
 	}
+
+	/// Creates error with stack trace
 	pub fn error(&self, err: Error) -> LocError {
 		LocError(err, self.stack_trace())
 	}
 
+	/// Runs passed function in state (required, if function needs to modify stack trace)
 	pub fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
 		EVAL_STATE.with(|v| {
 			let has_state = v.borrow().is_some();
@@ -386,7 +387,6 @@ pub mod tests {
 						ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
 						"inner".to_owned(),
 						|| {
-							state.print_stack_trace();
 							Ok(())
 						},
 					)?;

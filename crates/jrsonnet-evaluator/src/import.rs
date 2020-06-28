@@ -8,12 +8,23 @@ use std::fs;
 use std::io::Read;
 use std::{any::Any, cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
 
+/// Implements file resolution logic for `import` and `importStr`
 pub trait ImportResolver {
+	/// Resolve real file path, i.e
+	/// `(/home/user/manifests, b.libsonnet)` can resolve to both `/home/user/manifests/b.libsonnet` and to `/home/user/vendor/b.libsonnet`
+	/// (Where vendor is a library path)
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>>;
+	/// Reads file from filesystem, should be used only with path received from `resolve_file`
 	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>>;
+	/// # Safety
+	///
+	/// For use in bindings, do not try to use it elsewhere
+	/// Implementations, which are not intended to be
+	/// used in bindings, should panic in this method
 	unsafe fn as_any(&self) -> &dyn Any;
 }
 
+/// Dummy resolver, can't resolve/load any file
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
@@ -33,7 +44,11 @@ impl Default for Box<dyn ImportResolver> {
 	}
 }
 
+/// File resolver, can load file from both FS and library paths
+#[derive(Default)]
 pub struct FileImportResolver {
+	/// Library directories to search for file
+	/// In original jsonnet referred as jpath
 	pub library_paths: Vec<PathBuf>,
 }
 impl ImportResolver for FileImportResolver {
@@ -67,6 +82,8 @@ impl ImportResolver for FileImportResolver {
 }
 
 type ResolutionData = (PathBuf, PathBuf);
+
+/// Caches results of underlying resolver implementation
 pub struct CachingImportResolver {
 	resolution_cache: RefCell<HashMap<ResolutionData, Result<Rc<PathBuf>>>>,
 	loading_cache: RefCell<HashMap<PathBuf, Result<Rc<str>>>>,
