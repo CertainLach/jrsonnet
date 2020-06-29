@@ -16,6 +16,7 @@ mod import;
 mod map;
 mod obj;
 mod val;
+pub mod trace;
 
 pub use ctx::*;
 pub use dynamic::*;
@@ -27,6 +28,7 @@ use jrsonnet_parser::*;
 pub use obj::*;
 use std::{cell::{Ref, RefCell, RefMut}, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
 pub use val::*;
+use trace::{offset_to_location, CodeLocation};
 
 type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
 #[derive(Clone)]
@@ -187,6 +189,10 @@ impl EvaluationState {
 		let ro_map = &self.data().files;
 		ro_map.get(name).map(|value| value.0.clone())
 	}
+	pub fn map_source_locations(&self, file: &PathBuf, locs: &[usize]) -> Vec<CodeLocation> {
+		offset_to_location(&self.get_source(file).unwrap(), locs)
+	}
+
 	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
 		self.run_in_state(|| {
 			let expr: LocExpr = {

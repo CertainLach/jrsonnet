@@ -1,9 +1,6 @@
-pub mod location;
-
 use clap::Clap;
-use jrsonnet_evaluator::{EvaluationState, LocError, StackTrace, Val};
+use jrsonnet_evaluator::{trace::CodeLocation, EvaluationState, LocError, StackTrace, Val};
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
-use location::{offset_to_location, CodeLocation};
 use std::env::current_dir;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
@@ -252,14 +249,11 @@ fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
 	for item in trace.0.iter() {
 		let desc = &item.1;
 		let source = item.0.clone();
-		let code = evaluator.get_source(&source.0);
-		if code.is_none() {
-			continue;
-		}
-		let code = code.unwrap();
-		let start_end = offset_to_location(&code, &[source.1, source.2]);
+		let start_end = evaluator.map_source_locations(&source.0, &[source.1, source.2]);
 		if opts.trace_format == TraceFormat::Custom {
-			let source_fragment: String = code
+			let source_fragment: String = evaluator
+				.get_source(&source.0)
+				.unwrap()
 				.chars()
 				.skip(start_end[0].line_start_offset)
 				.take(start_end[1].line_end_offset - start_end[0].line_start_offset)
