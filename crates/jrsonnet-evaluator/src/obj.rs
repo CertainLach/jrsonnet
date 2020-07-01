@@ -1,12 +1,7 @@
 use crate::{evaluate_add_op, LazyBinding, Result, Val};
 use indexmap::IndexMap;
-use jrsonnet_parser::Visibility;
-use std::{
-	cell::RefCell,
-	collections::{BTreeMap, HashMap},
-	fmt::Debug,
-	rc::Rc,
-};
+use jrsonnet_parser::{ExprLocation, Visibility};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 #[derive(Debug)]
 pub struct ObjMember {
@@ -18,7 +13,7 @@ pub struct ObjMember {
 #[derive(Debug)]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
-	this_entries: Rc<BTreeMap<Rc<str>, ObjMember>>,
+	this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
 	value_cache: RefCell<HashMap<Rc<str>, Val>>,
 }
 #[derive(Clone)]
@@ -44,7 +39,7 @@ impl Debug for ObjValue {
 impl ObjValue {
 	pub fn new(
 		super_obj: Option<ObjValue>,
-		this_entries: Rc<BTreeMap<Rc<str>, ObjMember>>,
+		this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
 	) -> ObjValue {
 		ObjValue(Rc::new(ObjValueInternals {
 			super_obj,
@@ -53,7 +48,7 @@ impl ObjValue {
 		}))
 	}
 	pub fn new_empty() -> ObjValue {
-		Self::new(None, Rc::new(BTreeMap::new()))
+		Self::new(None, Rc::new(HashMap::new()))
 	}
 	pub fn with_super(&self, super_obj: ObjValue) -> ObjValue {
 		match &self.0.super_obj {

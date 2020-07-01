@@ -9,10 +9,7 @@ use jrsonnet_parser::{
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
-use std::{
-	collections::{BTreeMap, HashMap},
-	rc::Rc,
-};
+use std::{collections::HashMap, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
@@ -242,7 +239,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		new_bindings.fill(bindings);
 	}
 
-	let mut new_members = BTreeMap::new();
+	let mut new_members = HashMap::new();
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -317,7 +314,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 		ObjBody::MemberList(members) => evaluate_member_list_object(context, &members)?,
 		ObjBody::ObjComp(obj) => {
 			let future_this = FutureObjValue::new();
-			let mut new_members = BTreeMap::new();
+			let mut new_members = HashMap::new();
 			for (k, v) in evaluate_comp(
 				context.clone(),
 				&|ctx| {
@@ -450,13 +447,13 @@ pub fn evaluate_apply(
 					0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
 					1, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
 				], {
-					Ok(Val::Arr(Rc::new(
-						obj.fields_visibility()
-							.into_iter()
-							.filter(|(_k, v)| *v || inc_hidden)
-							.map(|(k, _v)| Val::Str(k))
-							.collect(),
-					)))
+					let mut out = obj.fields_visibility()
+						.into_iter()
+						.filter(|(_k, v)| *v || inc_hidden)
+						.map(|(k, _v)|k)
+						.collect::<Vec<_>>();
+					out.sort();
+					Ok(Val::Arr(Rc::new(out.into_iter().map(Val::Str).collect())))
 				}))?
 			}
 			// object, field, includeHidden

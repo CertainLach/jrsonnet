@@ -246,7 +246,8 @@ fn manifest_json_ex_buf(
 		}
 		Val::Obj(obj) => {
 			buf.push_str("{\n");
-			let fields = obj.visible_fields();
+			let mut fields = obj.visible_fields();
+			fields.sort();
 			if !fields.is_empty() {
 				let old_len = cur_padding.len();
 				cur_padding.push_str(padding);

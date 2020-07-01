@@ -8,7 +8,7 @@ use std::{
 	alloc::Layout,
 	any::Any,
 	cell::RefCell,
-	collections::BTreeMap,
+	collections::HashMap,
 	ffi::{CStr, CString},
 	fs::File,
 	io::Read,
@@ -191,7 +191,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 ) {
 	match obj {
 		Val::Obj(old) => {
-			let mut new = BTreeMap::new();
+			let mut new = HashMap::new();
 			new.insert(
 				CStr::from_ptr(name).to_str().unwrap().into(),
 				ObjMember {
