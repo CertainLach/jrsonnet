@@ -99,6 +99,12 @@ struct Opts {
 	)]
 	max_trace: usize,
 
+	#[clap(
+		long,
+		about = "Required os stack size, probally you shouldn't change it"
+	)]
+	thread_stack_size: Option<usize>,
+
 	#[clap(long, short = "J", about = "Library search dir")]
 	jpath: Vec<PathBuf>,
 
@@ -115,6 +121,19 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
+	if let Some(size) = opts.thread_stack_size {
+		std::thread::Builder::new()
+			.stack_size(size * 1024 * 1024)
+			.spawn(|| main_real(opts))
+			.unwrap()
+			.join()
+			.unwrap();
+	} else {
+		main_real(opts)
+	}
+}
+
+fn main_real(opts: Opts) {
 	let evaluator = jrsonnet_evaluator::EvaluationState::default();
 	evaluator.set_max_trace(opts.max_trace);
 	evaluator.set_max_stack(opts.max_stack);
