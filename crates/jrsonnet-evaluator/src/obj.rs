@@ -110,16 +110,9 @@ impl ObjValue {
 	}
 	pub(crate) fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
 		match (self.0.this_entries.get(key), &self.0.super_obj) {
-			(Some(k), None) => Ok(Some(
-				k.invoke
-					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
-					.evaluate()?,
-			)),
+			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
 			(Some(k), Some(s)) => {
-				let lazy = k
-					.invoke
-					.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?;
-				let our = lazy.evaluate()?;
+				let our = self.evaluate_this(k, real_this)?;
 				if k.add {
 					s.get_raw(key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
@@ -132,6 +125,11 @@ impl ObjValue {
 			(None, Some(s)) => s.get_raw(key, real_this),
 			(None, None) => Ok(None),
 		}
+	}
+	fn evaluate_this(&self, v: &ObjMember, real_this: &ObjValue) -> Result<Val> {
+		Ok(v.invoke
+			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
+			.evaluate()?)
 	}
 }
 impl PartialEq for ObjValue {
