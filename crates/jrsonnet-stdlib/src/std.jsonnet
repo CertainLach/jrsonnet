@@ -1,5 +1,5 @@
 {
-  __intristic_namespace__: 'std',
+  __intristic_namespace__:: 'std',
 
   local std = self,
   local id = function(x) x,
