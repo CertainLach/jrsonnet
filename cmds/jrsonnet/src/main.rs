@@ -71,13 +71,13 @@ impl FromStr for ExtStr {
 struct Opts {
 	#[clap(long, about = "Disable global std variable")]
 	no_stdlib: bool,
-	#[clap(long, about = "Add external string")]
+	#[clap(long, about = "Add external string", number_of_values = 1)]
 	ext_str: Vec<ExtStr>,
-	#[clap(long, about = "Add external string from code")]
+	#[clap(long, about = "Add external string from code", number_of_values = 1)]
 	ext_code: Vec<ExtStr>,
-	#[clap(long, about = "Add TLA")]
+	#[clap(long, about = "Add TLA", number_of_values = 1)]
 	tla_str: Vec<ExtStr>,
-	#[clap(long, about = "Add TLA from code")]
+	#[clap(long, about = "Add TLA from code", number_of_values = 1)]
 	tla_code: Vec<ExtStr>,
 	#[clap(long, short = "f", default_value = "json", possible_values = &["none", "json", "yaml"], about = "Output format, wraps resulting value to corresponding std.manifest call")]
 	format: Format,
@@ -109,7 +109,7 @@ struct Opts {
 	)]
 	line_padding: usize,
 
-	#[clap(about = "File to compile", index = 1)]
+	#[clap(about = "File to compile")]
 	input: String,
 }
 
