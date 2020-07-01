@@ -276,6 +276,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 								})?))
 							}),
 						)),
+						location: value.1.clone(),
 					},
 				);
 			}
@@ -305,6 +306,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 								)))
 							}),
 						)),
+						location: value.1.clone(),
 					},
 				);
 			}
@@ -368,6 +370,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 								add: false,
 								visibility: Visibility::Normal,
 								invoke: v,
+								location: obj.value.1.clone(),
 							},
 						);
 					}

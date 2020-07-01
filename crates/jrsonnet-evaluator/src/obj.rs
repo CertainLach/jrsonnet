@@ -8,6 +8,7 @@ pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
 	pub invoke: LazyBinding,
+	pub location: Option<ExprLocation>,
 }
 
 #[derive(Debug)]
