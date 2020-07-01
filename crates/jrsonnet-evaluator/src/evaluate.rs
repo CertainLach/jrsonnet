@@ -160,9 +160,15 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 			Val::Num(((*v1 as i32) ^ (*v2 as i32)) as f64)
 		}
 		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
+			if *v2 < 0.0 {
+				create_error_result(Error::RuntimeError("shift by negative exponent".into()))?
+			}
 			Val::Num(((*v1 as i32) << (*v2 as i32)) as f64)
 		}
 		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
+			if *v2 < 0.0 {
+				create_error_result(Error::RuntimeError("shift by negative exponent".into()))?
+			}
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
 
