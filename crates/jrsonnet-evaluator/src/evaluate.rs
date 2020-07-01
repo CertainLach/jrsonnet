@@ -427,7 +427,9 @@ pub fn evaluate_apply(
 				0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
 				1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			], {
-				assert!(sz >= 0.0);
+				if sz < 0.0 {
+					create_error_result(crate::error::Error::RuntimeError(format!("makeArray requires size >= 0, got {}", sz).into()))?;
+				}
 				let mut out = Vec::with_capacity(sz as usize);
 				for i in 0..sz as usize {
 					out.push(func.evaluate_values(
