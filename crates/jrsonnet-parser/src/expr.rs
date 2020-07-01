@@ -1,10 +1,10 @@
+#[cfg(feature = "deserialize")]
+use serde::Deserialize;
+#[cfg(feature = "serialize")]
+use serde::Serialize;
 use std::{fmt::Debug, ops::Deref, path::PathBuf, rc::Rc};
 #[cfg(feature = "dump")]
 use structdump_derive::Codegen;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
-#[cfg(feature = "deserialize")]
-use serde::Deserialize;
 
 #[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]

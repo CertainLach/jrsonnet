@@ -198,6 +198,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 					add: false,
 					visibility: Visibility::Normal,
 					invoke: LazyBinding::Bound(LazyVal::new_resolved(val.clone())),
+					location: None,
 				},
 			);
 			let new_obj = ObjValue::new(Some(old.clone()), Rc::new(new));

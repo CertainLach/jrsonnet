@@ -9,6 +9,7 @@ mod expr;
 pub use expr::*;
 pub use peg;
 
+#[derive(Default)]
 pub struct ParserSettings {
 	pub loc_data: bool,
 	pub file_name: Rc<PathBuf>,
@@ -83,9 +84,9 @@ parser! {
 			= str:$((!['\n'][_])* "\n") {str}
 		pub rule string_block() -> String
 			= "|||" (!['\n']single_whitespace())* "\n"
-			  prefix:[' ']+ first_line:whole_line()
-			  lines:([' ']*<{prefix.len()}> s:whole_line() {s})*
-			  [' ']*<, {prefix.len() - 1}> "|||"
+			  prefix:[' ' | '\t']+ first_line:whole_line()
+			  lines:([' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
+			  [' ' | '\t']*<, {prefix.len() - 1}> "|||"
 			  {let mut l = first_line.to_owned(); l.extend(lines); l}
 		pub rule string() -> String
 			= "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
@@ -359,7 +360,19 @@ pub mod tests {
 		assert_eq!(
 			parse!("|||\n    Hello world!\n     a\n|||"),
 			el!(Expr::Str("Hello world!\n a\n".into())),
-		)
+		);
+		assert_eq!(
+			parse!("|||\n  Hello world!\n   a\n|||"),
+			el!(Expr::Str("Hello world!\n a\n".into())),
+		);
+		assert_eq!(
+			parse!("|||\n\t\tHello world!\n\t\t\ta\n|||"),
+			el!(Expr::Str("Hello world!\n\ta\n".into())),
+		);
+		assert_eq!(
+			parse!("|||\n   Hello world!\n    a\n |||"),
+			el!(Expr::Str("Hello world!\n a\n".into())),
+		);
 	}
 
 	#[test]
