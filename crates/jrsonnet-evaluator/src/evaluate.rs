@@ -92,7 +92,7 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
-		(Val::Num(v1), Val::Num(v2)) => Val::Num(v1 + v2),
+		(Val::Num(v1), Val::Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		_ => create_error_result(Error::BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type()?,
@@ -135,15 +135,15 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Val::Str(v1), BinaryOpType::Gte, Val::Str(v2)) => Val::Bool(v1 >= v2),
 
 		// Num X Num
-		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Num(v1 * v2),
+		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::new_checked_num(v1 * v2)?,
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => {
 			if *v2 <= f64::EPSILON {
 				create_error_result(crate::Error::DivisionByZero)?
 			}
-			Val::Num(v1 / v2)
+			Val::new_checked_num(v1 / v2)?
 		}
 
-		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::Num(v1 - v2),
+		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::new_checked_num(v1 - v2)?,
 
 		(Val::Num(v1), BinaryOpType::Lt, Val::Num(v2)) => Val::Bool(v1 < v2),
 		(Val::Num(v1), BinaryOpType::Gt, Val::Num(v2)) => Val::Bool(v1 > v2),
@@ -644,7 +644,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(context, e)?,
 		Str(v) => Val::Str(v.clone()),
-		Num(v) => Val::Num(*v),
+		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(loc, "var", || {

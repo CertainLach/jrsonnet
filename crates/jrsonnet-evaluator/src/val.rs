@@ -134,6 +134,15 @@ macro_rules! matches_unwrap {
 	};
 }
 impl Val {
+	/// Creates Val::Num after checking for overflow. As numbers are f64, we can just check for finity
+	pub fn new_checked_num(num: f64) -> Result<Val> {
+		if num.is_finite() {
+			Ok(Val::Num(num))
+		} else {
+			create_error_result(Error::RuntimeError("overflow".into()))
+		}
+	}
+
 	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
 		let this_type = self.value_type()?;
 		if this_type != val_type {
