@@ -86,11 +86,14 @@ impl ObjValue {
 		Rc::try_unwrap(out).unwrap().into_inner()
 	}
 	pub fn visible_fields(&self) -> Vec<Rc<str>> {
-		self.fields_visibility()
+		let mut visible_fields: Vec<_> = self
+			.fields_visibility()
 			.into_iter()
 			.filter(|(_k, v)| *v)
 			.map(|(k, _)| k)
-			.collect()
+			.collect();
+		visible_fields.sort();
+		visible_fields
 	}
 	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
 		if let Some(v) = self.0.value_cache.borrow().get(&key) {
