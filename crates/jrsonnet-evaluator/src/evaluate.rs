@@ -658,9 +658,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
-		Var(name) => push(loc, "var", || {
-			Ok(Val::Lazy(context.binding(name.clone())?).unwrap_if_lazy()?)
-		})?,
+		Var(name) => push(
+			loc,
+			|| "var".to_owned(),
+			|| Ok(Val::Lazy(context.binding(name.clone())?).unwrap_if_lazy()?),
+		)?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
 			context
@@ -769,10 +771,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
 		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
 		AssertExpr(AssertStmt(value, msg), returned) => {
-			let assertion_result = push(&value.1, "assertion condition", || {
-				evaluate(context.clone(), &value)?
-					.try_cast_bool("assertion condition should be boolean")
-			})?;
+			let assertion_result = push(
+				&value.1,
+				|| "assertion condition".to_owned(),
+				|| {
+					evaluate(context.clone(), &value)?
+						.try_cast_bool("assertion condition should be boolean")
+				},
+			)?;
 			if assertion_result {
 				evaluate(context, returned)?
 			} else if let Some(msg) = msg {
@@ -781,9 +787,15 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				create_error_result(crate::Error::AssertionFailed(Val::Null))?
 			}
 		}
-		Error(e) => create_error_result(crate::Error::RuntimeError(
-			evaluate(context, e)?.try_cast_str("error text should be string")?,
-		))?,
+		Error(e) => push(
+			&loc,
+			|| "error statement".to_owned(),
+			|| {
+				create_error_result(crate::Error::RuntimeError(
+					evaluate(context, e)?.try_cast_str("error text should be string")?,
+				))?
+			},
+		)?,
 		IfElse {
 			cond,
 			cond_then,

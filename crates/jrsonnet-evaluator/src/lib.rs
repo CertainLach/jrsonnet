@@ -72,8 +72,8 @@ impl Default for EvaluationSettings {
 
 #[derive(Default)]
 struct EvaluationData {
-	/// Used for stack-overflows and stacktraces
-	stack: Vec<StackTraceElement>,
+	/// Used for stack overflow detection, stacktrace is now populated on unwind
+	stack_depth: usize,
 	/// Contains file source codes and evaluated results for imports and pretty
 	/// printing stacktraces
 	files: HashMap<Rc<PathBuf>, FileData>,
@@ -103,11 +103,11 @@ pub fn create_error_result<T>(err: Error) -> Result<T> {
 }
 pub(crate) fn push<T>(
 	e: &Option<ExprLocation>,
-	comment: &str,
+	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
-	if e.is_some() {
-		with_state(|s| s.push(e.clone().unwrap(), comment.to_owned(), f))
+	if let Some(v) = e {
+		with_state(|s| s.push(&v, frame_desc, f))
 	} else {
 		f()
 	}
@@ -332,42 +332,33 @@ impl EvaluationState {
 	/// Executes code, creating new stack frame
 	pub fn push<T>(
 		&self,
-		e: ExprLocation,
-		comment: String,
+		e: &ExprLocation,
+		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
 		{
 			let mut data = self.data_mut();
-			let stack = &mut data.stack;
-			if stack.len() > self.settings().max_stack_frames {
+			let stack_depth = &mut data.stack_depth;
+			if *stack_depth > self.settings().max_stack_frames {
 				// Error creation uses data, so i drop guard here
 				drop(data);
 				return Err(self.error(Error::StackOverflow));
 			} else {
-				stack.push(StackTraceElement(e, comment));
+				*stack_depth+=1;
 			}
 		}
 		let result = f();
-		self.data_mut().stack.pop();
+		self.data_mut().stack_depth -= 1;
+		if let Err(mut err) = result {
+			(err.1).0.push(StackTraceElement(e.clone(), frame_desc()));
+			return Err(err);
+		}
 		result
-	}
-
-	/// Returns current stack trace
-	pub fn stack_trace(&self) -> StackTrace {
-		StackTrace(
-			self.data()
-				.stack
-				.iter()
-				.rev()
-				.take(self.settings().max_stack_trace_size)
-				.cloned()
-				.collect(),
-		)
 	}
 
 	/// Creates error with stack trace
 	pub fn error(&self, err: Error) -> LocError {
-		LocError(err, self.stack_trace())
+		LocError(err, StackTrace(vec![]))
 	}
 
 	/// Runs passed function in state (required, if function needs to modify stack trace)
@@ -396,22 +387,24 @@ pub mod tests {
 	#[test]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
-		state
+		state.run_in_state(||{
+			state
 			.push(
-				ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
-				"outer".to_owned(),
+				&ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
+				|| "outer".to_owned(),
 				|| {
 					state.push(
-						ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
-						"inner".to_owned(),
+						&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
+						|| "inner".to_owned(),
 						|| {
-							Ok(())
+							Err(create_error(crate::error::Error::RuntimeError("".into())))
 						},
 					)?;
 					Ok(())
 				},
 			)
 			.unwrap();
+		});
 	}
 
 	#[test]
