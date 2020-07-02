@@ -108,6 +108,7 @@ dependencies = [
 name = "jrsonnet-evaluator"
 version = "1.0.0"
 dependencies = [
+ "base64",
  "bincode",
  "closure",
  "indexmap",

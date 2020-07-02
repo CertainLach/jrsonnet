@@ -566,6 +566,22 @@ pub fn evaluate_apply(
 				Ok(Val::Str(format!("{:x}", md5::compute(&str.as_bytes())).into()))
 			}))?,
 			// faster
+			("std", "base64") => parse_args!(context, "std.base64", args, 1, [
+				0, input: [Val::Str | Val::Arr], vec![ValType::Arr, ValType::Str];
+			], {
+				Val::Str(match input {
+					Val::Str(s) => {
+						base64::encode(s.bytes().collect::<Vec<_>>()).into()
+					},
+					Val::Arr(a) => {
+						base64::encode(a.iter().map(|v| {
+							Ok(v.clone().try_cast_num("base64 array")? as u8)
+						}).collect::<Result<Vec<_>>>()?).into()
+					},
+					_ => unreachable!()
+				})
+			}),
+			// faster
 			("std", "join") => noinline!(parse_args!(context, "std.join", args, 2, [
 				0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
 				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
