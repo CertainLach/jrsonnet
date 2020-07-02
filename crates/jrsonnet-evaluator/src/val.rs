@@ -56,7 +56,7 @@ impl PartialEq for LazyVal {
 	}
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, PartialEq)]
 pub struct FuncDesc {
 	pub ctx: Context,
 	pub params: ParamsDesc,
@@ -120,7 +120,7 @@ pub enum Val {
 	Lazy(LazyVal),
 	Arr(Rc<Vec<Val>>),
 	Obj(ObjValue),
-	Func(FuncDesc),
+	Func(Rc<FuncDesc>),
 
 	// Library functions implemented in native
 	Intristic(Rc<str>, Rc<str>),
