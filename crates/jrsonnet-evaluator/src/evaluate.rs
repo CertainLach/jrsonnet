@@ -484,7 +484,14 @@ pub fn evaluate_apply(
 				0, a, vec![];
 				1, b, vec![];
 			], {
-				Val::Bool(a == b)
+				Val::Bool(primitive_equals(&a, &b)?)
+			}),
+			// faster
+			("std", "equals") => parse_args!(context, "std.equals", args, 2, [
+				0, a, vec![];
+				1, b, vec![];
+			], {
+				Val::Bool(equals(&a, &b)?)
 			}),
 			("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
 				0, a: [Val::Num]!!Val::Num, vec![ValType::Num];

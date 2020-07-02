@@ -380,7 +380,7 @@ impl EvaluationState {
 #[cfg(test)]
 pub mod tests {
 	use super::Val;
-	use crate::EvaluationState;
+	use crate::{create_error, EvaluationState, primitive_equals};
 	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
 
@@ -411,11 +411,11 @@ pub mod tests {
 	fn eval_state_standard() {
 		let state = EvaluationState::default();
 		state.with_stdlib();
-		assert_eq!(
-			state
-				.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#)
-				.unwrap(),
-			Val::Bool(true)
+		assert!(
+			primitive_equals(
+				&state.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#).unwrap(),
+				&Val::Bool(true),
+			).unwrap()
 		);
 	}
 
@@ -445,14 +445,14 @@ pub mod tests {
 	/// Asserts given code returns `true`
 	macro_rules! assert_eval {
 		($str: expr) => {
-			assert_eq!(eval!($str), Val::Bool(true))
+			assert!(primitive_equals(&eval!($str), &Val::Bool(true)).unwrap())
 		};
 	}
 
 	/// Asserts given code returns `false`
 	macro_rules! assert_eval_neg {
 		($str: expr) => {
-			assert_eq!(eval!($str), Val::Bool(false))
+			assert!(primitive_equals(&eval!($str), &Val::Bool(false)).unwrap())
 		};
 	}
 	macro_rules! assert_json {
@@ -663,9 +663,11 @@ pub mod tests {
 
 	#[test]
 	fn string_is_string() {
-		assert_eq!(
-			eval!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
-			Val::Bool(false)
+		assert!(
+			primitive_equals(
+				&eval!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
+				&Val::Bool(false),
+			).unwrap()
 		);
 	}
 
@@ -766,5 +768,11 @@ pub mod tests {
 				},
 			)
 		})
+	}
+
+	#[test]
+	fn equality(){
+		println!("{:?}", jrsonnet_parser::parse("{ x: 1, y: 2 } == { x: 1, y: 2 }", &ParserSettings::default()));
+		assert_eval!("{ x: 1, y: 2 } == { x: 1, y: 2 }")
 	}
 }

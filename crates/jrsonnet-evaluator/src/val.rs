@@ -111,7 +111,7 @@ impl Display for ValType {
 	}
 }
 
-#[derive(Debug, PartialEq, Clone)]
+#[derive(Debug, Clone)]
 pub enum Val {
 	Bool(bool),
 	Null,
@@ -209,6 +209,67 @@ impl Val {
 			)?
 			.try_cast_str("to json")?)
 		})
+	}
+}
+
+fn is_function_like(val: &Val) -> bool {
+	matches!(val, Val::Func(_) | Val::Intristic(_, _))
+}
+
+/// Implements std.primitiveEquals builtin
+pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
+	Ok(match (val_a.unwrap_if_lazy()?, val_b.unwrap_if_lazy()?) {
+		(Val::Bool(a), Val::Bool(b)) => a == b,
+		(Val::Null, Val::Null) => true,
+		(Val::Str(a), Val::Str(b)) => a == b,
+		(Val::Num(a), Val::Num(b)) => (a - b).abs() <= f64::EPSILON,
+		(Val::Arr(_), Val::Arr(_)) => create_error_result(Error::RuntimeError(
+			"primitiveEquals operates on primitive types, got array".into(),
+		))?,
+		(Val::Obj(_), Val::Obj(_)) => create_error_result(Error::RuntimeError(
+			"primitiveEquals operates on primitive types, got object".into(),
+		))?,
+		(a, b) if is_function_like(&a) && is_function_like(&b) => create_error_result(
+			Error::RuntimeError("cannot test equality of functions".into()),
+		)?,
+		(_, _) => false,
+	})
+}
+
+/// Native implementation of std.equals
+pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
+	let val_a = val_a.unwrap_if_lazy()?;
+	let val_b = val_b.unwrap_if_lazy()?;
+
+	if val_a.value_type()? != val_b.value_type()? {
+		return Ok(false);
+	}
+	match (val_a, val_b) {
+		// Cant test for ptr equality, because all fields needs to be evaluated
+		(Val::Arr(a), Val::Arr(b)) => {
+			if a.len() != b.len() {
+				return Ok(false);
+			}
+			for (a, b) in a.iter().zip(b.iter()) {
+				if !equals(&a.unwrap_if_lazy()?, &b.unwrap_if_lazy()?)? {
+					return Ok(false);
+				}
+			}
+			Ok(true)
+		}
+		(Val::Obj(a), Val::Obj(b)) => {
+			let fields = a.visible_fields();
+			if fields != b.visible_fields() {
+				return Ok(false);
+			}
+			for field in fields {
+				if !equals(&a.get(field.clone())?.unwrap(), &b.get(field)?.unwrap())? {
+					return Ok(false);
+				}
+			}
+			Ok(true)
+		}
+		(a, b) => Ok(primitive_equals(&a, &b)?),
 	}
 }
 
