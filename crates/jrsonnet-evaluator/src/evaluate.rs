@@ -857,7 +857,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.0;
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
-			with_state(|s| s.import_file(&import_location, path))?
+			push(
+				loc,
+				|| format!("import {:?}", path),
+				|| with_state(|s| s.import_file(&import_location, path)),
+			)?
 		}
 		ImportStr(path) => {
 			let mut tmp = loc
