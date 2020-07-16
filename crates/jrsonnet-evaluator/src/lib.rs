@@ -262,57 +262,19 @@ impl EvaluationState {
 		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}
 
-	pub fn add_global(&self, name: Rc<str>, value: Val) {
-		self.settings_mut().globals.insert(name, value);
-	}
-	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
-		self.settings_mut().ext_vars.insert(name, value);
-	}
-	pub fn set_max_trace(&self, max_trace: usize) {
-		self.settings_mut().max_stack_trace_size = max_trace;
-	}
-	pub fn set_max_stack(&self, max_stack: usize) {
-		self.settings_mut().max_stack_frames = max_stack;
-	}
-
+	/// Adds standard library global variable (std) to this evaluator
 	pub fn with_stdlib(&self) -> &Self {
+		use jrsonnet_stdlib::STDLIB_STR;
 		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
 		self.run_in_state(|| {
-			use jrsonnet_stdlib::STDLIB_STR;
-			let mut parsed = false;
-			#[cfg(feature = "codegenerated-stdlib")]
-			if !parsed {
-				parsed = true;
-				#[allow(clippy::all)]
-				let stdlib = {
-					use jrsonnet_parser::*;
-					include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
-				};
-				self.add_parsed_file(std_path.clone(), STDLIB_STR.to_owned().into(), stdlib)
-					.unwrap();
-			}
-
-			#[cfg(feature = "serialized-stdlib")]
-			if !parsed {
-				parsed = true;
-				self.add_parsed_file(
-					std_path.clone(),
-					STDLIB_STR.to_owned().into(),
-					bincode::deserialize(include_bytes!(concat!(
-						env!("OUT_DIR"),
-						"/stdlib.bincode"
-					)))
-					.expect("deserialize stdlib"),
-				)
-				.unwrap();
-			}
-
-			if !parsed {
-				self.add_file(std_path, STDLIB_STR.to_owned().into())
-					.unwrap();
-			}
-			let val = self.evaluate_file(&PathBuf::from("std.jsonnet")).unwrap();
-			self.add_global("std".into(), val);
+			self.add_parsed_file(
+				std_path.clone(),
+				STDLIB_STR.to_owned().into(),
+				builtin::get_parsed_stdlib(),
+			)
+			.unwrap();
+			let val = self.evaluate_file(&std_path).unwrap();
+			self.settings_mut().globals.insert("std".into(), val);
 		});
 		self
 	}
