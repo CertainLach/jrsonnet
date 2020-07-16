@@ -58,6 +58,7 @@ impl PartialEq for LazyVal {
 
 #[derive(Debug, PartialEq)]
 pub struct FuncDesc {
+	pub name: Rc<str>,
 	pub ctx: Context,
 	pub params: ParamsDesc,
 	pub body: LocExpr,

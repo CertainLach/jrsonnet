@@ -1,7 +1,8 @@
 use crate::{
-	context_creator, create_error, create_error_result, escape_string_json, future_wrapper,
-	lazy_val, manifest_json_ex, parse_args, push, with_state, Context, ContextCreator, Error,
-	FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val, ValType,
+	context_creator, create_error, create_error_result, equals, escape_string_json, future_wrapper,
+	lazy_val, manifest_json_ex, parse_args, primitive_equals, push, with_state, Context,
+	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	ValType,
 };
 use closure::closure;
 use jrsonnet_parser::{
@@ -21,6 +22,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 				Ok(lazy_val!(
 					closure!(clone b, clone params, clone context_creator, || Ok(evaluate_method(
 						context_creator.0(this.clone(), super_obj.clone())?,
+						b.name.clone(),
 						params.clone(),
 						b.value.clone(),
 					)))
@@ -32,20 +34,24 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 			b.name.clone(),
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
-					push(&b.value.1, "thunk", ||{
-						evaluate(
+						evaluate_named(
 							context_creator.0(this.clone(), super_obj.clone())?,
-							&b.value
+							&b.value,
+							b.name.clone()
 						)
-					})
 				)))
 			})),
 		)
 	}
 }
 
-pub fn evaluate_method(ctx: Context, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(FuncDesc { ctx, params, body })
+pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {
+	Val::Func(Rc::new(FuncDesc {
+		name,
+		ctx,
+		params,
+		body,
+	}))
 }
 
 pub fn evaluate_field_name(
@@ -289,15 +295,16 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				}
 				let name = name.unwrap();
 				new_members.insert(
-					name,
+					name.clone(),
 					ObjMember {
 						add: false,
 						visibility: Visibility::Hidden,
 						invoke: LazyBinding::Bindable(Rc::new(
-							closure!(clone value, clone context_creator, clone params, |this, super_obj| {
+							closure!(clone value, clone context_creator, clone params, clone name, |this, super_obj| {
 								// TODO: Assert
 								Ok(LazyVal::new_resolved(evaluate_method(
 									context_creator.0(this, super_obj)?,
+									name.clone(),
 									params.clone(),
 									value.clone(),
 								)))
@@ -647,10 +654,19 @@ pub fn evaluate_apply(
 			if tailstrict {
 				body()?
 			} else {
-				push(loc, "function call", body)?
+				push(loc, || format!("function <{}> call", f.name), body)?
 			}
 		}
 		v => create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(v.value_type()?))?,
+	})
+}
+
+pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: Rc<str>) -> Result<Val> {
+	use Expr::*;
+	let LocExpr(expr, _loc) = lexpr;
+	Ok(match &**expr {
+		Function(params, body) => evaluate_method(context, name, params.clone(), body.clone()),
+		_ => evaluate(context, lexpr)?,
 	})
 }
 
@@ -680,7 +696,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(
 			loc,
-			|| "var".to_owned(),
+			|| format!("variable <{}>", name),
 			|| Ok(Val::Lazy(context.binding(name.clone())?).unwrap_if_lazy()?),
 		)?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
@@ -789,7 +805,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
 		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
-		Function(params, body) => evaluate_method(context, params.clone(), body.clone()),
+		Function(params, body) => {
+			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
+		}
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(
 				&value.1,
