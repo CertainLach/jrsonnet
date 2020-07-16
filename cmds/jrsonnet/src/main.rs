@@ -1,6 +1,7 @@
 use clap::Clap;
-use jrsonnet_evaluator::{trace::CodeLocation, EvaluationState, LocError, StackTrace, Val};
+use jrsonnet_evaluator::Val;
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParserSettings};
+use jrsonnet_trace::{CompactFormat, ExplainingFormat, PathResolver, TraceFormat};
 use std::env::current_dir;
 use std::{collections::HashMap, path::PathBuf, rc::Rc, str::FromStr};
 
@@ -26,18 +27,16 @@ impl FromStr for Format {
 }
 
 #[derive(PartialEq)]
-enum TraceFormat {
-	CppJsonnet,
-	GoJsonnet,
-	Custom,
+enum TraceFormatName {
+	Compact,
+	Explaining,
 }
-impl FromStr for TraceFormat {
+impl FromStr for TraceFormatName {
 	type Err = &'static str;
 	fn from_str(s: &str) -> Result<Self, Self::Err> {
 		Ok(match s {
-			"cpp" => TraceFormat::CppJsonnet,
-			"go" => TraceFormat::GoJsonnet,
-			"default" => TraceFormat::Custom,
+			"compact" => TraceFormatName::Compact,
+			"explaining" => TraceFormatName::Explaining,
 			_ => return Err("no such format"),
 		})
 	}
@@ -67,8 +66,8 @@ impl FromStr for ExtStr {
 }
 
 #[derive(Clap)]
-#[clap(version = "0.1.0", author = "Lach <iam@lach.pw>")]
-struct Opts {
+#[clap(name = "jrsonnet", version, author)]
+pub struct Opts {
 	#[clap(long, about = "Disable global std variable")]
 	no_stdlib: bool,
 	#[clap(long, about = "Add external string", number_of_values = 1)]
@@ -81,8 +80,8 @@ struct Opts {
 	tla_code: Vec<ExtStr>,
 	#[clap(long, short = "f", default_value = "json", possible_values = &["none", "json", "yaml"], about = "Output format, wraps resulting value to corresponding std.manifest call")]
 	format: Format,
-	#[clap(long, default_value = "default", possible_values = &["cpp", "go", "default"], about = "Emulated needed stacktrace display")]
-	trace_format: TraceFormat,
+	#[clap(long, default_value = "compact", possible_values = &["compact", "explaining"], about = "Choose format of displayed stacktraces")]
+	trace_format: TraceFormatName,
 
 	#[clap(
 		long,
@@ -149,11 +148,18 @@ fn main_real(opts: Opts) {
 	for ExtStr { name, value } in opts.ext_code.iter().cloned() {
 		evaluator.add_ext_var(name.into(), evaluator.parse_evaluate_raw(&value).unwrap());
 	}
+
+	let resolver = PathResolver::Relative(std::env::current_dir().unwrap());
+	let trace_format: Box<dyn TraceFormat> = match opts.trace_format {
+		TraceFormatName::Compact => Box::new(CompactFormat { resolver }),
+		TraceFormatName::Explaining => Box::new(ExplainingFormat { resolver }),
+	};
+
 	let mut input = current_dir().unwrap();
 	input.push(opts.input.clone());
 	let code_string = String::from_utf8(std::fs::read(opts.input.clone()).unwrap()).unwrap();
-	if let Err(e) = evaluator.add_file(Rc::new(input.clone()), code_string.clone().into()) {
-		print_syntax_error(e, &input, &code_string);
+	if let Err(e) = evaluator.add_file(Rc::new(input.clone()), code_string.into()) {
+		trace_format.print_trace(&evaluator, &e).unwrap();
 		std::process::exit(1);
 	}
 	let result = evaluator.evaluate_file(&input);
@@ -191,16 +197,13 @@ fn main_real(opts: Opts) {
 			};
 			let v = evaluator.run_in_state(|| match opts.format {
 				Format::Json => Ok(Val::Str(v.into_json(opts.line_padding)?)),
-				Format::Yaml => {
-					evaluator.add_global("__tmp__to_yaml__".into(), v);
-					evaluator.parse_evaluate_raw("std.manifestYamlDoc(__tmp__to_yaml__, \"  \")")
-				}
+				Format::Yaml => Ok(Val::Str(v.into_yaml(opts.line_padding)?)),
 				_ => Ok(v),
 			});
 			let v = match v {
 				Ok(v) => v,
 				Err(err) => {
-					print_error(&err, evaluator, &opts);
+					trace_format.print_trace(&evaluator, &err).unwrap();
 					std::process::exit(1);
 				}
 			};
@@ -213,128 +216,8 @@ fn main_real(opts: Opts) {
 			}
 		}
 		Err(err) => {
-			print_error(&err, evaluator, &opts);
+			trace_format.print_trace(&evaluator, &err).unwrap();
 			std::process::exit(1);
 		}
-	}
-}
-
-fn print_error(err: &LocError, evaluator: EvaluationState, opts: &Opts) {
-	println!("Error: {:?}", err.0);
-	print_trace(&(err.1), evaluator, &opts);
-}
-
-fn print_syntax_error(error: jrsonnet_parser::ParseError, file: &PathBuf, code: &str) {
-	use annotate_snippets::{
-		display_list::{DisplayList, FormatOptions},
-		snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
-	};
-	//&("Expected: ".to_owned() + error.expected)
-	let origin = file.to_str().unwrap();
-	let error_message = format!("Expected: {}", error.expected);
-	let snippet = Snippet {
-		opt: FormatOptions {
-			color: true,
-			..Default::default()
-		},
-		title: Some(Annotation {
-			label: Some(&error_message),
-			id: None,
-			annotation_type: AnnotationType::Error,
-		}),
-		footer: vec![],
-		slices: vec![Slice {
-			source: &code,
-			line_start: 1,
-			origin: Some(origin),
-			fold: false,
-			annotations: vec![SourceAnnotation {
-				label: "At this position",
-				annotation_type: AnnotationType::Error,
-				range: (error.location.offset, error.location.offset + 1),
-			}],
-		}],
-	};
-
-	let dl = DisplayList::from(snippet);
-	println!("{}", dl);
-}
-
-fn print_trace(trace: &StackTrace, evaluator: EvaluationState, opts: &Opts) {
-	use annotate_snippets::{
-		display_list::{DisplayList, FormatOptions},
-		snippet::{Annotation, AnnotationType, Slice, Snippet, SourceAnnotation},
-	};
-	for item in trace.0.iter() {
-		let desc = &item.1;
-		let source = item.0.clone();
-		let start_end = evaluator.map_source_locations(&source.0, &[source.1, source.2]);
-		if opts.trace_format == TraceFormat::Custom {
-			let source_fragment: String = evaluator
-				.get_source(&source.0)
-				.unwrap()
-				.chars()
-				.skip(start_end[0].line_start_offset)
-				.take(start_end[1].line_end_offset - start_end[0].line_start_offset)
-				.collect();
-			let snippet = Snippet {
-				opt: FormatOptions {
-					color: true,
-					..Default::default()
-				},
-				title: Some(Annotation {
-					label: Some(&item.1),
-					id: None,
-					annotation_type: AnnotationType::Error,
-				}),
-				footer: vec![],
-				slices: vec![Slice {
-					source: &source_fragment,
-					line_start: start_end[0].line,
-					origin: Some(&source.0.to_str().unwrap()),
-					fold: false,
-					annotations: vec![SourceAnnotation {
-						label: desc,
-						annotation_type: AnnotationType::Error,
-						range: (
-							source.1 - start_end[0].line_start_offset,
-							source.2 - start_end[0].line_start_offset,
-						),
-					}],
-				}],
-			};
-
-			let dl = DisplayList::from(snippet);
-			println!("{}", dl);
-		} else {
-			print_jsonnet_pair(
-				source.0.to_str().unwrap(),
-				&start_end[0],
-				&start_end[1],
-				opts.trace_format == TraceFormat::GoJsonnet,
-			);
-		}
-	}
-}
-
-fn print_jsonnet_pair(file: &str, start: &CodeLocation, end: &CodeLocation, is_go: bool) {
-	if is_go {
-		print!("        ");
-	} else {
-		print!("  ");
-	}
-	print!("{}:", file);
-	if start.line == end.line {
-		// IDK why, but this is the behavior original jsonnet cpp impl shows
-		if start.column == end.column || !is_go && start.column + 1 == end.column {
-			println!("{}:{}", start.line, end.column)
-		} else {
-			println!("{}:{}-{}", start.line, start.column, end.column);
-		}
-	} else {
-		println!(
-			"({}:{})-({}:{})",
-			start.line, end.column, start.line, end.column
-		);
 	}
 }

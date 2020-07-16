@@ -11,11 +11,9 @@ edition = "2018"
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "1.0.0" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "1.0.0" }
-annotate-snippets = "0.8.0"
+jrsonnet-trace = { path = "../../crates/jrsonnet-trace", version = "1.0.0" }
 # TODO: Fix mimalloc compile errors, and use them
 mimallocator = "0.1.3"
 
 [dependencies.clap]
 version = "3.0.0-beta.1"
-default-features = false
-features = ["std", "derive"]
