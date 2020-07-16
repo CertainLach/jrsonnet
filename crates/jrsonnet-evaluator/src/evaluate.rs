@@ -508,6 +508,11 @@ pub fn evaluate_apply(
 			], {
 				Val::Num(x.floor())
 			}),
+			("std", "log") => parse_args!(context, "std.log", args, 2, [
+				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				Val::Num(n.ln())
+			}),
 			("std", "trace") => parse_args!(context, "std.trace", args, 2, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 				1, rest, vec![];
