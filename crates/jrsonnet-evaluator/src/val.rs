@@ -1,9 +1,9 @@
 use crate::{
 	create_error_result, evaluate,
 	function::{parse_function_call, place_args},
-	Context, Error, ObjValue, Result,
+	with_state, Context, Error, ObjValue, Result,
 };
-use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
+use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	fmt::{Debug, Display},
@@ -199,6 +199,28 @@ impl Val {
 					el!(Expr::Index(
 						el!(Expr::Var("std".into())),
 						el!(Expr::Str("manifestJsonEx".into()))
+					)),
+					ArgsDesc(vec![
+						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
+						Arg(None, el!(Expr::Str(" ".repeat(padding).into())))
+					]),
+					false
+				)),
+			)?
+			.try_cast_str("to json")?)
+		})
+	}
+	pub fn into_yaml(self, padding: usize) -> Result<Rc<str>> {
+		with_state(|s| {
+			let ctx = s
+				.create_default_context()?
+				.with_var("__tmp__to_json__".into(), self)?;
+			Ok(evaluate(
+				ctx,
+				&el!(Expr::Apply(
+					el!(Expr::Index(
+						el!(Expr::Var("std".into())),
+						el!(Expr::Str("manifestYamlDoc".into()))
 					)),
 					ArgsDesc(vec![
 						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
