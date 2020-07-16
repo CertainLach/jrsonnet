@@ -512,14 +512,14 @@ pub fn evaluate_apply(
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 				1, rest, vec![];
 			], {
-				eprint!("TRACE: ");
+				eprint!("TRACE:");
 				if let Some(loc) = loc {
 					with_state(|s|{
 						let locs = s.map_source_locations(&loc.0, &[loc.1]);
-						eprint!("{}:{} ", loc.0.display(), locs[0].line);
+						eprint!(" {}:{}", loc.0.file_name().unwrap().to_str().unwrap(), locs[0].line);
 					});
 				}
-				eprintln!("{}", str);
+				eprintln!(" {}", str);
 				rest
 			}),
 			("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
