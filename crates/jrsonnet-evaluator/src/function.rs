@@ -136,8 +136,8 @@ macro_rules! parse_args {
 
 #[test]
 fn test() -> Result<()> {
-	use jrsonnet_parser::*;
 	use crate::val::ValType;
+	use jrsonnet_parser::*;
 	let state = crate::EvaluationState::default();
 	let evaluator = state.with_stdlib();
 	let ctx = evaluator.create_default_context()?;

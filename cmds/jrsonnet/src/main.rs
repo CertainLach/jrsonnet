@@ -134,19 +134,30 @@ fn main() {
 
 fn main_real(opts: Opts) {
 	let evaluator = jrsonnet_evaluator::EvaluationState::default();
-	evaluator.set_max_trace(opts.max_trace);
-	evaluator.set_max_stack(opts.max_stack);
-	evaluator.set_import_resolver(Box::new(jrsonnet_evaluator::FileImportResolver {
-		library_paths: opts.jpath.clone(),
-	}));
+	{
+		let mut settings = evaluator.settings_mut();
+		settings.max_stack = opts.max_stack;
+		settings.max_trace = opts.max_trace;
+		settings.import_resolver = Box::new(jrsonnet_evaluator::FileImportResolver {
+			library_paths: opts.jpath.clone(),
+		});
+	}
 	if !opts.no_stdlib {
 		evaluator.with_stdlib();
 	}
 	for ExtStr { name, value } in opts.ext_str.iter().cloned() {
-		evaluator.add_ext_var(name.into(), Val::Str(value.into()));
+		evaluator
+			.settings_mut()
+			.ext_vars
+			.insert(name.into(), Val::Str(value.into()));
 	}
 	for ExtStr { name, value } in opts.ext_code.iter().cloned() {
-		evaluator.add_ext_var(name.into(), evaluator.parse_evaluate_raw(&value).unwrap());
+		evaluator.settings_mut().ext_vars.insert(
+			name.clone().into(),
+			evaluator
+				.parse_evaluate_raw(PathBuf::from(format!("ext_code {}", name)).into(), &value)
+				.unwrap(),
+		);
 	}
 
 	let resolver = PathResolver::Relative(std::env::current_dir().unwrap());
@@ -184,7 +195,10 @@ fn main_real(opts: Opts) {
 							.unwrap(),
 						);
 					}
-					evaluator.add_global("__tmp__tlf__".into(), Val::Func(f));
+					evaluator
+						.settings_mut()
+						.globals
+						.insert("__tmp__tlf__".into(), Val::Func(f));
 					evaluator
 						.evaluate_raw(el!(Expr::Apply(
 							el!(Expr::Var("__tmp__tlf__".into())),

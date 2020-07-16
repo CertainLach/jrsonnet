@@ -7,6 +7,7 @@
 
 extern crate test;
 
+mod builtin;
 mod ctx;
 mod dynamic;
 mod error;
@@ -15,8 +16,8 @@ mod function;
 mod import;
 mod map;
 mod obj;
-mod val;
 pub mod trace;
+mod val;
 
 pub use ctx::*;
 pub use dynamic::*;
@@ -26,9 +27,15 @@ pub use function::parse_function_call;
 pub use import::*;
 use jrsonnet_parser::*;
 pub use obj::*;
-use std::{cell::{Ref, RefCell, RefMut}, collections::HashMap, fmt::Debug, path::PathBuf, rc::Rc};
-pub use val::*;
+use std::{
+	cell::{Ref, RefCell, RefMut},
+	collections::HashMap,
+	fmt::Debug,
+	path::PathBuf,
+	rc::Rc,
+};
 use trace::{offset_to_location, CodeLocation};
+pub use val::*;
 
 type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
 #[derive(Clone)]
@@ -319,7 +326,7 @@ impl EvaluationState {
 				drop(data);
 				return Err(self.error(Error::StackOverflow));
 			} else {
-				*stack_depth+=1;
+				*stack_depth += 1;
 			}
 		}
 		let result = f();
@@ -355,30 +362,28 @@ impl EvaluationState {
 #[cfg(test)]
 pub mod tests {
 	use super::Val;
-	use crate::{create_error, EvaluationState, primitive_equals};
+	use crate::{create_error, primitive_equals, EvaluationState};
 	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
 
 	#[test]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
-		state.run_in_state(||{
+		state.run_in_state(|| {
 			state
-			.push(
-				&ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
-				|| "outer".to_owned(),
-				|| {
-					state.push(
-						&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
-						|| "inner".to_owned(),
-						|| {
-							Err(create_error(crate::error::Error::RuntimeError("".into())))
-						},
-					)?;
-					Ok(())
-				},
-			)
-			.unwrap();
+				.push(
+					&ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
+					|| "outer".to_owned(),
+					|| {
+						state.push(
+							&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
+							|| "inner".to_owned(),
+							|| Err(create_error(crate::error::Error::RuntimeError("".into()))),
+						)?;
+						Ok(())
+					},
+				)
+				.unwrap();
 		});
 	}
 
@@ -386,19 +391,23 @@ pub mod tests {
 	fn eval_state_standard() {
 		let state = EvaluationState::default();
 		state.with_stdlib();
-		assert!(
-			primitive_equals(
-				&state.parse_evaluate_raw(r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#).unwrap(),
-				&Val::Bool(true),
-			).unwrap()
-		);
+		assert!(primitive_equals(
+			&state
+				.parse_evaluate_raw(
+					Rc::new(PathBuf::from("raw.jsonnet")),
+					r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#
+				)
+				.unwrap(),
+			&Val::Bool(true),
+		)
+		.unwrap());
 	}
 
 	macro_rules! eval {
 		($str: expr) => {
 			EvaluationState::default()
 				.with_stdlib()
-				.parse_evaluate_raw($str)
+				.parse_evaluate_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str)
 				.unwrap()
 		};
 	}
@@ -406,15 +415,15 @@ pub mod tests {
 		($str: expr) => {{
 			let evaluator = EvaluationState::default();
 			evaluator.with_stdlib();
-			evaluator.run_in_state(||{
+			evaluator.run_in_state(|| {
 				evaluator
-					.parse_evaluate_raw($str)
+					.parse_evaluate_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str)
 					.unwrap()
 					.into_json(0)
 					.unwrap()
 					.replace("\n", "")
-			})
-		}}
+				})
+			}};
 	}
 
 	/// Asserts given code returns `true`
@@ -638,12 +647,11 @@ pub mod tests {
 
 	#[test]
 	fn string_is_string() {
-		assert!(
-			primitive_equals(
-				&eval!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
-				&Val::Bool(false),
-			).unwrap()
-		);
+		assert!(primitive_equals(
+			&eval!("local arr = 'hello'; (!std.isArray(arr)) && (!std.isString(arr))"),
+			&Val::Bool(false),
+		)
+		.unwrap());
 	}
 
 	#[test]
@@ -746,8 +754,14 @@ pub mod tests {
 	}
 
 	#[test]
-	fn equality(){
-		println!("{:?}", jrsonnet_parser::parse("{ x: 1, y: 2 } == { x: 1, y: 2 }", &ParserSettings::default()));
+	fn equality() {
+		println!(
+			"{:?}",
+			jrsonnet_parser::parse(
+				"{ x: 1, y: 2 } == { x: 1, y: 2 }",
+				&ParserSettings::default()
+			)
+		);
 		assert_eval!("{ x: 1, y: 2 } == { x: 1, y: 2 }")
 	}
 }
