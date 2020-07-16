@@ -46,7 +46,11 @@ pub enum Error {
 	ResolvedFileNotFound(PathBuf),
 	ImportBadFileUtf8(PathBuf),
 	ImportNotSupported(PathBuf, PathBuf),
-	ImportSyntaxError(jrsonnet_parser::ParseError),
+	ImportSyntaxError {
+		path: Rc<PathBuf>,
+		source_code: Rc<str>,
+		error: jrsonnet_parser::ParseError,
+	},
 
 	RuntimeError(Rc<str>),
 	StackOverflow,
