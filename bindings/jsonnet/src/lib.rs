@@ -68,13 +68,13 @@ impl ImportResolver for NativeImportResolver {
 pub extern "C" fn jsonnet_make() -> Box<EvaluationState> {
 	let state = EvaluationState::default();
 	state.with_stdlib();
-	state.set_import_resolver(Box::new(NativeImportResolver::default()));
+	state.settings_mut().import_resolver = Box::new(NativeImportResolver::default());
 	Box::new(state)
 }
 
 #[no_mangle]
 pub extern "C" fn jsonnet_max_stack(vm: &EvaluationState, v: c_uint) {
-	vm.set_max_stack(v as usize);
+	vm.settings_mut().max_stack = v as usize;
 }
 
 // jrsonnet currently have no GC, so these functions is no-op
@@ -273,7 +273,7 @@ pub extern "C" fn jsonnet_max_trace() {
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &EvaluationState, v: *const c_char) {
 	let cstr = CStr::from_ptr(v);
 	let path = PathBuf::from(cstr.to_str().unwrap());
-	let any_resolver = vm.import_resolver();
+	let any_resolver = &vm.settings().import_resolver;
 	let resolver = any_resolver
 		.as_any()
 		.downcast_ref::<NativeImportResolver>()

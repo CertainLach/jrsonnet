@@ -51,18 +51,23 @@ impl LazyBinding {
 	}
 }
 
-struct EvaluationSettings {
-	max_stack_frames: usize,
-	max_stack_trace_size: usize,
-	ext_vars: HashMap<Rc<str>, Val>,
-	globals: HashMap<Rc<str>, Val>,
-	import_resolver: Box<dyn ImportResolver>,
+pub struct EvaluationSettings {
+	/// Limits recursion by limiting stack frames
+	pub max_stack: usize,
+	/// Limit amount of stack trace items preserved
+	pub max_trace: usize,
+	/// Used for std.extVar
+	pub ext_vars: HashMap<Rc<str>, Val>,
+	/// Global variables are inserted in default context
+	pub globals: HashMap<Rc<str>, Val>,
+	/// Used to resolve file locations/contents
+	pub import_resolver: Box<dyn ImportResolver>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		EvaluationSettings {
-			max_stack_frames: 200,
-			max_stack_trace_size: 20,
+			max_stack: 200,
+			max_trace: 20,
 			globals: Default::default(),
 			ext_vars: Default::default(),
 			import_resolver: Box::new(DummyImportResolver),
@@ -80,10 +85,16 @@ struct EvaluationData {
 	str_files: HashMap<Rc<PathBuf>, Rc<str>>,
 }
 
-pub struct FileData(Rc<str>, LocExpr, Option<Val>);
+pub struct FileData {
+	source_code: Rc<str>,
+	parsed: LocExpr,
+	evaluated: Option<Val>,
+}
 #[derive(Default)]
 pub struct EvaluationStateInternals {
+	/// Internal state
 	data: RefCell<EvaluationData>,
+	/// Settings, safe to change at runtime
 	settings: RefCell<EvaluationSettings>,
 }
 
@@ -123,71 +134,71 @@ impl EvaluationState {
 	fn data_mut(&self) -> RefMut<EvaluationData> {
 		self.0.data.borrow_mut()
 	}
-	fn settings(&self) -> Ref<EvaluationSettings> {
+	pub fn settings(&self) -> Ref<EvaluationSettings> {
 		self.0.settings.borrow()
 	}
-	fn settings_mut(&self) -> RefMut<EvaluationSettings> {
+	pub fn settings_mut(&self) -> RefMut<EvaluationSettings> {
 		self.0.settings.borrow_mut()
 	}
 
-	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
-		self.settings_mut().import_resolver = resolver;
-	}
-	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
-		Ref::map(self.settings(), |s|&*s.import_resolver)
-	}
-
-	pub fn evaluate_file_to_json(
-		&self,
-		path: &PathBuf,
-	) -> std::result::Result<Rc<str>, LocError> {
-		self.import_file(&PathBuf::new(), &path).and_then(|v|v.into_json(4))
+	pub fn evaluate_file_to_json(&self, path: &PathBuf) -> std::result::Result<Rc<str>, LocError> {
+		self.import_file(&PathBuf::new(), &path)
+			.and_then(|v| v.into_json(4))
 	}
 	pub fn evaluate_snippet_to_json(
 		&self,
 		path: &PathBuf,
 		snippet: &str,
 	) -> std::result::Result<Rc<str>, LocError> {
-		self.parse_evaluate_raw_with_source(Rc::new(path.clone()), snippet).and_then(|v|v.into_json(4))
+		self.parse_evaluate_raw(Rc::new(path.clone()), snippet)
+			.and_then(|v| v.into_json(4))
 	}
 
-	pub fn add_file(
-		&self,
-		name: Rc<PathBuf>,
-		code: Rc<str>,
-	) -> std::result::Result<(), ParseError> {
-		self.data_mut().files.insert(
-			name.clone(),
-			FileData(
-				code.clone(),
-				parse(
-					&code,
-					&ParserSettings {
-						file_name: name,
-						loc_data: true,
-					},
-				)?,
-				None,
-			),
-		);
+	/// Parses and adds file to loaded
+	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
+		self.add_parsed_file(
+			path.clone(),
+			source_code.clone(),
+			parse(
+				&source_code,
+				&ParserSettings {
+					file_name: path.clone(),
+					loc_data: true,
+				},
+			)
+			.map_err(|error| {
+				create_error(Error::ImportSyntaxError {
+					error,
+					path,
+					source_code,
+				})
+			})?,
+		)?;
 
 		Ok(())
 	}
+
+	/// Adds file by source code and parsed expr
 	pub fn add_parsed_file(
 		&self,
 		name: Rc<PathBuf>,
-		code: Rc<str>,
+		source_code: Rc<str>,
 		parsed: LocExpr,
-	) -> std::result::Result<(), ()> {
-		self.data_mut()
-			.files
-			.insert(name, FileData(code, parsed, None));
+	) -> Result<()> {
+		self.data_mut().files.insert(
+			name,
+			FileData {
+				source_code,
+				parsed,
+				evaluated: None,
+			},
+		);
 
 		Ok(())
 	}
 	pub fn get_source(&self, name: &PathBuf) -> Option<Rc<str>> {
 		let ro_map = &self.data().files;
-		ro_map.get(name).map(|value| value.0.clone())
+		ro_map.get(name).map(|value| value.source_code.clone())
 	}
 	pub fn map_source_locations(&self, file: &PathBuf, locs: &[usize]) -> Vec<CodeLocation> {
 		offset_to_location(&self.get_source(file).unwrap(), locs)
@@ -200,50 +211,54 @@ impl EvaluationState {
 				let value = ro_map
 					.get(name)
 					.unwrap_or_else(|| panic!("file not added: {:?}", name));
-				if value.2.is_some() {
-					return Ok(value.2.clone().unwrap());
+				if value.evaluated.is_some() {
+					return Ok(value.evaluated.clone().unwrap());
 				}
-				value.1.clone()
+				value.parsed.clone()
 			};
 			let value = evaluate(self.create_default_context()?, &expr)?;
 			{
 				self.0
-					.data.borrow_mut()
+					.data
+					.borrow_mut()
 					.files
 					.get_mut(name)
 					.unwrap()
-					.2
+					.evaluated
 					.replace(value.clone());
 			}
 			Ok(value)
 		})
 	}
+	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+		Ok(self.settings().import_resolver.resolve_file(from, path)?)
+	}
+	pub fn load_file_contents(&self, path: &PathBuf) -> Result<Rc<str>> {
+		Ok(self.settings().import_resolver.load_file_contents(path)?)
+	}
 	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
-		let file_path = self.settings().import_resolver.resolve_file(from, path)?;
+		let file_path = self.resolve_file(from, path)?;
 		{
 			let files = &self.data().files;
 			if files.contains_key(&file_path) {
 				return self.evaluate_file(&file_path);
 			}
 		}
-		let contents = self.settings().import_resolver.load_file_contents(&file_path)?;
-		self.add_file(file_path.clone(), contents).map_err(|e| {
-			create_error(Error::ImportSyntaxError(e))
-		})?;
+		let contents = self.load_file_contents(&file_path)?;
+		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_file(&file_path)
 	}
 	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<str>> {
-		let path = self.settings().import_resolver.resolve_file(from, path)?;
+		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
-			let file_str = self.settings().import_resolver.load_file_contents(&path)?;
-			self.data_mut()
-				.str_files
-				.insert(path.clone(), file_str);
+			let file_str = self.load_file_contents(&path)?;
+			self.data_mut().str_files.insert(path.clone(), file_str);
 		}
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
 	}
 
-	pub fn parse_evaluate_raw_with_source(&self, source: Rc<PathBuf>, code: &str) -> Result<Val> {
+	/// Parses and evaluates snippet
+	pub fn parse_evaluate_raw(&self, source: Rc<PathBuf>, code: &str) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
@@ -254,10 +269,7 @@ impl EvaluationState {
 		.unwrap();
 		self.evaluate_raw(parsed)
 	}
-	pub fn parse_evaluate_raw(&self, code: &str) -> Result<Val> {
-		self.parse_evaluate_raw_with_source(Rc::new(PathBuf::from("raw.jsonnet")), code)
-	}
-
+	/// Evaluates parsed expression
 	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
 		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}
@@ -279,6 +291,7 @@ impl EvaluationState {
 		self
 	}
 
+	/// Creates context with all passed global variables
 	pub fn create_default_context(&self) -> Result<Context> {
 		let globals = &self.settings().globals;
 		let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
@@ -301,7 +314,7 @@ impl EvaluationState {
 		{
 			let mut data = self.data_mut();
 			let stack_depth = &mut data.stack_depth;
-			if *stack_depth > self.settings().max_stack_frames {
+			if *stack_depth > self.settings().max_stack {
 				// Error creation uses data, so i drop guard here
 				drop(data);
 				return Err(self.error(Error::StackOverflow));
