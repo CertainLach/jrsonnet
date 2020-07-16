@@ -12,7 +12,7 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 		return vec![];
 	}
 	let mut line = 1;
-	let mut column = 0;
+	let mut column = 1;
 	let max_offset = *offsets.iter().max().unwrap();
 
 	let mut offset_map = offsets
@@ -42,19 +42,19 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 				with_no_known_line_ending.push(out_idx);
 				out[out_idx].line = line;
 				out[out_idx].column = column;
-				out[out_idx].line_start_offset = this_line_offset + 1;
+				out[out_idx].line_start_offset = this_line_offset;
 				offset_map.pop();
 			}
 			_ => {}
 		}
 		if ch == '\n' {
 			line += 1;
-			column = 0;
+			column = 1;
 
 			for idx in with_no_known_line_ending.drain(..) {
 				out[idx].line_end_offset = pos;
 			}
-			this_line_offset = pos;
+			this_line_offset = pos + 1;
 
 			if pos == max_offset + 1 {
 				break;
@@ -84,13 +84,13 @@ pub mod tests {
 				CodeLocation {
 					line: 1,
 					column: 1,
-					line_start_offset: 1,
+					line_start_offset: 0,
 					line_end_offset: 11
 				},
 				CodeLocation {
 					line: 2,
 					column: 3,
-					line_start_offset: 12,
+					line_start_offset: 11,
 					line_end_offset: 67
 				}
 			]
