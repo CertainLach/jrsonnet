@@ -1,7 +1,4 @@
-use jrsonnet_evaluator::{
-	trace::{offset_to_location, CodeLocation},
-	EvaluationState, LocError,
-};
+use jrsonnet_evaluator::{trace::CodeLocation, EvaluationState, LocError};
 use std::path::PathBuf;
 
 /// How paths should be displayed

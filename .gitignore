@@ -4,3 +4,5 @@
 .vscode
 
 cache
+
+jsonnet-cpp

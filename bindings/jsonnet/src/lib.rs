@@ -65,11 +65,18 @@ impl ImportResolver for NativeImportResolver {
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_make() -> Box<EvaluationState> {
+pub extern "C" fn jsonnet_make() -> *mut EvaluationState {
 	let state = EvaluationState::default();
 	state.with_stdlib();
 	state.settings_mut().import_resolver = Box::new(NativeImportResolver::default());
-	Box::new(state)
+	Box::into_raw(Box::new(state))
+}
+
+/// # Safety
+#[no_mangle]
+#[allow(clippy::boxed_local)]
+pub unsafe extern "C" fn jsonnet_destroy(vm: *mut EvaluationState) {
+	Box::from_raw(vm);
 }
 
 #[no_mangle]
@@ -133,31 +140,31 @@ pub extern "C" fn jsonnet_json_extract_null(_vm: &EvaluationState, v: &Val) -> c
 pub unsafe extern "C" fn jsonnet_json_make_string(
 	_vm: &EvaluationState,
 	v: *const c_char,
-) -> Box<Val> {
+) -> *mut Val {
 	let cstr = CStr::from_ptr(v);
 	let str = cstr.to_str().unwrap();
-	Box::new(Val::Str(str.into()))
+	Box::into_raw(Box::new(Val::Str(str.into())))
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_json_make_number(_vm: &EvaluationState, v: c_double) -> Box<Val> {
-	Box::new(Val::Num(v))
+pub extern "C" fn jsonnet_json_make_number(_vm: &EvaluationState, v: c_double) -> *mut Val {
+	Box::into_raw(Box::new(Val::Num(v)))
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_json_make_bool(_vm: &EvaluationState, v: c_int) -> Box<Val> {
+pub extern "C" fn jsonnet_json_make_bool(_vm: &EvaluationState, v: c_int) -> *mut Val {
 	assert!(v == 0 || v == 1);
-	Box::new(Val::Bool(v == 1))
+	Box::into_raw(Box::new(Val::Bool(v == 1)))
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_json_make_null(_vm: &EvaluationState) -> Box<Val> {
-	Box::new(Val::Null)
+pub extern "C" fn jsonnet_json_make_null(_vm: &EvaluationState) -> *mut Val {
+	Box::into_raw(Box::new(Val::Null))
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> Box<Val> {
-	Box::new(Val::Arr(Rc::new(Vec::new())))
+pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> *mut Val {
+	Box::into_raw(Box::new(Val::Arr(Rc::new(Vec::new()))))
 }
 
 #[no_mangle]
@@ -175,8 +182,8 @@ pub extern "C" fn jsonnet_json_array_append(_vm: &EvaluationState, arr: &mut Val
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_json_make_object(_vm: &EvaluationState) -> Box<Val> {
-	Box::new(Val::Obj(ObjValue::new_empty()))
+pub extern "C" fn jsonnet_json_make_object(_vm: &EvaluationState) -> *mut Val {
+	Box::into_raw(Box::new(Val::Obj(ObjValue::new_empty())))
 }
 
 /// # Safety
@@ -233,9 +240,12 @@ pub unsafe extern "C" fn jsonnet_realloc(
 	std::alloc::realloc(buf, old_layout, sz)
 }
 
+/// # Safety
 #[no_mangle]
 #[allow(clippy::boxed_local)]
-pub extern "C" fn jsonnet_json_destroy(_vm: &EvaluationState, _v: Box<Val>) {}
+pub unsafe extern "C" fn jsonnet_json_destroy(_vm: &EvaluationState, v: *mut Val) {
+	Box::from_raw(v);
+}
 
 #[no_mangle]
 pub extern "C" fn jsonnet_import_callback() {
@@ -362,7 +372,3 @@ pub extern "C" fn jsonnet_evaluate_file_stream() {
 pub extern "C" fn jsonnet_evaluate_snippet_stream() {
 	todo!()
 }
-
-#[no_mangle]
-#[allow(clippy::boxed_local)]
-pub extern "C" fn jsonnet_destroy(_vm: Box<EvaluationState>) {}
