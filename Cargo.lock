@@ -63,8 +63,7 @@ checksum = "b1be3409f94d7bdceeb5f5fac551039d9b3f00e25da7a74fc4d33400a0d96368"
 [[package]]
 name = "clap"
 version = "3.0.0-beta.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "860643c53f980f0d38a5e25dfab6c3c93b2cb3aa1fe192643d17a293c6c41936"
+source = "git+https://github.com/clap-rs/clap?rev=48d308a8ab9e96d4b21336e428feee420dbac51d#48d308a8ab9e96d4b21336e428feee420dbac51d"
 dependencies = [
  "atty",
  "bitflags",
@@ -82,8 +81,7 @@ dependencies = [
 [[package]]
 name = "clap_derive"
 version = "3.0.0-beta.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "fb51c9e75b94452505acd21d929323f5a5c6c4735a852adbd39ef5fb1b014f30"
+source = "git+https://github.com/clap-rs/clap?rev=48d308a8ab9e96d4b21336e428feee420dbac51d#48d308a8ab9e96d4b21336e428feee420dbac51d"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -130,16 +128,26 @@ name = "jrsonnet"
 version = "1.0.0"
 dependencies = [
  "clap",
+ "jrsonnet-cli",
  "jrsonnet-evaluator",
  "jrsonnet-parser",
- "jrsonnet-trace",
  "mimallocator",
+]
+
+[[package]]
+name = "jrsonnet-cli"
+version = "0.1.0"
+dependencies = [
+ "clap",
+ "jrsonnet-evaluator",
+ "jrsonnet-parser",
 ]
 
 [[package]]
 name = "jrsonnet-evaluator"
 version = "1.0.0"
 dependencies = [
+ "annotate-snippets",
  "base64",
  "bincode",
  "closure",
@@ -147,6 +155,7 @@ dependencies = [
  "jrsonnet-parser",
  "jrsonnet-stdlib",
  "md5",
+ "pathdiff",
  "serde",
  "structdump",
 ]
@@ -168,22 +177,11 @@ name = "jrsonnet-stdlib"
 version = "1.0.0"
 
 [[package]]
-name = "jrsonnet-trace"
-version = "1.0.0"
-dependencies = [
- "annotate-snippets",
- "jrsonnet-evaluator",
- "jrsonnet-parser",
- "pathdiff",
-]
-
-[[package]]
 name = "jsonnet"
 version = "0.1.0"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-parser",
- "libc",
 ]
 
 [[package]]
@@ -264,9 +262,9 @@ checksum = "0c1a2897e69d986c7986747ebad425cf03746ec5e3e09bb3b2600f91301ba864"
 
 [[package]]
 name = "proc-macro-error"
-version = "0.4.12"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "18f33027081eba0a6d8aba6d1b1c3a3be58cbb12106341c2d5759fcd9b5277e7"
+checksum = "fc175e9777c3116627248584e8f8b3e2987405cabe1c0adf7d1dd28f09dc7880"
 dependencies = [
  "proc-macro-error-attr",
  "proc-macro2",
@@ -277,9 +275,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro-error-attr"
-version = "0.4.12"
+version = "1.0.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a5b4b77fdb63c1eca72173d68d24501c54ab1269409f6b672c85deb18af69de"
+checksum = "3cc9795ca17eb581285ec44936da7fc2335a3f34f2ddd13118b6f4d515435c50"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -382,9 +380,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.11.0"
+version = "0.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d326610f408c7a4eb6f51c37c330e496b08506c9457c9d34287ecc38809fb060"
+checksum = "203008d98caf094106cfaba70acfed15e18ed3ddb7d94e49baec153a2b462789"
 dependencies = [
  "unicode-width",
 ]
