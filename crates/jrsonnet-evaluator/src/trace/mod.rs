@@ -1,4 +1,7 @@
-use jrsonnet_evaluator::{trace::CodeLocation, EvaluationState, LocError};
+mod location;
+
+use crate::{EvaluationState, LocError};
+pub use location::*;
 use std::path::PathBuf;
 
 /// How paths should be displayed
@@ -33,17 +36,17 @@ impl PathResolver {
 pub trait TraceFormat {
 	fn write_trace(
 		&self,
-		out: &mut dyn std::io::Write,
+		out: &mut dyn std::fmt::Write,
 		evaluation_state: &EvaluationState,
 		error: &LocError,
-	) -> Result<(), std::io::Error>;
-	fn print_trace(
-		&self,
-		evaluation_state: &EvaluationState,
-		error: &LocError,
-	) -> Result<(), std::io::Error> {
-		self.write_trace(&mut std::io::stdout(), evaluation_state, error)
-	}
+	) -> Result<(), std::fmt::Error>;
+	// fn print_trace(
+	// 	&self,
+	// 	evaluation_state: &EvaluationState,
+	// 	error: &LocError,
+	// ) -> Result<(), std::fmt::Error> {
+	// 	self.write_trace(&mut std::fmt::stdout(), evaluation_state, error)
+	// }
 }
 
 fn print_code_location(
@@ -73,24 +76,25 @@ fn print_code_location(
 /// vanilla jsonnet like formatting
 pub struct CompactFormat {
 	pub resolver: PathResolver,
+	pub padding: usize,
 }
 
 impl TraceFormat for CompactFormat {
 	fn write_trace(
 		&self,
-		out: &mut dyn std::io::Write,
+		out: &mut dyn std::fmt::Write,
 		evaluation_state: &EvaluationState,
 		error: &LocError,
-	) -> Result<(), std::io::Error> {
+	) -> Result<(), std::fmt::Error> {
 		writeln!(out, "{:?}", error.0)?;
 		let file_names = (error.1)
 			.0
 			.iter()
 			.map(|el| {
-				let resolved_path = self.resolver.resolve(&(el.0).0);
+				let resolved_path = self.resolver.resolve(&el.location.0);
 				// TODO: Process all trace elements first
-				let location =
-					evaluation_state.map_source_locations(&(el.0).0, &[(el.0).1, (el.0).2]);
+				let location = evaluation_state
+					.map_source_locations(&el.location.0, &[el.location.1, el.location.2]);
 				(resolved_path, location)
 			})
 			.map(|(mut n, location)| {
@@ -105,23 +109,63 @@ impl TraceFormat for CompactFormat {
 			if i != 0 {
 				writeln!(out)?;
 			}
-			write!(out, "{:<w$}: {}", file, el.1, w = align)?;
+			write!(
+				out,
+				"{:<p$}{:<w$}: {}",
+				"",
+				file,
+				el.desc,
+				p = self.padding,
+				w = align
+			)?;
+		}
+		Ok(())
+	}
+}
+
+pub struct JSFormat;
+impl TraceFormat for JSFormat {
+	fn write_trace(
+		&self,
+		out: &mut dyn std::fmt::Write,
+		evaluation_state: &EvaluationState,
+		error: &LocError,
+	) -> Result<(), std::fmt::Error> {
+		writeln!(out, "{:?}", error.0)?;
+		for (i, item) in (error.1).0.iter().enumerate() {
+			if i != 0 {
+				writeln!(out)?;
+			}
+			let desc = &item.desc;
+			let source = item.location.clone();
+			let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+
+			write!(
+				out,
+				"    at {} ({}:{}:{})",
+				desc,
+				source.0.to_str().unwrap(),
+				start_end[0].line,
+				start_end[0].column,
+			)?;
 		}
 		Ok(())
 	}
 }
 
 /// rustc-like trace displaying
+#[cfg(feature = "explaining-traces")]
 pub struct ExplainingFormat {
 	pub resolver: PathResolver,
 }
+#[cfg(feature = "explaining-traces")]
 impl TraceFormat for ExplainingFormat {
 	fn write_trace(
 		&self,
-		out: &mut dyn std::io::Write,
+		out: &mut dyn std::fmt::Write,
 		evaluation_state: &EvaluationState,
 		error: &LocError,
-	) -> Result<(), std::io::Error> {
+	) -> Result<(), std::fmt::Error> {
 		use annotate_snippets::{
 			display_list::{DisplayList, FormatOptions},
 			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
@@ -129,8 +173,8 @@ impl TraceFormat for ExplainingFormat {
 		writeln!(out, "{:?}", error.0)?;
 		let trace = &error.1;
 		for item in trace.0.iter() {
-			let desc = &item.1;
-			let source = item.0.clone();
+			let desc = &item.desc;
+			let source = item.location.clone();
 			let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
 
 			let source_fragment: String = evaluation_state
