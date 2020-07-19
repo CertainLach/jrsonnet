@@ -15,7 +15,7 @@ pub struct ObjMember {
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
 	this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
-	value_cache: RefCell<HashMap<Rc<str>, Val>>,
+	value_cache: RefCell<HashMap<(Rc<str>, usize), Option<Val>>>,
 }
 #[derive(Clone)]
 pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
@@ -96,19 +96,15 @@ impl ObjValue {
 		visible_fields
 	}
 	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
-		if let Some(v) = self.0.value_cache.borrow().get(&key) {
-			return Ok(Some(v.clone()));
-		}
-		if let Some(v) = self.get_raw(&key, self)? {
-			let v = v.unwrap_if_lazy()?;
-			self.0.value_cache.borrow_mut().insert(key, v.clone());
-			Ok(Some(v))
-		} else {
-			Ok(None)
-		}
+		Ok(self.get_raw(key, self)?)
 	}
-	pub(crate) fn get_raw(&self, key: &str, real_this: &ObjValue) -> Result<Option<Val>> {
-		match (self.0.this_entries.get(key), &self.0.super_obj) {
+	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: &ObjValue) -> Result<Option<Val>> {
+		let cache_key = (key.clone(), Rc::as_ptr(&real_this.0) as usize);
+
+		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
+			return Ok(v.clone());
+		}
+		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
 			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
 			(Some(k), Some(s)) => {
 				let our = self.evaluate_this(k, real_this)?;
@@ -123,7 +119,12 @@ impl ObjValue {
 			}
 			(None, Some(s)) => s.get_raw(key, real_this),
 			(None, None) => Ok(None),
-		}
+		}?;
+		self.0
+			.value_cache
+			.borrow_mut()
+			.insert(cache_key, value.clone());
+		Ok(value)
 	}
 	fn evaluate_this(&self, v: &ObjMember, real_this: &ObjValue) -> Result<Val> {
 		Ok(v.invoke

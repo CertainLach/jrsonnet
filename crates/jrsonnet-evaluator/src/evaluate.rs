@@ -786,7 +786,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.super_obj()
 				.clone()
 				.expect("no super found")
-				.get_raw(&name, &context.this().clone().expect("no this found"))?
+				.get_raw(name, &context.this().clone().expect("no this found"))?
 				.expect("value not found")
 		}
 		Index(value, index) => {
