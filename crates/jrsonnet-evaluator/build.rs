@@ -35,7 +35,10 @@ fn main() {
 								Member::Field(FieldMember {
 									name: FieldName::Fixed(name),
 									..
-								}) if **name == *"join" || **name == *"manifestJsonEx" || **name == *"escapeStringJson" || **name == *"equals" || **name == *"base64"
+								})
+								if **name == *"join" || **name == *"manifestJsonEx" ||
+								**name == *"escapeStringJson" || **name == *"equals" ||
+								**name == *"base64" || **name == *"foldl" || **name == *"foldr"
 							)
 						})
 						.collect(),

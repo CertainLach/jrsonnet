@@ -557,6 +557,30 @@ pub fn evaluate_apply(
 						.collect(),
 				)))
 			}))?,
+			// faster
+			("std", "foldl") => noinline!(parse_args!(context, "std.foldl", args, 3, [
+				0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+				2, init, vec![];
+			], {
+				let mut acc = init;
+				for i in arr.iter().cloned() {
+					acc = func.evaluate_values(context.clone(), &[acc, i])?;
+				}
+				Ok(acc)
+			}))?,
+			// faster
+			("std", "foldr") => noinline!(parse_args!(context, "std.foldr", args, 3, [
+				0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
+				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+				2, init, vec![];
+			], {
+				let mut acc = init;
+				for i in arr.iter().rev().cloned() {
+					acc = func.evaluate_values(context.clone(), &[acc, i])?;
+				}
+				Ok(acc)
+			}))?,
 			("std", "char") => parse_args!(context, "std.char", args, 1, [
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
