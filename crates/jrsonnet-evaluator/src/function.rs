@@ -167,12 +167,12 @@ macro_rules! parse_args {
 			$(
 				match $name {
 					$($p(_))|+ => {},
-					_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd argument"), $nt, $name.value_type()?))?,
+					_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?))?,
 				};
 				$(
 					let $name = match $name {
 						$a(v) => v,
-						_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd argument"), $nt, $name.value_type()?))?,
+						_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?))?,
 					};
 				)*
 			)*
