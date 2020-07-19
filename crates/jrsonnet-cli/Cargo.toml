@@ -1,19 +1,15 @@
 [package]
-name = "jrsonnet"
-description = "Rust jsonnet implementation"
-version = "1.0.0"
+name = "jrsonnet-cli"
+description = "Utilities for building jrsonnet CLIs"
+version = "0.1.0"
 authors = ["Лач <iam@lach.pw>"]
-license = "MIT"
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "1.0.0" }
+jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "1.0.0", features = ["explaining-traces"] }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "1.0.0" }
-jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.1.0" }
-# TODO: Fix mimalloc compile errors, and use them
-mimallocator = "0.1.3"
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
