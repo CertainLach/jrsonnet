@@ -1,11 +1,12 @@
 use crate::{
 	create_error_result, evaluate,
-	function::{parse_function_call, place_args},
+	function::{parse_function_call, parse_function_call_map, place_args},
 	with_state, Context, Error, ObjValue, Result,
 };
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
+	collections::HashMap,
 	fmt::{Debug, Display},
 	rc::Rc,
 };
@@ -67,6 +68,22 @@ impl FuncDesc {
 	/// This function is always inlined to make tailstrict work
 	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
 		let ctx = parse_function_call(
+			call_ctx,
+			Some(self.ctx.clone()),
+			&self.params,
+			args,
+			tailstrict,
+		)?;
+		evaluate(ctx, &self.body)
+	}
+
+	pub fn evaluate_map(
+		&self,
+		call_ctx: Context,
+		args: &HashMap<Rc<str>, Val>,
+		tailstrict: bool,
+	) -> Result<Val> {
+		let ctx = parse_function_call_map(
 			call_ctx,
 			Some(self.ctx.clone()),
 			&self.params,

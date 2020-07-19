@@ -4,7 +4,10 @@ use crate::{
 };
 use closure::closure;
 use jrsonnet_parser::{ArgsDesc, ParamsDesc};
-use std::collections::HashMap;
+use std::{collections::HashMap, rc::Rc};
+
+const NO_DEFAULT_CONTEXT: &str =
+	"no default context set for call with defined default parameter value";
 
 /// Creates correct [context](Context) for function body evaluation, returning error on invalid call
 ///
@@ -45,12 +48,7 @@ pub fn parse_function_call(
 		let (ctx, expr) = if let Some(arg) = &positioned_args[id] {
 			(ctx.clone(), arg)
 		} else if let Some(default) = &p.1 {
-			(
-				body_ctx
-					.clone()
-					.expect("no default context set for call with defined default parameter value"),
-				default,
-			)
+			(body_ctx.clone().expect(NO_DEFAULT_CONTEXT), default)
 		} else {
 			create_error_result(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
 			unreachable!()
@@ -59,6 +57,55 @@ pub fn parse_function_call(
 			resolved_lazy_val!(evaluate(ctx, expr)?)
 		} else {
 			lazy_val!(closure!(clone ctx, clone expr, ||evaluate(ctx.clone(), &expr)))
+		};
+		out.insert(p.0.clone(), val);
+	}
+
+	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
+}
+
+pub fn parse_function_call_map(
+	ctx: Context,
+	body_ctx: Option<Context>,
+	params: &ParamsDesc,
+	args: &HashMap<Rc<str>, Val>,
+	tailstrict: bool,
+) -> Result<Context> {
+	let mut out = HashMap::new();
+	let mut positioned_args = vec![None; params.0.len()];
+	for (name, val) in args.iter() {
+		let idx = params.iter().position(|p| *p.0 == **name).ok_or_else(|| {
+			create_error(Error::UnknownFunctionParameter((&name as &str).to_owned()))
+		})?;
+
+		if idx >= params.len() {
+			create_error_result(Error::TooManyArgsFunctionHas(params.len()))?;
+		}
+		if positioned_args[idx].is_some() {
+			create_error_result(Error::BindingParameterASecondTime(params[idx].0.clone()))?;
+		}
+		positioned_args[idx] = Some(val.clone());
+	}
+	// Fill defaults
+	for (id, p) in params.iter().enumerate() {
+		let val = if let Some(arg) = positioned_args[id].take() {
+			resolved_lazy_val!(arg)
+		} else if let Some(default) = &p.1 {
+			if tailstrict {
+				resolved_lazy_val!(evaluate(
+					body_ctx.clone().expect(NO_DEFAULT_CONTEXT),
+					default
+				)?)
+			} else {
+				let body_ctx = body_ctx.clone();
+				let default = default.clone();
+				lazy_val!(move || {
+					evaluate(body_ctx.clone().expect(NO_DEFAULT_CONTEXT), &default)
+				})
+			}
+		} else {
+			create_error_result(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
+			unreachable!()
 		};
 		out.insert(p.0.clone(), val);
 	}
