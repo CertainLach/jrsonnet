@@ -38,7 +38,8 @@ fn main() {
 								})
 								if **name == *"join" || **name == *"manifestJsonEx" ||
 								**name == *"escapeStringJson" || **name == *"equals" ||
-								**name == *"base64" || **name == *"foldl" || **name == *"foldr"
+								**name == *"base64" || **name == *"foldl" || **name == *"foldr" ||
+								**name == *"sortImpl"
 							)
 						})
 						.collect(),

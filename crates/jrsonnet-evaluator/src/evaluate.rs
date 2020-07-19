@@ -10,7 +10,7 @@ use jrsonnet_parser::{
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
-use std::{collections::HashMap, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
@@ -580,6 +580,58 @@ pub fn evaluate_apply(
 					acc = func.evaluate_values(context.clone(), &[acc, i])?;
 				}
 				Ok(acc)
+			}))?,
+			// faster
+			("std", "sortImpl") => noinline!(parse_args!(context, "std.sort", args, 2, [
+				0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
+				1, keyF: [Val::Func]!!Val::Func, vec![ValType::Func];
+			], {
+				if arr.len() <= 1 {
+					return Ok(Val::Arr(arr))
+				}
+				let mut new_arr = arr.iter().cloned().collect::<Vec<_>>();
+				match keyF.evaluate_values(context.clone(), &[new_arr[0].clone()])? {
+					Val::Str(_) => {
+						let mut err = None;
+						new_arr.sort_by_cached_key(|k| {
+							match keyF.evaluate_values(context.clone(), &[k.clone()]) {
+								Ok(Val::Str(v)) => v,
+								Ok(_) => {
+									err = Some(create_error(crate::error::Error::RuntimeError("types of all array elements should equal".into())));
+									"".into()
+								}
+								Err(e) => {
+									err = Some(e);
+									"".into()
+								}
+							}
+						});
+						if let Some(e) = err {
+							return Err(e);
+						}
+					},
+					Val::Num(_) => {
+						let mut err = None;
+						new_arr.sort_unstable_by(|a, b| {
+							match (keyF.evaluate_values(context.clone(), &[a.clone()]), keyF.evaluate_values(context.clone(), &[b.clone()])) {
+								(Ok(Val::Num(a)), Ok(Val::Num(b))) => a.partial_cmp(&b).unwrap(),
+								(Ok(_a), Ok(_b)) => {
+									err = Some(create_error(crate::error::Error::RuntimeError("types of all array elements should equal".into())));
+									Ordering::Equal
+								}
+								(Err(e), _) | (_, Err(e)) => {
+									err = Some(e);
+									Ordering::Equal
+								}
+							}
+						});
+						if let Some(e) = err {
+							return Err(e);
+						}
+					},
+					_ => return Err(create_error(crate::error::Error::RuntimeError("keys should be number or string".into())))
+				}
+				Ok(Val::Arr(Rc::new(new_arr)))
 			}))?,
 			("std", "char") => parse_args!(context, "std.char", args, 1, [
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];

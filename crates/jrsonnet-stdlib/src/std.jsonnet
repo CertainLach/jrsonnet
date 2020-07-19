@@ -1131,7 +1131,7 @@
     std.makeArray(l, function(i) arr[l - i - 1]),
 
   // Merge-sort for long arrays and naive quicksort for shorter ones
-  sort(arr, keyF=id)::
+  sortImpl(arr, keyF)::
     local quickSort(arr, keyF=id) =
       local l = std.length(arr);
       if std.length(arr) <= 1 then
@@ -1165,6 +1165,9 @@
       local mid = std.floor(l / 2);
       local left = arr[:mid], right = arr[mid:];
       merge(std.sort(left, keyF=keyF), std.sort(right, keyF=keyF)),
+
+  sort(arr, keyF=id)::
+    std.sortImpl(arr, keyF),
 
   uniq(arr, keyF=id)::
     local f(a, b) =
