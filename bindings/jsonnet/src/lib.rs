@@ -1,67 +1,29 @@
-use jrsonnet_evaluator::{
-	create_error, create_error_result, Error, EvaluationState, ImportResolver, LazyBinding,
-	LazyVal, ObjMember, ObjValue, Result, Val,
-};
-use jrsonnet_parser::Visibility;
-use libc::{c_char, c_double, c_int, c_uint};
+#![feature(custom_inner_attributes)]
+
+pub mod import;
+pub mod interop;
+pub mod val_extract;
+pub mod val_make;
+pub mod val_modify;
+pub mod vars_tlas;
+
+use import::NativeImportResolver;
+use jrsonnet_evaluator::{EvaluationState, ManifestFormat, Val};
 use std::{
 	alloc::Layout,
-	any::Any,
-	cell::RefCell,
-	collections::HashMap,
 	ffi::{CStr, CString},
-	fs::File,
-	io::Read,
+	os::raw::{c_char, c_double, c_int, c_uint},
 	path::PathBuf,
 	rc::Rc,
 };
 
+/// WASM stub
 #[no_mangle]
-#[cfg(target = "wasm32-wasi")]
 pub extern "C" fn _start() {}
 
 #[no_mangle]
 pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.16.0\0"
-}
-
-#[derive(Default)]
-struct NativeImportResolver {
-	library_paths: RefCell<Vec<PathBuf>>,
-}
-impl NativeImportResolver {
-	fn add_jpath(&self, path: PathBuf) {
-		self.library_paths.borrow_mut().push(path);
-	}
-}
-impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		let mut new_path = from.clone();
-		new_path.push(path);
-		if new_path.exists() {
-			Ok(Rc::new(new_path))
-		} else {
-			for library_path in self.library_paths.borrow().iter() {
-				let mut cloned = library_path.clone();
-				cloned.push(path);
-				if cloned.exists() {
-					return Ok(Rc::new(cloned));
-				}
-			}
-			create_error_result(Error::ImportFileNotFound(from.clone(), path.clone()))
-		}
-	}
-	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
-		let mut file =
-			File::open(id).map_err(|_e| create_error(Error::ResolvedFileNotFound(id.clone())))?;
-		let mut out = String::new();
-		file.read_to_string(&mut out)
-			.map_err(|_e| create_error(Error::ImportBadFileUtf8(id.clone())))?;
-		Ok(out.into())
-	}
-	unsafe fn as_any(&self) -> &dyn Any {
-		self
-	}
 }
 
 #[no_mangle]
@@ -90,128 +52,12 @@ pub extern "C" fn jsonnet_gc_min_objects(_vm: &EvaluationState, _v: c_uint) {}
 #[no_mangle]
 pub extern "C" fn jsonnet_gc_growth_trigger(_vm: &EvaluationState, _v: c_double) {}
 
-// TODO
 #[no_mangle]
-pub extern "C" fn jsonnet_string_output(_vm: &EvaluationState, _v: c_int) {
-	todo!()
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_extract_string(_vm: &EvaluationState, v: &Val) -> *mut c_char {
-	match v.unwrap_if_lazy().unwrap() {
-		Val::Str(s) => CString::new(&*s as &str).unwrap().into_raw(),
-		_ => std::ptr::null_mut(),
-	}
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_json_extract_number(
-	_vm: &EvaluationState,
-	v: &Val,
-	out: &mut c_double,
-) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
-		Val::Num(n) => {
-			*out = n;
-			1
-		}
-		_ => 0,
-	}
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_json_extract_bool(_vm: &EvaluationState, v: &Val) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
-		Val::Bool(false) => 0,
-		Val::Bool(true) => 1,
-		_ => 2,
-	}
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_json_extract_null(_vm: &EvaluationState, v: &Val) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
-		Val::Null => 1,
-		_ => 0,
-	}
-}
-
-/// # Safety
-///
-/// This function is safe, if received v is a pointer to normal C string
-#[no_mangle]
-pub unsafe extern "C" fn jsonnet_json_make_string(
-	_vm: &EvaluationState,
-	v: *const c_char,
-) -> *mut Val {
-	let cstr = CStr::from_ptr(v);
-	let str = cstr.to_str().unwrap();
-	Box::into_raw(Box::new(Val::Str(str.into())))
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_make_number(_vm: &EvaluationState, v: c_double) -> *mut Val {
-	Box::into_raw(Box::new(Val::Num(v)))
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_make_bool(_vm: &EvaluationState, v: c_int) -> *mut Val {
-	assert!(v == 0 || v == 1);
-	Box::into_raw(Box::new(Val::Bool(v == 1)))
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_make_null(_vm: &EvaluationState) -> *mut Val {
-	Box::into_raw(Box::new(Val::Null))
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> *mut Val {
-	Box::into_raw(Box::new(Val::Arr(Rc::new(Vec::new()))))
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_array_append(_vm: &EvaluationState, arr: &mut Val, val: &Val) {
-	match arr {
-		Val::Arr(old) => {
-			// TODO: Mutate array, instead of recreating them
-			let mut new = Vec::new();
-			new.extend(old.iter().cloned());
-			new.push(val.clone());
-			*arr = Val::Arr(Rc::new(new));
-		}
-		_ => panic!("should receive array"),
-	}
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_json_make_object(_vm: &EvaluationState) -> *mut Val {
-	Box::into_raw(Box::new(Val::Obj(ObjValue::new_empty())))
-}
-
-/// # Safety
-///
-/// This function is safe if passed name is ok
-#[no_mangle]
-pub unsafe extern "C" fn jsonnet_json_object_append(
-	_vm: &EvaluationState,
-	obj: &mut Val,
-	name: *const c_char,
-	val: &Val,
-) {
-	match obj {
-		Val::Obj(old) => {
-			let mut new = HashMap::new();
-			new.insert(
-				CStr::from_ptr(name).to_str().unwrap().into(),
-				ObjMember {
-					add: false,
-					visibility: Visibility::Normal,
-					invoke: LazyBinding::Bound(LazyVal::new_resolved(val.clone())),
-					location: None,
-				},
-			);
-			let new_obj = ObjValue::new(Some(old.clone()), Rc::new(new));
-			*obj = Val::Obj(new_obj);
-		}
-		_ => panic!("should receive array"),
+pub extern "C" fn jsonnet_string_output(vm: &EvaluationState, v: c_int) {
+	match v {
+		1 => vm.set_manifest_format(ManifestFormat::None),
+		0 => vm.set_manifest_format(ManifestFormat::Json(4)),
+		_ => panic!("incorrect output format"),
 	}
 }
 
@@ -248,47 +94,13 @@ pub unsafe extern "C" fn jsonnet_json_destroy(_vm: &EvaluationState, v: *mut Val
 }
 
 #[no_mangle]
-pub extern "C" fn jsonnet_import_callback() {
-	todo!()
-}
-#[no_mangle]
 pub extern "C" fn jsonnet_native_callback() {
 	todo!()
 }
-#[no_mangle]
-pub extern "C" fn jsonnet_ext_var() {
-	todo!()
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_ext_code() {
-	todo!()
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_tla_var() {
-	todo!()
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_tla_code() {
-	todo!()
-}
-#[no_mangle]
-pub extern "C" fn jsonnet_max_trace() {
-	todo!()
-}
 
-/// # Safety
-///
-/// This function is safe, if received v is a pointer to normal C string
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_jpath_add(vm: &EvaluationState, v: *const c_char) {
-	let cstr = CStr::from_ptr(v);
-	let path = PathBuf::from(cstr.to_str().unwrap());
-	let any_resolver = &vm.settings().import_resolver;
-	let resolver = any_resolver
-		.as_any()
-		.downcast_ref::<NativeImportResolver>()
-		.unwrap();
-	resolver.add_jpath(path);
+pub extern "C" fn jsonnet_max_trace(vm: &EvaluationState, v: c_uint) {
+	vm.set_max_trace(v as usize)
 }
 
 /// # Safety
@@ -301,20 +113,19 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 	error: &mut c_int,
 ) -> *const c_char {
 	vm.run_in_state(|| {
-		use std::fmt::Write;
 		let filename = CStr::from_ptr(filename);
-		match vm.evaluate_file_to_json(&PathBuf::from(filename.to_str().unwrap())) {
+		match vm
+			.evaluate_file_raw_nocwd(&PathBuf::from(filename.to_str().unwrap()))
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest(v))
+		{
 			Ok(v) => {
 				*error = 0;
 				CString::new(&*v as &str).unwrap().into_raw()
 			}
 			Err(e) => {
 				*error = 1;
-				let mut out = String::new();
-				writeln!(out, "{:?}", e.0).unwrap();
-				for i in (e.1).0.iter() {
-					writeln!(out, "{:?}", i.0).unwrap();
-				}
+				let out = vm.stringify_err(&e);
 				CString::new(&out as &str).unwrap().into_raw()
 			}
 		}
@@ -332,24 +143,23 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	error: &mut c_int,
 ) -> *const c_char {
 	vm.run_in_state(|| {
-		use std::fmt::Write;
 		let filename = CStr::from_ptr(filename);
 		let snippet = CStr::from_ptr(snippet);
-		match vm.evaluate_snippet_to_json(
-			&PathBuf::from(filename.to_str().unwrap()),
-			&snippet.to_str().unwrap(),
-		) {
+		match vm
+			.evaluate_snippet_raw(
+				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				snippet.to_str().unwrap().into(),
+			)
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest(v))
+		{
 			Ok(v) => {
 				*error = 0;
 				CString::new(&*v as &str).unwrap().into_raw()
 			}
 			Err(e) => {
 				*error = 1;
-				let mut out = String::new();
-				writeln!(out, "{:?}", e.0).unwrap();
-				for i in (e.1).0.iter() {
-					writeln!(out, "{:?} ---- {}", i.0, i.1).unwrap();
-				}
+				let out = vm.stringify_err(&e);
 				CString::new(&out as &str).unwrap().into_raw()
 			}
 		}

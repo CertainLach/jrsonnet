@@ -56,10 +56,17 @@ pub enum Error {
 	StackOverflow,
 	FractionalIndex,
 	DivisionByZero,
+
+	StringManifestOutputIsNotAString,
+
+	ImportCallbackError(String),
 }
 
 #[derive(Clone, Debug)]
-pub struct StackTraceElement(pub ExprLocation, pub String);
+pub struct StackTraceElement {
+	pub location: ExprLocation,
+	pub desc: String,
+}
 #[derive(Debug, Clone)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
