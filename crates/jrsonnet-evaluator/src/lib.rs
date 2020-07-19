@@ -34,7 +34,7 @@ use std::{
 	path::PathBuf,
 	rc::Rc,
 };
-use trace::{offset_to_location, CodeLocation};
+use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
 
 type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
@@ -58,6 +58,13 @@ impl LazyBinding {
 	}
 }
 
+#[derive(Clone)]
+pub enum ManifestFormat {
+	Yaml(usize),
+	Json(usize),
+	None,
+}
+
 pub struct EvaluationSettings {
 	/// Limits recursion by limiting stack frames
 	pub max_stack: usize,
@@ -65,10 +72,16 @@ pub struct EvaluationSettings {
 	pub max_trace: usize,
 	/// Used for std.extVar
 	pub ext_vars: HashMap<Rc<str>, Val>,
+	/// TLA vars
+	pub tla_vars: HashMap<Rc<str>, Val>,
 	/// Global variables are inserted in default context
 	pub globals: HashMap<Rc<str>, Val>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: Box<dyn ImportResolver>,
+	/// Used in manifestification functions
+	pub manifest_format: ManifestFormat,
+	/// Used for bindings
+	pub trace_format: Box<dyn TraceFormat>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
@@ -77,7 +90,13 @@ impl Default for EvaluationSettings {
 			max_trace: 20,
 			globals: Default::default(),
 			ext_vars: Default::default(),
+			tla_vars: Default::default(),
 			import_resolver: Box::new(DummyImportResolver),
+			manifest_format: ManifestFormat::Json(4),
+			trace_format: Box::new(CompactFormat {
+				padding: 4,
+				resolver: trace::PathResolver::Absolute,
+			}),
 		}
 	}
 }
@@ -114,10 +133,10 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
 pub fn create_error(err: Error) -> LocError {
-	with_state(|s| s.error(err))
+	LocError(err, StackTrace(vec![]))
 }
 pub fn create_error_result<T>(err: Error) -> Result<T> {
-	Err(with_state(|s| s.error(err)))
+	Err(LocError(err, StackTrace(vec![])))
 }
 pub(crate) fn push<T>(
 	e: &Option<ExprLocation>,
@@ -134,33 +153,8 @@ pub(crate) fn push<T>(
 /// Maintains stack trace and import resolution
 #[derive(Default, Clone)]
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
+
 impl EvaluationState {
-	fn data(&self) -> Ref<EvaluationData> {
-		self.0.data.borrow()
-	}
-	fn data_mut(&self) -> RefMut<EvaluationData> {
-		self.0.data.borrow_mut()
-	}
-	pub fn settings(&self) -> Ref<EvaluationSettings> {
-		self.0.settings.borrow()
-	}
-	pub fn settings_mut(&self) -> RefMut<EvaluationSettings> {
-		self.0.settings.borrow_mut()
-	}
-
-	pub fn evaluate_file_to_json(&self, path: &PathBuf) -> std::result::Result<Rc<str>, LocError> {
-		self.import_file(&PathBuf::new(), &path)
-			.and_then(|v| v.into_json(4))
-	}
-	pub fn evaluate_snippet_to_json(
-		&self,
-		path: &PathBuf,
-		snippet: &str,
-	) -> std::result::Result<Rc<str>, LocError> {
-		self.parse_evaluate_raw(Rc::new(path.clone()), snippet)
-			.and_then(|v| v.into_json(4))
-	}
-
 	/// Parses and adds file to loaded
 	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
 		self.add_parsed_file(
@@ -211,49 +205,17 @@ impl EvaluationState {
 		offset_to_location(&self.get_source(file).unwrap(), locs)
 	}
 
-	pub fn evaluate_file(&self, name: &PathBuf) -> Result<Val> {
-		self.run_in_state(|| {
-			let expr: LocExpr = {
-				let ro_map = &self.data().files;
-				let value = ro_map
-					.get(name)
-					.unwrap_or_else(|| panic!("file not added: {:?}", name));
-				if value.evaluated.is_some() {
-					return Ok(value.evaluated.clone().unwrap());
-				}
-				value.parsed.clone()
-			};
-			let value = evaluate(self.create_default_context()?, &expr)?;
-			{
-				self.0
-					.data
-					.borrow_mut()
-					.files
-					.get_mut(name)
-					.unwrap()
-					.evaluated
-					.replace(value.clone());
-			}
-			Ok(value)
-		})
-	}
-	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		Ok(self.settings().import_resolver.resolve_file(from, path)?)
-	}
-	pub fn load_file_contents(&self, path: &PathBuf) -> Result<Rc<str>> {
-		Ok(self.settings().import_resolver.load_file_contents(path)?)
-	}
 	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
 			let files = &self.data().files;
 			if files.contains_key(&file_path) {
-				return self.evaluate_file(&file_path);
+				return self.evaluate_loaded_file_raw(&file_path);
 			}
 		}
 		let contents = self.load_file_contents(&file_path)?;
 		self.add_file(file_path.clone(), contents)?;
-		self.evaluate_file(&file_path)
+		self.evaluate_loaded_file_raw(&file_path)
 	}
 	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<str>> {
 		let path = self.resolve_file(from, path)?;
@@ -264,21 +226,27 @@ impl EvaluationState {
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
 	}
 
-	/// Parses and evaluates snippet
-	pub fn parse_evaluate_raw(&self, source: Rc<PathBuf>, code: &str) -> Result<Val> {
-		let parsed = parse(
-			&code,
-			&ParserSettings {
-				file_name: source,
-				loc_data: true,
-			},
-		)
-		.unwrap();
-		self.evaluate_raw(parsed)
-	}
-	/// Evaluates parsed expression
-	pub fn evaluate_raw(&self, code: LocExpr) -> Result<Val> {
-		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
+	fn evaluate_loaded_file_raw(&self, name: &PathBuf) -> Result<Val> {
+		let expr: LocExpr = {
+			let ro_map = &self.data().files;
+			let value = ro_map
+				.get(name)
+				.unwrap_or_else(|| panic!("file not added: {:?}", name));
+			if let Some(ref evaluated) = value.evaluated {
+				return Ok(evaluated.clone());
+			}
+			value.parsed.clone()
+		};
+		let value = evaluate(self.create_default_context()?, &expr)?;
+		{
+			self.data_mut()
+				.files
+				.get_mut(name)
+				.unwrap()
+				.evaluated
+				.replace(value.clone());
+		}
+		Ok(value)
 	}
 
 	/// Adds standard library global variable (std) to this evaluator
@@ -292,7 +260,7 @@ impl EvaluationState {
 				builtin::get_parsed_stdlib(),
 			)
 			.unwrap();
-			let val = self.evaluate_file(&std_path).unwrap();
+			let val = self.evaluate_loaded_file_raw(&std_path).unwrap();
 			self.settings_mut().globals.insert("std".into(), val);
 		});
 		self
@@ -321,10 +289,10 @@ impl EvaluationState {
 		{
 			let mut data = self.data_mut();
 			let stack_depth = &mut data.stack_depth;
-			if *stack_depth > self.settings().max_stack {
+			if *stack_depth > self.max_stack() {
 				// Error creation uses data, so i drop guard here
 				drop(data);
-				return Err(self.error(Error::StackOverflow));
+				return Err(create_error(Error::StackOverflow));
 			} else {
 				*stack_depth += 1;
 			}
@@ -332,15 +300,13 @@ impl EvaluationState {
 		let result = f();
 		self.data_mut().stack_depth -= 1;
 		if let Err(mut err) = result {
-			(err.1).0.push(StackTraceElement(e.clone(), frame_desc()));
+			(err.1).0.push(StackTraceElement {
+				location: e.clone(),
+				desc: frame_desc(),
+			});
 			return Err(err);
 		}
 		result
-	}
-
-	/// Creates error with stack trace
-	pub fn error(&self, err: Error) -> LocError {
-		LocError(err, StackTrace(vec![]))
 	}
 
 	/// Runs passed function in state (required, if function needs to modify stack trace)
@@ -356,6 +322,152 @@ impl EvaluationState {
 			}
 			result
 		})
+	}
+
+	pub fn stringify_err(&self, e: &LocError) -> String {
+		let mut out = String::new();
+		self.settings()
+			.trace_format
+			.write_trace(&mut out, self, e)
+			.unwrap();
+		out
+	}
+
+	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
+		Ok(match self.manifest_format() {
+			ManifestFormat::Yaml(padding) => val.into_yaml(padding)?,
+			ManifestFormat::Json(padding) => val.into_json(padding)?,
+			ManifestFormat::None => match val {
+				Val::Str(s) => s,
+				_ => return Err(create_error(Error::StringManifestOutputIsNotAString)),
+			},
+		})
+	}
+
+	/// If passed value is function - call with set TLA
+	pub fn with_tla(&self, val: Val) -> Result<Val> {
+		Ok(match val {
+			Val::Func(func) => func.evaluate_map(
+				self.create_default_context()?,
+				&self.settings().tla_vars,
+				true,
+			)?,
+			v => v,
+		})
+	}
+}
+
+/// Internals
+impl EvaluationState {
+	fn data(&self) -> Ref<EvaluationData> {
+		self.0.data.borrow()
+	}
+	fn data_mut(&self) -> RefMut<EvaluationData> {
+		self.0.data.borrow_mut()
+	}
+	pub fn settings(&self) -> Ref<EvaluationSettings> {
+		self.0.settings.borrow()
+	}
+	pub fn settings_mut(&self) -> RefMut<EvaluationSettings> {
+		self.0.settings.borrow_mut()
+	}
+}
+
+/// Raw methods evaluates passed values, but not performs TLA execution
+impl EvaluationState {
+	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
+		self.import_file(&std::env::current_dir().expect("cwd"), &name)
+	}
+	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
+		self.import_file(&PathBuf::from("."), &name)
+	}
+	/// Parses and evaluates snippet
+	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {
+		let parsed = parse(
+			&code,
+			&ParserSettings {
+				file_name: source.clone(),
+				loc_data: true,
+			},
+		)
+		.unwrap();
+		self.add_parsed_file(source, code, parsed.clone())?;
+		self.evaluate_expr_raw(parsed)
+	}
+	/// Evaluates parsed expression
+	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
+		evaluate(self.create_default_context()?, &code)
+	}
+}
+
+/// Settings utilities
+impl EvaluationState {
+	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
+		self.settings_mut().ext_vars.insert(name, value);
+	}
+	pub fn add_ext_str(&self, name: Rc<str>, value: Rc<str>) {
+		self.add_ext_var(name, Val::Str(value));
+	}
+	pub fn add_ext_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+		let value =
+			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("ext_code {}", name))), code)?;
+		self.add_ext_var(name, value);
+		Ok(())
+	}
+
+	pub fn add_tla(&self, name: Rc<str>, value: Val) {
+		self.settings_mut().tla_vars.insert(name, value);
+	}
+	pub fn add_tla_str(&self, name: Rc<str>, value: Rc<str>) {
+		self.add_tla(name, Val::Str(value));
+	}
+	pub fn add_tla_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+		let value =
+			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("tla_code {}", name))), code)?;
+		self.add_ext_var(name, value);
+		Ok(())
+	}
+
+	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+		Ok(self.settings().import_resolver.resolve_file(from, path)?)
+	}
+	pub fn load_file_contents(&self, path: &PathBuf) -> Result<Rc<str>> {
+		Ok(self.settings().import_resolver.load_file_contents(path)?)
+	}
+
+	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
+		Ref::map(self.settings(), |s| &*s.import_resolver)
+	}
+	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
+		self.settings_mut().import_resolver = resolver;
+	}
+
+	pub fn manifest_format(&self) -> ManifestFormat {
+		self.settings().manifest_format.clone()
+	}
+	pub fn set_manifest_format(&self, format: ManifestFormat) {
+		self.settings_mut().manifest_format = format;
+	}
+
+	pub fn trace_format(&self) -> Ref<dyn TraceFormat> {
+		Ref::map(self.settings(), |s| &*s.trace_format)
+	}
+	pub fn set_trace_format(&self, format: Box<dyn TraceFormat>) {
+		self.settings_mut().trace_format = format;
+	}
+
+	pub fn max_trace(&self) -> usize {
+		self.settings().max_trace
+	}
+	pub fn set_max_trace(&self, trace: usize) {
+		self.settings_mut().max_trace = trace;
+	}
+
+	pub fn max_stack(&self) -> usize {
+		self.settings().max_stack
+	}
+	pub fn set_max_stack(&self, trace: usize) {
+		self.settings_mut().max_stack = trace;
 	}
 }
 
@@ -393,9 +505,9 @@ pub mod tests {
 		state.with_stdlib();
 		assert!(primitive_equals(
 			&state
-				.parse_evaluate_raw(
+				.evaluate_snippet_raw(
 					Rc::new(PathBuf::from("raw.jsonnet")),
-					r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#
+					r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#.into()
 				)
 				.unwrap(),
 			&Val::Bool(true),
@@ -407,7 +519,7 @@ pub mod tests {
 		($str: expr) => {
 			EvaluationState::default()
 				.with_stdlib()
-				.parse_evaluate_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str)
+				.evaluate_snippet_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str.into())
 				.unwrap()
 		};
 	}
@@ -417,7 +529,7 @@ pub mod tests {
 			evaluator.with_stdlib();
 			evaluator.run_in_state(|| {
 				evaluator
-					.parse_evaluate_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str)
+					.evaluate_snippet_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str.into())
 					.unwrap()
 					.into_json(0)
 					.unwrap()
