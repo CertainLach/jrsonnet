@@ -83,14 +83,14 @@ pub mod tests {
 			vec![
 				CodeLocation {
 					line: 1,
-					column: 1,
+					column: 2,
 					line_start_offset: 0,
 					line_end_offset: 11
 				},
 				CodeLocation {
 					line: 2,
-					column: 3,
-					line_start_offset: 11,
+					column: 4,
+					line_start_offset: 12,
 					line_end_offset: 67
 				}
 			]
