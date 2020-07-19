@@ -19,10 +19,9 @@ It is fun to write one in Rust :D
 
 ## Bindings
 
-C bindings (libjsonnet.so) are WIP
-JS bindings are WIP too, but also available in WASM form
+Jrsonnet implements standard `libjsonnet.so` shared library, and should work as drop-in replacement for it
 
-See them in `./bindings/jsonnet/`
+See `./bindings/`
 
 ## Benchmark
 
