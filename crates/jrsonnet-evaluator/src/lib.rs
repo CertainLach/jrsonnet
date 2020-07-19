@@ -334,13 +334,15 @@ impl EvaluationState {
 	}
 
 	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
-		Ok(match self.manifest_format() {
-			ManifestFormat::Yaml(padding) => val.into_yaml(padding)?,
-			ManifestFormat::Json(padding) => val.into_json(padding)?,
-			ManifestFormat::None => match val {
-				Val::Str(s) => s,
-				_ => return Err(create_error(Error::StringManifestOutputIsNotAString)),
-			},
+		self.run_in_state(|| {
+			Ok(match self.manifest_format() {
+				ManifestFormat::Yaml(padding) => val.into_yaml(padding)?,
+				ManifestFormat::Json(padding) => val.into_json(padding)?,
+				ManifestFormat::None => match val {
+					Val::Str(s) => s,
+					_ => return Err(create_error(Error::StringManifestOutputIsNotAString)),
+				},
+			})
 		})
 	}
 
