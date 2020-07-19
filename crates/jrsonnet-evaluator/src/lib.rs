@@ -376,10 +376,10 @@ impl EvaluationState {
 /// Raw methods evaluates passed values, but not performs TLA execution
 impl EvaluationState {
 	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
-		self.import_file(&std::env::current_dir().expect("cwd"), &name)
+		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), &name))
 	}
 	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
-		self.import_file(&PathBuf::from("."), &name)
+		self.run_in_state(|| self.import_file(&PathBuf::from("."), &name))
 	}
 	/// Parses and evaluates snippet
 	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {
@@ -396,7 +396,7 @@ impl EvaluationState {
 	}
 	/// Evaluates parsed expression
 	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
-		evaluate(self.create_default_context()?, &code)
+		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}
 }
 
@@ -479,6 +479,7 @@ pub mod tests {
 	use std::{path::PathBuf, rc::Rc};
 
 	#[test]
+	#[should_panic]
 	fn eval_state_stacktrace() {
 		let state = EvaluationState::default();
 		state.run_in_state(|| {
