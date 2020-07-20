@@ -21,45 +21,21 @@ It is fun to write one in Rust :D
 
 Jrsonnet implements standard `libjsonnet.so` shared library, and should work as drop-in replacement for it
 
+WASM bindings are also available, Java bindings (Both JNI and WASM to .class compiled) are in progress
+
 See `./bindings/`
 
 ## Benchmark
 
-It is faster than golang implementation on mine kubernetes cluster configuration, which includes a lot of stuff, i.e prometheus operator
+This is fastest implementation of jsonnet, according to both official benchmarks
+and mine cluster configuration templating speed
 
-Mine configuration contains two manifests, first one contains a lot of plain values, second one - a lot of computations
+Official benchmark report are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b), and updated sometimes. Here it tested against golang, C++, and scala impl. As you can see, it is a lot faster
 
-- `gojsonnet` - golang impl
-- `../../../../jsonnet-rs/target/release/jrsonnet` - this repo impl
+You can generate this report by calling `make benchmarks`, but it probally won't work in standard setup, you need to link golang jsonnet impl to gojsonnet, and c++ impl to jsonnet.
 
-```markdown
-# Manifest 1 (plain values)
+TODO: Create docker container for easier benchmarking and/or benchmark in CI
 
-Benchmark #1: gojsonnet 02-prepare.jsonnet -J ../vendor/
-  Time (mean ± σ):     647.4 ms ±  12.8 ms    [User: 1.252 s, System: 0.069 s]
-  Range (min … max):   626.0 ms … 668.7 ms    10 runs
+Also, there is some ideas to improve performance even further, by i.e:
 
-Benchmark #2: ../../../../jsonnet-rs/target/release/jrsonnet 02-prepare.jsonnet -J ../vendor/
-  Time (mean ± σ):     163.7 ms ±   2.9 ms    [User: 138.5 ms, System: 24.6 ms]
-  Range (min … max):   161.4 ms … 174.0 ms    17 runs
-
-Summary
-  '../../../../jsonnet-rs/target/release/jrsonnet 02-prepare.jsonnet -J ../vendor/' ran
-    3.96 ± 0.10 times faster than 'gojsonnet 02-prepare.jsonnet -J ../vendor/'
-
-# Manifest 2 (computations)
-
-Benchmark #1: gojsonnet 03-deploy.jsonnet -J ../vendor/
-  Time (mean ± σ):     14.387 s ±  0.473 s    [User: 27.657 s, System: 0.226 s]
-  Range (min … max):   13.865 s … 15.147 s    10 runs
-
-Benchmark #2: ../../../../jsonnet-rs/target/release/jrsonnet 03-deploy.jsonnet -J ../vendor/
-  Time (mean ± σ):      2.373 s ±  0.083 s    [User: 2.304 s, System: 0.063 s]
-  Range (min … max):    2.286 s …  2.486 s    10 runs
-
-Summary
-  '../../../../jsonnet-rs/target/release/jrsonnet 03-deploy.jsonnet -J ../vendor/' ran
-    6.06 ± 0.29 times faster than 'gojsonnet 03-deploy.jsonnet -J ../vendor/'
-```
-
-However, go impl still can be faster in some cases, because it curretly have more stdlib functions implemented in native, instead of stdlib (I.e `std.base64`)
+- Mutating strings/arrays/objects instead of cloning on some operations (I.e concat), it should be possible by checking strong reference count, and mutating if there is only one reference
