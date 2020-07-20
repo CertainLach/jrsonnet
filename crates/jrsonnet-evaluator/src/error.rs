@@ -60,6 +60,7 @@ pub enum Error {
 	StringManifestOutputIsNotAString,
 
 	ImportCallbackError(String),
+	InvalidUnicodeCodepointGot(u32),
 }
 
 #[derive(Clone, Debug)]

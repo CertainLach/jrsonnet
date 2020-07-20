@@ -405,6 +405,15 @@ pub fn escape_string_json(s: &str) -> String {
 	out
 }
 
+pub fn to_string(val: &Val) -> Result<Rc<str>> {
+	Ok(match val {
+		Val::Bool(true) => "true".into(),
+		Val::Null => "null".into(),
+		Val::Str(s) => s.clone(),
+		v => v.clone().into_json(0)?,
+	})
+}
+
 #[test]
 fn json_test() {
 	assert_eq!(escape_string_json("\u{001f}"), "\"\\u001f\"")

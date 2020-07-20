@@ -1,4 +1,5 @@
 use crate::{
+	builtin::format::{format_arr, format_obj},
 	context_creator, create_error, create_error_result, equals, escape_string_json, future_wrapper,
 	lazy_val, manifest_json_ex, parse_args, primitive_equals, push, with_state, Context,
 	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
@@ -634,6 +635,17 @@ pub fn evaluate_apply(
 				Ok(Val::Arr(Rc::new(new_arr)))
 			}))?,
 			// faster
+			("std", "format") => parse_args!(context, "std.format", args, 2, [
+				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
+				1, vals: [Val::Arr|Val::Obj], vec![ValType::Arr, ValType::Obj];
+			], {
+				match vals {
+					Val::Arr(vals) => Val::Str(format_arr(&str, &vals).unwrap().into()),
+					Val::Obj(obj) => Val::Str(format_obj(&str, &obj).unwrap().into()),
+					_ => unreachable!()
+				}
+			}),
+			// faster
 			("std", "range") => parse_args!(context, "std.range", args, 2, [
 				0, from: [Val::Num]!!Val::Num, vec![ValType::Num];
 				0, to: [Val::Num]!!Val::Num, vec![ValType::Num];
@@ -648,9 +660,11 @@ pub fn evaluate_apply(
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
 				let mut out = String::new();
-				out.push(std::char::from_u32(n as u32).unwrap());
-				Val::Str(out.into())
-			}),
+				out.push(std::char::from_u32(n as u32).ok_or_else(||
+					create_error(crate::error::Error::InvalidUnicodeCodepointGot(n as u32))
+				)?);
+				Ok(Val::Str(out.into()))
+			})?,
 			("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
