@@ -633,6 +633,17 @@ pub fn evaluate_apply(
 				}
 				Ok(Val::Arr(Rc::new(new_arr)))
 			}))?,
+			// faster
+			("std", "range") => parse_args!(context, "std.range", args, 2, [
+				0, from: [Val::Num]!!Val::Num, vec![ValType::Num];
+				0, to: [Val::Num]!!Val::Num, vec![ValType::Num];
+			], {
+				let mut out = Vec::with_capacity((1+to as usize-from as usize).max(0));
+				for i in from as usize..=to as usize {
+					out.push(Val::Num(i as f64));
+				}
+				Val::Arr(Rc::new(out))
+			}),
 			("std", "char") => parse_args!(context, "std.char", args, 1, [
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
