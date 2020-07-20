@@ -38,7 +38,11 @@ pub struct TraceOpts {
 impl ConfigureState for TraceOpts {
 	fn configure(&self, state: &EvaluationState) -> Result<()> {
 		let resolver = PathResolver::Absolute;
-		match self.trace_format.as_ref().unwrap_or(&TraceFormatName::Compact) {
+		match self
+			.trace_format
+			.as_ref()
+			.unwrap_or(&TraceFormatName::Compact)
+		{
 			TraceFormatName::Compact => state.set_trace_format(Box::new(CompactFormat {
 				resolver,
 				padding: 4,
