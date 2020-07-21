@@ -252,10 +252,12 @@ pub fn parse_codes(mut str: &str) -> Result<Vec<Element>, FormatError> {
 		while offset != bytes.len() && bytes[offset] != b'%' {
 			offset += 1;
 		}
+		if offset != 0 {
+			out.push(Element::String(&str[0..offset]));
+		}
 		if offset == bytes.len() {
 			return Ok(out);
 		}
-		out.push(Element::String(&str[0..offset]));
 		str = &str[offset + 1..];
 		let (code, nstr) = parse_code(str)?;
 		str = nstr;
@@ -696,7 +698,14 @@ pub mod test_format {
 
 	#[test]
 	fn parse() {
-		println!("{:?}", parse_codes("Hello %s world!!! %s %(aaa)s ww"));
+		assert_eq!(
+			parse_codes(
+				"How much error budget is left looking at our %.3f%% availability gurantees?"
+			)
+			.unwrap()
+			.len(),
+			4
+		);
 	}
 
 	#[test]
