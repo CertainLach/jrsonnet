@@ -1,31 +1,32 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use crate::{
-	create_error, create_error_result, to_string, Error, LocError, ObjValue, Val, ValType,
-};
+use crate::{error::Error::*, throw, to_string, LocError, ObjValue, Result, Val, ValType};
 
-#[derive(Debug)]
+#[derive(Debug, Clone)]
 pub enum FormatError {
 	TruncatedFormatCode,
 	UnrecognizedConversionType(char),
-	ValueError(LocError),
 
 	NotEnoughValues,
 
 	CannotUseStarWidthWithObject,
 	MappingKeysRequired,
-	NoSuchField(Rc<str>),
+	NoSuchFormatField(Rc<str>),
 }
-impl From<LocError> for FormatError {
-	fn from(e: LocError) -> Self {
-		Self::ValueError(e)
+
+impl From<FormatError> for LocError {
+	fn from(e: FormatError) -> Self {
+		Self::new(Format(e))
 	}
 }
+
 use std::rc::Rc;
 use FormatError::*;
 
-pub fn try_parse_mapping_key(str: &str) -> Result<(&str, &str), FormatError> {
+type ParseResult<'t, T> = std::result::Result<(T, &'t str), FormatError>;
+
+pub fn try_parse_mapping_key(str: &str) -> ParseResult<&str> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -84,7 +85,7 @@ pub struct CFlags {
 	pub sign: bool,
 }
 
-pub fn try_parse_cflags(str: &str) -> Result<(CFlags, &str), FormatError> {
+pub fn try_parse_cflags(str: &str) -> ParseResult<CFlags> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -113,7 +114,7 @@ pub enum Width {
 	Star,
 	Fixed(usize),
 }
-pub fn try_parse_field_width(str: &str) -> Result<(Width, &str), FormatError> {
+pub fn try_parse_field_width(str: &str) -> ParseResult<Width> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -134,7 +135,7 @@ pub fn try_parse_field_width(str: &str) -> Result<(Width, &str), FormatError> {
 	Ok((Width::Fixed(out), &str[digits..]))
 }
 
-pub fn try_parse_precision(str: &str) -> Result<(Option<Width>, &str), FormatError> {
+pub fn try_parse_precision(str: &str) -> ParseResult<Option<Width>> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -147,7 +148,7 @@ pub fn try_parse_precision(str: &str) -> Result<(Option<Width>, &str), FormatErr
 }
 
 // Only skips
-pub fn try_parse_length_modifier(str: &str) -> Result<&str, FormatError> {
+pub fn try_parse_length_modifier(str: &str) -> ParseResult<()> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -159,10 +160,10 @@ pub fn try_parse_length_modifier(str: &str) -> Result<&str, FormatError> {
 			return Err(TruncatedFormatCode);
 		}
 	}
-	Ok(&str[idx..])
+	Ok(((), &str[idx..]))
 }
 
-#[derive(Debug)]
+#[derive(Debug, PartialEq)]
 pub enum ConvTypeV {
 	Decimal,
 	Octal,
@@ -179,7 +180,7 @@ pub struct ConvType {
 	caps: bool,
 }
 
-pub fn parse_conversion_type(str: &str) -> Result<(ConvType, &str), FormatError> {
+pub fn parse_conversion_type(str: &str) -> ParseResult<ConvType> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -214,7 +215,7 @@ pub struct Code<'s> {
 	convtype: ConvTypeV,
 	caps: bool,
 }
-pub fn parse_code(str: &str) -> Result<(Code, &str), FormatError> {
+pub fn parse_code(str: &str) -> ParseResult<Code> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -222,7 +223,7 @@ pub fn parse_code(str: &str) -> Result<(Code, &str), FormatError> {
 	let (cflags, str) = try_parse_cflags(str)?;
 	let (width, str) = try_parse_field_width(str)?;
 	let (precision, str) = try_parse_precision(str)?;
-	let str = try_parse_length_modifier(str)?;
+	let (_, str) = try_parse_length_modifier(str)?;
 	let (convtype, str) = parse_conversion_type(str)?;
 
 	Ok((
@@ -243,7 +244,7 @@ pub enum Element<'s> {
 	String(&'s str),
 	Code(Code<'s>),
 }
-pub fn parse_codes(mut str: &str) -> Result<Vec<Element>, FormatError> {
+pub fn parse_codes(mut str: &str) -> Result<Vec<Element>> {
 	let mut bytes = str.as_bytes();
 	let mut out = vec![];
 	let mut offset = 0;
@@ -453,7 +454,7 @@ pub fn format_code(
 	code: &Code,
 	width: usize,
 	precision: Option<usize>,
-) -> Result<(), FormatError> {
+) -> Result<()> {
 	let clfags = &code.cflags;
 	let (fpprec, iprec) = match precision {
 		Some(v) => (v, v),
@@ -565,22 +566,22 @@ pub fn format_code(
 		ConvTypeV::Char => match value.clone().unwrap_if_lazy()? {
 			Val::Num(n) => tmp_out.push(
 				std::char::from_u32(n as u32)
-					.ok_or_else(|| create_error(Error::InvalidUnicodeCodepointGot(n as u32)))?,
+					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
 			),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
-					create_error_result(Error::RuntimeError(
+					throw!(RuntimeError(
 						format!("%c expected 1 char string, got {}", s.chars().count()).into(),
-					))?;
+					));
 				}
 				tmp_out.push_str(&s);
 			}
 			_ => {
-				create_error_result(Error::TypeMismatch(
+				throw!(TypeMismatch(
 					"%c requires number/string",
 					vec![ValType::Num, ValType::Str],
 					value.value_type()?,
-				))?;
+				));
 			}
 		},
 		ConvTypeV::Percent => tmp_out.push('%'),
@@ -603,7 +604,7 @@ pub fn format_code(
 	Ok(())
 }
 
-pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> {
+pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 	let codes = parse_codes(&str)?;
 	let mut out = String::new();
 
@@ -616,7 +617,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> 
 				let width = match c.width {
 					Width::Star => {
 						if values.is_empty() {
-							return Err(FormatError::NotEnoughValues);
+							throw!(NotEnoughValues);
 						}
 						let value = &values[0];
 						values = &values[1..];
@@ -627,7 +628,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> 
 				let precision = match c.precision {
 					Some(Width::Star) => {
 						if values.is_empty() {
-							return Err(FormatError::NotEnoughValues);
+							throw!(NotEnoughValues);
 						}
 						let value = &values[0];
 						values = &values[1..];
@@ -642,7 +643,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> 
 					&Val::Null
 				} else {
 					if values.is_empty() {
-						return Err(FormatError::NotEnoughValues);
+						throw!(NotEnoughValues);
 					}
 					let value = &values[0];
 					values = &values[1..];
@@ -657,7 +658,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> 
 	Ok(out)
 }
 
-pub fn format_obj(str: &str, values: &ObjValue) -> Result<String, FormatError> {
+pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 	let codes = parse_codes(&str)?;
 	let mut out = String::new();
 
@@ -670,17 +671,17 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String, FormatError> {
 				// TODO: Operate on ref
 				let f: Rc<str> = c.mkey.into();
 				if f.is_empty() {
-					return Err(FormatError::MappingKeysRequired);
+					throw!(MappingKeysRequired);
 				}
 				let width = match c.width {
 					Width::Star => {
-						return Err(FormatError::CannotUseStarWidthWithObject);
+						throw!(CannotUseStarWidthWithObject);
 					}
 					Width::Fixed(n) => n,
 				};
 				let precision = match c.precision {
 					Some(Width::Star) => {
-						return Err(FormatError::CannotUseStarWidthWithObject);
+						throw!(CannotUseStarWidthWithObject);
 					}
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,
@@ -688,7 +689,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String, FormatError> {
 				let value = if let Some(v) = values.get(f.clone())? {
 					v
 				} else {
-					return Err(FormatError::NoSuchField(f));
+					throw!(NoSuchFormatField(f));
 				};
 
 				format_code(&mut out, &value, &c, width, precision)?;

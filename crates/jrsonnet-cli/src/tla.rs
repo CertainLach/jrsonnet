@@ -1,6 +1,6 @@
 use crate::{ConfigureState, ExtStr};
 use clap::Clap;
-use jrsonnet_evaluator::{EvaluationState, Result};
+use jrsonnet_evaluator::{error::Result, EvaluationState};
 
 #[derive(Clap)]
 // #[clap(help_heading = "TOP LEVEL ARGUMENTS")]

@@ -11,11 +11,13 @@ pub struct ObjMember {
 	pub location: Option<ExprLocation>,
 }
 
+// Field => This
+type CacheKey = (Rc<str>, usize);
 #[derive(Debug)]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
 	this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
-	value_cache: RefCell<HashMap<(Rc<str>, usize), Option<Val>>>,
+	value_cache: RefCell<HashMap<CacheKey, Option<Val>>>,
 }
 #[derive(Clone)]
 pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);

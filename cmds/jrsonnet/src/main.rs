@@ -1,6 +1,6 @@
 use clap::Clap;
 use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts};
-use jrsonnet_evaluator::{EvaluationState, Result};
+use jrsonnet_evaluator::{error::Result, EvaluationState};
 use std::{path::PathBuf, rc::Rc};
 
 #[global_allocator]

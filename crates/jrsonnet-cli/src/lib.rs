@@ -9,7 +9,7 @@ pub use tla::*;
 pub use trace::*;
 
 use clap::Clap;
-use jrsonnet_evaluator::{EvaluationState, FileImportResolver, Result};
+use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
 use std::path::PathBuf;
 
 pub trait ConfigureState {

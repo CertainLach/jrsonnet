@@ -197,7 +197,7 @@ parser! {
 			/ l(s,<keyword("function") _ "(" _ params:params(s) _ ")" _ expr:expr(s) {Expr::Function(params, expr)}>)
 			/ l(s,<assertion:assertion(s) _ ";" _ expr:expr(s) { Expr::AssertExpr(assertion, expr) }>)
 
-			/ l(s,<keyword("error") _ expr:expr(s) { Expr::Error(expr) }>)
+			/ l(s,<keyword("error") _ expr:expr(s) { Expr::ErrorStmt(expr) }>)
 
 		rule slice_part(s: &ParserSettings) -> Option<LocExpr>
 			= e:(_ e:expr(s) _{e})? {e}

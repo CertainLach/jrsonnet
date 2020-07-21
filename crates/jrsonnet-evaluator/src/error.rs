@@ -1,4 +1,4 @@
-use crate::{Val, ValType};
+use crate::{builtin::format::FormatError, Val, ValType};
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
@@ -61,6 +61,13 @@ pub enum Error {
 
 	ImportCallbackError(String),
 	InvalidUnicodeCodepointGot(u32),
+
+	Format(FormatError),
+}
+impl From<Error> for LocError {
+	fn from(e: Error) -> Self {
+		Self(e, StackTrace(vec![]))
+	}
 }
 
 #[derive(Clone, Debug)]
@@ -73,4 +80,17 @@ pub struct StackTrace(pub Vec<StackTraceElement>);
 
 #[derive(Debug, Clone)]
 pub struct LocError(pub Error, pub StackTrace);
+impl LocError {
+	pub fn new(e: Error) -> Self {
+		Self(e, StackTrace(vec![]))
+	}
+}
+
 pub type Result<V> = std::result::Result<V, LocError>;
+
+#[macro_export]
+macro_rules! throw {
+	($e: expr) => {
+		return Err($e.into());
+	};
+}

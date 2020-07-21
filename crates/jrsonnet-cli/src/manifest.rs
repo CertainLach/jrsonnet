@@ -1,6 +1,6 @@
 use crate::ConfigureState;
 use clap::Clap;
-use jrsonnet_evaluator::{EvaluationState, ManifestFormat, Result};
+use jrsonnet_evaluator::{error::Result, EvaluationState, ManifestFormat};
 use std::str::FromStr;
 
 pub enum ManifestFormatName {

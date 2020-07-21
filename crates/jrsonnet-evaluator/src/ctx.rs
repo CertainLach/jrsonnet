@@ -1,5 +1,5 @@
 use crate::{
-	create_error, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, Error,
+	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
 use std::{
@@ -61,11 +61,12 @@ impl Context {
 	}
 
 	pub fn binding(&self, name: Rc<str>) -> Result<LazyVal> {
-		self.0
+		Ok(self
+			.0
 			.bindings
 			.get(&name)
 			.cloned()
-			.ok_or_else(|| create_error(Error::UnknownVariable(name)))
+			.ok_or_else(|| UnknownVariable(name))?)
 	}
 	pub fn into_future(self, ctx: FutureContext) -> Context {
 		{

@@ -1,8 +1,9 @@
 use crate::ConfigureState;
 use clap::Clap;
 use jrsonnet_evaluator::{
+	error::Result,
 	trace::{CompactFormat, ExplainingFormat, PathResolver},
-	EvaluationState, Result,
+	EvaluationState,
 };
 use std::str::FromStr;
 

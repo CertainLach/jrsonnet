@@ -1,9 +1,10 @@
 use crate::{
 	builtin::format::{format_arr, format_obj},
-	context_creator, create_error, create_error_result, equals, escape_string_json, future_wrapper,
-	lazy_val, manifest_json_ex, parse_args, primitive_equals, push, with_state, Context,
-	ContextCreator, Error, FuncDesc, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
-	ValType,
+	context_creator, equals,
+	error::Error::*,
+	escape_string_json, future_wrapper, lazy_val, manifest_json_ex, parse_args, primitive_equals,
+	push, throw, with_state, Context, ContextCreator, FuncDesc, LazyBinding, LazyVal, LocError,
+	ObjMember, ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jrsonnet_parser::{
@@ -11,7 +12,7 @@ use jrsonnet_parser::{
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
-use std::{cmp::Ordering, collections::HashMap, rc::Rc};
+use std::{cmp::Ordering, collections::HashMap, path::PathBuf, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
@@ -79,10 +80,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
 		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
 		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
-		(op, o) => create_error_result(Error::UnaryOperatorDoesNotOperateOnType(
-			op,
-			o.value_type()?,
-		))?,
+		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type()?)),
 	})
 }
 
@@ -100,11 +98,11 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
 		(Val::Num(v1), Val::Num(v2)) => Val::new_checked_num(v1 + v2)?,
-		_ => create_error_result(Error::BinaryOperatorDoesNotOperateOnValues(
+		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type()?,
 			b.value_type()?,
-		))?,
+		)),
 	})
 }
 
@@ -145,7 +143,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::new_checked_num(v1 * v2)?,
 		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => {
 			if *v2 <= f64::EPSILON {
-				create_error_result(crate::Error::DivisionByZero)?
+				throw!(DivisionByZero)
 			}
 			Val::new_checked_num(v1 / v2)?
 		}
@@ -168,22 +166,22 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		}
 		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
 			if *v2 < 0.0 {
-				create_error_result(Error::RuntimeError("shift by negative exponent".into()))?
+				throw!(RuntimeError("shift by negative exponent".into()))
 			}
 			Val::Num(((*v1 as i32) << (*v2 as i32)) as f64)
 		}
 		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
 			if *v2 < 0.0 {
-				create_error_result(Error::RuntimeError("shift by negative exponent".into()))?
+				throw!(RuntimeError("shift by negative exponent".into()))
 			}
 			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
 		}
 
-		_ => create_error_result(Error::BinaryOperatorDoesNotOperateOnValues(
+		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			op,
 			a.value_type()?,
 			b.value_type()?,
-		))?,
+		)),
 	})
 }
 
@@ -218,7 +216,7 @@ pub fn evaluate_comp<T>(
 					}
 					Some(out.into_iter().flatten().flatten().collect())
 				}
-				_ => create_error_result(Error::InComprehensionCanOnlyIterateOverArray)?,
+				_ => throw!(InComprehensionCanOnlyIterateOverArray),
 			}
 		}
 	})
@@ -379,7 +377,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							},
 						);
 					}
-					v => create_error_result(Error::FieldMustBeStringGot(v.value_type()?))?,
+					v => throw!(FieldMustBeStringGot(v.value_type()?)),
 				}
 			}
 
@@ -409,7 +407,7 @@ pub fn evaluate_apply(
 	Ok(match value {
 		Val::Intristic(ns, name) => match (&ns as &str, &name as &str) {
 			// arr/string/function
-			("std", "length") => noinline!(parse_args!(context, "std.length", args, 1, [
+			("std", "length") => parse_args!(context, "std.length", args, 1, [
 				0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
 			], {
 				Ok(match x {
@@ -423,20 +421,20 @@ pub fn evaluate_apply(
 					),
 					_ => unreachable!(),
 				})
-			}))?,
+			})?,
 			// any
 			("std", "type") => parse_args!(context, "std.type", args, 1, [
 				0, x, vec![];
 			], {
-				Val::Str(x.value_type()?.name().into())
-			}),
+				Ok(Val::Str(x.value_type()?.name().into()))
+			})?,
 			// length, idx=>any
 			("std", "makeArray") => noinline!(parse_args!(context, "std.makeArray", args, 2, [
 				0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
 				1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			], {
 				if sz < 0.0 {
-					create_error_result(crate::error::Error::RuntimeError(format!("makeArray requires size >= 0, got {}", sz).into()))?;
+					throw!(RuntimeError(format!("makeArray requires size >= 0, got {}", sz).into()));
 				}
 				let mut out = Vec::with_capacity(sz as usize);
 				for i in 0..sz as usize {
@@ -455,8 +453,8 @@ pub fn evaluate_apply(
 					str.chars().count() == 1,
 					"std.codepoint should receive single char string"
 				);
-				Val::Num(str.chars().take(1).next().unwrap() as u32 as f64)
-			}),
+				Ok(Val::Num(str.chars().take(1).next().unwrap() as u32 as f64))
+			})?,
 			// object, includeHidden
 			("std", "objectFieldsEx") => {
 				noinline!(parse_args!(context, "std.objectFieldsEx",args, 2, [
@@ -478,42 +476,42 @@ pub fn evaluate_apply(
 				1, f: [Val::Str]!!Val::Str, vec![ValType::Str];
 				2, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
 			], {
-				Val::Bool(
+				Ok(Val::Bool(
 					obj.fields_visibility()
 						.into_iter()
 						.filter(|(_k, v)| *v || inc_hidden)
 						.any(|(k, _v)| *k == *f),
-				)
-			}),
+				))
+			})?,
 			("std", "primitiveEquals") => parse_args!(context, "std.primitiveEquals", args, 2, [
 				0, a, vec![];
 				1, b, vec![];
 			], {
-				Val::Bool(primitive_equals(&a, &b)?)
-			}),
+				Ok(Val::Bool(primitive_equals(&a, &b)?))
+			})?,
 			// faster
 			("std", "equals") => parse_args!(context, "std.equals", args, 2, [
 				0, a, vec![];
 				1, b, vec![];
 			], {
-				Val::Bool(equals(&a, &b)?)
-			}),
+				Ok(Val::Bool(equals(&a, &b)?))
+			})?,
 			("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
 				0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
 				1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
-				Val::Num(a % b)
-			}),
+				Ok(Val::Num(a % b))
+			})?,
 			("std", "floor") => parse_args!(context, "std.floor", args, 1, [
 				0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
-				Val::Num(x.floor())
-			}),
+				Ok(Val::Num(x.floor()))
+			})?,
 			("std", "log") => parse_args!(context, "std.log", args, 2, [
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
-				Val::Num(n.ln())
-			}),
+				Ok(Val::Num(n.ln()))
+			})?,
 			("std", "trace") => parse_args!(context, "std.trace", args, 2, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 				1, rest, vec![];
@@ -526,21 +524,21 @@ pub fn evaluate_apply(
 					});
 				}
 				eprintln!(" {}", str);
-				rest
-			}),
+				Ok(rest)
+			})?,
 			("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
 				0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 				1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
-				Val::Num(x.powf(n))
-			}),
+				Ok(Val::Num(x.powf(n)))
+			})?,
 			("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
 				0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
-				with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
-					|| create_error(crate::Error::UndefinedExternalVariable(x)),
-				)?
-			}),
+				Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
+					|| UndefinedExternalVariable(x),
+				)?)
+			})?,
 			("std", "filter") => noinline!(parse_args!(context, "std.filter", args, 2, [
 				0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 				1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
@@ -583,6 +581,7 @@ pub fn evaluate_apply(
 				Ok(acc)
 			}))?,
 			// faster
+			#[allow(non_snake_case)]
 			("std", "sortImpl") => noinline!(parse_args!(context, "std.sort", args, 2, [
 				0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 				1, keyF: [Val::Func]!!Val::Func, vec![ValType::Func];
@@ -598,7 +597,7 @@ pub fn evaluate_apply(
 							match keyF.evaluate_values(context.clone(), &[k.clone()]) {
 								Ok(Val::Str(v)) => v,
 								Ok(_) => {
-									err = Some(create_error(crate::error::Error::RuntimeError("types of all array elements should equal".into())));
+									err = Some(LocError::new(RuntimeError("types of all array elements should equal".into())));
 									"".into()
 								}
 								Err(e) => {
@@ -617,7 +616,7 @@ pub fn evaluate_apply(
 							match (keyF.evaluate_values(context.clone(), &[a.clone()]), keyF.evaluate_values(context.clone(), &[b.clone()])) {
 								(Ok(Val::Num(a)), Ok(Val::Num(b))) => a.partial_cmp(&b).unwrap(),
 								(Ok(_a), Ok(_b)) => {
-									err = Some(create_error(crate::error::Error::RuntimeError("types of all array elements should equal".into())));
+									err = Some(RuntimeError("types of all array elements should equal".into()).into());
 									Ordering::Equal
 								}
 								(Err(e), _) | (_, Err(e)) => {
@@ -630,21 +629,23 @@ pub fn evaluate_apply(
 							return Err(e);
 						}
 					},
-					_ => return Err(create_error(crate::error::Error::RuntimeError("keys should be number or string".into())))
+					_ => throw!(RuntimeError("keys should be number or string".into()))
 				}
 				Ok(Val::Arr(Rc::new(new_arr)))
 			}))?,
 			// faster
 			("std", "format") => parse_args!(context, "std.format", args, 2, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
-				1, vals: [Val::Arr|Val::Obj], vec![ValType::Arr, ValType::Obj];
+				1, vals, vec![]
 			], {
-				match vals {
-					Val::Arr(vals) => Val::Str(format_arr(&str, &vals).unwrap().into()),
-					Val::Obj(obj) => Val::Str(format_obj(&str, &obj).unwrap().into()),
-					_ => unreachable!()
-				}
-			}),
+				push(&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)), ||format!("std.format of {}", str), ||{
+					Ok(match vals {
+						Val::Arr(vals) => Val::Str(format_arr(&str, &vals)?.into()),
+						Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
+						o => Val::Str(format_arr(&str, &[o])?.into()),
+					})
+				})
+			})?,
 			// faster
 			("std", "range") => parse_args!(context, "std.range", args, 2, [
 				0, from: [Val::Num]!!Val::Num, vec![ValType::Num];
@@ -654,22 +655,22 @@ pub fn evaluate_apply(
 				for i in from as usize..=to as usize {
 					out.push(Val::Num(i as f64));
 				}
-				Val::Arr(Rc::new(out))
-			}),
+				Ok(Val::Arr(Rc::new(out)))
+			})?,
 			("std", "char") => parse_args!(context, "std.char", args, 1, [
 				0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 			], {
 				let mut out = String::new();
 				out.push(std::char::from_u32(n as u32).ok_or_else(||
-					create_error(crate::error::Error::InvalidUnicodeCodepointGot(n as u32))
+					InvalidUnicodeCodepointGot(n as u32)
 				)?);
 				Ok(Val::Str(out.into()))
 			})?,
 			("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
-				Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect()))
-			}),
+				Ok(Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect())))
+			})?,
 			("std", "md5") => noinline!(parse_args!(context, "std.md5", args, 1, [
 				0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
@@ -679,7 +680,7 @@ pub fn evaluate_apply(
 			("std", "base64") => parse_args!(context, "std.base64", args, 1, [
 				0, input: [Val::Str | Val::Arr], vec![ValType::Arr, ValType::Str];
 			], {
-				Val::Str(match input {
+				Ok(Val::Str(match input {
 					Val::Str(s) => {
 						base64::encode(s.bytes().collect::<Vec<_>>()).into()
 					},
@@ -689,8 +690,8 @@ pub fn evaluate_apply(
 						}).collect::<Result<Vec<_>>>()?).into()
 					},
 					_ => unreachable!()
-				})
-			}),
+				}))
+			})?,
 			// faster
 			("std", "join") => noinline!(parse_args!(context, "std.join", args, 2, [
 				0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
@@ -711,7 +712,7 @@ pub fn evaluate_apply(
 								out.reserve(items.len());
 								out.extend(items.iter().cloned());
 							} else {
-								create_error_result(crate::Error::RuntimeError("in std.join all items should be arrays".into()))?;
+								throw!(RuntimeError("in std.join all items should be arrays".into()));
 							}
 						}
 
@@ -729,7 +730,7 @@ pub fn evaluate_apply(
 								first = false;
 								out += &item;
 							} else {
-								create_error_result(crate::Error::RuntimeError("in std.join all items should be strings".into()))?;
+								throw!(RuntimeError("in std.join all items should be strings".into()));
 							}
 						}
 
@@ -742,18 +743,16 @@ pub fn evaluate_apply(
 			("std", "escapeStringJson") => parse_args!(context, "std.escapeStringJson", args, 1, [
 				0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
-				Val::Str(escape_string_json(&str_).into())
-			}),
+				Ok(Val::Str(escape_string_json(&str_).into()))
+			})?,
 			// Faster
 			("std", "manifestJsonEx") => parse_args!(context, "std.manifestJsonEx", args, 2, [
 				0, value, vec![];
 				1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
 			], {
-				Val::Str(manifest_json_ex(&value, &indent)?.into())
-			}),
-			(ns, name) => {
-				create_error_result(crate::Error::IntristicNotFound(ns.into(), name.into()))?
-			}
+				Ok(Val::Str(manifest_json_ex(&value, &indent)?.into()))
+			})?,
+			(ns, name) => throw!(IntristicNotFound(ns.into(), name.into())),
 		},
 		Val::Func(f) => {
 			let body = || f.evaluate(context, args, tailstrict);
@@ -763,7 +762,7 @@ pub fn evaluate_apply(
 				push(loc, || format!("function <{}> call", f.name), body)?
 			}
 		}
-		v => create_error_result(crate::Error::OnlyFunctionsCanBeCalledGot(v.value_type()?))?,
+		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type()?)),
 	})
 }
 
@@ -784,13 +783,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			context
 				.this()
 				.clone()
-				.ok_or_else(|| create_error(crate::Error::CantUseSelfOutsideOfObject))?,
+				.ok_or_else(|| CantUseSelfOutsideOfObject)?,
 		),
 		Literal(LiteralType::Dollar) => Val::Obj(
 			context
 				.dollar()
 				.clone()
-				.ok_or_else(|| create_error(crate::Error::NoTopLevelObjectFound))?,
+				.ok_or_else(|| NoTopLevelObjectFound)?,
 		),
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
@@ -825,34 +824,30 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					} else if let Some(Val::Str(n)) = v.get("__intristic_namespace__".into())? {
 						Val::Intristic(n, s)
 					} else {
-						create_error_result(crate::Error::NoSuchField(s))?
+						throw!(NoSuchField(s))
 					}
 				}
-				(Val::Obj(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Obj,
 					ValType::Str,
 					n.value_type()?,
-				))?,
+				)),
 
 				(Val::Arr(v), Val::Num(n)) => {
 					if n.fract() > f64::EPSILON {
-						create_error_result(crate::Error::FractionalIndex)?
+						throw!(FractionalIndex)
 					}
 					v.get(n as usize)
-						.ok_or_else(|| {
-							create_error(crate::Error::ArrayBoundsError(n as usize, v.len()))
-						})?
+						.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
 						.clone()
 						.unwrap_if_lazy()?
 				}
-				(Val::Arr(_), Val::Str(n)) => {
-					create_error_result(crate::Error::AttemptedIndexAnArrayWithString(n))?
-				}
-				(Val::Arr(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
+				(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Arr,
 					ValType::Num,
 					n.value_type()?,
-				))?,
+				)),
 
 				(Val::Str(s), Val::Num(n)) => Val::Str(
 					s.chars()
@@ -861,13 +856,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						.collect::<String>()
 						.into(),
 				),
-				(Val::Str(_), n) => create_error_result(crate::Error::ValueIndexMustBeTypeGot(
+				(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Str,
 					ValType::Num,
 					n.value_type()?,
-				))?,
+				)),
 
-				(v, _) => create_error_result(crate::Error::CantIndexInto(v.value_type()?))?,
+				(v, _) => throw!(CantIndexInto(v.value_type()?)),
 			}
 		}
 		LocalExpr(bindings, returned) => {
@@ -926,18 +921,18 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			if assertion_result {
 				evaluate(context, returned)?
 			} else if let Some(msg) = msg {
-				create_error_result(crate::Error::AssertionFailed(evaluate(context, msg)?))?
+				throw!(AssertionFailed(evaluate(context, msg)?));
 			} else {
-				create_error_result(crate::Error::AssertionFailed(Val::Null))?
+				throw!(AssertionFailed(Val::Null));
 			}
 		}
-		Error(e) => push(
+		ErrorStmt(e) => push(
 			&loc,
 			|| "error statement".to_owned(),
 			|| {
-				create_error_result(crate::Error::RuntimeError(
+				throw!(RuntimeError(
 					evaluate(context, e)?.try_cast_str("error text should be string")?,
-				))?
+				))
 			},
 		)?,
 		IfElse {
@@ -978,6 +973,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
-		Literal(LiteralType::Super) => return create_error_result(crate::Error::StandaloneSuper),
+		Literal(LiteralType::Super) => throw!(StandaloneSuper),
 	})
 }

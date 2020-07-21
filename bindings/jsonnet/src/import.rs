@@ -1,7 +1,8 @@
 //! Import resolution manipulation utilities
 
 use jrsonnet_evaluator::{
-	create_error, create_error_result, Error, EvaluationState, ImportResolver, Result,
+	error::{Error::*, Result},
+	throw, EvaluationState, ImportResolver,
 };
 use std::{
 	any::Any,
@@ -55,10 +56,9 @@ impl ImportResolver for CallbackImportResolver {
 		let result_str = result_raw.to_str().unwrap();
 		assert!(success == 0 || success == 1);
 		if success == 0 {
-			let result = result_str.to_owned();
-			let err = Err(create_error(Error::ImportCallbackError(result)));
 			unsafe { CString::from_raw(result_ptr) };
-			return err;
+			let result = result_str.to_owned();
+			throw!(ImportCallbackError(result));
 		}
 
 		let found_here_raw = unsafe { CStr::from_ptr(found_here) };
@@ -121,15 +121,14 @@ impl ImportResolver for NativeImportResolver {
 					return Ok(Rc::new(cloned));
 				}
 			}
-			create_error_result(Error::ImportFileNotFound(from.clone(), path.clone()))
+			throw!(ImportFileNotFound(from.clone(), path.clone()))
 		}
 	}
 	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
-		let mut file =
-			File::open(id).map_err(|_e| create_error(Error::ResolvedFileNotFound(id.clone())))?;
+		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
 		let mut out = String::new();
 		file.read_to_string(&mut out)
-			.map_err(|_e| create_error(Error::ImportBadFileUtf8(id.clone())))?;
+			.map_err(|_e| ImportBadFileUtf8(id.clone()))?;
 		Ok(out.into())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {

@@ -10,7 +10,7 @@ extern crate test;
 mod builtin;
 mod ctx;
 mod dynamic;
-mod error;
+pub mod error;
 mod evaluate;
 mod function;
 mod import;
@@ -21,7 +21,7 @@ mod val;
 
 pub use ctx::*;
 pub use dynamic::*;
-pub use error::*;
+use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
 pub use import::*;
@@ -132,12 +132,6 @@ thread_local! {
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
-pub fn create_error(err: Error) -> LocError {
-	LocError(err, StackTrace(vec![]))
-}
-pub fn create_error_result<T>(err: Error) -> Result<T> {
-	Err(LocError(err, StackTrace(vec![])))
-}
 pub(crate) fn push<T>(
 	e: &Option<ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
@@ -167,12 +161,10 @@ impl EvaluationState {
 					loc_data: true,
 				},
 			)
-			.map_err(|error| {
-				create_error(Error::ImportSyntaxError {
-					error,
-					path,
-					source_code,
-				})
+			.map_err(|error| ImportSyntaxError {
+				error,
+				path,
+				source_code,
 			})?,
 		)?;
 
@@ -292,7 +284,7 @@ impl EvaluationState {
 			if *stack_depth > self.max_stack() {
 				// Error creation uses data, so i drop guard here
 				drop(data);
-				return Err(create_error(Error::StackOverflow));
+				throw!(StackOverflow);
 			} else {
 				*stack_depth += 1;
 			}
@@ -340,7 +332,7 @@ impl EvaluationState {
 				ManifestFormat::Json(padding) => val.into_json(padding)?,
 				ManifestFormat::None => match val {
 					Val::Str(s) => s,
-					_ => return Err(create_error(Error::StringManifestOutputIsNotAString)),
+					_ => throw!(StringManifestOutputIsNotAString),
 				},
 			})
 		})
@@ -476,7 +468,7 @@ impl EvaluationState {
 #[cfg(test)]
 pub mod tests {
 	use super::Val;
-	use crate::{create_error, primitive_equals, EvaluationState};
+	use crate::{error::Error::*, primitive_equals, EvaluationState};
 	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
 
@@ -493,7 +485,7 @@ pub mod tests {
 						state.push(
 							&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
 							|| "inner".to_owned(),
-							|| Err(create_error(crate::error::Error::RuntimeError("".into()))),
+							|| Err(RuntimeError("".into()).into()),
 						)?;
 						Ok(())
 					},

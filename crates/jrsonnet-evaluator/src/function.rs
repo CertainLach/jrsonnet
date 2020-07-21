@@ -1,7 +1,4 @@
-use crate::{
-	create_error, create_error_result, evaluate, lazy_val, resolved_lazy_val, Context, Error,
-	Result, Val,
-};
+use crate::{error::Error::*, evaluate, lazy_val, resolved_lazy_val, throw, Context, Result, Val};
 use closure::closure;
 use jrsonnet_parser::{ArgsDesc, ParamsDesc};
 use std::{collections::HashMap, rc::Rc};
@@ -30,16 +27,16 @@ pub fn parse_function_call(
 			params
 				.iter()
 				.position(|p| *p.0 == *name)
-				.ok_or_else(|| create_error(Error::UnknownFunctionParameter(name.clone())))?
+				.ok_or_else(|| UnknownFunctionParameter(name.clone()))?
 		} else {
 			id
 		};
 
 		if idx >= params.len() {
-			create_error_result(Error::TooManyArgsFunctionHas(params.len()))?;
+			throw!(TooManyArgsFunctionHas(params.len()));
 		}
 		if positioned_args[idx].is_some() {
-			create_error_result(Error::BindingParameterASecondTime(params[idx].0.clone()))?;
+			throw!(BindingParameterASecondTime(params[idx].0.clone()));
 		}
 		positioned_args[idx] = Some(arg.1.clone());
 	}
@@ -50,8 +47,7 @@ pub fn parse_function_call(
 		} else if let Some(default) = &p.1 {
 			(body_ctx.clone().expect(NO_DEFAULT_CONTEXT), default)
 		} else {
-			create_error_result(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
-			unreachable!()
+			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
 		let val = if tailstrict {
 			resolved_lazy_val!(evaluate(ctx, expr)?)
@@ -74,15 +70,16 @@ pub fn parse_function_call_map(
 	let mut out = HashMap::new();
 	let mut positioned_args = vec![None; params.0.len()];
 	for (name, val) in args.iter() {
-		let idx = params.iter().position(|p| *p.0 == **name).ok_or_else(|| {
-			create_error(Error::UnknownFunctionParameter((&name as &str).to_owned()))
-		})?;
+		let idx = params
+			.iter()
+			.position(|p| *p.0 == **name)
+			.ok_or_else(|| UnknownFunctionParameter((&name as &str).to_owned()))?;
 
 		if idx >= params.len() {
-			create_error_result(Error::TooManyArgsFunctionHas(params.len()))?;
+			throw!(TooManyArgsFunctionHas(params.len()));
 		}
 		if positioned_args[idx].is_some() {
-			create_error_result(Error::BindingParameterASecondTime(params[idx].0.clone()))?;
+			throw!(BindingParameterASecondTime(params[idx].0.clone()));
 		}
 		positioned_args[idx] = Some(val.clone());
 	}
@@ -104,8 +101,7 @@ pub fn parse_function_call_map(
 				})
 			}
 		} else {
-			create_error_result(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
-			unreachable!()
+			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
 		out.insert(p.0.clone(), val);
 	}
@@ -123,7 +119,7 @@ pub(crate) fn place_args(
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		if id >= params.len() {
-			create_error_result(Error::TooManyArgsFunctionHas(params.len()))?;
+			throw!(TooManyArgsFunctionHas(params.len()));
 		}
 		positioned_args[id] = Some(arg);
 	}
@@ -134,8 +130,7 @@ pub(crate) fn place_args(
 		} else if let Some(default) = &p.1 {
 			evaluate(ctx.clone(), default)?
 		} else {
-			create_error_result(Error::FunctionParameterNotBoundInCall(p.0.clone()))?;
-			unreachable!()
+			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
 		out.insert(p.0.clone(), resolved_lazy_val!(val));
 	}
@@ -148,36 +143,39 @@ macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
 		$($id: expr, $name: ident $(: [$($p: path)|+] $(!! $a: path)?)?, $nt: expr);+ $(;)?
 	], $handler:block) => {{
-		use crate::Error;
+		use crate::{throw, error::Error::*};
 		let args = $args;
 		if args.len() > $total_args {
-			create_error_result(Error::TooManyArgsFunctionHas($total_args))?;
+			throw!(TooManyArgsFunctionHas($total_args));
 		}
 		$(
 			if args.len() <= $id {
-				create_error_result(Error::FunctionParameterNotBoundInCall(stringify!($name).into()))?;
+				throw!(FunctionParameterNotBoundInCall(stringify!($name).into()));
 			}
 			let $name = &args[$id];
 			if $name.0.is_some() {
 				if $name.0.as_ref().unwrap() != stringify!($name) {
-					create_error_result(Error::IntristicArgumentReorderingIsNotSupportedYet)?;
+					throw!(IntristicArgumentReorderingIsNotSupportedYet);
 				}
 			}
 			let $name = evaluate($ctx.clone(), &$name.1)?;
 			$(
 				match $name {
 					$($p(_))|+ => {},
-					_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?))?,
+					_ => throw!(TypeMismatch(
+						concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"),
+						$nt, $name.value_type()?
+					)),
 				};
 				$(
 					let $name = match $name {
 						$a(v) => v,
-						_ => create_error_result(Error::TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?))?,
+						_ =>throw!(TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?)),
 					};
 				)*
 			)*
 		)+
-		$handler
+		($handler as crate::Result<_>)
 	}};
 }
 
@@ -198,7 +196,9 @@ fn test() -> Result<()> {
 		], {
 			assert!((a - 2.0).abs() <= f64::EPSILON);
 			assert!((b - 1.0).abs() <= f64::EPSILON);
-		});
+			Ok(())
+		})
+		.unwrap();
 		Ok(())
 	})
 }

@@ -258,7 +258,7 @@ pub enum Expr {
 	/// importStr "file.txt"
 	ImportStr(PathBuf),
 	/// error "I'm broken"
-	Error(LocExpr),
+	ErrorStmt(LocExpr),
 	/// a(b, c)
 	Apply(LocExpr, ArgsDesc, bool),
 	/// a[b]

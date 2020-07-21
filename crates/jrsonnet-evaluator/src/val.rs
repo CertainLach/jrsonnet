@@ -1,7 +1,8 @@
 use crate::{
-	create_error_result, evaluate,
+	error::Error::*,
+	evaluate,
 	function::{parse_function_call, parse_function_call_map, place_args},
-	with_state, Context, Error, ObjValue, Result,
+	throw, with_state, Context, ObjValue, Result,
 };
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
 use std::{
@@ -157,14 +158,14 @@ impl Val {
 		if num.is_finite() {
 			Ok(Val::Num(num))
 		} else {
-			create_error_result(Error::RuntimeError("overflow".into()))
+			throw!(RuntimeError("overflow".into()))
 		}
 	}
 
 	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
 		let this_type = self.value_type()?;
 		if this_type != val_type {
-			create_error_result(Error::TypeMismatch(context, vec![val_type], this_type))
+			throw!(TypeMismatch(context, vec![val_type], this_type))
 		} else {
 			Ok(())
 		}
@@ -263,15 +264,15 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
 		(Val::Num(a), Val::Num(b)) => (a - b).abs() <= f64::EPSILON,
-		(Val::Arr(_), Val::Arr(_)) => create_error_result(Error::RuntimeError(
+		(Val::Arr(_), Val::Arr(_)) => throw!(RuntimeError(
 			"primitiveEquals operates on primitive types, got array".into(),
-		))?,
-		(Val::Obj(_), Val::Obj(_)) => create_error_result(Error::RuntimeError(
+		)),
+		(Val::Obj(_), Val::Obj(_)) => throw!(RuntimeError(
 			"primitiveEquals operates on primitive types, got object".into(),
-		))?,
-		(a, b) if is_function_like(&a) && is_function_like(&b) => create_error_result(
-			Error::RuntimeError("cannot test equality of functions".into()),
-		)?,
+		)),
+		(a, b) if is_function_like(&a) && is_function_like(&b) => {
+			throw!(RuntimeError("cannot test equality of functions".into()))
+		}
 		(_, _) => false,
 	})
 }
@@ -376,7 +377,7 @@ fn manifest_json_ex_buf(
 			buf.push('}');
 		}
 		Val::Func(_) | Val::Intristic(_, _) => {
-			create_error_result(Error::RuntimeError("tried to manifest function".into()))?
+			throw!(RuntimeError("tried to manifest function".into()))
 		}
 		Val::Lazy(_) => unreachable!(),
 	};
