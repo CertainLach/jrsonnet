@@ -636,11 +636,18 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String, FormatError> 
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,
 				};
-				if values.is_empty() {
-					return Err(FormatError::NotEnoughValues);
-				}
-				let value = &values[0];
-				values = &values[1..];
+
+				// %% should not consume a value
+				let value = if c.convtype == ConvTypeV::Percent {
+					&Val::Null
+				} else {
+					if values.is_empty() {
+						return Err(FormatError::NotEnoughValues);
+					}
+					let value = &values[0];
+					values = &values[1..];
+					value
+				};
 
 				format_code(&mut out, value, &c, width, precision)?;
 			}
@@ -719,5 +726,17 @@ pub mod test_format {
 		assert_eq!(format_arr("%-4o", &[Val::Num(8.0)]).unwrap(), "10  ");
 		assert_eq!(format_arr("%+-4o", &[Val::Num(8.0)]).unwrap(), "+10 ");
 		assert_eq!(format_arr("%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
+	}
+
+	#[test]
+	fn percent_doesnt_consumes_values() {
+		assert_eq!(
+			format_arr(
+				"How much error budget is left looking at our %.3f%% availability gurantees?",
+				&[Val::Num(4.0)]
+			)
+			.unwrap(),
+			"How much error budget is left looking at our 4.000% availability gurantees?"
+		);
 	}
 }
