@@ -75,36 +75,56 @@ impl Context {
 		ctx.unwrap()
 	}
 
-	pub fn with_var(&self, name: Rc<str>, value: Val) -> Result<Context> {
+	pub fn with_var(self, name: Rc<str>, value: Val) -> Context {
 		let mut new_bindings = HashMap::with_capacity(1);
 		new_bindings.insert(name, resolved_lazy_val!(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
 	pub fn extend(
-		&self,
+		self,
 		new_bindings: HashMap<Rc<str>, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
-	) -> Result<Context> {
-		let dollar = new_dollar.or_else(|| self.0.dollar.clone());
-		let this = new_this.or_else(|| self.0.this.clone());
-		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
-		let bindings = if new_bindings.is_empty() {
-			self.0.bindings.clone()
-		} else {
-			self.0.bindings.extend(new_bindings)
-		};
-		Ok(Context(Rc::new(ContextInternals {
-			dollar,
-			this,
-			super_obj,
-			bindings,
-		})))
+	) -> Context {
+		match Rc::try_unwrap(self.0) {
+			Ok(mut ctx) => {
+				// Extended context aren't used by anything else, we can freely mutate it without cloning
+				if let Some(dollar) = new_dollar {
+					ctx.dollar = Some(dollar);
+				}
+				if let Some(this) = new_this {
+					ctx.this = Some(this);
+				}
+				if let Some(super_obj) = new_super_obj {
+					ctx.super_obj = Some(super_obj);
+				}
+				if !new_bindings.is_empty() {
+					ctx.bindings = ctx.bindings.extend(new_bindings);
+				}
+				Context(Rc::new(ctx))
+			}
+			Err(ctx) => {
+				let dollar = new_dollar.or_else(|| ctx.dollar.clone());
+				let this = new_this.or_else(|| ctx.this.clone());
+				let super_obj = new_super_obj.or_else(|| ctx.super_obj.clone());
+				let bindings = if new_bindings.is_empty() {
+					ctx.bindings.clone()
+				} else {
+					ctx.bindings.clone().extend(new_bindings)
+				};
+				Context(Rc::new(ContextInternals {
+					dollar,
+					this,
+					super_obj,
+					bindings,
+				}))
+			}
+		}
 	}
 	pub fn extend_unbound(
-		&self,
+		self,
 		new_bindings: HashMap<Rc<str>, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
@@ -116,7 +136,7 @@ impl Context {
 		for (k, v) in new_bindings.into_iter() {
 			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
 		}
-		self.extend(new, new_dollar, this, super_obj)
+		Ok(self.extend(new, new_dollar, this, super_obj))
 	}
 	pub fn into_weak(self) -> WeakContext {
 		WeakContext(Rc::downgrade(&self.0))

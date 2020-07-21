@@ -10,12 +10,17 @@ struct LayeredHashMapInternals<K: Hash, V> {
 pub struct LayeredHashMap<K: Hash, V>(Rc<LayeredHashMapInternals<K, V>>);
 
 impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
-	pub fn extend(&self, new_layer: HashMap<K, V>) -> Self {
-		let super_map = self.clone();
-		LayeredHashMap(Rc::new(LayeredHashMapInternals {
-			parent: Some(super_map),
-			current: new_layer,
-		}))
+	pub fn extend(self, new_layer: HashMap<K, V>) -> Self {
+		match Rc::try_unwrap(self.0) {
+			Ok(mut map) => {
+				map.current.extend(new_layer);
+				LayeredHashMap(Rc::new(map))
+			}
+			Err(this) => LayeredHashMap(Rc::new(LayeredHashMapInternals {
+				parent: Some(LayeredHashMap(this)),
+				current: new_layer,
+			})),
+		}
 	}
 
 	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>

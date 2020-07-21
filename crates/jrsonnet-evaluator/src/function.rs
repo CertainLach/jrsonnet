@@ -57,7 +57,7 @@ pub fn parse_function_call(
 		out.insert(p.0.clone(), val);
 	}
 
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
+	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
 pub fn parse_function_call_map(
@@ -106,7 +106,7 @@ pub fn parse_function_call_map(
 		out.insert(p.0.clone(), val);
 	}
 
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
+	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
 pub(crate) fn place_args(
@@ -135,7 +135,7 @@ pub(crate) fn place_args(
 		out.insert(p.0.clone(), resolved_lazy_val!(val));
 	}
 
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None)?)
+	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
 #[macro_export]

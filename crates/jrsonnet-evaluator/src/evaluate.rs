@@ -209,7 +209,7 @@ pub fn evaluate_comp<T>(
 					for item in list.iter() {
 						let item = item.unwrap_if_lazy()?;
 						out.push(evaluate_comp(
-							context.with_var(var.clone(), item.clone())?,
+							context.clone().with_var(var.clone(), item.clone()),
 							value,
 							&specs[1..],
 						)?);
@@ -227,7 +227,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 	let future_this = FutureObjValue::new();
 	let context_creator = context_creator!(
 		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-			Ok(context.extend_unbound(
+			Ok(context.clone().extend_unbound(
 				new_bindings.clone().unwrap(),
 				context.dollar().clone().or_else(||this.clone()),
 				Some(this.unwrap()),
@@ -332,7 +332,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let new_bindings = FutureNewBindings::new();
 					let context_creator = context_creator!(
 						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-							Ok(context.extend_unbound(
+							Ok(context.clone().extend_unbound(
 								new_bindings.clone().unwrap(),
 								context.dollar().clone().or_else(||this.clone()),
 								None,
@@ -354,7 +354,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let key = evaluate(ctx.clone(), &obj.key)?;
 					let value = LazyBinding::Bindable(Rc::new(
 						closure!(clone ctx, clone obj.value, |this, _super_obj| {
-							Ok(LazyVal::new_resolved(evaluate(ctx.extend(HashMap::new(), None, this, None)?, &value)?))
+							Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(HashMap::new(), None, this, None), &value)?))
 						}),
 					));
 
