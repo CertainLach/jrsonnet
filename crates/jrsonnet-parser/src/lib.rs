@@ -266,7 +266,7 @@ parser! {
 						el!(Expr::Var("std".into())),
 						el!(Expr::Str("mod".into()))
 					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
-					true
+					false
 				))}
 				--
 						"-" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
