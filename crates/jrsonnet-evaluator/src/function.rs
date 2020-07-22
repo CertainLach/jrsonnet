@@ -20,7 +20,7 @@ pub fn parse_function_call(
 	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = HashMap::new();
+	let mut out = HashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		let idx = if let Some(name) = &arg.0 {
@@ -67,7 +67,7 @@ pub fn parse_function_call_map(
 	args: &HashMap<Rc<str>, Val>,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = HashMap::new();
+	let mut out = HashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (name, val) in args.iter() {
 		let idx = params
@@ -115,7 +115,7 @@ pub(crate) fn place_args(
 	params: &ParamsDesc,
 	args: &[Val],
 ) -> Result<Context> {
-	let mut out = HashMap::new();
+	let mut out = HashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		if id >= params.len() {
