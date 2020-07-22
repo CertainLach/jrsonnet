@@ -819,13 +819,23 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				evaluate(context, index)?,
 			) {
 				(Val::Obj(v), Val::Str(s)) => {
-					if let Some(v) = v.get(s.clone())? {
-						v.unwrap_if_lazy()?
-					} else if let Some(Val::Str(n)) = v.get("__intristic_namespace__".into())? {
-						Val::Intristic(n, s)
-					} else {
-						throw!(NoSuchField(s))
-					}
+					let sn = s.clone();
+					push(
+						&loc,
+						|| format!("field <{}> access", sn),
+						|| {
+							if let Some(v) = v.get(s.clone())? {
+								println!("{:?}", loc);
+								Ok(v.unwrap_if_lazy()?)
+							} else if let Some(Val::Str(n)) =
+								v.get("__intristic_namespace__".into())?
+							{
+								Ok(Val::Intristic(n, s))
+							} else {
+								throw!(NoSuchField(s))
+							}
+						},
+					)?
 				}
 				(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Obj,
