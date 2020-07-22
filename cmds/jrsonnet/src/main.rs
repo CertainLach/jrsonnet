@@ -3,6 +3,7 @@ use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts};
 use jrsonnet_evaluator::{error::Result, EvaluationState};
 use std::{path::PathBuf, rc::Rc};
 
+#[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
 
