@@ -1,7 +1,7 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use crate::{error::Error::*, throw, to_string, LocError, ObjValue, Result, Val, ValType};
+use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val, ValType};
 
 #[derive(Debug, Clone)]
 pub enum FormatError {
