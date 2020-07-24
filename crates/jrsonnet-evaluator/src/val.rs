@@ -407,7 +407,7 @@ pub fn escape_string_json(s: &str) -> String {
 }
 
 pub fn to_string(val: &Val) -> Result<Rc<str>> {
-	Ok(match val {
+	Ok(match val.unwrap_if_lazy()? {
 		Val::Bool(true) => "true".into(),
 		Val::Null => "null".into(),
 		Val::Str(s) => s.clone(),
