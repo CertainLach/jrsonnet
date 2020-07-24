@@ -37,7 +37,7 @@ pub struct ManifestOpts {
 	string: bool,
 	/// Numbed of spaces to pad output manifest with.
 	/// 0 for hard tabs, -1 for single line output
-	#[clap(long, default_value = "4")]
+	#[clap(long, default_value = "3")]
 	line_padding: usize,
 }
 impl ConfigureState for ManifestOpts {
