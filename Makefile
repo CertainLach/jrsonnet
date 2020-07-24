@@ -62,7 +62,7 @@ benchmarks: jsonnet-cpp jsonnet-sjsonnet
 	cd ../perf_tests/
 
 	$(call bench,large_string_join.jsonnet)
-	golang overflows os stack on this benchmark
+	# golang overflows os stack on this benchmark
 	$(call bench-no-go,large_string_template.jsonnet)
 	$(call bench,realistic1.jsonnet)
 	$(call bench,realistic2.jsonnet)
