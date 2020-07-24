@@ -470,7 +470,7 @@ pub fn format_code(
 	let mut tmp_out = String::new();
 
 	match code.convtype {
-		ConvTypeV::String => tmp_out.push_str(&to_string(value)?),
+		ConvTypeV::String => tmp_out.push_str(&value.clone().into_string()?),
 		ConvTypeV::Decimal => {
 			let value = value.clone().try_cast_num("%d/%u/%i requires number")?;
 			render_decimal(

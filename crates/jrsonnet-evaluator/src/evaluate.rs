@@ -92,8 +92,8 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o).into()),
 		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n).into()),
 
-		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_json(0)?).into()),
-		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_json(0)?, s).into()),
+		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_string()?).into()),
+		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_string()?, s).into()),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
@@ -825,7 +825,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
-								println!("{:?}", loc);
 								Ok(v.unwrap_if_lazy()?)
 							} else if let Some(Val::Str(n)) =
 								v.get("__intristic_namespace__".into())?
