@@ -670,9 +670,6 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 			Element::Code(c) => {
 				// TODO: Operate on ref
 				let f: Rc<str> = c.mkey.into();
-				if f.is_empty() {
-					throw!(MappingKeysRequired);
-				}
 				let width = match c.width {
 					Width::Star => {
 						throw!(CannotUseStarWidthWithObject);
@@ -686,10 +683,19 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,
 				};
-				let value = if let Some(v) = values.get(f.clone())? {
-					v
+
+				let value = if c.convtype == ConvTypeV::Percent {
+					Val::Null
 				} else {
-					throw!(NoSuchFormatField(f));
+					if f.is_empty() {
+						throw!(MappingKeysRequired);
+					}
+					let value = if let Some(v) = values.get(f.clone())? {
+						v
+					} else {
+						throw!(NoSuchFormatField(f));
+					};
+					value
 				};
 
 				format_code(&mut out, &value, &c, width, precision)?;
