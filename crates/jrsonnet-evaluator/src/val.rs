@@ -202,12 +202,52 @@ impl Val {
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
-	#[cfg(feature = "faster")]
-	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
-		manifest_json_ex(&self, &" ".repeat(padding)).map(|s| s.into())
+
+	pub fn into_string(self) -> Result<Rc<str>> {
+		Ok(match self.unwrap_if_lazy()? {
+			Val::Bool(true) => "true".into(),
+			Val::Bool(false) => "false".into(),
+			Val::Null => "null".into(),
+			Val::Str(s) => s,
+			v => manifest_json_ex(
+				&v,
+				&ManifestJsonOptions {
+					padding: &"",
+					mtype: ManifestType::ToString,
+				},
+			)?
+			.into(),
+		})
 	}
-	#[cfg(not(feature = "faster"))]
+
+	/// For manifestification
 	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
+		manifest_json_ex(
+			&self,
+			&ManifestJsonOptions {
+				padding: &" ".repeat(padding),
+				mtype: ManifestType::Manifest,
+			},
+		)
+		.map(|s| s.into())
+	}
+
+	/// Calls std.manifestJson
+	#[cfg(feature = "faster")]
+	pub fn into_std_json(self, padding: usize) -> Result<Rc<str>> {
+		manifest_json_ex(
+			&self,
+			&ManifestJsonOptions {
+				padding: &" ".repeat(padding),
+				mtype: ManifestType::Std,
+			},
+		)
+		.map(|s| s.into())
+	}
+
+	/// Calls std.manifestJson
+	#[cfg(not(feature = "faster"))]
+	pub fn into_std_json(self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
@@ -233,7 +273,7 @@ impl Val {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
-				.with_var("__tmp__to_json__".into(), self)?;
+				.with_var("__tmp__to_json__".into(), self);
 			Ok(evaluate(
 				ctx,
 				&el!(Expr::Apply(
@@ -314,16 +354,32 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	}
 }
 
-pub fn manifest_json_ex(val: &Val, padding: &str) -> Result<String> {
+#[derive(PartialEq)]
+pub enum ManifestType {
+	// Applied in manifestification
+	Manifest,
+	/// Used for std.manifestJson
+	/// Empty array/objects extends to "[\n\n]" instead of "[ ]" as in manifest
+	Std,
+	// No line breaks, used in `obj+''`
+	ToString,
+}
+
+pub struct ManifestJsonOptions<'s> {
+	pub padding: &'s str,
+	pub mtype: ManifestType,
+}
+
+pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
 	let mut out = String::new();
-	manifest_json_ex_buf(val, &mut out, padding, &mut String::new())?;
+	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
 }
 fn manifest_json_ex_buf(
 	val: &Val,
 	buf: &mut String,
-	padding: &str,
 	cur_padding: &mut String,
+	options: &ManifestJsonOptions<'_>,
 ) -> Result<()> {
 	use std::fmt::Write;
 	match val.unwrap_if_lazy()? {
@@ -338,42 +394,76 @@ fn manifest_json_ex_buf(
 		Val::Str(s) => buf.push_str(&escape_string_json(&s)),
 		Val::Num(n) => write!(buf, "{}", n).unwrap(),
 		Val::Arr(items) => {
-			buf.push_str("[\n");
+			buf.push('[');
 			if !items.is_empty() {
+				if options.mtype != ManifestType::ToString {
+					buf.push('\n');
+				}
+
 				let old_len = cur_padding.len();
-				cur_padding.push_str(padding);
+				cur_padding.push_str(options.padding);
 				for (i, item) in items.iter().enumerate() {
 					if i != 0 {
-						buf.push_str(",\n")
+						buf.push(',');
+						if options.mtype == ManifestType::ToString {
+							buf.push(' ');
+						} else {
+							buf.push('\n');
+						}
 					}
 					buf.push_str(cur_padding);
-					manifest_json_ex_buf(item, buf, padding, cur_padding)?;
+					manifest_json_ex_buf(item, buf, cur_padding, options)?;
 				}
 				cur_padding.truncate(old_len);
+
+				if options.mtype != ManifestType::ToString {
+					buf.push('\n');
+					buf.push_str(cur_padding);
+				}
+			} else if options.mtype == ManifestType::Std {
+				buf.push_str("\n\n");
+				buf.push_str(cur_padding);
+			} else if options.mtype == ManifestType::ToString {
+				buf.push(' ');
 			}
-			buf.push('\n');
-			buf.push_str(cur_padding);
 			buf.push(']');
 		}
 		Val::Obj(obj) => {
-			buf.push_str("{\n");
+			buf.push('{');
 			let fields = obj.visible_fields();
 			if !fields.is_empty() {
+				if options.mtype != ManifestType::ToString {
+					buf.push('\n');
+				}
+
 				let old_len = cur_padding.len();
-				cur_padding.push_str(padding);
+				cur_padding.push_str(options.padding);
 				for (i, field) in fields.into_iter().enumerate() {
 					if i != 0 {
-						buf.push_str(",\n")
+						buf.push(',');
+						if options.mtype == ManifestType::ToString {
+							buf.push(' ');
+						} else {
+							buf.push('\n');
+						}
 					}
 					buf.push_str(cur_padding);
 					buf.push_str(&escape_string_json(&field));
 					buf.push_str(": ");
-					manifest_json_ex_buf(&obj.get(field)?.unwrap(), buf, padding, cur_padding)?;
+					manifest_json_ex_buf(&obj.get(field)?.unwrap(), buf, cur_padding, options)?;
 				}
 				cur_padding.truncate(old_len);
+
+				if options.mtype != ManifestType::ToString {
+					buf.push('\n');
+					buf.push_str(cur_padding);
+				}
+			} else if options.mtype == ManifestType::Std {
+				buf.push_str("\n\n");
+				buf.push_str(cur_padding);
+			} else if options.mtype == ManifestType::ToString {
+				buf.push(' ');
 			}
-			buf.push('\n');
-			buf.push_str(cur_padding);
 			buf.push('}');
 		}
 		Val::Func(_) | Val::Intristic(_, _) => {
@@ -404,15 +494,6 @@ pub fn escape_string_json(s: &str) -> String {
 	}
 	out.push('"');
 	out
-}
-
-pub fn to_string(val: &Val) -> Result<Rc<str>> {
-	Ok(match val.unwrap_if_lazy()? {
-		Val::Bool(true) => "true".into(),
-		Val::Null => "null".into(),
-		Val::Str(s) => s.clone(),
-		v => v.clone().into_json(0)?,
-	})
 }
 
 #[test]
