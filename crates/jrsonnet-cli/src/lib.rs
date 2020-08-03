@@ -26,8 +26,9 @@ pub struct InputOpts {
 	)]
 	pub evaluate: bool,
 
-	#[clap(about = "Path to the file to be compiled if `--evaluate` is unset, \
-	otherwise code itself")]
+	#[clap(
+		about = "Path to the file to be compiled if `--evaluate` is unset, otherwise code itself"
+	)]
 	pub input: String,
 }
 
@@ -37,19 +38,19 @@ pub struct MiscOpts {
 	/// Disable standard library.
 	/// By default standard library will be available via global `std` variable.
 	/// Note that standard library will still be loaded
-	/// if chosen manifestification method is not `none`
+	/// if chosen manifestification method is not `none`.
 	#[clap(long)]
 	no_stdlib: bool,
 
 	/// Maximal allowed number of stack frames,
-	/// stack overflow error will be raised if this number gets exceeded
+	/// stack overflow error will be raised if this number gets exceeded.
 	#[clap(long, short = 's', default_value = "200")]
 	max_stack: usize,
 
 	/// Library search dirs.
 	/// Any not found `imported` file will be searched in these.
 	/// This can also be specified via `JSONNET_PATH` variable,
-	/// which should contain a colon-separated (semicolon-separated on Windows) list of directories
+	/// which should contain a colon-separated (semicolon-separated on Windows) list of directories.
 	#[clap(long, short = 'J')]
 	jpath: Vec<PathBuf>,
 }
