@@ -156,7 +156,7 @@ macro_rules! parse_args {
 			let $name = &args[$id];
 			if $name.0.is_some() {
 				if $name.0.as_ref().unwrap() != stringify!($name) {
-					throw!(IntristicArgumentReorderingIsNotSupportedYet);
+					throw!(IntrinsicArgumentReorderingIsNotSupportedYet);
 				}
 			}
 			let $name = evaluate($ctx.clone(), &$name.1)?;

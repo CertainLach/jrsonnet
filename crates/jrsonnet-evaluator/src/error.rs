@@ -7,8 +7,8 @@ use std::{path::PathBuf, rc::Rc};
 
 #[derive(Debug, Clone)]
 pub enum Error {
-	IntristicNotFound(Rc<str>, Rc<str>),
-	IntristicArgumentReorderingIsNotSupportedYet,
+	IntrinsicNotFound(Rc<str>, Rc<str>),
+	IntrinsicArgumentReorderingIsNotSupportedYet,
 
 	UnaryOperatorDoesNotOperateOnType(UnaryOpType, ValType),
 	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
