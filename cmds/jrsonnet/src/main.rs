@@ -10,7 +10,8 @@ static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
 #[derive(Clap)]
 // #[clap(help_heading = "DEBUG")]
 struct DebugOpts {
-	/// Required OS stack size, probally you shouldn't change it, unless jrsonnet is failing with stack overflow
+	/// Required OS stack size.
+	/// This shouldn't be changed unless jrsonnet is failing with stack overflow error.
 	#[clap(long, name = "size")]
 	pub os_stack: Option<usize>,
 }
