@@ -97,6 +97,15 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
 
 [[package]]
+name = "hashbrown"
+version = "0.8.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "34f595585f103464d8d2f6e9864682d74c1601fed5e07d62b1c9058dba8246fb"
+dependencies = [
+ "autocfg",
+]
+
+[[package]]
 name = "heck"
 version = "0.3.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -116,16 +125,17 @@ dependencies = [
 
 [[package]]
 name = "indexmap"
-version = "1.4.0"
+version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c398b2b113b55809ceb9ee3e753fcbac793f1956663f3c36549c1346015c2afe"
+checksum = "5b88cd59ee5f71fea89a62248fc8f387d44400cefe05ef548466d61ced9029a7"
 dependencies = [
  "autocfg",
+ "hashbrown",
 ]
 
 [[package]]
 name = "jrsonnet"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "clap",
  "jrsonnet-cli",
@@ -145,7 +155,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "annotate-snippets",
  "base64",
@@ -162,7 +172,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "1.0.0"
+version = "0.3.0"
 dependencies = [
  "jrsonnet-stdlib",
  "peg",
@@ -174,7 +184,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "1.0.0"
+version = "0.3.0"
 
 [[package]]
 name = "jsonnet"
@@ -235,9 +245,9 @@ checksum = "877630b3de15c0b64cc52f659345724fbf6bdad9bd9566699fc53688f3c34a34"
 
 [[package]]
 name = "peg"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9075875c14bb21f25f11cad4b6ad2e4dd443b8fb83900b2fbdd6ebd744b82e97"
+checksum = "9f76678828272f177ac33b7e2ac2e3e73cc6c1cd1e3e387928aa69562fa51367"
 dependencies = [
  "peg-macros",
  "peg-runtime",
@@ -245,9 +255,9 @@ dependencies = [
 
 [[package]]
 name = "peg-macros"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c24c165fd39e995246140cc78df55c56c6733ba87e6658cb3e197b8856c62852"
+checksum = "636d60acf97633e48d266d7415a9355d4389cea327a193f87df395d88cd2b14d"
 dependencies = [
  "peg-runtime",
  "proc-macro2",
@@ -256,9 +266,9 @@ dependencies = [
 
 [[package]]
 name = "peg-runtime"
-version = "0.6.2"
+version = "0.6.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "0c1a2897e69d986c7986747ebad425cf03746ec5e3e09bb3b2600f91301ba864"
+checksum = "9555b1514d2d99d78150d3c799d4c357a3e2c2a8062cd108e93a06d9057629c5"
 
 [[package]]
 name = "proc-macro-error"
