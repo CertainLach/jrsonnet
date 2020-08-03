@@ -1,5 +1,3 @@
-#![feature(custom_inner_attributes)]
-
 pub mod import;
 pub mod interop;
 pub mod val_extract;

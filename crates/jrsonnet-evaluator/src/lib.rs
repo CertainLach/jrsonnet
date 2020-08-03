@@ -1,11 +1,5 @@
-#![feature(box_syntax, box_patterns)]
-#![feature(type_alias_impl_trait)]
-#![feature(debug_non_exhaustive)]
-#![feature(test)]
-#![feature(stmt_expr_attributes)]
+#![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
-
-extern crate test;
 
 mod builtin;
 mod ctx;
@@ -821,8 +815,6 @@ pub mod tests {
 		);
 	}
 
-	use test::Bencher;
-
 	// This test is commented out by default, because of huge compilation slowdown
 	// #[bench]
 	// fn bench_codegen(b: &mut Bencher) {
@@ -836,6 +828,7 @@ pub mod tests {
 	// 	})
 	// }
 
+	/*
 	#[bench]
 	fn bench_serialize(b: &mut Bencher) {
 		b.iter(|| {
@@ -859,6 +852,7 @@ pub mod tests {
 			)
 		})
 	}
+	*/
 
 	#[test]
 	fn equality() {

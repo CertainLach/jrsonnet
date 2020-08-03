@@ -1,8 +1,3 @@
-#![feature(box_syntax)]
-#![feature(test)]
-
-extern crate test;
-
 use peg::parser;
 use std::{path::PathBuf, rc::Rc};
 mod expr;
@@ -581,11 +576,11 @@ pub mod tests {
 		parse!(jrsonnet_stdlib::STDLIB_STR);
 	}
 
-	use test::Bencher;
-
 	// From source code
+	/*
 	#[bench]
 	fn bench_parse_peg(b: &mut Bencher) {
 		b.iter(|| parse!(jrsonnet_stdlib::STDLIB_STR))
 	}
+	*/
 }

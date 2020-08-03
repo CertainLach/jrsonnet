@@ -35,7 +35,14 @@ impl Debug for ObjValue {
 		for (name, member) in self.0.this_entries.iter() {
 			debug.field(name, member);
 		}
-		debug.finish_non_exhaustive()
+		#[cfg(feature = "unstable")]
+		{
+			debug.finish_non_exhaustive()
+		}
+		#[cfg(not(feature = "unstable"))]
+		{
+			debug.finish()
+		}
 	}
 }
 

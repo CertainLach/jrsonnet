@@ -390,10 +390,16 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 
 /// Extracts code block and disables inlining for them
 /// Fixes WASM to java bytecode compilation failing because of very large method
+#[cfg(feature = "unstable")]
 macro_rules! noinline {
 	($e:expr) => {
-		(#[inline(never)]
-		move || $e)()
+		(#![inline(never)] move || $e)()
+	};
+}
+#[cfg(not(feature = "unstable"))]
+macro_rules! noinline {
+	($e:expr) => {
+		(move || $e)()
 	};
 }
 

@@ -2,12 +2,7 @@ use crate::{
 	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
-use std::{
-	cell::RefCell,
-	collections::HashMap,
-	fmt::Debug,
-	rc::{Rc, Weak},
-};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
 	ContextCreator,
@@ -138,6 +133,7 @@ impl Context {
 		}
 		Ok(self.extend(new, new_dollar, this, super_obj))
 	}
+	#[cfg(feature = "unstable")]
 	pub fn into_weak(self) -> WeakContext {
 		WeakContext(Rc::downgrade(&self.0))
 	}
@@ -155,13 +151,16 @@ impl PartialEq for Context {
 	}
 }
 
+#[cfg(feature = "unstable")]
 #[derive(Debug, Clone)]
-pub struct WeakContext(Weak<ContextInternals>);
+pub struct WeakContext(std::rc::Weak<ContextInternals>);
+#[cfg(feature = "unstable")]
 impl WeakContext {
 	pub fn upgrade(&self) -> Context {
 		Context(self.0.upgrade().expect("context is removed"))
 	}
 }
+#[cfg(feature = "unstable")]
 impl PartialEq for WeakContext {
 	fn eq(&self, other: &Self) -> bool {
 		self.0.ptr_eq(&other.0)

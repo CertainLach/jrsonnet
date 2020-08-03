@@ -20,6 +20,9 @@ faster = []
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
 
+# Unlocks extra features, but works only on unstable
+unstable = []
+
 [dependencies]
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "1.0.0" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "1.0.0" }
