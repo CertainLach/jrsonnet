@@ -27,12 +27,14 @@ impl FromStr for TraceFormatName {
 #[derive(Clap)]
 // #[clap(help_heading = "STACK TRACE VISUAL")]
 pub struct TraceOpts {
-	/// How stack traces should be displayed in console.
-	/// compact format only shows `filename:line:column`s, where explaining displays source code
-	/// with attached trace annotations, so it is more verbose
+	/// Format of stack traces' display in console.
+	/// `compact` format only shows `filename:line:column`s
+	/// while `explaining` displays source code with attached trace annotations
+	/// thus being more verbose.
 	#[clap(long, possible_values = &["compact", "explaining"])]
 	trace_format: Option<TraceFormatName>,
-	/// Amount of stack trace elements to be displayed, if zero - then full stack trace will be displayed
+	/// Amount of stack trace elements to be displayed.
+	/// If set to `0` then full stack trace will be displayed.
 	#[clap(long, short = 't', default_value = "20")]
 	max_trace: usize,
 }
