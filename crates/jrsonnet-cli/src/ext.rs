@@ -32,13 +32,14 @@ impl FromStr for ExtStr {
 // #[clap(help_heading = "EXTERNAL VARIABLES")]
 pub struct ExtVarOpts {
 	/// Add string external variable.
-	/// External variables are globally available, so prefer to use top level arguments where possible.
-	/// If [=data] is not set, then it will be read from `name` env variable.
-	/// Can be accessed from code via `std.extVar("name")`
+	/// External variables are globally available so it is preferred
+	/// to use top level arguments whenever it's possible.
+	/// If [=data] is not set then it will be read from `name` env variable.
+	/// Can be accessed from code via `std.extVar("name")`.
 	#[clap(long, short = 'V', name = "name[=var data]", number_of_values = 1)]
 	ext_str: Vec<ExtStr>,
-	/// Read string external variable from file.
-	/// See also `--ext-str`
+	// / Read string external variable from file.
+	// / See also `--ext-str`
 	// #[clap(long, name = "name[=var path]", number_of_values = 1)]
 	// ext_str_file: Vec<ExtStr>,
 	/// Add external variable from code.
