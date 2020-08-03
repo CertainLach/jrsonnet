@@ -7,8 +7,8 @@ use jrsonnet_evaluator::{error::Result, EvaluationState};
 pub struct TLAOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.
-	/// prefer using them instead of ExtVars.
-	/// If [=data] is not set, then it will be read from `name` env variable.
+	/// This is preferred to ExtVars method.
+	/// If [=data] is not set then it will be read from `name` env variable.
 	#[clap(long, short = 'A', name = "name[=tla data]", number_of_values = 1)]
 	tla_str: Vec<ExtStr>,
 	/// Read top level argument string from file.
