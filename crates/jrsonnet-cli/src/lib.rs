@@ -22,28 +22,34 @@ pub struct InputOpts {
 	#[clap(
 		long,
 		short = 'e',
-		about = "Threat input as code, evaluate them instead of reading file"
+		about = "Treat input as code, evaluate them instead of reading file"
 	)]
 	pub evaluate: bool,
 
-	#[clap(about = "File to compile (Or code directly, if --evaluate is specified)")]
+	#[clap(about = "Path to the file to be compiled if `--evaluate` is unset, \
+	otherwise code itself")]
 	pub input: String,
 }
 
 #[derive(Clap)]
 // #[clap(help_heading = "OPTIONS")]
 pub struct MiscOpts {
-	/// Disable standard library. By default, standard library will be available via global `std` variable.
-	/// Beware that standard library will still be loaded if choosen manifestification method is not `none`
+	/// Disable standard library.
+	/// By default standard library will be available via global `std` variable.
+	/// Note that standard library will still be loaded
+	/// if chosen manifestification method is not `none`
 	#[clap(long)]
 	no_stdlib: bool,
 
-	/// Number of allowed stack frames, stack overflow error will be returned if reached
+	/// Maximal allowed number of stack frames,
+	/// stack overflow error will be raised if this number gets exceeded
 	#[clap(long, short = 's', default_value = "200")]
 	max_stack: usize,
 
-	/// Library search dirs. Any not found `imported` file will be searched in them.
-	/// Can also be specified via JSONNET_PATH, which should contain colon (semicolon on Windows) delimited list of directories
+	/// Library search dirs.
+	/// Any not found `imported` file will be searched in these.
+	/// This can also be specified via `JSONNET_PATH` variable,
+	/// which should contain a colon-separated (semicolon-separated on Windows) list of directories
 	#[clap(long, short = 'J')]
 	jpath: Vec<PathBuf>,
 }
@@ -62,7 +68,7 @@ impl ConfigureState for MiscOpts {
 	}
 }
 
-/// For general configuration of jsonnet
+/// General configuration of jsonnet
 #[derive(Clap)]
 #[clap(name = "jrsonnet", version, author)]
 pub struct GeneralOpts {
