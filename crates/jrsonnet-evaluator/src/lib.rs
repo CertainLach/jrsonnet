@@ -56,11 +56,11 @@ impl LazyBinding {
 }
 
 pub struct EvaluationSettings {
-	/// Limits recursion by limiting stack frames
+	/// Limits recursion by limiting the number of stack frames
 	pub max_stack: usize,
-	/// Limit amount of stack trace items preserved
+	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
-	/// Used for std.extVar
+	/// Used for s`td.extVar`
 	pub ext_vars: HashMap<Rc<str>, Val>,
 	/// Used for ext.native
 	pub ext_natives: HashMap<Rc<str>, Rc<NativeCallback>>,
@@ -96,10 +96,9 @@ impl Default for EvaluationSettings {
 
 #[derive(Default)]
 struct EvaluationData {
-	/// Used for stack overflow detection, stacktrace is now populated on unwind
+	/// Used for stack overflow detection, stacktrace is populated on unwind
 	stack_depth: usize,
-	/// Contains file source codes and evaluated results for imports and pretty
-	/// printing stacktraces
+	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
 	files: HashMap<Rc<PathBuf>, FileData>,
 	str_files: HashMap<Rc<PathBuf>, Rc<str>>,
 }
@@ -118,8 +117,8 @@ pub struct EvaluationStateInternals {
 }
 
 thread_local! {
-	/// Contains state for currently executing file
-	/// Global state is fine there
+	/// Contains the state for a currently executed file.
+	/// Global state is fine here.
 	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
@@ -142,7 +141,7 @@ pub(crate) fn push<T>(
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
-	/// Parses and adds file to loaded
+	/// Parses and adds files as loaded
 	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
 		self.add_parsed_file(
 			path.clone(),
@@ -264,7 +263,7 @@ impl EvaluationState {
 		Context::new().extend_unbound(new_bindings, None, None, None)
 	}
 
-	/// Executes code, creating new stack frame
+	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
 		e: &ExprLocation,
@@ -294,7 +293,7 @@ impl EvaluationState {
 		result
 	}
 
-	/// Runs passed function in state (required, if function needs to modify stack trace)
+	/// Runs passed function in state (required if function needs to modify stack trace)
 	pub fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
 		EVAL_STATE.with(|v| {
 			let has_state = v.borrow().is_some();
@@ -328,7 +327,7 @@ impl EvaluationState {
 		self.run_in_state(|| val.manifest_stream(&self.manifest_format()))
 	}
 
-	/// If passed value is function - call with set TLA
+	/// If passed value is function then call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		Ok(match val {
 			Val::Func(func) => func.evaluate_map(
@@ -357,7 +356,7 @@ impl EvaluationState {
 	}
 }
 
-/// Raw methods evaluates passed values, but not performs TLA execution
+/// Raw methods evaluate passed values but don't perform TLA execution
 impl EvaluationState {
 	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), &name))
@@ -365,7 +364,7 @@ impl EvaluationState {
 	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&PathBuf::from("."), &name))
 	}
-	/// Parses and evaluates snippet
+	/// Parses and evaluates the given snippet
 	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {
 		let parsed = parse(
 			&code,
@@ -378,7 +377,7 @@ impl EvaluationState {
 		self.add_parsed_file(source, code, parsed.clone())?;
 		self.evaluate_expr_raw(parsed)
 	}
-	/// Evaluates parsed expression
+	/// Evaluates the parsed expression
 	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
 		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
 	}

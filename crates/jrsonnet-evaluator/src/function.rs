@@ -7,13 +7,14 @@ use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
 const NO_DEFAULT_CONTEXT: &str =
 	"no default context set for call with defined default parameter value";
 
-/// Creates correct [context](Context) for function body evaluation, returning error on invalid call
+/// Creates correct [context](Context) for function body evaluation returning error on invalid call.
 ///
-/// * `ctx` used for passed argument expressions execution, and for body execution (if `body_ctx` is not set)
-/// * `body_ctx` used for default parameter values execution, and for body execution (if set)
-/// * `params` function parameters definition
-/// * `args` passed function arguments
-/// * `tailstruct` if true - function arguments is eager executed, otherwise - lazy
+/// ## Parameters
+/// * `ctx`: used for passed argument expressions' execution and for body execution (if `body_ctx` is not set)
+/// * `body_ctx`: used for default parameter values' execution and for body execution (if set)
+/// * `params`: function parameters' definition
+/// * `args`: passed function arguments
+/// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_function_call(
 	ctx: Context,
 	body_ctx: Option<Context>,

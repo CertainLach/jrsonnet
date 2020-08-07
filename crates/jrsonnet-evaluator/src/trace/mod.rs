@@ -4,13 +4,13 @@ use crate::{EvaluationState, LocError};
 pub use location::*;
 use std::path::PathBuf;
 
-/// How paths should be displayed
+/// The way paths should be displayed
 pub enum PathResolver {
-	/// Only filename will be shown
+	/// Only filename
 	FileName,
-	/// Absolute path of file
+	/// Absolute path
 	Absolute,
-	/// Relative path from base directory
+	/// Path relative to base directory
 	Relative(PathBuf),
 }
 
@@ -32,7 +32,7 @@ impl PathResolver {
 	}
 }
 
-/// Implements trace to string pretty-printing
+/// Implements pretty-printing of traces
 pub trait TraceFormat {
 	fn write_trace(
 		&self,
@@ -73,7 +73,7 @@ fn print_code_location(
 	Ok(())
 }
 
-/// vanilla jsonnet like formatting
+/// vanilla-like jsonnet formatting
 pub struct CompactFormat {
 	pub resolver: PathResolver,
 	pub padding: usize,

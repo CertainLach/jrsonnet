@@ -545,9 +545,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 			Val::Arr(Rc::new(out))
 		}
-		ArrComp(expr, compspecs) => Val::Arr(
-			// First compspec should be forspec, so no "None" possible here
-			Rc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), compspecs)?.unwrap()),
+		ArrComp(expr, comp_specs) => Val::Arr(
+			// First comp_spec should be for_spec, so no "None" possible here
+			Rc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?.unwrap()),
 		),
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
@@ -564,7 +564,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				|| "assertion condition".to_owned(),
 				|| {
 					evaluate(context.clone(), &value)?
-						.try_cast_bool("assertion condition should be boolean")
+						.try_cast_bool("assertion condition should be of type `boolean`")
 				},
 			)?;
 			if assertion_result {
@@ -580,7 +580,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			|| "error statement".to_owned(),
 			|| {
 				throw!(RuntimeError(
-					evaluate(context, e)?.try_cast_str("error text should be string")?,
+					evaluate(context, e)?.try_cast_str("error text should be of type `string`")?,
 				))
 			},
 		)?,
@@ -590,7 +590,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_else,
 		} => {
 			if evaluate(context.clone(), &cond.0)?
-				.try_cast_bool("if condition should be boolean")?
+				.try_cast_bool("if condition should be of type `boolean`")?
 			{
 				evaluate(context, cond_then)?
 			} else {
@@ -603,7 +603,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Import(path) => {
 			let mut tmp = loc
 				.clone()
-				.expect("imports can't be used without loc_data")
+				.expect("imports cannot be used without loc_data")
 				.0;
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
@@ -616,7 +616,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		ImportStr(path) => {
 			let mut tmp = loc
 				.clone()
-				.expect("imports can't be used without loc_data")
+				.expect("imports cannot be used without loc_data")
 				.0;
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();

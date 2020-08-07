@@ -225,7 +225,8 @@ macro_rules! matches_unwrap {
 	};
 }
 impl Val {
-	/// Creates Val::Num after checking for overflow. As numbers are f64, we can just check for finity
+	/// Creates `Val::Num` after checking for numeric overflow.
+	/// As numbers are `f64`, we can just check for their finity.
 	pub fn new_checked_num(num: f64) -> Result<Val> {
 		if num.is_finite() {
 			Ok(Val::Num(num))
@@ -379,7 +380,7 @@ impl Val {
 		.map(|s| s.into())
 	}
 
-	/// Calls std.manifestJson
+	/// Calls `std.manifestJson`
 	#[cfg(feature = "faster")]
 	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		manifest_json_ex(
@@ -392,7 +393,7 @@ impl Val {
 		.map(|s| s.into())
 	}
 
-	/// Calls std.manifestJson
+	/// Calls `std.manifestJson`
 	#[cfg(not(feature = "faster"))]
 	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
@@ -444,7 +445,7 @@ fn is_function_like(val: &Val) -> bool {
 	matches!(val, Val::Func(_))
 }
 
-/// Implements std.primitiveEquals builtin
+/// Native implementation of `std.primitiveEquals`
 pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	Ok(match (val_a.unwrap_if_lazy()?, val_b.unwrap_if_lazy()?) {
 		(Val::Bool(a), Val::Bool(b)) => a == b,
@@ -464,7 +465,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	})
 }
 
-/// Native implementation of std.equals
+/// Native implementation of `std.equals`
 pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	let val_a = val_a.unwrap_if_lazy()?;
 	let val_b = val_b.unwrap_if_lazy()?;

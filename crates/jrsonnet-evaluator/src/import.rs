@@ -9,17 +9,19 @@ use std::{any::Any, cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
 
 /// Implements file resolution logic for `import` and `importStr`
 pub trait ImportResolver {
-	/// Resolve real file path, i.e
-	/// `(/home/user/manifests, b.libsonnet)` can resolve to both `/home/user/manifests/b.libsonnet` and to `/home/user/vendor/b.libsonnet`
-	/// (Where vendor is a library path)
+	/// Resolves real file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
+	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
+	/// where `${vendor}` is a library path.
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>>;
+
 	/// Reads file from filesystem, should be used only with path received from `resolve_file`
 	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>>;
+
 	/// # Safety
 	///
-	/// For use in bindings, do not try to use it elsewhere
-	/// Implementations, which are not intended to be
-	/// used in bindings, should panic in this method
+	/// For use only in bindings, should not be used elsewhere.
+	/// Implementations which are not intended to be used in bindings
+	/// should panic on call to this method.
 	unsafe fn as_any(&self) -> &dyn Any;
 }
 
@@ -29,12 +31,14 @@ impl ImportResolver for DummyImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
 		throw!(ImportNotSupported(from.clone(), path.clone()))
 	}
+
 	fn load_file_contents(&self, _resolved: &PathBuf) -> Result<Rc<str>> {
 		// Can be only caused by library direct consumer, not by supplied jsonnet
 		panic!("dummy resolver can't load any file")
 	}
+
 	unsafe fn as_any(&self) -> &dyn Any {
-		panic!("this resolver can't be used as any")
+		panic!("`as_any($self)` is not supported by dummy resolver")
 	}
 }
 impl Default for Box<dyn ImportResolver> {
@@ -46,8 +50,8 @@ impl Default for Box<dyn ImportResolver> {
 /// File resolver, can load file from both FS and library paths
 #[derive(Default)]
 pub struct FileImportResolver {
-	/// Library directories to search for file
-	/// In original jsonnet referred as jpath
+	/// Library directories to search for file.
+	/// Referred to as `jpath` in original jsonnet implementation.
 	pub library_paths: Vec<PathBuf>,
 }
 impl ImportResolver for FileImportResolver {
@@ -81,7 +85,7 @@ impl ImportResolver for FileImportResolver {
 
 type ResolutionData = (PathBuf, PathBuf);
 
-/// Caches results of underlying resolver implementation
+/// Caches results of the underlying resolver
 pub struct CachingImportResolver {
 	resolution_cache: RefCell<HashMap<ResolutionData, Result<Rc<PathBuf>>>>,
 	loading_cache: RefCell<HashMap<PathBuf, Result<Rc<str>>>>,
@@ -95,6 +99,7 @@ impl ImportResolver for CachingImportResolver {
 			.or_insert_with(|| self.inner.resolve_file(from, path))
 			.clone()
 	}
+
 	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>> {
 		self.loading_cache
 			.borrow_mut()
