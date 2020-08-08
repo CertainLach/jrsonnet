@@ -141,7 +141,7 @@ pub(crate) fn push<T>(
 pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
-	/// Parses and adds files as loaded
+	/// Parses and adds file as loaded
 	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
 		self.add_parsed_file(
 			path.clone(),
