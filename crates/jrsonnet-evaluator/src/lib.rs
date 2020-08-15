@@ -8,6 +8,7 @@ pub mod error;
 mod evaluate;
 mod function;
 mod import;
+mod integrations;
 mod map;
 mod obj;
 pub mod trace;

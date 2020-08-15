@@ -12,6 +12,8 @@ edition = "2018"
 default = ["serialized-stdlib", "faster", "explaining-traces"]
 # Serializes standard library AST instead of parsing them every run
 serialized-stdlib = ["serde", "bincode", "jrsonnet-parser/deserialize"]
+# Allow to convert Val into serde_json::Value and backwards
+serde-json = ["serde", "serde_json"]
 # Same as above, but with generated code instead of serde. Reduces memory usage, but increases binary size and compilation time
 codegenerated-stdlib = []
 # Replace some standard library functions with faster implementations (I.e manifestJsonEx)
@@ -29,17 +31,22 @@ jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.0" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"
-indexmap = "1.5.0"
+indexmap = "1.5.1"
 
 md5 = "0.7.0"
 base64 = "0.12.3"
 
 # Serialized stdlib
 [dependencies.serde]
-version = "1.0.114"
+version = "1.0.115"
 optional = true
 [dependencies.bincode]
 version = "1.3.1"
+optional = true
+
+# Serde json
+[dependencies.serde_json]
+version = "1.0.57"
 optional = true
 
 # Explaining traces
@@ -51,5 +58,5 @@ optional = true
 jrsonnet-parser = { path = "../jrsonnet-parser", features = ["dump", "serialize", "deserialize"], version = "0.3.0" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.0" }
 structdump = "0.1.2"
-serde = "1.0.114"
+serde = "1.0.115"
 bincode = "1.3.1"
