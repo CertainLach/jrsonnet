@@ -17,7 +17,11 @@ impl TryFrom<&Val> for Value {
 			Val::Bool(b) => Value::Bool(*b),
 			Val::Null => Value::Null,
 			Val::Str(s) => Value::String((&s as &str).into()),
-			Val::Num(n) => Value::Number(Number::from_f64(*n).expect("to json number")),
+			Val::Num(n) => Value::Number(if *n <= f64::EPSILON {
+				(*n as i64).into()
+			} else {
+				Number::from_f64(*n).expect("to json number")
+			}),
 			Val::Lazy(v) => (&v.evaluate()?).try_into()?,
 			Val::Arr(a) => {
 				let mut out = Vec::with_capacity(a.len());
