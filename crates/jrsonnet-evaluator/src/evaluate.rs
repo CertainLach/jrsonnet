@@ -1,12 +1,13 @@
 use crate::{
-	builtin::format::{format_arr, format_obj},
+	builtin::{
+		format::{format_arr, format_obj},
+		manifest::{escape_string_json, manifest_json_ex, ManifestJsonOptions, ManifestType},
+	},
 	context_creator, equals,
 	error::Error::*,
-	escape_string_json, future_wrapper, lazy_val, manifest_json_ex, parse_args, primitive_equals,
-	push, throw,
-	val::ManifestJsonOptions,
-	with_state, Context, ContextCreator, FuncDesc, LazyBinding, LazyVal, LocError, ManifestType,
-	ObjMember, ObjValue, Result, Val, ValType,
+	future_wrapper, lazy_val, parse_args, primitive_equals, push, throw, with_state, Context,
+	ContextCreator, FuncDesc, LazyBinding, LazyVal, LocError, ObjMember, ObjValue, Result, Val,
+	ValType,
 };
 use closure::closure;
 use jrsonnet_parser::{
