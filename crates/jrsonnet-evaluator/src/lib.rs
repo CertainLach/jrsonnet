@@ -53,13 +53,6 @@ impl LazyBinding {
 	}
 }
 
-#[derive(Clone)]
-pub enum ManifestFormat {
-	Yaml(usize),
-	Json(usize),
-	None,
-}
-
 pub struct EvaluationSettings {
 	/// Limits recursion by limiting stack frames
 	pub max_stack: usize,
@@ -321,16 +314,7 @@ impl EvaluationState {
 	}
 
 	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
-		self.run_in_state(|| {
-			Ok(match self.manifest_format() {
-				ManifestFormat::Yaml(padding) => val.into_yaml(padding)?,
-				ManifestFormat::Json(padding) => val.into_json(padding)?,
-				ManifestFormat::None => match val {
-					Val::Str(s) => s,
-					_ => throw!(StringManifestOutputIsNotAString),
-				},
-			})
-		})
+		self.run_in_state(|| val.manifest(&self.manifest_format()))
 	}
 
 	/// If passed value is function - call with set TLA
@@ -521,7 +505,7 @@ pub mod tests {
 				evaluator
 					.evaluate_snippet_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str.into())
 					.unwrap()
-					.into_json(0)
+					.to_json(0)
 					.unwrap()
 					.replace("\n", "")
 				})

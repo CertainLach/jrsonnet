@@ -54,7 +54,7 @@ pub extern "C" fn jsonnet_gc_growth_trigger(_vm: &EvaluationState, _v: c_double)
 #[no_mangle]
 pub extern "C" fn jsonnet_string_output(vm: &EvaluationState, v: c_int) {
 	match v {
-		1 => vm.set_manifest_format(ManifestFormat::None),
+		1 => vm.set_manifest_format(ManifestFormat::String),
 		0 => vm.set_manifest_format(ManifestFormat::Json(4)),
 		_ => panic!("incorrect output format"),
 	}

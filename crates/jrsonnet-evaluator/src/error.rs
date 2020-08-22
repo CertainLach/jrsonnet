@@ -58,6 +58,11 @@ pub enum Error {
 	DivisionByZero,
 
 	StringManifestOutputIsNotAString,
+	StreamManifestOutputIsNotAArray,
+	MultiManifestOutputIsNotAObject,
+
+	StreamManifestOutputCannotBeRecursed,
+	StreamManifestCannotNestString,
 
 	ImportCallbackError(String),
 	InvalidUnicodeCodepointGot(u32),

@@ -131,6 +131,14 @@ impl Display for ValType {
 	}
 }
 
+#[derive(Clone)]
+pub enum ManifestFormat {
+	YamlStream(Box<ManifestFormat>),
+	Yaml(usize),
+	Json(usize),
+	String,
+}
+
 #[derive(Debug, Clone)]
 pub enum Val {
 	Bool(bool),
@@ -221,10 +229,46 @@ impl Val {
 		})
 	}
 
+
+	pub fn manifest(&self, ty: &ManifestFormat) -> Result<Rc<str>> {
+		Ok(match ty {
+			ManifestFormat::YamlStream(format) => {
+				let arr = match self {
+					Val::Arr(a) => a,
+					_ => throw!(StreamManifestOutputIsNotAArray),
+				};
+				let mut out = String::new();
+
+				match format as &ManifestFormat {
+					ManifestFormat::YamlStream(_) => throw!(StreamManifestOutputCannotBeRecursed),
+					ManifestFormat::String => throw!(StreamManifestCannotNestString),
+					_ => {}
+				};
+
+				if !arr.is_empty() {
+					for v in arr.iter() {
+						out.push_str("---\n");
+						out.push_str(&v.manifest(format)?);
+						out.push_str("\n");
+					}
+					out.push_str("...");
+				}
+
+				out.into()
+			}
+			ManifestFormat::Yaml(padding) => self.to_yaml(*padding)?,
+			ManifestFormat::Json(padding) => self.to_json(*padding)?,
+			ManifestFormat::String => match self {
+				Val::Str(s) => s.clone(),
+				_ => throw!(StringManifestOutputIsNotAString),
+			},
+		})
+	}
+
 	/// For manifestification
-	pub fn into_json(self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_json(&self, padding: usize) -> Result<Rc<str>> {
 		manifest_json_ex(
-			&self,
+			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
 				mtype: if padding == 0 {
@@ -239,7 +283,7 @@ impl Val {
 
 	/// Calls std.manifestJson
 	#[cfg(feature = "faster")]
-	pub fn into_std_json(self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		manifest_json_ex(
 			&self,
 			&ManifestJsonOptions {
@@ -252,11 +296,11 @@ impl Val {
 
 	/// Calls std.manifestJson
 	#[cfg(not(feature = "faster"))]
-	pub fn into_std_json(self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
-				.with_var("__tmp__to_json__".into(), self)?;
+				.with_var("__tmp__to_json__".into(), self.clone())?;
 			Ok(evaluate(
 				ctx,
 				&el!(Expr::Apply(
@@ -274,11 +318,11 @@ impl Val {
 			.try_cast_str("to json")?)
 		})
 	}
-	pub fn into_yaml(self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_yaml(&self, padding: usize) -> Result<Rc<str>> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
-				.with_var("__tmp__to_json__".into(), self);
+				.with_var("__tmp__to_json__".into(), self.clone());
 			Ok(evaluate(
 				ctx,
 				&el!(Expr::Apply(
