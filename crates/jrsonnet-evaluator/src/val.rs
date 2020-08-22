@@ -227,7 +227,11 @@ impl Val {
 			&self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
-				mtype: ManifestType::Manifest,
+				mtype: if padding == 0 {
+					ManifestType::Minify
+				} else {
+					ManifestType::Manifest
+				},
 			},
 		)
 		.map(|s| s.into())

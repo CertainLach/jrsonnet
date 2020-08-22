@@ -2,15 +2,17 @@ use crate::error::Error::*;
 use crate::error::Result;
 use crate::{throw, Val};
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Clone, Copy)]
 pub enum ManifestType {
 	// Applied in manifestification
 	Manifest,
 	/// Used for std.manifestJson
 	/// Empty array/objects extends to "[\n\n]" instead of "[ ]" as in manifest
 	Std,
-	// No line breaks, used in `obj+''`
+	/// No line breaks, used in `obj+''`
 	ToString,
+	/// Minified json
+	Minify,
 }
 
 pub struct ManifestJsonOptions<'s> {
@@ -30,6 +32,7 @@ fn manifest_json_ex_buf(
 	options: &ManifestJsonOptions<'_>,
 ) -> Result<()> {
 	use std::fmt::Write;
+	let mtype = options.mtype;
 	match val.unwrap_if_lazy()? {
 		Val::Bool(v) => {
 			if v {
@@ -44,7 +47,7 @@ fn manifest_json_ex_buf(
 		Val::Arr(items) => {
 			buf.push('[');
 			if !items.is_empty() {
-				if options.mtype != ManifestType::ToString {
+				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push('\n');
 				}
 
@@ -53,9 +56,9 @@ fn manifest_json_ex_buf(
 				for (i, item) in items.iter().enumerate() {
 					if i != 0 {
 						buf.push(',');
-						if options.mtype == ManifestType::ToString {
+						if mtype == ManifestType::ToString {
 							buf.push(' ');
-						} else {
+						} else if mtype != ManifestType::Minify {
 							buf.push('\n');
 						}
 					}
@@ -64,14 +67,14 @@ fn manifest_json_ex_buf(
 				}
 				cur_padding.truncate(old_len);
 
-				if options.mtype != ManifestType::ToString {
+				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push('\n');
 					buf.push_str(cur_padding);
 				}
-			} else if options.mtype == ManifestType::Std {
+			} else if mtype == ManifestType::Std {
 				buf.push_str("\n\n");
 				buf.push_str(cur_padding);
-			} else if options.mtype == ManifestType::ToString {
+			} else if mtype == ManifestType::ToString {
 				buf.push(' ');
 			}
 			buf.push(']');
@@ -80,7 +83,7 @@ fn manifest_json_ex_buf(
 			buf.push('{');
 			let fields = obj.visible_fields();
 			if !fields.is_empty() {
-				if options.mtype != ManifestType::ToString {
+				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push('\n');
 				}
 
@@ -89,9 +92,9 @@ fn manifest_json_ex_buf(
 				for (i, field) in fields.into_iter().enumerate() {
 					if i != 0 {
 						buf.push(',');
-						if options.mtype == ManifestType::ToString {
+						if mtype == ManifestType::ToString {
 							buf.push(' ');
-						} else {
+						} else if mtype != ManifestType::Minify {
 							buf.push('\n');
 						}
 					}
@@ -102,14 +105,14 @@ fn manifest_json_ex_buf(
 				}
 				cur_padding.truncate(old_len);
 
-				if options.mtype != ManifestType::ToString {
+				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push('\n');
 					buf.push_str(cur_padding);
 				}
-			} else if options.mtype == ManifestType::Std {
+			} else if mtype == ManifestType::Std {
 				buf.push_str("\n\n");
 				buf.push_str(cur_padding);
-			} else if options.mtype == ManifestType::ToString {
+			} else if mtype == ManifestType::ToString {
 				buf.push(' ');
 			}
 			buf.push('}');
