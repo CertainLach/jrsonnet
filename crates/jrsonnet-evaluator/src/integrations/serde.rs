@@ -40,7 +40,7 @@ impl TryFrom<&Val> for Value {
 				}
 				Value::Object(out)
 			}
-			Val::Func(_) | Val::Intristic(_, _) => {
+			Val::Func(_) | Val::Intristic(_, _) | Val::NativeExt(_, _) => {
 				throw!(RuntimeError("tried to manifest function".into()))
 			}
 		})

@@ -10,6 +10,7 @@ mod function;
 mod import;
 mod integrations;
 mod map;
+pub mod native;
 mod obj;
 pub mod trace;
 mod val;
@@ -21,6 +22,7 @@ pub use evaluate::*;
 pub use function::parse_function_call;
 pub use import::*;
 use jrsonnet_parser::*;
+use native::NativeCallback;
 pub use obj::*;
 use std::{
 	cell::{Ref, RefCell, RefMut},
@@ -60,6 +62,8 @@ pub struct EvaluationSettings {
 	pub max_trace: usize,
 	/// Used for std.extVar
 	pub ext_vars: HashMap<Rc<str>, Val>,
+	/// Used for ext.native
+	pub ext_natives: HashMap<Rc<str>, Rc<NativeCallback>>,
 	/// TLA vars
 	pub tla_vars: HashMap<Rc<str>, Val>,
 	/// Global variables are inserted in default context
@@ -78,6 +82,7 @@ impl Default for EvaluationSettings {
 			max_trace: 20,
 			globals: Default::default(),
 			ext_vars: Default::default(),
+			ext_natives: Default::default(),
 			tla_vars: Default::default(),
 			import_resolver: Box::new(DummyImportResolver),
 			manifest_format: ManifestFormat::Json(4),
@@ -413,6 +418,10 @@ impl EvaluationState {
 	}
 	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
 		self.settings_mut().import_resolver = resolver;
+	}
+
+	pub fn add_native(&self, name: Rc<str>, cb: Rc<NativeCallback>) {
+		self.settings_mut().ext_natives.insert(name, cb);
 	}
 
 	pub fn manifest_format(&self) -> ManifestFormat {
@@ -849,5 +858,31 @@ pub mod tests {
 			)
 		);
 		assert_eval!("{ x: 1, y: 2 } == { x: 1, y: 2 }")
+	}
+
+	#[test]
+	fn native_ext() -> crate::error::Result<()> {
+		use super::native::NativeCallback;
+		let evaluator = EvaluationState::default();
+
+		evaluator.with_stdlib();
+		evaluator.settings_mut().ext_natives.insert(
+			"native_add".into(),
+			Rc::new(NativeCallback::new(
+				ParamsDesc(Rc::new(vec![
+					Param("a".into(), None),
+					Param("b".into(), None),
+				])),
+				|args| match (&args[0], &args[1]) {
+					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
+					(_, _) => todo!(),
+				},
+			)),
+		);
+		evaluator.evaluate_snippet_raw(
+			Rc::new(PathBuf::from("test.jsonnet")),
+			"std.assertEqual(std.native(\"native_add\")(1, 2), 3)".into(),
+		)?;
+		Ok(())
 	}
 }

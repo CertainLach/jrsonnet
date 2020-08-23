@@ -1,5 +1,6 @@
 pub mod import;
 pub mod interop;
+pub mod native;
 pub mod val_extract;
 pub mod val_make;
 pub mod val_modify;
@@ -90,11 +91,6 @@ pub unsafe extern "C" fn jsonnet_realloc(
 #[allow(clippy::boxed_local)]
 pub unsafe extern "C" fn jsonnet_json_destroy(_vm: &EvaluationState, v: *mut Val) {
 	Box::from_raw(v);
-}
-
-#[no_mangle]
-pub extern "C" fn jsonnet_native_callback() {
-	todo!()
 }
 
 #[no_mangle]

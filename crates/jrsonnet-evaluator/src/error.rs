@@ -33,6 +33,7 @@ pub enum Error {
 	FunctionParameterNotBoundInCall(Rc<str>),
 
 	UndefinedExternalVariable(Rc<str>),
+	UndefinedExternalFunction(Rc<str>),
 
 	FieldMustBeStringGot(ValType),
 

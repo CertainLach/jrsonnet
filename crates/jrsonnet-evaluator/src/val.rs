@@ -3,6 +3,7 @@ use crate::{
 	error::Error::*,
 	evaluate,
 	function::{parse_function_call, parse_function_call_map, place_args},
+	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
@@ -152,6 +153,7 @@ pub enum Val {
 
 	// Library functions implemented in native
 	Intristic(Rc<str>, Rc<str>),
+	NativeExt(Rc<str>, Rc<NativeCallback>),
 }
 macro_rules! matches_unwrap {
 	($e: expr, $p: pat, $r: expr) => {
@@ -204,10 +206,9 @@ impl Val {
 			Val::Num(..) => ValType::Num,
 			Val::Arr(..) => ValType::Arr,
 			Val::Obj(..) => ValType::Obj,
-			Val::Func(..) => ValType::Func,
 			Val::Bool(_) => ValType::Bool,
 			Val::Null => ValType::Null,
-			Val::Intristic(_, _) => ValType::Func,
+			Val::Func(..) | Val::Intristic(_, _) | Val::NativeExt(_, _) => ValType::Func,
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
@@ -343,7 +344,7 @@ impl Val {
 }
 
 fn is_function_like(val: &Val) -> bool {
-	matches!(val, Val::Func(_) | Val::Intristic(_, _))
+	matches!(val, Val::Func(_) | Val::Intristic(_, _) | Val::NativeExt(_, _))
 }
 
 /// Implements std.primitiveEquals builtin

@@ -5,9 +5,9 @@ use crate::{
 	},
 	context_creator, equals,
 	error::Error::*,
-	future_wrapper, lazy_val, parse_args, primitive_equals, push, throw, with_state, Context,
-	ContextCreator, FuncDesc, LazyBinding, LazyVal, LocError, ObjMember, ObjValue, Result, Val,
-	ValType,
+	future_wrapper, lazy_val, parse_args, parse_function_call, primitive_equals, push, throw,
+	with_state, Context, ContextCreator, FuncDesc, LazyBinding, LazyVal, LocError, ObjMember,
+	ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jrsonnet_parser::{
@@ -549,11 +549,18 @@ pub fn evaluate_apply(
 					], {
 						Ok(Val::Num(x.powf(n)))
 					})?,
-					("std", "extVar") => parse_args!(context, "std.extVar", args, 2, [
+					("std", "extVar") => parse_args!(context, "std.extVar", args, 1, [
 						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 					], {
 						Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
 							|| UndefinedExternalVariable(x),
+						)?)
+					})?,
+					("std", "native") => parse_args!(context, "std.native", args, 1, [
+						0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
+					], {
+						Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::NativeExt(x.clone(), v)).ok_or_else(
+							|| UndefinedExternalFunction(x),
 						)?)
 					})?,
 					("std", "filter") => noinline!(parse_args!(context, "std.filter", args, 2, [
@@ -778,6 +785,18 @@ pub fn evaluate_apply(
 					}
 					(ns, name) => throw!(IntristicNotFound(ns.into(), name.into())),
 				})
+			},
+		)?,
+		Val::NativeExt(n, f) => push(
+			loc,
+			|| format!("native <{}> call", n),
+			|| {
+				let args = parse_function_call(context, None, &f.params, args, true)?;
+				let mut out_args = Vec::with_capacity(f.params.len());
+				for p in f.params.0.iter() {
+					out_args.push(args.binding(p.0.clone())?.evaluate()?);
+				}
+				Ok(f.call(&out_args)?)
 			},
 		)?,
 		Val::Func(f) => {
