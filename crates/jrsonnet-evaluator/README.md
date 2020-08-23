@@ -31,10 +31,10 @@ test tests::bench_serialize ... bench:   1,763,999 ns/iter (+/- 76,211)
 test tests::bench_parse     ... bench:   7,206,164 ns/iter (+/- 1,067,418)
 ```
 
-## Intristics
+## Intrinsics
 
-Some functions from stdlib are implemented as intristics
+Some functions from stdlib are implemented as intrinsics
 
-### Intristic handling
+### Intrinsic handling
 
-If indexed jsonnet object has field '__intristic_namespace__' of type 'string', then any not found field/method is resolved as `Val::Intristic(__intristic_namespace__, name)`
+If indexed jsonnet object has field '__intrinsic_namespace__' of type 'string', then any not found field/method is resolved as `Val::Intrinsic(__intrinsic_namespace__, name)`

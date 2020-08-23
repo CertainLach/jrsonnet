@@ -76,7 +76,7 @@ pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intristic(Rc<str>, Rc<str>),
+	Intrinsic(Rc<str>, Rc<str>),
 	/// Library functions implemented in native
 	NativeExt(Rc<str>, Rc<NativeCallback>),
 }
@@ -85,7 +85,7 @@ impl PartialEq for FuncVal {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(FuncVal::Normal(a), FuncVal::Normal(b)) => a == b,
-			(FuncVal::Intristic(ans, an), FuncVal::Intristic(bns, bn)) => ans == bns && an == bn,
+			(FuncVal::Intrinsic(ans, an), FuncVal::Intrinsic(bns, bn)) => ans == bns && an == bn,
 			(FuncVal::NativeExt(an, _), FuncVal::NativeExt(bn, _)) => an == bn,
 			(..) => false,
 		}
@@ -93,12 +93,12 @@ impl PartialEq for FuncVal {
 }
 impl FuncVal {
 	pub fn is_ident(&self) -> bool {
-		matches!(&self, FuncVal::Intristic(ns, n) if ns as &str == "std" && n as &str == "id")
+		matches!(&self, FuncVal::Intrinsic(ns, n) if ns as &str == "std" && n as &str == "id")
 	}
 	pub fn name(&self) -> Rc<str> {
 		match self {
 			FuncVal::Normal(normal) => normal.name.clone(),
-			FuncVal::Intristic(ns, name) => format!("intristic.{}.{}", ns, name).into(),
+			FuncVal::Intrinsic(ns, name) => format!("intrinsic.{}.{}", ns, name).into(),
 			FuncVal::NativeExt(n, _) => format!("native.{}", n).into(),
 		}
 	}
@@ -120,7 +120,7 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intristic(ns, name) => call_builtin(call_ctx, loc, &ns, &name, args),
+			FuncVal::Intrinsic(ns, name) => call_builtin(call_ctx, loc, &ns, &name, args),
 			FuncVal::NativeExt(_name, handler) => {
 				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
 				let mut out_args = Vec::with_capacity(handler.params.len());
@@ -149,7 +149,7 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intristic(_, _) => todo!(),
+			FuncVal::Intrinsic(_, _) => todo!(),
 			FuncVal::NativeExt(_, _) => todo!(),
 		}
 	}
@@ -160,7 +160,7 @@ impl FuncVal {
 				let ctx = place_args(call_ctx, Some(func.ctx.clone()), &func.params, args)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intristic(_, _) => todo!(),
+			FuncVal::Intrinsic(_, _) => todo!(),
 			FuncVal::NativeExt(_, _) => todo!(),
 		}
 	}

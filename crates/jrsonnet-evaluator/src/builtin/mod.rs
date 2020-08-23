@@ -349,6 +349,6 @@ pub fn call_builtin(
 		], {
 			Ok(v)
 		})?,
-		(ns, name) => throw!(IntristicNotFound(ns.into(), name.into())),
+		(ns, name) => throw!(IntrinsicNotFound(ns.into(), name.into())),
 	})
 }

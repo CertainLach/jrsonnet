@@ -467,9 +467,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							if let Some(v) = v.get(s.clone())? {
 								Ok(v.unwrap_if_lazy()?)
 							} else if let Some(Val::Str(n)) =
-								v.get("__intristic_namespace__".into())?
+								v.get("__intrinsic_namespace__".into())?
 							{
-								Ok(Val::Func(Rc::new(FuncVal::Intristic(n, s))))
+								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(n, s))))
 							} else {
 								throw!(NoSuchField(s))
 							}
