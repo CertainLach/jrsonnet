@@ -1,4 +1,7 @@
-use crate::{builtin::format::FormatError, ValType};
+use crate::{
+	builtin::{format::FormatError, sort::SortError},
+	ValType,
+};
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
@@ -69,6 +72,7 @@ pub enum Error {
 	InvalidUnicodeCodepointGot(u32),
 
 	Format(FormatError),
+	Sort(SortError),
 }
 impl From<Error> for LocError {
 	fn from(e: Error) -> Self {

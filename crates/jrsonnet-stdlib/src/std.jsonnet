@@ -2,7 +2,7 @@
   __intristic_namespace__:: 'std',
 
   local std = self,
-  local id = function(x) x,
+  local id = std.id,
 
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',

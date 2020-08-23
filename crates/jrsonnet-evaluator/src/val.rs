@@ -1,12 +1,15 @@
 use crate::{
-	builtin::manifest::{manifest_json_ex, ManifestJsonOptions, ManifestType},
+	builtin::{
+		call_builtin,
+		manifest::{manifest_json_ex, ManifestJsonOptions, ManifestType},
+	},
 	error::Error::*,
 	evaluate,
 	function::{parse_function_call, parse_function_call_map, place_args},
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
-use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, LocExpr, ParamsDesc};
+use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	collections::HashMap,
@@ -67,17 +70,65 @@ pub struct FuncDesc {
 	pub params: ParamsDesc,
 	pub body: LocExpr,
 }
-impl FuncDesc {
-	/// This function is always inlined to make tailstrict work
-	pub fn evaluate(&self, call_ctx: Context, args: &ArgsDesc, tailstrict: bool) -> Result<Val> {
-		let ctx = parse_function_call(
-			call_ctx,
-			Some(self.ctx.clone()),
-			&self.params,
-			args,
-			tailstrict,
-		)?;
-		evaluate(ctx, &self.body)
+
+#[derive(Debug, Clone)]
+pub enum FuncVal {
+	/// Plain function implemented in jsonnet
+	Normal(Rc<FuncDesc>),
+	/// Standard library function
+	Intristic(Rc<str>, Rc<str>),
+	/// Library functions implemented in native
+	NativeExt(Rc<str>, Rc<NativeCallback>),
+}
+impl PartialEq for FuncVal {
+	fn eq(&self, other: &Self) -> bool {
+		match (self, other) {
+			(FuncVal::Normal(a), FuncVal::Normal(b)) => a == b,
+			(FuncVal::Intristic(ans, an), FuncVal::Intristic(bns, bn)) => ans == bns && an == bn,
+			(FuncVal::NativeExt(an, _), FuncVal::NativeExt(bn, _)) => an == bn,
+			(..) => false,
+		}
+	}
+}
+impl FuncVal {
+	pub fn is_ident(&self) -> bool {
+		matches!(&self, FuncVal::Intristic(ns, n) if ns as &str == "std" && n as &str == "id")
+	}
+	pub fn name(&self) -> Rc<str> {
+		match self {
+			FuncVal::Normal(normal) => normal.name.clone(),
+			FuncVal::Intristic(ns, name) => format!("intristic.{}.{}", ns, name).into(),
+			FuncVal::NativeExt(n, _) => format!("native.{}", n).into(),
+		}
+	}
+	pub fn evaluate(
+		&self,
+		call_ctx: Context,
+		loc: &Option<ExprLocation>,
+		args: &ArgsDesc,
+		tailstrict: bool,
+	) -> Result<Val> {
+		match self {
+			FuncVal::Normal(func) => {
+				let ctx = parse_function_call(
+					call_ctx,
+					Some(func.ctx.clone()),
+					&func.params,
+					args,
+					tailstrict,
+				)?;
+				evaluate(ctx, &func.body)
+			}
+			FuncVal::Intristic(ns, name) => call_builtin(call_ctx, loc, &ns, &name, args),
+			FuncVal::NativeExt(_name, handler) => {
+				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
+				let mut out_args = Vec::with_capacity(handler.params.len());
+				for p in handler.params.0.iter() {
+					out_args.push(args.binding(p.0.clone())?.evaluate()?);
+				}
+				Ok(handler.call(&out_args)?)
+			}
+		}
 	}
 
 	pub fn evaluate_map(
@@ -86,19 +137,31 @@ impl FuncDesc {
 		args: &HashMap<Rc<str>, Val>,
 		tailstrict: bool,
 	) -> Result<Val> {
-		let ctx = parse_function_call_map(
-			call_ctx,
-			Some(self.ctx.clone()),
-			&self.params,
-			args,
-			tailstrict,
-		)?;
-		evaluate(ctx, &self.body)
+		match self {
+			FuncVal::Normal(func) => {
+				let ctx = parse_function_call_map(
+					call_ctx,
+					Some(func.ctx.clone()),
+					&func.params,
+					args,
+					tailstrict,
+				)?;
+				evaluate(ctx, &func.body)
+			}
+			FuncVal::Intristic(_, _) => todo!(),
+			FuncVal::NativeExt(_, _) => todo!(),
+		}
 	}
 
 	pub fn evaluate_values(&self, call_ctx: Context, args: &[Val]) -> Result<Val> {
-		let ctx = place_args(call_ctx, Some(self.ctx.clone()), &self.params, args)?;
-		evaluate(ctx, &self.body)
+		match self {
+			FuncVal::Normal(func) => {
+				let ctx = place_args(call_ctx, Some(func.ctx.clone()), &func.params, args)?;
+				evaluate(ctx, &func.body)
+			}
+			FuncVal::Intristic(_, _) => todo!(),
+			FuncVal::NativeExt(_, _) => todo!(),
+		}
 	}
 }
 
@@ -149,11 +212,7 @@ pub enum Val {
 	Lazy(LazyVal),
 	Arr(Rc<Vec<Val>>),
 	Obj(ObjValue),
-	Func(Rc<FuncDesc>),
-
-	// Library functions implemented in native
-	Intristic(Rc<str>, Rc<str>),
-	NativeExt(Rc<str>, Rc<NativeCallback>),
+	Func(FuncVal),
 }
 macro_rules! matches_unwrap {
 	($e: expr, $p: pat, $r: expr) => {
@@ -193,6 +252,12 @@ impl Val {
 		self.assert_type(context, ValType::Num)?;
 		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Num(v), v))
 	}
+	pub fn inplace_unwrap(&mut self) -> Result<()> {
+		while let Val::Lazy(lazy) = self {
+			*self = lazy.evaluate()?;
+		}
+		Ok(())
+	}
 	pub fn unwrap_if_lazy(&self) -> Result<Self> {
 		Ok(if let Val::Lazy(v) = self {
 			v.evaluate()?.unwrap_if_lazy()?
@@ -208,7 +273,7 @@ impl Val {
 			Val::Obj(..) => ValType::Obj,
 			Val::Bool(_) => ValType::Bool,
 			Val::Null => ValType::Null,
-			Val::Func(..) | Val::Intristic(_, _) | Val::NativeExt(_, _) => ValType::Func,
+			Val::Func(..) => ValType::Func,
 			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
@@ -374,7 +439,7 @@ impl Val {
 }
 
 fn is_function_like(val: &Val) -> bool {
-	matches!(val, Val::Func(_) | Val::Intristic(_, _) | Val::NativeExt(_, _))
+	matches!(val, Val::Func(_))
 }
 
 /// Implements std.primitiveEquals builtin

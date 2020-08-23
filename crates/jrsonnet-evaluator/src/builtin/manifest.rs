@@ -117,9 +117,7 @@ fn manifest_json_ex_buf(
 			}
 			buf.push('}');
 		}
-		Val::Func(_) | Val::Intristic(_, _) | Val::NativeExt(_, _) => {
-			throw!(RuntimeError("tried to manifest function".into()))
-		}
+		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
 		Val::Lazy(_) => unreachable!(),
 	};
 	Ok(())
