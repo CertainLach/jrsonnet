@@ -86,8 +86,9 @@ impl TraceFormat for CompactFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{:?}", error.0)?;
-		let file_names = (error.1)
+		writeln!(out, "{:?}", error.error())?;
+		let file_names = error
+			.trace()
 			.0
 			.iter()
 			.map(|el| {
@@ -105,7 +106,7 @@ impl TraceFormat for CompactFormat {
 			})
 			.collect::<Vec<_>>();
 		let align = file_names.iter().map(|e| e.len()).max().unwrap_or(0);
-		for (i, (el, file)) in (error.1).0.iter().zip(file_names).enumerate() {
+		for (i, (el, file)) in error.trace().0.iter().zip(file_names).enumerate() {
 			if i != 0 {
 				writeln!(out)?;
 			}
@@ -131,8 +132,8 @@ impl TraceFormat for JSFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{:?}", error.0)?;
-		for (i, item) in (error.1).0.iter().enumerate() {
+		writeln!(out, "{:?}", error.error())?;
+		for (i, item) in error.trace().0.iter().enumerate() {
 			if i != 0 {
 				writeln!(out)?;
 			}
@@ -170,8 +171,8 @@ impl TraceFormat for ExplainingFormat {
 			display_list::{DisplayList, FormatOptions},
 			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
 		};
-		writeln!(out, "{:?}", error.0)?;
-		let trace = &error.1;
+		writeln!(out, "{:?}", error.error())?;
+		let trace = &error.trace();
 		for item in trace.0.iter() {
 			let desc = &item.desc;
 			let source = item.location.clone();

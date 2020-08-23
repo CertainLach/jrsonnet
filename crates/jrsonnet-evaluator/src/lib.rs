@@ -285,7 +285,7 @@ impl EvaluationState {
 		let result = f();
 		self.data_mut().stack_depth -= 1;
 		if let Err(mut err) = result {
-			(err.1).0.push(StackTraceElement {
+			err.trace_mut().0.push(StackTraceElement {
 				location: e.clone(),
 				desc: frame_desc(),
 			});

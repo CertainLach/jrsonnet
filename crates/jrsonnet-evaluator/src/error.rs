@@ -76,7 +76,7 @@ pub enum Error {
 }
 impl From<Error> for LocError {
 	fn from(e: Error) -> Self {
-		Self(e, StackTrace(vec![]))
+		Self::new(e)
 	}
 }
 
@@ -89,10 +89,20 @@ pub struct StackTraceElement {
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
 #[derive(Debug, Clone)]
-pub struct LocError(pub Error, pub StackTrace);
+pub struct LocError(Box<(Error, StackTrace)>);
 impl LocError {
 	pub fn new(e: Error) -> Self {
-		Self(e, StackTrace(vec![]))
+		Self(Box::new((e, StackTrace(vec![]))))
+	}
+
+	pub fn error(&self) -> &Error {
+		&(self.0).0
+	}
+	pub fn trace(&self) -> &StackTrace {
+		&(self.0).1
+	}
+	pub fn trace_mut(&mut self) -> &mut StackTrace {
+		&mut (self.0).1
 	}
 }
 
