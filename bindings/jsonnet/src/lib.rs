@@ -161,19 +161,152 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	})
 }
 
-#[no_mangle]
-pub extern "C" fn jsonnet_evaluate_file_multi() {
-	todo!()
+fn multi_to_raw(multi: Vec<(Rc<str>, Rc<str>)>) -> *const c_char {
+	let mut out = Vec::new();
+	for (i, (k, v)) in multi.iter().enumerate() {
+		if i != 0 {
+			out.push(0);
+		}
+		out.extend_from_slice(k.as_bytes());
+		out.push(0);
+		out.extend_from_slice(v.as_bytes());
+	}
+	out.push(0);
+	out.push(0);
+	let v = out.as_ptr();
+	std::mem::forget(out);
+	v as *const c_char
 }
+
+/// # Safety
 #[no_mangle]
-pub extern "C" fn jsonnet_evaluate_snippet_multi() {
-	todo!()
+pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
+	vm: &EvaluationState,
+	filename: *const c_char,
+	error: &mut c_int,
+) -> *const c_char {
+	vm.run_in_state(|| {
+		let filename = CStr::from_ptr(filename);
+		match vm
+			.evaluate_file_raw_nocwd(&PathBuf::from(filename.to_str().unwrap()))
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest_multi(v))
+		{
+			Ok(v) => {
+				*error = 0;
+				multi_to_raw(v)
+			}
+			Err(e) => {
+				*error = 1;
+				let out = vm.stringify_err(&e);
+				CString::new(&out as &str).unwrap().into_raw()
+			}
+		}
+	})
 }
+
+/// # Safety
 #[no_mangle]
-pub extern "C" fn jsonnet_evaluate_file_stream() {
-	todo!()
+pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
+	vm: &EvaluationState,
+	filename: *const c_char,
+	snippet: *const c_char,
+	error: &mut c_int,
+) -> *const c_char {
+	vm.run_in_state(|| {
+		let filename = CStr::from_ptr(filename);
+		let snippet = CStr::from_ptr(snippet);
+		match vm
+			.evaluate_snippet_raw(
+				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				snippet.to_str().unwrap().into(),
+			)
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest_multi(v))
+		{
+			Ok(v) => {
+				*error = 0;
+				multi_to_raw(v)
+			}
+			Err(e) => {
+				*error = 1;
+				let out = vm.stringify_err(&e);
+				CString::new(&out as &str).unwrap().into_raw()
+			}
+		}
+	})
 }
+
+fn stream_to_raw(multi: Vec<Rc<str>>) -> *const c_char {
+	let mut out = Vec::new();
+	for (i, v) in multi.iter().enumerate() {
+		if i != 0 {
+			out.push(0);
+		}
+		out.extend_from_slice(v.as_bytes());
+	}
+	out.push(0);
+	out.push(0);
+	let v = out.as_ptr();
+	std::mem::forget(out);
+	v as *const c_char
+}
+
+/// # Safety
 #[no_mangle]
-pub extern "C" fn jsonnet_evaluate_snippet_stream() {
-	todo!()
+pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
+	vm: &EvaluationState,
+	filename: *const c_char,
+	error: &mut c_int,
+) -> *const c_char {
+	vm.run_in_state(|| {
+		let filename = CStr::from_ptr(filename);
+		match vm
+			.evaluate_file_raw_nocwd(&PathBuf::from(filename.to_str().unwrap()))
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest_stream(v))
+		{
+			Ok(v) => {
+				*error = 0;
+				stream_to_raw(v)
+			}
+			Err(e) => {
+				*error = 1;
+				let out = vm.stringify_err(&e);
+				CString::new(&out as &str).unwrap().into_raw()
+			}
+		}
+	})
+}
+
+/// # Safety
+#[no_mangle]
+pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
+	vm: &EvaluationState,
+	filename: *const c_char,
+	snippet: *const c_char,
+	error: &mut c_int,
+) -> *const c_char {
+	vm.run_in_state(|| {
+		let filename = CStr::from_ptr(filename);
+		let snippet = CStr::from_ptr(snippet);
+		match vm
+			.evaluate_snippet_raw(
+				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				snippet.to_str().unwrap().into(),
+			)
+			.and_then(|v| vm.with_tla(v))
+			.and_then(|v| vm.manifest_stream(v))
+		{
+			Ok(v) => {
+				*error = 0;
+				stream_to_raw(v)
+			}
+			Err(e) => {
+				*error = 1;
+				let out = vm.stringify_err(&e);
+				CString::new(&out as &str).unwrap().into_raw()
+			}
+		}
+	})
 }

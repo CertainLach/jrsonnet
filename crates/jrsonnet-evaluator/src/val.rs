@@ -213,7 +213,7 @@ impl Val {
 		})
 	}
 
-	pub fn into_string(self) -> Result<Rc<str>> {
+	pub fn to_string(&self) -> Result<Rc<str>> {
 		Ok(match self.unwrap_if_lazy()? {
 			Val::Bool(true) => "true".into(),
 			Val::Bool(false) => "false".into(),
@@ -230,6 +230,36 @@ impl Val {
 		})
 	}
 
+	/// Expects value to be object, outputs (key, manifested value) pairs
+	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+		let obj = match self {
+			Val::Obj(obj) => obj,
+			_ => throw!(MultiManifestOutputIsNotAObject),
+		};
+		let keys = obj.visible_fields();
+		let mut out = Vec::with_capacity(keys.len());
+		for key in keys {
+			let value = obj
+				.get(key.clone())?
+				.expect("item in object")
+				.manifest(ty)?;
+			out.push((key, value));
+		}
+		Ok(out)
+	}
+
+	/// Expects value to be array, outputs manifested values
+	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<Rc<str>>> {
+		let arr = match self {
+			Val::Arr(a) => a,
+			_ => throw!(StreamManifestOutputIsNotAArray),
+		};
+		let mut out = Vec::with_capacity(arr.len());
+		for i in arr.iter() {
+			out.push(i.manifest(ty)?);
+		}
+		Ok(out)
+	}
 
 	pub fn manifest(&self, ty: &ManifestFormat) -> Result<Rc<str>> {
 		Ok(match ty {

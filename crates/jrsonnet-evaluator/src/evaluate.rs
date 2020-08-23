@@ -95,8 +95,8 @@ pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o).into()),
 		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n).into()),
 
-		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().into_string()?).into()),
-		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().into_string()?, s).into()),
+		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().to_string()?).into()),
+		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().to_string()?, s).into()),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
@@ -975,9 +975,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			if assertion_result {
 				evaluate(context, returned)?
 			} else if let Some(msg) = msg {
-				throw!(AssertionFailed(evaluate(context, msg)?));
+				throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
 			} else {
-				throw!(AssertionFailed(Val::Null));
+				throw!(AssertionFailed(Val::Null.to_string()?));
 			}
 		}
 		ErrorStmt(e) => push(

@@ -321,6 +321,12 @@ impl EvaluationState {
 	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
 		self.run_in_state(|| val.manifest(&self.manifest_format()))
 	}
+	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+		self.run_in_state(|| val.manifest_multi(&self.manifest_format()))
+	}
+	pub fn manifest_stream(&self, val: Val) -> Result<Vec<Rc<str>>> {
+		self.run_in_state(|| val.manifest_stream(&self.manifest_format()))
+	}
 
 	/// If passed value is function - call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
