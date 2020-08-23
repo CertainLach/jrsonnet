@@ -690,12 +690,11 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 					if f.is_empty() {
 						throw!(MappingKeysRequired);
 					}
-					let value = if let Some(v) = values.get(f.clone())? {
+					if let Some(v) = values.get(f.clone())? {
 						v
 					} else {
 						throw!(NoSuchFormatField(f));
-					};
-					value
+					}
 				};
 
 				format_code(&mut out, &value, &c, width, precision)?;

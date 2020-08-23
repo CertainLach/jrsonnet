@@ -32,8 +32,6 @@ and mine cluster configuration templating speed
 
 Official benchmark report are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b), and updated sometimes. Here it tested against golang, C++, and scala impl. As you can see, it is a lot faster
 
-You can generate this report by calling `make benchmarks`, but it probally won't work in standard setup, you need to link golang jsonnet impl to gojsonnet, and c++ impl to jsonnet.
-
 TODO: Create docker container for easier benchmarking and/or benchmark in CI
 
 Also, there is some ideas to improve performance even further, by i.e:
