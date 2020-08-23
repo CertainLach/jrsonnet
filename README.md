@@ -92,15 +92,9 @@ See [bindings](./bindings/) for more information.
 
 This is the fastest implementation of jsonnet both according to official benchmarks and real-life cluster configuration templating speed.
 
-Official benchmark results are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b) which may get updated sometimes. It shows tests against Golang, C++ and Scala implementations showing the best performance in most cases.
+Official benchmark results are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b) which may get updated sometimes. It shows tests against Golang, C++ and Scala implementations showing the best performance in all cases.
 
-You can generate this report via
-
-```bash
-$ make benchmarks
-```
-
- However it may not work until you link golang jsonnet implementation to `gojsonnet` and C++ implementation to `jsonnet`.
+You can generate this report via provided nix flake
 
 ## TO-DO list
 
