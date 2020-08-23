@@ -155,7 +155,7 @@ impl EvaluationState {
 				},
 			)
 			.map_err(|error| ImportSyntaxError {
-				error,
+				error: Box::new(error),
 				path,
 				source_code,
 			})?,

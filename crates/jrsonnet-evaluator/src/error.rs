@@ -1,4 +1,4 @@
-use crate::{builtin::format::FormatError, Val, ValType};
+use crate::{builtin::format::FormatError, ValType};
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 
@@ -18,7 +18,7 @@ pub enum Error {
 
 	ArrayBoundsError(usize, usize),
 
-	AssertionFailed(Val),
+	AssertionFailed(Rc<str>),
 
 	VariableIsNotDefined(String),
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
@@ -50,7 +50,7 @@ pub enum Error {
 	ImportSyntaxError {
 		path: Rc<PathBuf>,
 		source_code: Rc<str>,
-		error: jrsonnet_parser::ParseError,
+		error: Box<jrsonnet_parser::ParseError>,
 	},
 
 	RuntimeError(Rc<str>),
