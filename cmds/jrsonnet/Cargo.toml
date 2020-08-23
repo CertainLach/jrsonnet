@@ -22,4 +22,4 @@ mimallocator = { version = "0.1.3", optional = true }
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
-rev = "ddd55e57dc4b0205e02c121f1116704bd1b51956"
+rev = "6a56a82629d1a990efb37dae9c75a76e943f22a0"
