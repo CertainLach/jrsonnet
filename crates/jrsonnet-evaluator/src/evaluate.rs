@@ -9,6 +9,7 @@ use jrsonnet_parser::{
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
+use rustc_hash::FxHashMap;
 use std::{collections::HashMap, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
@@ -45,7 +46,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 }
 
 pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(FuncVal::Normal(Rc::new(FuncDesc {
+	Val::Func(Rc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -351,7 +352,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let key = evaluate(ctx.clone(), &obj.key)?;
 					let value = LazyBinding::Bindable(Rc::new(
 						closure!(clone ctx, clone obj.value, |this, _super_obj| {
-							Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(HashMap::new(), None, this, None), &value)?))
+							Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(FxHashMap::default(), None, this, None), &value)?))
 						}),
 					));
 
@@ -468,7 +469,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							} else if let Some(Val::Str(n)) =
 								v.get("__intristic_namespace__".into())?
 							{
-								Ok(Val::Func(FuncVal::Intristic(n, s)))
+								Ok(Val::Func(Rc::new(FuncVal::Intristic(n, s))))
 							} else {
 								throw!(NoSuchField(s))
 							}

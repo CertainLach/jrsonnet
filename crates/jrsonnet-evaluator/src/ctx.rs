@@ -2,6 +2,8 @@ use crate::{
 	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
+use rustc_hash::FxHashMap;
+use std::hash::BuildHasherDefault;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
@@ -71,14 +73,15 @@ impl Context {
 	}
 
 	pub fn with_var(self, name: Rc<str>, value: Val) -> Context {
-		let mut new_bindings = HashMap::with_capacity(1);
+		let mut new_bindings =
+			FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new_bindings.insert(name, resolved_lazy_val!(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
 	pub fn extend(
 		self,
-		new_bindings: HashMap<Rc<str>, LazyVal>,
+		new_bindings: FxHashMap<Rc<str>, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -127,7 +130,8 @@ impl Context {
 	) -> Result<Context> {
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
-		let mut new = HashMap::with_capacity(new_bindings.len());
+		let mut new =
+			FxHashMap::with_capacity_and_hasher(new_bindings.len(), BuildHasherDefault::default());
 		for (k, v) in new_bindings.into_iter() {
 			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
 		}

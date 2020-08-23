@@ -158,7 +158,7 @@ pub fn call_builtin(
 		("std", "native") => parse_args!(context, "std.native", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(FuncVal::NativeExt(x.clone(), v))).ok_or_else(
+			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or_else(
 				|| UndefinedExternalFunction(x),
 			)?)
 		})?,
@@ -212,7 +212,7 @@ pub fn call_builtin(
 			if arr.len() <= 1 {
 				return Ok(Val::Arr(arr))
 			}
-			Ok(Val::Arr(sort::sort(context, arr, keyF)?))
+			Ok(Val::Arr(sort::sort(context, arr, &keyF)?))
 		})?,
 		// faster
 		("std", "format") => parse_args!(context, "std.format", args, 2, [

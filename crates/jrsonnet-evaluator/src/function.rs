@@ -1,7 +1,8 @@
 use crate::{error::Error::*, evaluate, lazy_val, resolved_lazy_val, throw, Context, Result, Val};
 use closure::closure;
 use jrsonnet_parser::{ArgsDesc, ParamsDesc};
-use std::{collections::HashMap, rc::Rc};
+use rustc_hash::FxHashMap;
+use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
 
 const NO_DEFAULT_CONTEXT: &str =
 	"no default context set for call with defined default parameter value";
@@ -20,7 +21,7 @@ pub fn parse_function_call(
 	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = HashMap::with_capacity(params.len());
+	let mut out = HashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		let idx = if let Some(name) = &arg.0 {
@@ -67,7 +68,7 @@ pub fn parse_function_call_map(
 	args: &HashMap<Rc<str>, Val>,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = HashMap::with_capacity(params.len());
+	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (name, val) in args.iter() {
 		let idx = params
@@ -115,7 +116,7 @@ pub(crate) fn place_args(
 	params: &ParamsDesc,
 	args: &[Val],
 ) -> Result<Context> {
-	let mut out = HashMap::with_capacity(params.len());
+	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		if id >= params.len() {

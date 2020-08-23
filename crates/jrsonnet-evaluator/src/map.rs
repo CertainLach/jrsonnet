@@ -1,16 +1,17 @@
-use std::{borrow::Borrow, collections::HashMap, hash::Hash, rc::Rc};
+use rustc_hash::FxHashMap;
+use std::{borrow::Borrow, hash::Hash, rc::Rc};
 
 #[derive(Default, Debug)]
 struct LayeredHashMapInternals<K: Hash, V> {
 	parent: Option<LayeredHashMap<K, V>>,
-	current: HashMap<K, V>,
+	current: FxHashMap<K, V>,
 }
 
 #[derive(Debug)]
 pub struct LayeredHashMap<K: Hash, V>(Rc<LayeredHashMapInternals<K, V>>);
 
 impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
-	pub fn extend(self, new_layer: HashMap<K, V>) -> Self {
+	pub fn extend(self, new_layer: FxHashMap<K, V>) -> Self {
 		match Rc::try_unwrap(self.0) {
 			Ok(mut map) => {
 				map.current.extend(new_layer);
@@ -45,7 +46,7 @@ impl<K: Hash + Eq, V> Default for LayeredHashMap<K, V> {
 	fn default() -> Self {
 		LayeredHashMap(Rc::new(LayeredHashMapInternals {
 			parent: None,
-			current: HashMap::new(),
+			current: FxHashMap::default(),
 		}))
 	}
 }

@@ -71,15 +71,16 @@ pub struct FuncDesc {
 	pub body: LocExpr,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug)]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
-	Normal(Rc<FuncDesc>),
+	Normal(FuncDesc),
 	/// Standard library function
 	Intristic(Rc<str>, Rc<str>),
 	/// Library functions implemented in native
 	NativeExt(Rc<str>, Rc<NativeCallback>),
 }
+
 impl PartialEq for FuncVal {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
@@ -212,8 +213,9 @@ pub enum Val {
 	Lazy(LazyVal),
 	Arr(Rc<Vec<Val>>),
 	Obj(ObjValue),
-	Func(FuncVal),
+	Func(Rc<FuncVal>),
 }
+
 macro_rules! matches_unwrap {
 	($e: expr, $p: pat, $r: expr) => {
 		match $e {
