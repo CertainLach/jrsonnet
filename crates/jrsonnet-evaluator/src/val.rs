@@ -177,7 +177,7 @@ pub enum ValType {
 	Func,
 }
 impl ValType {
-	pub const fn name(&self) -> &'static str {
+	pub fn name(&self) -> &'static str {
 		use ValType::*;
 		match self {
 			Bool => "boolean",
@@ -441,7 +441,7 @@ impl Val {
 	}
 }
 
-const fn is_function_like(val: &Val) -> bool {
+fn is_function_like(val: &Val) -> bool {
 	matches!(val, Val::Func(_))
 }
 
