@@ -1,0 +1,75 @@
+name: CI
+
+on:
+  push:
+    branches:
+      - master
+
+jobs:
+  test:
+    name: Test Suite
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout sources
+        uses: actions/checkout@v2
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: stable
+          override: true
+      - name: Run tests
+        uses: actions-rs/cargo@v1
+        with:
+          command: test
+          args: --all
+  release:
+    if: startsWith(github.ref, 'refs/tags/')
+    needs: [test]
+    strategy:
+      matrix:
+        os: [ubuntu-latest, macOS-latest, windows-latest]
+        include:
+          - os: ubuntu-latest
+            rust: stable
+            target: x86_64-unknown-linux-gnu
+            bin: jrsonnet
+          - os: windows-latest
+            rust: stable
+            target: x86_64-pc-windows-msvc
+            bin: jrsonnet.exe
+          - os: macOS-latest
+            rust: stable
+            target: x86_64-apple-darwin
+            bin: jrsonnet
+    runs-on: ${{ matrix.os }}
+    steps:
+      - name: Install stable toolchain
+        uses: actions-rs/toolchain@v1
+        with:
+          toolchain: ${{ matrix.rust }}
+          override: true
+          target: ${{ matrix.target }}
+      - name: Checkout
+        uses: actions/checkout@v2
+      - name: Run build
+        uses: actions-rs/cargo@v1
+        with:
+          command: build
+          args: --release --target ${{ matrix.target }}
+      - name: Package
+        shell: bash
+        run: |
+          strip target/${{ matrix.target }}/release/${{ matrix.bin }}
+          cd target/${{ matrix.target }}/release
+
+          cp ../../../${{ matrix.bin }} ${{ matrix.bin }}
+          cd -
+      - name: Generate SHA-256
+        run: shasum -a 256 ${{ matrix.bin }}
+      - name: Publish
+        uses: softprops/action-gh-release@v1
+        with:
+          draft: true
+          files: "jrsonnet*"
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
