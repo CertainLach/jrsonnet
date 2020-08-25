@@ -314,7 +314,7 @@ pub fn render_integer(
 	for _ in 0..zp2 {
 		out.push('0');
 	}
-	out.push_str(&prefix);
+	out.push_str(prefix);
 
 	for digit in digits.into_iter().rev() {
 		let ch = NUMBERS[digit as usize] as char;
@@ -399,7 +399,10 @@ pub fn render_float(
 		}
 		return;
 	}
-	let frac = (n.fract() * 10.0_f64.powf(precision as f64) + 0.5).floor();
+	let frac = n
+		.fract()
+		.mul_add(10.0_f64.powf(precision as f64), 0.5)
+		.floor();
 	if trailing || frac > 0.0 {
 		out.push('.');
 		let mut frac_str = String::new();
@@ -605,7 +608,7 @@ pub fn format_code(
 }
 
 pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
-	let codes = parse_codes(&str)?;
+	let codes = parse_codes(str)?;
 	let mut out = String::new();
 
 	for code in codes {
@@ -659,7 +662,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 }
 
 pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
-	let codes = parse_codes(&str)?;
+	let codes = parse_codes(str)?;
 	let mut out = String::new();
 
 	for code in codes {

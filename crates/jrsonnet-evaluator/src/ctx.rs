@@ -48,8 +48,8 @@ impl Context {
 		&self.0.super_obj
 	}
 
-	pub fn new() -> Context {
-		Context(Rc::new(ContextInternals {
+	pub fn new() -> Self {
+		Self(Rc::new(ContextInternals {
 			dollar: None,
 			this: None,
 			super_obj: None,
@@ -65,14 +65,14 @@ impl Context {
 			.cloned()
 			.ok_or_else(|| UnknownVariable(name))?)
 	}
-	pub fn into_future(self, ctx: FutureContext) -> Context {
+	pub fn into_future(self, ctx: FutureContext) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
 		}
 		ctx.unwrap()
 	}
 
-	pub fn with_var(self, name: Rc<str>, value: Val) -> Context {
+	pub fn with_var(self, name: Rc<str>, value: Val) -> Self {
 		let mut new_bindings =
 			FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new_bindings.insert(name, resolved_lazy_val!(value));
@@ -85,7 +85,7 @@ impl Context {
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
-	) -> Context {
+	) -> Self {
 		match Rc::try_unwrap(self.0) {
 			Ok(mut ctx) => {
 				// Extended context aren't used by anything else, we can freely mutate it without cloning
@@ -101,7 +101,7 @@ impl Context {
 				if !new_bindings.is_empty() {
 					ctx.bindings = ctx.bindings.extend(new_bindings);
 				}
-				Context(Rc::new(ctx))
+				Self(Rc::new(ctx))
 			}
 			Err(ctx) => {
 				let dollar = new_dollar.or_else(|| ctx.dollar.clone());
@@ -112,7 +112,7 @@ impl Context {
 				} else {
 					ctx.bindings.clone().extend(new_bindings)
 				};
-				Context(Rc::new(ContextInternals {
+				Self(Rc::new(ContextInternals {
 					dollar,
 					this,
 					super_obj,
@@ -127,7 +127,7 @@ impl Context {
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
-	) -> Result<Context> {
+	) -> Result<Self> {
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
 		let mut new =

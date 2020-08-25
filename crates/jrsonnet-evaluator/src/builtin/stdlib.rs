@@ -22,7 +22,7 @@ thread_local! {
 		}
 
 		jrsonnet_parser::parse(
-			&jrsonnet_stdlib::STDLIB_STR,
+			jrsonnet_stdlib::STDLIB_STR,
 			&ParserSettings {
 				loc_data: true,
 				file_name: Rc::new(PathBuf::from("std.jsonnet")),

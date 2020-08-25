@@ -25,10 +25,10 @@ enum LazyValInternals {
 pub struct LazyVal(Rc<RefCell<LazyValInternals>>);
 impl LazyVal {
 	pub fn new(f: Box<dyn Fn() -> Result<Val>>) -> Self {
-		LazyVal(Rc::new(RefCell::new(LazyValInternals::Waiting(f))))
+		Self(Rc::new(RefCell::new(LazyValInternals::Waiting(f))))
 	}
 	pub fn new_resolved(val: Val) -> Self {
-		LazyVal(Rc::new(RefCell::new(LazyValInternals::Computed(val))))
+		Self(Rc::new(RefCell::new(LazyValInternals::Computed(val))))
 	}
 	pub fn evaluate(&self) -> Result<Val> {
 		let new_value = match &*self.0.borrow() {
@@ -84,22 +84,22 @@ pub enum FuncVal {
 impl PartialEq for FuncVal {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
-			(FuncVal::Normal(a), FuncVal::Normal(b)) => a == b,
-			(FuncVal::Intrinsic(ans, an), FuncVal::Intrinsic(bns, bn)) => ans == bns && an == bn,
-			(FuncVal::NativeExt(an, _), FuncVal::NativeExt(bn, _)) => an == bn,
+			(Self::Normal(a), Self::Normal(b)) => a == b,
+			(Self::Intrinsic(ans, an), Self::Intrinsic(bns, bn)) => ans == bns && an == bn,
+			(Self::NativeExt(an, _), Self::NativeExt(bn, _)) => an == bn,
 			(..) => false,
 		}
 	}
 }
 impl FuncVal {
 	pub fn is_ident(&self) -> bool {
-		matches!(&self, FuncVal::Intrinsic(ns, n) if ns as &str == "std" && n as &str == "id")
+		matches!(&self, Self::Intrinsic(ns, n) if ns as &str == "std" && n as &str == "id")
 	}
 	pub fn name(&self) -> Rc<str> {
 		match self {
-			FuncVal::Normal(normal) => normal.name.clone(),
-			FuncVal::Intrinsic(ns, name) => format!("intrinsic.{}.{}", ns, name).into(),
-			FuncVal::NativeExt(n, _) => format!("native.{}", n).into(),
+			Self::Normal(normal) => normal.name.clone(),
+			Self::Intrinsic(ns, name) => format!("intrinsic.{}.{}", ns, name).into(),
+			Self::NativeExt(n, _) => format!("native.{}", n).into(),
 		}
 	}
 	pub fn evaluate(
@@ -110,7 +110,7 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			FuncVal::Normal(func) => {
+			Self::Normal(func) => {
 				let ctx = parse_function_call(
 					call_ctx,
 					Some(func.ctx.clone()),
@@ -120,8 +120,8 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intrinsic(ns, name) => call_builtin(call_ctx, loc, &ns, &name, args),
-			FuncVal::NativeExt(_name, handler) => {
+			Self::Intrinsic(ns, name) => call_builtin(call_ctx, loc, ns, name, args),
+			Self::NativeExt(_name, handler) => {
 				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
 				let mut out_args = Vec::with_capacity(handler.params.len());
 				for p in handler.params.0.iter() {
@@ -139,7 +139,7 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			FuncVal::Normal(func) => {
+			Self::Normal(func) => {
 				let ctx = parse_function_call_map(
 					call_ctx,
 					Some(func.ctx.clone()),
@@ -149,19 +149,19 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intrinsic(_, _) => todo!(),
-			FuncVal::NativeExt(_, _) => todo!(),
+			Self::Intrinsic(_, _) => todo!(),
+			Self::NativeExt(_, _) => todo!(),
 		}
 	}
 
 	pub fn evaluate_values(&self, call_ctx: Context, args: &[Val]) -> Result<Val> {
 		match self {
-			FuncVal::Normal(func) => {
+			Self::Normal(func) => {
 				let ctx = place_args(call_ctx, Some(func.ctx.clone()), &func.params, args)?;
 				evaluate(ctx, &func.body)
 			}
-			FuncVal::Intrinsic(_, _) => todo!(),
-			FuncVal::NativeExt(_, _) => todo!(),
+			Self::Intrinsic(_, _) => todo!(),
+			Self::NativeExt(_, _) => todo!(),
 		}
 	}
 }
@@ -177,7 +177,7 @@ pub enum ValType {
 	Func,
 }
 impl ValType {
-	pub fn name(&self) -> &'static str {
+	pub const fn name(&self) -> &'static str {
 		use ValType::*;
 		match self {
 			Bool => "boolean",
@@ -227,9 +227,9 @@ macro_rules! matches_unwrap {
 impl Val {
 	/// Creates `Val::Num` after checking for numeric overflow.
 	/// As numbers are `f64`, we can just check for their finity.
-	pub fn new_checked_num(num: f64) -> Result<Val> {
+	pub fn new_checked_num(num: f64) -> Result<Self> {
 		if num.is_finite() {
-			Ok(Val::Num(num))
+			Ok(Self::Num(num))
 		} else {
 			throw!(RuntimeError("overflow".into()))
 		}
@@ -245,24 +245,24 @@ impl Val {
 	}
 	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {
 		self.assert_type(context, ValType::Bool)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Bool(v), v))
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Bool(v), v))
 	}
 	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
 		self.assert_type(context, ValType::Str)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Str(v), v))
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Str(v), v))
 	}
 	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
 		self.assert_type(context, ValType::Num)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Val::Num(v), v))
+		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Num(v), v))
 	}
 	pub fn inplace_unwrap(&mut self) -> Result<()> {
-		while let Val::Lazy(lazy) = self {
+		while let Self::Lazy(lazy) = self {
 			*self = lazy.evaluate()?;
 		}
 		Ok(())
 	}
 	pub fn unwrap_if_lazy(&self) -> Result<Self> {
-		Ok(if let Val::Lazy(v) = self {
+		Ok(if let Self::Lazy(v) = self {
 			v.evaluate()?.unwrap_if_lazy()?
 		} else {
 			self.clone()
@@ -270,27 +270,27 @@ impl Val {
 	}
 	pub fn value_type(&self) -> Result<ValType> {
 		Ok(match self {
-			Val::Str(..) => ValType::Str,
-			Val::Num(..) => ValType::Num,
-			Val::Arr(..) => ValType::Arr,
-			Val::Obj(..) => ValType::Obj,
-			Val::Bool(_) => ValType::Bool,
-			Val::Null => ValType::Null,
-			Val::Func(..) => ValType::Func,
-			Val::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
+			Self::Str(..) => ValType::Str,
+			Self::Num(..) => ValType::Num,
+			Self::Arr(..) => ValType::Arr,
+			Self::Obj(..) => ValType::Obj,
+			Self::Bool(_) => ValType::Bool,
+			Self::Null => ValType::Null,
+			Self::Func(..) => ValType::Func,
+			Self::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
 		})
 	}
 
 	pub fn to_string(&self) -> Result<Rc<str>> {
 		Ok(match self.unwrap_if_lazy()? {
-			Val::Bool(true) => "true".into(),
-			Val::Bool(false) => "false".into(),
-			Val::Null => "null".into(),
-			Val::Str(s) => s,
+			Self::Bool(true) => "true".into(),
+			Self::Bool(false) => "false".into(),
+			Self::Null => "null".into(),
+			Self::Str(s) => s,
 			v => manifest_json_ex(
 				&v,
 				&ManifestJsonOptions {
-					padding: &"",
+					padding: "",
 					mtype: ManifestType::ToString,
 				},
 			)?
@@ -301,7 +301,7 @@ impl Val {
 	/// Expects value to be object, outputs (key, manifested value) pairs
 	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(Rc<str>, Rc<str>)>> {
 		let obj = match self {
-			Val::Obj(obj) => obj,
+			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
 		};
 		let keys = obj.visible_fields();
@@ -319,7 +319,7 @@ impl Val {
 	/// Expects value to be array, outputs manifested values
 	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<Rc<str>>> {
 		let arr = match self {
-			Val::Arr(a) => a,
+			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
 		};
 		let mut out = Vec::with_capacity(arr.len());
@@ -333,7 +333,7 @@ impl Val {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
-					Val::Arr(a) => a,
+					Self::Arr(a) => a,
 					_ => throw!(StreamManifestOutputIsNotAArray),
 				};
 				let mut out = String::new();
@@ -358,7 +358,7 @@ impl Val {
 			ManifestFormat::Yaml(padding) => self.to_yaml(*padding)?,
 			ManifestFormat::Json(padding) => self.to_json(*padding)?,
 			ManifestFormat::String => match self {
-				Val::Str(s) => s.clone(),
+				Self::Str(s) => s.clone(),
 				_ => throw!(StringManifestOutputIsNotAString),
 			},
 		})
@@ -384,7 +384,7 @@ impl Val {
 	#[cfg(feature = "faster")]
 	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		manifest_json_ex(
-			&self,
+			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
 				mtype: ManifestType::Std,
@@ -441,7 +441,7 @@ impl Val {
 	}
 }
 
-fn is_function_like(val: &Val) -> bool {
+const fn is_function_like(val: &Val) -> bool {
 	matches!(val, Val::Func(_))
 }
 

@@ -16,6 +16,7 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
+#[allow(clippy::cognitive_complexity)]
 pub fn call_builtin(
 	context: Context,
 	loc: &Option<ExprLocation>,
@@ -23,7 +24,7 @@ pub fn call_builtin(
 	name: &str,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	Ok(match (ns, &name as &str) {
+	Ok(match (ns, name as &str) {
 		// arr/string/function
 		("std", "length") => parse_args!(context, "std.length", args, 1, [
 			0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];

@@ -82,9 +82,9 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	})
 }
 
-pub(crate) fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
+pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
-		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + &v2).into()),
+		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
 		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o).into()),
@@ -111,7 +111,7 @@ pub fn evaluate_binary_op_special(
 	b: &LocExpr,
 ) -> Result<Val> {
 	Ok(
-		match (evaluate(context.clone(), &a)?.unwrap_if_lazy()?, op, b) {
+		match (evaluate(context.clone(), a)?.unwrap_if_lazy()?, op, b) {
 			(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
 			(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
 			(a, op, eb) => {
@@ -194,14 +194,14 @@ pub fn evaluate_comp<T>(
 	Ok(match specs.get(0) {
 		None => Some(vec![value(context)?]),
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
-			if evaluate(context.clone(), &cond)?.try_cast_bool("if spec")? {
+			if evaluate(context.clone(), cond)?.try_cast_bool("if spec")? {
 				evaluate_comp(context, value, &specs[1..])?
 			} else {
 				None
 			}
 		}
 		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
-			match evaluate(context.clone(), &expr)?.unwrap_if_lazy()? {
+			match evaluate(context.clone(), expr)?.unwrap_if_lazy()? {
 				Val::Arr(list) => {
 					let mut out = Vec::new();
 					for item in list.iter() {
@@ -258,7 +258,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				visibility,
 				value,
 			}) => {
-				let name = evaluate_field_name(context.clone(), &name)?;
+				let name = evaluate_field_name(context.clone(), name)?;
 				if name.is_none() {
 					continue;
 				}
@@ -286,7 +286,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				value,
 				..
 			}) => {
-				let name = evaluate_field_name(context.clone(), &name)?;
+				let name = evaluate_field_name(context.clone(), name)?;
 				if name.is_none() {
 					continue;
 				}
@@ -320,7 +320,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 
 pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 	Ok(match object {
-		ObjBody::MemberList(members) => evaluate_member_list_object(context, &members)?,
+		ObjBody::MemberList(members) => evaluate_member_list_object(context, members)?,
 		ObjBody::ObjComp(obj) => {
 			let future_this = FutureObjValue::new();
 			let mut new_members = HashMap::new();
@@ -437,7 +437,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Parened(e) => evaluate(context, e)?,
 		Str(v) => Val::Str(v.clone()),
 		Num(v) => Val::new_checked_num(*v)?,
-		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, &v1, *o, &v2)?,
+		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(
 			loc,
@@ -461,7 +461,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
 					push(
-						&loc,
+						loc,
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
@@ -563,7 +563,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				&value.1,
 				|| "assertion condition".to_owned(),
 				|| {
-					evaluate(context.clone(), &value)?
+					evaluate(context.clone(), value)?
 						.try_cast_bool("assertion condition should be of type `boolean`")
 				},
 			)?;
@@ -576,7 +576,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		ErrorStmt(e) => push(
-			&loc,
+			loc,
 			|| "error statement".to_owned(),
 			|| {
 				throw!(RuntimeError(
@@ -610,7 +610,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			push(
 				loc,
 				|| format!("import {:?}", path),
-				|| with_state(|s| s.import_file(&import_location, path)),
+				|| with_state(|s| s.import_file(import_location, path)),
 			)?
 		}
 		ImportStr(path) => {
@@ -620,7 +620,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.0;
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
-			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
+			Val::Str(with_state(|s| s.import_file_str(import_location, path))?)
 		}
 		Literal(LiteralType::Super) => throw!(StandaloneSuper),
 	})

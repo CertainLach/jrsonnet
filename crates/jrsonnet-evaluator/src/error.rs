@@ -95,10 +95,10 @@ impl LocError {
 		Self(Box::new((e, StackTrace(vec![]))))
 	}
 
-	pub fn error(&self) -> &Error {
+	pub const fn error(&self) -> &Error {
 		&(self.0).0
 	}
-	pub fn trace(&self) -> &StackTrace {
+	pub const fn trace(&self) -> &StackTrace {
 		&(self.0).1
 	}
 	pub fn trace_mut(&mut self) -> &mut StackTrace {

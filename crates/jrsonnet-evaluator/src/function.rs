@@ -75,7 +75,7 @@ pub fn parse_function_call_map(
 		let idx = params
 			.iter()
 			.position(|p| *p.0 == **name)
-			.ok_or_else(|| UnknownFunctionParameter((&name as &str).to_owned()))?;
+			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
 
 		if idx >= params.len() {
 			throw!(TooManyArgsFunctionHas(params.len()));
@@ -111,7 +111,7 @@ pub fn parse_function_call_map(
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
-pub(crate) fn place_args(
+pub fn place_args(
 	ctx: Context,
 	body_ctx: Option<Context>,
 	params: &ParamsDesc,

@@ -17,9 +17,9 @@ pub enum PathResolver {
 impl PathResolver {
 	pub fn resolve(&self, from: &PathBuf) -> String {
 		match self {
-			PathResolver::FileName => from.file_name().unwrap().to_string_lossy().into_owned(),
-			PathResolver::Absolute => from.to_string_lossy().into_owned(),
-			PathResolver::Relative(base) => {
+			Self::FileName => from.file_name().unwrap().to_string_lossy().into_owned(),
+			Self::Absolute => from.to_string_lossy().into_owned(),
+			Self::Relative(base) => {
 				if from.is_relative() {
 					return from.to_string_lossy().into_owned();
 				}

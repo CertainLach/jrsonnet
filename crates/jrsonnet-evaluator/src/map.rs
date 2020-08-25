@@ -15,10 +15,10 @@ impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
 		match Rc::try_unwrap(self.0) {
 			Ok(mut map) => {
 				map.current.extend(new_layer);
-				LayeredHashMap(Rc::new(map))
+				Self(Rc::new(map))
 			}
-			Err(this) => LayeredHashMap(Rc::new(LayeredHashMapInternals {
-				parent: Some(LayeredHashMap(this)),
+			Err(this) => Self(Rc::new(LayeredHashMapInternals {
+				parent: Some(Self(this)),
 				current: new_layer,
 			})),
 		}
@@ -31,20 +31,20 @@ impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
 	{
 		(self.0)
 			.current
-			.get(&key)
+			.get(key)
 			.or_else(|| self.0.parent.as_ref().and_then(|p| p.get(key)))
 	}
 }
 
 impl<K: Hash, V> Clone for LayeredHashMap<K, V> {
 	fn clone(&self) -> Self {
-		LayeredHashMap(self.0.clone())
+		Self(self.0.clone())
 	}
 }
 
 impl<K: Hash + Eq, V> Default for LayeredHashMap<K, V> {
 	fn default() -> Self {
-		LayeredHashMap(Rc::new(LayeredHashMapInternals {
+		Self(Rc::new(LayeredHashMapInternals {
 			parent: None,
 			current: FxHashMap::default(),
 		}))

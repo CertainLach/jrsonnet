@@ -1,5 +1,6 @@
 #![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
 #![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
+#![warn(clippy::all, clippy::nursery)]
 
 mod builtin;
 mod ctx;
@@ -49,8 +50,8 @@ impl Debug for LazyBinding {
 impl LazyBinding {
 	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
 		match self {
-			LazyBinding::Bindable(v) => v(this, super_obj),
-			LazyBinding::Bound(v) => Ok(v.clone()),
+			Self::Bindable(v) => v(this, super_obj),
+			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
 }
@@ -77,7 +78,7 @@ pub struct EvaluationSettings {
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
-		EvaluationSettings {
+		Self {
 			max_stack: 200,
 			max_trace: 20,
 			globals: Default::default(),
@@ -130,7 +131,7 @@ pub(crate) fn push<T>(
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
 	if let Some(v) = e {
-		with_state(|s| s.push(&v, frame_desc, f))
+		with_state(|s| s.push(v, frame_desc, f))
 	} else {
 		f()
 	}
@@ -359,10 +360,10 @@ impl EvaluationState {
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl EvaluationState {
 	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
-		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), &name))
+		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), name))
 	}
 	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
-		self.run_in_state(|| self.import_file(&PathBuf::from("."), &name))
+		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
 	}
 	/// Parses and evaluates the given snippet
 	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {

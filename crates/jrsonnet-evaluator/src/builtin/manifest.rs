@@ -20,7 +20,7 @@ pub struct ManifestJsonOptions<'s> {
 	pub mtype: ManifestType,
 }
 
-pub(crate) fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
+pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
 	let mut out = String::new();
 	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)

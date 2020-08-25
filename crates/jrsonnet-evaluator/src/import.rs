@@ -41,6 +41,7 @@ impl ImportResolver for DummyImportResolver {
 		panic!("`as_any($self)` is not supported by dummy resolver")
 	}
 }
+#[allow(clippy::use_self)]
 impl Default for Box<dyn ImportResolver> {
 	fn default() -> Self {
 		Box::new(DummyImportResolver)

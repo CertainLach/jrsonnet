@@ -47,23 +47,20 @@ impl Debug for ObjValue {
 }
 
 impl ObjValue {
-	pub fn new(
-		super_obj: Option<ObjValue>,
-		this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
-	) -> ObjValue {
-		ObjValue(Rc::new(ObjValueInternals {
+	pub fn new(super_obj: Option<Self>, this_entries: Rc<HashMap<Rc<str>, ObjMember>>) -> Self {
+		Self(Rc::new(ObjValueInternals {
 			super_obj,
 			this_entries,
 			value_cache: RefCell::new(HashMap::new()),
 		}))
 	}
-	pub fn new_empty() -> ObjValue {
+	pub fn new_empty() -> Self {
 		Self::new(None, Rc::new(HashMap::new()))
 	}
-	pub fn with_super(&self, super_obj: ObjValue) -> ObjValue {
+	pub fn with_super(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
-			None => ObjValue::new(Some(super_obj), self.0.this_entries.clone()),
-			Some(v) => ObjValue::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
+			None => Self::new(Some(super_obj), self.0.this_entries.clone()),
+			Some(v) => Self::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
 		}
 	}
 	pub fn enum_fields(&self, handler: &impl Fn(&Rc<str>, &Visibility)) {
@@ -71,7 +68,7 @@ impl ObjValue {
 			s.enum_fields(handler);
 		}
 		for (name, member) in self.0.this_entries.iter() {
-			handler(&name, &member.visibility);
+			handler(name, &member.visibility);
 		}
 	}
 	pub fn fields_visibility(&self) -> IndexMap<Rc<str>, bool> {
@@ -107,7 +104,7 @@ impl ObjValue {
 	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
 		Ok(self.get_raw(key, self)?)
 	}
-	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: &ObjValue) -> Result<Option<Val>> {
+	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: &Self) -> Result<Option<Val>> {
 		let cache_key = (key.clone(), Rc::as_ptr(&real_this.0) as usize);
 
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
@@ -135,7 +132,7 @@ impl ObjValue {
 			.insert(cache_key, value.clone());
 		Ok(value)
 	}
-	fn evaluate_this(&self, v: &ObjMember, real_this: &ObjValue) -> Result<Val> {
+	fn evaluate_this(&self, v: &ObjMember, real_this: &Self) -> Result<Val> {
 		Ok(v.invoke
 			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
 			.evaluate()?)
