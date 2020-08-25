@@ -24,7 +24,7 @@ pub struct InputOpts {
 		short = 'e',
 		about = "Treat input as code, evaluate them instead of reading file"
 	)]
-	pub evaluate: bool,
+	pub exec: bool,
 
 	#[clap(
 		about = "Path to the file to be compiled if `--evaluate` is unset, otherwise code itself"

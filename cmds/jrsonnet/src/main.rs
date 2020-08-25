@@ -53,7 +53,7 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<()> {
 	opts.general.configure(&state)?;
 	opts.manifest.configure(&state)?;
 
-	let val = if opts.input.evaluate {
+	let val = if opts.input.exec {
 		state.evaluate_snippet_raw(
 			Rc::new(PathBuf::from("args")),
 			(&opts.input.input as &str).into(),
