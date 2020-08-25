@@ -21,7 +21,7 @@ test-library:
   image: $CI_REGISTRY_IMAGE:build
   stage: build
   script:
-    - make test
+    - cargo clippy
   cache:
     key: test
     paths:
@@ -31,7 +31,7 @@ build-linux:
   image: $CI_REGISTRY_IMAGE:build
   stage: build
   script:
-    - make build
+    - cargo build --release
   cache:
     key: linux
     paths:
@@ -46,7 +46,7 @@ build-wasm:
   image: $CI_REGISTRY_IMAGE:build
   stage: build
   script:
-    - make build-wasi
+    - cargo build --target=wasm32-wasi --release
   cache:
     key: wasm
     paths:
