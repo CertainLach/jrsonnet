@@ -103,8 +103,9 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 				dir.pop();
 				create_dir_all(dir)?;
 			}
+			println!("{}", path.to_str().expect("path"));
 			let mut file = File::create(path)?;
-			write!(file, "{}", data)?;
+			writeln!(file, "{}", data)?;
 		}
 	} else if let Some(path) = opts.output.output_file {
 		if opts.output.create_output_dirs {
@@ -113,7 +114,7 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 			create_dir_all(dir)?;
 		}
 		let mut file = File::create(path)?;
-		write!(file, "{}", state.manifest(val)?)?;
+		writeln!(file, "{}", state.manifest(val)?)?;
 	} else {
 		println!("{}", state.manifest(val)?);
 	}
