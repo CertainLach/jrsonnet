@@ -1,7 +1,12 @@
 use clap::Clap;
-use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts};
-use jrsonnet_evaluator::{error::Result, EvaluationState};
-use std::{path::PathBuf, rc::Rc};
+use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
+use jrsonnet_evaluator::{error::LocError, EvaluationState};
+use std::{
+	fs::{create_dir_all, File},
+	io::Write,
+	path::PathBuf,
+	rc::Rc,
+};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -25,6 +30,8 @@ struct Opts {
 	#[clap(flatten)]
 	manifest: ManifestOpts,
 	#[clap(flatten)]
+	output: OutputOpts,
+	#[clap(flatten)]
 	debug: DebugOpts,
 }
 
@@ -42,14 +49,32 @@ fn main() {
 	}
 }
 
-fn main_catch(opts: Opts) {
-	let state = EvaluationState::default();
-	if let Err(e) = main_real(&state, opts) {
-		println!("{}", state.stringify_err(&e));
+#[derive(thiserror::Error, Debug)]
+enum Error {
+	// Handled differently
+	#[error("evaluation error")]
+	Evaluation(jrsonnet_evaluator::error::LocError),
+	#[error("io error")]
+	Io(#[from] std::io::Error),
+}
+impl From<LocError> for Error {
+	fn from(e: LocError) -> Self {
+		Self::Evaluation(e)
 	}
 }
 
-fn main_real(state: &EvaluationState, opts: Opts) -> Result<()> {
+fn main_catch(opts: Opts) {
+	let state = EvaluationState::default();
+	if let Err(e) = main_real(&state, opts) {
+		if let Error::Evaluation(e) = e {
+			println!("{}", state.stringify_err(&e));
+		} else {
+			println!("{}", e);
+		}
+	}
+}
+
+fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 	opts.general.configure(&state)?;
 	opts.manifest.configure(&state)?;
 
@@ -64,7 +89,34 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<()> {
 
 	let val = state.with_tla(val)?;
 
-	println!("{}", state.manifest(val)?);
+	if let Some(multi) = opts.output.multi {
+		if opts.output.create_output_dirs {
+			let mut dir = multi.clone();
+			dir.pop();
+			create_dir_all(dir)?;
+		}
+		for (file, data) in state.manifest_multi(val)?.iter() {
+			let mut path = multi.clone();
+			path.push(&file as &str);
+			if opts.output.create_output_dirs {
+				let mut dir = path.clone();
+				dir.pop();
+				create_dir_all(dir)?;
+			}
+			let mut file = File::create(path)?;
+			write!(file, "{}", data)?;
+		}
+	} else if let Some(path) = opts.output.output_file {
+		if opts.output.create_output_dirs {
+			let mut dir = path.clone();
+			dir.pop();
+			create_dir_all(dir)?;
+		}
+		let mut file = File::create(path)?;
+		write!(file, "{}", state.manifest(val)?)?;
+	} else {
+		println!("{}", state.manifest(val)?);
+	}
 
 	Ok(())
 }
