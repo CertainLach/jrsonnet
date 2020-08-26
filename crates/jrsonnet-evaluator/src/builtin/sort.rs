@@ -4,9 +4,11 @@ use crate::{
 };
 use std::rc::Rc;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, thiserror::Error)]
 pub enum SortError {
+	#[error("sort key should be string or number")]
 	SortKeyShouldBeStringOrNumber,
+	#[error("sort elements should have equal types")]
 	SortElementsShouldHaveEqualType,
 }
 

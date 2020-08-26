@@ -86,7 +86,7 @@ impl TraceFormat for CompactFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{:?}", error.error())?;
+		writeln!(out, "{}", error.error())?;
 		let file_names = error
 			.trace()
 			.0
@@ -132,7 +132,7 @@ impl TraceFormat for JSFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{:?}", error.error())?;
+		writeln!(out, "{}", error.error())?;
 		for (i, item) in error.trace().0.iter().enumerate() {
 			if i != 0 {
 				writeln!(out)?;
@@ -171,7 +171,7 @@ impl TraceFormat for ExplainingFormat {
 			display_list::{DisplayList, FormatOptions},
 			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
 		};
-		writeln!(out, "{:?}", error.error())?;
+		writeln!(out, "{}", error.error())?;
 		let trace = &error.trace();
 		for item in trace.0.iter() {
 			let desc = &item.desc;

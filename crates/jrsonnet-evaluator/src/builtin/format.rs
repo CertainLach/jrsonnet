@@ -2,16 +2,23 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val, ValType};
+use thiserror::Error;
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Error)]
 pub enum FormatError {
+	#[error("truncated format code")]
 	TruncatedFormatCode,
+	#[error("unrecognized conversion type: {0}")]
 	UnrecognizedConversionType(char),
 
+	#[error("not enough values")]
 	NotEnoughValues,
 
+	#[error("cannot use * width with object")]
 	CannotUseStarWidthWithObject,
+	#[error("mapping keys required")]
 	MappingKeysRequired,
+	#[error("no such format field: {0}")]
 	NoSuchFormatField(Rc<str>),
 }
 
