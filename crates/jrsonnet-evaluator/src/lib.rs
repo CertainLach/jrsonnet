@@ -330,13 +330,15 @@ impl EvaluationState {
 
 	/// If passed value is function then call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
-		Ok(match val {
-			Val::Func(func) => func.evaluate_map(
-				self.create_default_context()?,
-				&self.settings().tla_vars,
-				true,
-			)?,
-			v => v,
+		self.run_in_state(|| {
+			Ok(match val {
+				Val::Func(func) => func.evaluate_map(
+					self.create_default_context()?,
+					&self.settings().tla_vars,
+					true,
+				)?,
+				v => v,
+			})
 		})
 	}
 }
@@ -408,7 +410,7 @@ impl EvaluationState {
 	pub fn add_tla_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
 		let value =
 			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("tla_code {}", name))), code)?;
-		self.add_ext_var(name, value);
+		self.add_tla(name, value);
 		Ok(())
 	}
 
