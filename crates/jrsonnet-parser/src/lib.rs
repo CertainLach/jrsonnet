@@ -79,10 +79,11 @@ parser! {
 			= str:$((!['\n'][_])* "\n") {str}
 		pub rule string_block() -> String
 			= "|||" (!['\n']single_whitespace())* "\n"
+			  empty_lines:$(['\n']*)
 			  prefix:[' ' | '\t']+ first_line:whole_line()
-			  lines:([' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
+			  lines:("\n" {"\n"} / [' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
 			  [' ' | '\t']*<, {prefix.len() - 1}> "|||"
-			  {let mut l = first_line.to_owned(); l.extend(lines); l}
+			  {let mut l = empty_lines.to_owned(); l.push_str(first_line); l.extend(lines); l}
 		pub rule string() -> String
 			= "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
 			/ "'" str:$(("\\'" / "\\\\" / (!['\''][_]))*) "'" {unescape::unescape(str).unwrap()}
