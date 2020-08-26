@@ -2,7 +2,12 @@
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
 use serde::Serialize;
-use std::{fmt::Debug, ops::Deref, path::PathBuf, rc::Rc};
+use std::{
+	fmt::{Debug, Display},
+	ops::Deref,
+	path::PathBuf,
+	rc::Rc,
+};
 #[cfg(feature = "dump")]
 use structdump_derive::Codegen;
 
@@ -68,6 +73,21 @@ pub enum UnaryOpType {
 	BitNot,
 	Not,
 }
+impl Display for UnaryOpType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use UnaryOpType::*;
+		write!(
+			f,
+			"{}",
+			match self {
+				Plus => "+",
+				Minus => "-",
+				BitNot => "~",
+				Not => "!",
+			}
+		)
+	}
+}
 
 #[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -94,6 +114,32 @@ pub enum BinaryOpType {
 
 	And,
 	Or,
+}
+impl Display for BinaryOpType {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		use BinaryOpType::*;
+		write!(
+			f,
+			"{}",
+			match self {
+				Mul => "*",
+				Div => "/",
+				Add => "+",
+				Sub => "-",
+				Lhs => "<<",
+				Rhs => ">>",
+				Lt => "<",
+				Gt => ">",
+				Lte => "<=",
+				Gte => ">=",
+				BitAnd => "&",
+				BitOr => "|",
+				BitXor => "^",
+				And => "&&",
+				Or => "||",
+			}
+		)
+	}
 }
 
 /// name, default value
