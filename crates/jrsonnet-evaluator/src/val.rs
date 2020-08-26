@@ -9,7 +9,7 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
-use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LocExpr, ParamsDesc};
+use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use std::{
 	cell::RefCell,
 	collections::HashMap,
@@ -431,7 +431,14 @@ impl Val {
 					)),
 					ArgsDesc(vec![
 						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
-						Arg(None, el!(Expr::Str(" ".repeat(padding).into())))
+						Arg(
+							None,
+							el!(Expr::Literal(if padding != 0 {
+								LiteralType::True
+							} else {
+								LiteralType::False
+							}))
+						)
 					]),
 					false
 				)),
