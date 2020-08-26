@@ -589,9 +589,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if evaluate(context.clone(), &cond.0)?
-				.try_cast_bool("if condition should be of type `boolean`")?
-			{
+			if push(
+				loc,
+				|| "if condition".to_owned(),
+				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
+			)? {
 				evaluate(context, cond_then)?
 			} else {
 				match cond_else {
