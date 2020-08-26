@@ -1,7 +1,7 @@
 use crate::ConfigureState;
 use clap::Clap;
 use jrsonnet_evaluator::{error::Result, EvaluationState, ManifestFormat};
-use std::str::FromStr;
+use std::{path::PathBuf, str::FromStr};
 
 pub enum ManifestFormatName {
 	/// Expect string as output, and write them directly
@@ -65,4 +65,17 @@ impl ConfigureState for ManifestOpts {
 		}
 		Ok(())
 	}
+}
+
+#[derive(Clap)]
+pub struct OutputOpts {
+	/// Write to the output file rather than stdout
+	#[clap(long, short = 'o')]
+	pub output_file: Option<PathBuf>,
+	/// Automatically creates all parent directories for files
+	#[clap(long, short = 'c')]
+	pub create_output_dirs: bool,
+	/// Write multiple files to the directory, list files on stdout
+	#[clap(long, short = 'm')]
+	pub multi: Option<PathBuf>,
 }
