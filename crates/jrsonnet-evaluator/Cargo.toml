@@ -31,7 +31,7 @@ jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.0" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"
-indexmap = "1.5.1"
+indexmap = "1.6.0"
 
 md5 = "0.7.0"
 base64 = "0.12.3"
