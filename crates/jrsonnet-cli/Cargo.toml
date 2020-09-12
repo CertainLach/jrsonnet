@@ -1,16 +1,16 @@
 [package]
 name = "jrsonnet-cli"
 description = "Utilities for building jrsonnet CLIs"
-version = "0.1.0"
+version = "0.3.1"
 authors = ["Лач <iam@lach.pw>"]
 edition = "2018"
 
 # See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.0", features = ["explaining-traces"] }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.0" }
+jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.1", features = ["explaining-traces"] }
+jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.1" }
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
-rev = "6a56a82629d1a990efb37dae9c75a76e943f22a0"
+rev = "3e9ee86713b5c407b50ba76f30cffaed25952063"

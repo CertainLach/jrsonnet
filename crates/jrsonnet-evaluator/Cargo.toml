@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-evaluator"
 description = "jsonnet interpreter"
-version = "0.3.0"
+version = "0.3.1"
 authors = ["Лач <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
@@ -26,8 +26,8 @@ explaining-traces = ["annotate-snippets"]
 unstable = []
 
 [dependencies]
-jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.0" }
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.0" }
+jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.1" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.1" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"
@@ -41,7 +41,7 @@ thiserror = "1.0.20"
 
 # Serialized stdlib
 [dependencies.serde]
-version = "1.0.115"
+version = "1.0.116"
 optional = true
 [dependencies.bincode]
 version = "1.3.1"
@@ -61,5 +61,5 @@ optional = true
 jrsonnet-parser = { path = "../jrsonnet-parser", features = ["dump", "serialize", "deserialize"], version = "0.3.0" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.0" }
 structdump = "0.1.2"
-serde = "1.0.115"
+serde = "1.0.116"
 bincode = "1.3.1"
