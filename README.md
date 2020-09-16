@@ -1,6 +1,6 @@
 # jrsonnet
 
-![Crates.io](https://img.shields.io/crates/v/jrsonnet)
+![Crates.io](https://img.shields.io/crates/v/jrsonnet-evaluator)
 
 ## What is it
 
