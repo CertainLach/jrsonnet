@@ -37,7 +37,7 @@ md5 = "0.7.0"
 base64 = "0.13.0"
 rustc-hash = "1.1.0"
 
-thiserror = "1.0.20"
+thiserror = "1.0.21"
 
 # Serialized stdlib
 [dependencies.serde]
