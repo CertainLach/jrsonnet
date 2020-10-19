@@ -3,6 +3,7 @@ use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts, OutputO
 use jrsonnet_evaluator::{error::LocError, EvaluationState};
 use std::{
 	fs::{create_dir_all, File},
+	io::Read,
 	io::Write,
 	path::PathBuf,
 	rc::Rc,
@@ -56,6 +57,8 @@ enum Error {
 	Evaluation(jrsonnet_evaluator::error::LocError),
 	#[error("io error")]
 	Io(#[from] std::io::Error),
+	#[error("input is not utf8 encoded")]
+	Utf8(#[from] std::str::Utf8Error),
 }
 impl From<LocError> for Error {
 	fn from(e: LocError) -> Self {
@@ -83,6 +86,11 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 			Rc::new(PathBuf::from("args")),
 			(&opts.input.input as &str).into(),
 		)?
+	} else if opts.input.input == "-" {
+		let mut input = Vec::new();
+		std::io::stdin().read_to_end(&mut input)?;
+		let input_str = std::str::from_utf8(&input)?.into();
+		state.evaluate_snippet_raw(Rc::new(PathBuf::from("<stdin>")), input_str)?
 	} else {
 		state.evaluate_file_raw(&PathBuf::from(opts.input.input))?
 	};
