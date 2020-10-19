@@ -12,6 +12,7 @@ pub enum ContextCreator {
 	MemberList {
 		context: Context,
 		new_bindings: FutureNewBindings,
+		/// If false - then created context will have no `this` set
 		has_this: bool,
 	},
 	Future(FutureContext),
