@@ -4,10 +4,10 @@ use crate::{
 		manifest::{manifest_json_ex, ManifestJsonOptions, ManifestType},
 	},
 	error::Error::*,
-	evaluate,
+	evaluate, evaluate_method, evaluate_named,
 	function::{parse_function_call, parse_function_call_map, place_args},
 	native::NativeCallback,
-	throw, with_state, Context, ObjValue, Result,
+	throw, with_state, Context, ContextCreator, ObjValue, Result,
 };
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use std::{
@@ -17,41 +17,70 @@ use std::{
 	rc::Rc,
 };
 
-enum LazyValInternals {
-	Computed(Val),
-	Waiting(Box<dyn Fn() -> Result<Val>>),
+pub enum LazyValBody {
+	Resolved(Val),
+	EvaluateMethod {
+		context_creator: ContextCreator,
+		this: Option<ObjValue>,
+		super_obj: Option<ObjValue>,
+
+		name: Rc<str>,
+		params: ParamsDesc,
+		value: LocExpr,
+	},
+	EvaluateNamed {
+		context_creator: ContextCreator,
+		this: Option<ObjValue>,
+		super_obj: Option<ObjValue>,
+
+		name: Rc<str>,
+		value: LocExpr,
+	},
+	Evaluate(Context, LocExpr),
 }
+impl From<LazyValBody> for LazyVal {
+	fn from(body: LazyValBody) -> Self {
+		LazyVal(Rc::new(RefCell::new(body)))
+	}
+}
+
 #[derive(Clone)]
-pub struct LazyVal(Rc<RefCell<LazyValInternals>>);
+pub struct LazyVal(Rc<RefCell<LazyValBody>>);
 impl LazyVal {
-	pub fn new(f: Box<dyn Fn() -> Result<Val>>) -> Self {
-		Self(Rc::new(RefCell::new(LazyValInternals::Waiting(f))))
-	}
-	pub fn new_resolved(val: Val) -> Self {
-		Self(Rc::new(RefCell::new(LazyValInternals::Computed(val))))
-	}
 	pub fn evaluate(&self) -> Result<Val> {
 		let new_value = match &*self.0.borrow() {
-			LazyValInternals::Computed(v) => return Ok(v.clone()),
-			LazyValInternals::Waiting(f) => f()?,
+			LazyValBody::Resolved(v) => return Ok(v.clone()),
+			LazyValBody::EvaluateMethod {
+				context_creator,
+				this,
+				super_obj,
+				name,
+				params,
+				value,
+			} => evaluate_method(
+				context_creator.create(this.clone(), super_obj.clone())?,
+				name.clone(),
+				params.clone(),
+				value.clone(),
+			),
+			LazyValBody::EvaluateNamed {
+				context_creator,
+				this,
+				super_obj,
+				name,
+				value,
+			} => evaluate_named(
+				context_creator.create(this.clone(), super_obj.clone())?,
+				&value,
+				name.clone(),
+			)?,
+			LazyValBody::Evaluate(context, expr) => evaluate(context.clone(), expr)?,
 		};
-		*self.0.borrow_mut() = LazyValInternals::Computed(new_value.clone());
+		*self.0.borrow_mut() = LazyValBody::Resolved(new_value.clone());
 		Ok(new_value)
 	}
 }
 
-#[macro_export]
-macro_rules! lazy_val {
-	($f: expr) => {
-		$crate::LazyVal::new(Box::new($f))
-	};
-}
-#[macro_export]
-macro_rules! resolved_lazy_val {
-	($f: expr) => {
-		$crate::LazyVal::new_resolved($f)
-	};
-}
 impl Debug for LazyVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Lazy")
@@ -113,7 +142,7 @@ impl FuncVal {
 			Self::Normal(func) => {
 				let ctx = parse_function_call(
 					call_ctx,
-					Some(func.ctx.clone()),
+					func.ctx.clone(),
 					&func.params,
 					args,
 					tailstrict,
@@ -122,7 +151,8 @@ impl FuncVal {
 			}
 			Self::Intrinsic(ns, name) => call_builtin(call_ctx, loc, ns, name, args),
 			Self::NativeExt(_name, handler) => {
-				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
+				let args =
+					parse_function_call(call_ctx.clone(), call_ctx, &handler.params, args, true)?;
 				let mut out_args = Vec::with_capacity(handler.params.len());
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
@@ -132,21 +162,11 @@ impl FuncVal {
 		}
 	}
 
-	pub fn evaluate_map(
-		&self,
-		call_ctx: Context,
-		args: &HashMap<Rc<str>, Val>,
-		tailstrict: bool,
-	) -> Result<Val> {
+	pub fn evaluate_map(&self, args: &HashMap<Rc<str>, Val>, tailstrict: bool) -> Result<Val> {
 		match self {
 			Self::Normal(func) => {
-				let ctx = parse_function_call_map(
-					call_ctx,
-					Some(func.ctx.clone()),
-					&func.params,
-					args,
-					tailstrict,
-				)?;
+				let ctx =
+					parse_function_call_map(func.ctx.clone(), &func.params, args, tailstrict)?;
 				evaluate(ctx, &func.body)
 			}
 			Self::Intrinsic(_, _) => todo!(),

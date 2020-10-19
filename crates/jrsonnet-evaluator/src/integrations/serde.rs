@@ -1,6 +1,6 @@
 use crate::{
 	error::{Error::*, LocError, Result},
-	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+	throw, LazyBinding, LazyValBody, ObjMember, ObjValue, Val,
 };
 use jrsonnet_parser::Visibility;
 use serde_json::{Map, Number, Value};
@@ -67,7 +67,7 @@ impl From<&Value> for Val {
 						ObjMember {
 							add: false,
 							visibility: Visibility::Normal,
-							invoke: LazyBinding::Bound(LazyVal::new_resolved(v.into())),
+							invoke: LazyBinding::Bound(LazyValBody::Resolved(v.into()).into()),
 							location: None,
 						},
 					);

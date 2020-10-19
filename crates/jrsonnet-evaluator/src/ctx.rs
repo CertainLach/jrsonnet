@@ -1,8 +1,8 @@
-use crate::evaluate::FutureNewBindings;
 use crate::{
-	error::Error::*, future_wrapper, map::LayeredHashMap, resolved_lazy_val, LazyBinding, LazyVal,
-	ObjValue, Result, Val,
+	error::Error::*, future_wrapper, map::LayeredHashMap, LazyBinding, LazyVal, ObjValue, Result,
+	Val,
 };
+use crate::{evaluate::FutureNewBindings, LazyValBody};
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasherDefault;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
@@ -103,7 +103,7 @@ impl Context {
 	pub fn with_var(self, name: Rc<str>, value: Val) -> Self {
 		let mut new_bindings =
 			FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
-		new_bindings.insert(name, resolved_lazy_val!(value));
+		new_bindings.insert(name, LazyValBody::Resolved(value).into());
 		self.extend(new_bindings, None, None, None)
 	}
 

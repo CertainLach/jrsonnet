@@ -258,7 +258,7 @@ impl EvaluationState {
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
-				LazyBinding::Bound(resolved_lazy_val!(value.clone())),
+				LazyBinding::Bound(LazyValBody::Resolved(value.clone()).into()),
 			);
 		}
 		Context::new().extend_unbound(new_bindings, None, None, None)
@@ -332,11 +332,7 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => func.evaluate_map(
-					self.create_default_context()?,
-					&self.settings().tla_vars,
-					true,
-				)?,
+				Val::Func(func) => func.evaluate_map(&self.settings().tla_vars, true)?,
 				v => v,
 			})
 		})

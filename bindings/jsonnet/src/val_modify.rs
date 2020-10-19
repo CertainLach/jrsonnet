@@ -2,7 +2,7 @@
 //! Only tested with variables, which haven't altered by code before appearing here
 //! In jrsonnet every value is immutable, and this code is probally broken
 
-use jrsonnet_evaluator::{EvaluationState, LazyBinding, LazyVal, ObjMember, ObjValue, Val};
+use jrsonnet_evaluator::{EvaluationState, LazyBinding, LazyValBody, ObjMember, ObjValue, Val};
 use jrsonnet_parser::Visibility;
 use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
 
@@ -43,7 +43,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 				ObjMember {
 					add: false,
 					visibility: Visibility::Normal,
-					invoke: LazyBinding::Bound(LazyVal::new_resolved(val.clone())),
+					invoke: LazyBinding::Bound(LazyValBody::Resolved(val.clone()).into()),
 					location: None,
 				},
 			);
