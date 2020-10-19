@@ -25,7 +25,7 @@ impl FromStr for TraceFormatName {
 }
 
 #[derive(Clap)]
-// #[clap(help_heading = "STACK TRACE VISUAL")]
+#[clap(help_heading = "STACK TRACE VISUAL")]
 pub struct TraceOpts {
 	/// Format of stack traces' display in console.
 	/// `compact` format only shows `filename:line:column`s

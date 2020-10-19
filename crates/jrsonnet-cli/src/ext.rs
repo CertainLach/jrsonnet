@@ -54,7 +54,7 @@ impl FromStr for ExtFile {
 }
 
 #[derive(Clap)]
-// #[clap(help_heading = "EXTERNAL VARIABLES")]
+#[clap(help_heading = "EXTERNAL VARIABLES")]
 pub struct ExtVarOpts {
 	/// Add string external variable.
 	/// External variables are globally available so it is preferred

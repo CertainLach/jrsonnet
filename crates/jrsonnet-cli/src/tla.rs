@@ -3,7 +3,7 @@ use clap::Clap;
 use jrsonnet_evaluator::{error::Result, EvaluationState};
 
 #[derive(Clap)]
-// #[clap(help_heading = "TOP LEVEL ARGUMENTS")]
+#[clap(help_heading = "TOP LEVEL ARGUMENTS")]
 pub struct TLAOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.

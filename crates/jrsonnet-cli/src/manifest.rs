@@ -23,8 +23,7 @@ impl FromStr for ManifestFormatName {
 }
 
 #[derive(Clap)]
-// TODO: Restore arg group after issue fixed in clap
-// #[clap(group = clap::ArgGroup::new("output_format"), help_heading = "MANIFESTIFICATION OUTPUT")]
+#[clap(group = clap::ArgGroup::new("output_format"), help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
 	/// Output format, wraps resulting value to corresponding std.manifest call.
 	/// If set to `string` then plain string value is expected to be returned,
@@ -33,7 +32,7 @@ pub struct ManifestOpts {
 	format: ManifestFormatName,
 	/// Expect plain string as output.
 	/// Shortcut for `--format=string` thus this option is mutually exclusive with `format` option.
-	#[clap(long, short = 'S'/*, group = "output_format"*/)]
+	#[clap(long, short = 'S', group = "output_format")]
 	string: bool,
 	/// Write output as YAML stream, can be used with --format json/yaml
 	#[clap(long, short = 'y')]
