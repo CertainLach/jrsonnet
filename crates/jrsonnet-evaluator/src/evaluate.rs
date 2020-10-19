@@ -1,7 +1,6 @@
 use crate::{
-	context_creator, error::Error::*, future_wrapper, lazy_val, push, throw, with_state, Context,
-	ContextCreator, FuncDesc, FuncVal, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
-	ValType,
+	error::Error::*, future_wrapper, lazy_val, push, throw, with_state, Context, ContextCreator,
+	FuncDesc, FuncVal, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val, ValType,
 };
 use closure::closure;
 use jrsonnet_parser::{
@@ -21,7 +20,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(
 					closure!(clone b, clone params, clone context_creator, || Ok(evaluate_method(
-						context_creator.0(this.clone(), super_obj.clone())?,
+						context_creator.create(this.clone(), super_obj.clone())?,
 						b.name.clone(),
 						params.clone(),
 						b.value.clone(),
@@ -35,7 +34,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
 						evaluate_named(
-							context_creator.0(this.clone(), super_obj.clone())?,
+							context_creator.create(this.clone(), super_obj.clone())?,
 							&b.value,
 							b.name.clone()
 						)
@@ -223,16 +222,11 @@ pub fn evaluate_comp<T>(
 pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Result<ObjValue> {
 	let new_bindings = FutureNewBindings::new();
 	let future_this = FutureObjValue::new();
-	let context_creator = context_creator!(
-		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-			Ok(context.clone().extend_unbound(
-				new_bindings.clone().unwrap(),
-				context.dollar().clone().or_else(||this.clone()),
-				Some(this.unwrap()),
-				super_obj
-			)?)
-		})
-	);
+	let context_creator = ContextCreator::MemberList {
+		context: context.clone(),
+		new_bindings: new_bindings.clone(),
+		has_this: true,
+	};
 	{
 		let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
 		for (n, b) in members
@@ -271,7 +265,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						invoke: LazyBinding::Bindable(Rc::new(
 							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
 								Ok(LazyVal::new_resolved(evaluate(
-									context_creator.0(this, super_obj)?,
+									context_creator.create(this, super_obj)?,
 									&value,
 								)?))
 							}),
@@ -300,7 +294,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 							closure!(clone value, clone context_creator, clone params, clone name, |this, super_obj| {
 								// TODO: Assert
 								Ok(LazyVal::new_resolved(evaluate_method(
-									context_creator.0(this, super_obj)?,
+									context_creator.create(this, super_obj)?,
 									name.clone(),
 									params.clone(),
 									value.clone(),
@@ -328,16 +322,11 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				context.clone(),
 				&|ctx| {
 					let new_bindings = FutureNewBindings::new();
-					let context_creator = context_creator!(
-						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-							Ok(context.clone().extend_unbound(
-								new_bindings.clone().unwrap(),
-								context.dollar().clone().or_else(||this.clone()),
-								None,
-								super_obj
-							)?)
-						})
-					);
+					let context_creator = ContextCreator::MemberList {
+						context: context.clone(),
+						new_bindings: new_bindings.clone(),
+						has_this: false,
+					};
 					let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
 					for (n, b) in obj
 						.pre_locals
@@ -518,9 +507,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
-			let context_creator = context_creator!(
-				closure!(clone future_context, |_, _| Ok(future_context.clone().unwrap()))
-			);
+			let context_creator = ContextCreator::Future(future_context.clone());
 
 			for (k, v) in bindings
 				.iter()

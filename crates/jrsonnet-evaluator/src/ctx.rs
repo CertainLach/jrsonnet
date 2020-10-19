@@ -1,16 +1,43 @@
+use crate::evaluate::FutureNewBindings;
 use crate::{
-	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
-	LazyBinding, LazyVal, ObjValue, Result, Val,
+	error::Error::*, future_wrapper, map::LayeredHashMap, resolved_lazy_val, LazyBinding, LazyVal,
+	ObjValue, Result, Val,
 };
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasherDefault;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
-rc_fn_helper!(
-	ContextCreator,
-	context_creator,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Context>
-);
+#[derive(Clone)]
+pub enum ContextCreator {
+	MemberList {
+		context: Context,
+		new_bindings: FutureNewBindings,
+		has_this: bool,
+	},
+	Future(FutureContext),
+}
+impl ContextCreator {
+	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
+		Ok(match self {
+			ContextCreator::MemberList {
+				context,
+				new_bindings,
+				has_this,
+			} => {
+				if *has_this {
+					assert!(this.is_some());
+				}
+				context.clone().extend_unbound(
+					new_bindings.clone().unwrap(),
+					context.dollar().clone().or_else(|| this.clone()),
+					if *has_this { this } else { None },
+					super_obj,
+				)?
+			}
+			ContextCreator::Future(future) => future.clone().unwrap(),
+		})
+	}
+}
 
 future_wrapper!(Context, FutureContext);
 
