@@ -13,38 +13,18 @@ use std::{collections::HashMap, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
-	if let Some(params) = &b.params {
-		let params = params.clone();
-		(
-			b.name.clone(),
-			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
-				Ok(LazyValBody::EvaluateMethod {
-					context_creator: context_creator.clone(),
-					this: this.clone(),
-					super_obj: super_obj.clone(),
-					name: b.name.clone(),
-					params: params.clone(),
-					value: b.value.clone(),
-				}
-				.into())
-			})),
-		)
-	} else {
-		(
-			b.name.clone(),
-			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
-				Ok(LazyValBody::EvaluateNamed {
-					context_creator: context_creator.clone(),
-					this: this.clone(),
-					super_obj: super_obj.clone(),
-
-					name: b.name.clone(),
-					value: b.value.clone(),
-				}
-				.into())
-			})),
-		)
-	}
+	(
+		b.name.clone(),
+		LazyBinding::Bindable(Rc::new(move |this, super_obj| {
+			Ok(LazyValBody::EvaluateBinding {
+				context_creator: context_creator.clone(),
+				this: this.clone(),
+				super_obj: super_obj.clone(),
+				spec: b.clone(),
+			}
+			.into())
+		})),
+	)
 }
 
 pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {

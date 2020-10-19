@@ -9,7 +9,9 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ContextCreator, ObjValue, Result,
 };
-use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
+use jrsonnet_parser::{
+	el, Arg, ArgsDesc, BindSpec, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc,
+};
 use std::{
 	cell::RefCell,
 	collections::HashMap,
@@ -19,22 +21,12 @@ use std::{
 
 pub enum LazyValBody {
 	Resolved(Val),
-	EvaluateMethod {
+	EvaluateBinding {
 		context_creator: ContextCreator,
 		this: Option<ObjValue>,
 		super_obj: Option<ObjValue>,
 
-		name: Rc<str>,
-		params: ParamsDesc,
-		value: LocExpr,
-	},
-	EvaluateNamed {
-		context_creator: ContextCreator,
-		this: Option<ObjValue>,
-		super_obj: Option<ObjValue>,
-
-		name: Rc<str>,
-		value: LocExpr,
+		spec: BindSpec,
 	},
 	Evaluate(Context, LocExpr),
 }
@@ -50,30 +42,27 @@ impl LazyVal {
 	pub fn evaluate(&self) -> Result<Val> {
 		let new_value = match &*self.0.borrow() {
 			LazyValBody::Resolved(v) => return Ok(v.clone()),
-			LazyValBody::EvaluateMethod {
+			LazyValBody::EvaluateBinding {
 				context_creator,
 				this,
 				super_obj,
-				name,
-				params,
-				value,
-			} => evaluate_method(
-				context_creator.create(this.clone(), super_obj.clone())?,
-				name.clone(),
-				params.clone(),
-				value.clone(),
-			),
-			LazyValBody::EvaluateNamed {
-				context_creator,
-				this,
-				super_obj,
-				name,
-				value,
-			} => evaluate_named(
-				context_creator.create(this.clone(), super_obj.clone())?,
-				&value,
-				name.clone(),
-			)?,
+				spec,
+			} => {
+				if let Some(params) = &spec.params {
+					evaluate_method(
+						context_creator.create(this.clone(), super_obj.clone())?,
+						spec.name.clone(),
+						params.clone(),
+						spec.value.clone(),
+					)
+				} else {
+					evaluate_named(
+						context_creator.create(this.clone(), super_obj.clone())?,
+						&spec.value,
+						spec.name.clone(),
+					)?
+				}
+			}
 			LazyValBody::Evaluate(context, expr) => evaluate(context.clone(), expr)?,
 		};
 		*self.0.borrow_mut() = LazyValBody::Resolved(new_value.clone());
