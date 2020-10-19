@@ -201,6 +201,7 @@ pub enum ManifestFormat {
 	YamlStream(Box<ManifestFormat>),
 	Yaml(usize),
 	Json(usize),
+	ToString,
 	String,
 }
 
@@ -357,6 +358,7 @@ impl Val {
 			}
 			ManifestFormat::Yaml(padding) => self.to_yaml(*padding)?,
 			ManifestFormat::Json(padding) => self.to_json(*padding)?,
+			ManifestFormat::ToString => self.to_string()?,
 			ManifestFormat::String => match self {
 				Self::Str(s) => s.clone(),
 				_ => throw!(StringManifestOutputIsNotAString),
