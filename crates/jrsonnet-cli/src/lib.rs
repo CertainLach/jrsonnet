@@ -17,7 +17,7 @@ pub trait ConfigureState {
 }
 
 #[derive(Clap)]
-// #[clap(help_heading = "INPUT")]
+#[clap(help_heading = "INPUT")]
 pub struct InputOpts {
 	#[clap(
 		long,
@@ -33,7 +33,7 @@ pub struct InputOpts {
 }
 
 #[derive(Clap)]
-// #[clap(help_heading = "OPTIONS")]
+#[clap(help_heading = "OPTIONS")]
 pub struct MiscOpts {
 	/// Disable standard library.
 	/// By default standard library will be available via global `std` variable.

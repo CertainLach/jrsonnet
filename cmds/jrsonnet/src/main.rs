@@ -1,3 +1,4 @@
+use clap::AppSettings;
 use clap::Clap;
 use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, EvaluationState, ManifestFormat};
@@ -13,7 +14,7 @@ use std::{
 static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
 
 #[derive(Clap)]
-// #[clap(help_heading = "DEBUG")]
+#[clap(help_heading = "DEBUG")]
 struct DebugOpts {
 	/// Required OS stack size.
 	/// This shouldn't be changed unless jrsonnet is failing with stack overflow error.
@@ -22,6 +23,10 @@ struct DebugOpts {
 }
 
 #[derive(Clap)]
+#[clap(
+	global_setting = AppSettings::ColoredHelp,
+	global_setting = AppSettings::DeriveDisplayOrder,
+)]
 struct Opts {
 	#[clap(flatten)]
 	input: InputOpts,

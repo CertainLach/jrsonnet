@@ -13,4 +13,4 @@ jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.1" }
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
-rev = "3e9ee86713b5c407b50ba76f30cffaed25952063"
+rev = "1d0b21908f93478e75b4b1a21533d86325d39386"
