@@ -2,28 +2,21 @@ use crate::{
 	error::Error::*, future_wrapper, push, throw, with_state, Context, ContextCreator, FuncDesc,
 	FuncVal, LazyBinding, LazyValBody, ObjMember, ObjValue, Result, Val, ValType,
 };
-use closure::closure;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
-use rustc_hash::FxHashMap;
 use std::{collections::HashMap, rc::Rc};
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
 	let b = b.clone();
 	(
 		b.name.clone(),
-		LazyBinding::Bindable(Rc::new(move |this, super_obj| {
-			Ok(LazyValBody::EvaluateBinding {
-				context_creator: context_creator.clone(),
-				this: this.clone(),
-				super_obj: super_obj.clone(),
-				spec: b.clone(),
-			}
-			.into())
-		})),
+		LazyBinding::EvaluateBinding {
+			context_creator: context_creator.clone(),
+			spec: b.clone(),
+		},
 	)
 }
 
@@ -245,14 +238,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					ObjMember {
 						add: *plus,
 						visibility: *visibility,
-						invoke: LazyBinding::Bindable(Rc::new(
-							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-								Ok(LazyValBody::Resolved(evaluate(
-									context_creator.create(this, super_obj)?,
-									&value,
-								)?).into())
-							}),
-						)),
+						invoke: LazyBinding::Evaluate(context_creator.clone(), value.clone()),
 						location: value.1.clone(),
 					},
 				);
@@ -273,17 +259,14 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					ObjMember {
 						add: false,
 						visibility: Visibility::Hidden,
-						invoke: LazyBinding::Bindable(Rc::new(
-							closure!(clone value, clone context_creator, clone params, clone name, |this, super_obj| {
-								// TODO: Assert
-								Ok(LazyValBody::Resolved(evaluate_method(
-									context_creator.create(this, super_obj)?,
-									name.clone(),
-									params.clone(),
-									value.clone(),
-								)).into())
-							}),
-						)),
+						invoke: LazyBinding::EvaluateBinding {
+							context_creator: context_creator.clone(),
+							spec: BindSpec {
+								name,
+								params: Some(params.clone()),
+								value: value.clone(),
+							},
+						},
 						location: value.1.clone(),
 					},
 				);
@@ -322,11 +305,10 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let bindings = new_bindings.fill(bindings);
 					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
 					let key = evaluate(ctx.clone(), &obj.key)?;
-					let value = LazyBinding::Bindable(Rc::new(
-						closure!(clone ctx, clone obj.value, |this, _super_obj| {
-							Ok(LazyValBody::Resolved(evaluate(ctx.clone().extend(FxHashMap::default(), None, this, None), &value)?).into())
-						}),
-					));
+					let value = LazyBinding::ObjComp {
+						ctx: ctx.clone(),
+						value: obj.value.clone(),
+					};
 
 					Ok((key, value))
 				},

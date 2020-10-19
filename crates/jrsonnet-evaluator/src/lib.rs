@@ -25,6 +25,7 @@ pub use import::*;
 use jrsonnet_parser::*;
 use native::NativeCallback;
 pub use obj::*;
+use rustc_hash::FxHashMap;
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
@@ -35,10 +36,17 @@ use std::{
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
 
-type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
 #[derive(Clone)]
 pub enum LazyBinding {
-	Bindable(Rc<BindableFn>),
+	EvaluateBinding {
+		context_creator: ContextCreator,
+		spec: BindSpec,
+	},
+	Evaluate(ContextCreator, LocExpr),
+	ObjComp {
+		ctx: Context,
+		value: LocExpr,
+	},
 	Bound(LazyVal),
 }
 
@@ -49,10 +57,28 @@ impl Debug for LazyBinding {
 }
 impl LazyBinding {
 	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
-		match self {
-			Self::Bindable(v) => v(this, super_obj),
-			Self::Bound(v) => Ok(v.clone()),
-		}
+		Ok(match self {
+			LazyBinding::EvaluateBinding {
+				context_creator,
+				spec,
+			} => LazyValBody::EvaluateBinding {
+				context_creator: context_creator.clone(),
+				this: this.clone(),
+				super_obj: super_obj.clone(),
+				spec: spec.clone(),
+			}
+			.into(),
+			LazyBinding::Bound(v) => v.clone(),
+			LazyBinding::Evaluate(context_creator, value) => {
+				LazyValBody::Resolved(evaluate(context_creator.create(this, super_obj)?, &value)?)
+					.into()
+			}
+			LazyBinding::ObjComp { ctx, value } => LazyValBody::Resolved(evaluate(
+				ctx.clone().extend(FxHashMap::default(), None, this, None),
+				value,
+			)?)
+			.into(),
+		})
 	}
 }
 

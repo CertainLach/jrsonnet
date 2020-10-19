@@ -91,12 +91,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "closure"
-version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d6173fd61b610d15a7566dd7b7620775627441c4ab9dac8906e17cb93a24b782"
-
-[[package]]
 name = "hashbrown"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -164,7 +158,6 @@ dependencies = [
  "annotate-snippets",
  "base64",
  "bincode",
- "closure",
  "indexmap",
  "jrsonnet-parser",
  "jrsonnet-stdlib",

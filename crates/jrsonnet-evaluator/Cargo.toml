@@ -30,7 +30,6 @@ jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.1" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.1" }
 pathdiff = "0.2.0"
 
-closure = "0.3.0"
 indexmap = "1.6.0"
 
 md5 = "0.7.0"
