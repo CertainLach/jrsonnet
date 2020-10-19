@@ -466,10 +466,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						|| {
 							if let Some(v) = v.get(s.clone())? {
 								Ok(v.unwrap_if_lazy()?)
-							} else if let Some(Val::Str(n)) =
-								v.get("__intrinsic_namespace__".into())?
-							{
-								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(n, s))))
+							} else if let Some(_) = v.get("__intrinsic_namespace__".into())? {
+								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(s))))
 							} else {
 								throw!(NoSuchField(s))
 							}
@@ -558,6 +556,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
+		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(
 				&value.1,

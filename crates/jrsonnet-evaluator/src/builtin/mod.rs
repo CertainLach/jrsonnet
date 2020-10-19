@@ -20,13 +20,12 @@ pub mod sort;
 pub fn call_builtin(
 	context: Context,
 	loc: &Option<ExprLocation>,
-	ns: &str,
 	name: &str,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	Ok(match (ns, name as &str) {
+	Ok(match name as &str {
 		// arr/string/function
-		("std", "length") => parse_args!(context, "std.length", args, 1, [
+		"length" => parse_args!(context, "std.length", args, 1, [
 			0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
 		], {
 			Ok(match x {
@@ -42,13 +41,13 @@ pub fn call_builtin(
 			})
 		})?,
 		// any
-		("std", "type") => parse_args!(context, "std.type", args, 1, [
+		"type" => parse_args!(context, "std.type", args, 1, [
 			0, x, vec![];
 		], {
 			Ok(Val::Str(x.value_type()?.name().into()))
 		})?,
 		// length, idx=>any
-		("std", "makeArray") => parse_args!(context, "std.makeArray", args, 2, [
+		"makeArray" => parse_args!(context, "std.makeArray", args, 2, [
 			0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 		], {
@@ -65,7 +64,7 @@ pub fn call_builtin(
 			Ok(Val::Arr(Rc::new(out)))
 		})?,
 		// string
-		("std", "codepoint") => parse_args!(context, "std.codepoint", args, 1, [
+		"codepoint" => parse_args!(context, "std.codepoint", args, 1, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			assert!(
@@ -75,7 +74,7 @@ pub fn call_builtin(
 			Ok(Val::Num(str.chars().take(1).next().unwrap() as u32 as f64))
 		})?,
 		// object, includeHidden
-		("std", "objectFieldsEx") => parse_args!(context, "std.objectFieldsEx",args, 2, [
+		"objectFieldsEx" => parse_args!(context, "std.objectFieldsEx",args, 2, [
 			0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
 			1, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
 		], {
@@ -88,7 +87,7 @@ pub fn call_builtin(
 			Ok(Val::Arr(Rc::new(out.into_iter().map(Val::Str).collect())))
 		})?,
 		// object, field, includeHidden
-		("std", "objectHasEx") => parse_args!(context, "std.objectHasEx", args, 3, [
+		"objectHasEx" => parse_args!(context, "std.objectHasEx", args, 3, [
 			0, obj: [Val::Obj]!!Val::Obj, vec![ValType::Obj];
 			1, f: [Val::Str]!!Val::Str, vec![ValType::Str];
 			2, inc_hidden: [Val::Bool]!!Val::Bool, vec![ValType::Bool];
@@ -100,36 +99,36 @@ pub fn call_builtin(
 					.any(|(k, _v)| *k == *f),
 			))
 		})?,
-		("std", "primitiveEquals") => parse_args!(context, "std.primitiveEquals", args, 2, [
+		"primitiveEquals" => parse_args!(context, "std.primitiveEquals", args, 2, [
 			0, a, vec![];
 			1, b, vec![];
 		], {
 			Ok(Val::Bool(primitive_equals(&a, &b)?))
 		})?,
 		// faster
-		("std", "equals") => parse_args!(context, "std.equals", args, 2, [
+		"equals" => parse_args!(context, "std.equals", args, 2, [
 			0, a, vec![];
 			1, b, vec![];
 		], {
 			Ok(Val::Bool(equals(&a, &b)?))
 		})?,
-		("std", "modulo") => parse_args!(context, "std.modulo", args, 2, [
+		"modulo" => parse_args!(context, "std.modulo", args, 2, [
 			0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			Ok(Val::Num(a % b))
 		})?,
-		("std", "floor") => parse_args!(context, "std.floor", args, 1, [
+		"floor" => parse_args!(context, "std.floor", args, 1, [
 			0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			Ok(Val::Num(x.floor()))
 		})?,
-		("std", "log") => parse_args!(context, "std.log", args, 2, [
+		"log" => parse_args!(context, "std.log", args, 2, [
 			0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			Ok(Val::Num(n.ln()))
 		})?,
-		("std", "trace") => parse_args!(context, "std.trace", args, 2, [
+		"trace" => parse_args!(context, "std.trace", args, 2, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			1, rest, vec![];
 		], {
@@ -143,27 +142,27 @@ pub fn call_builtin(
 			eprintln!(" {}", str);
 			Ok(rest)
 		})?,
-		("std", "pow") => parse_args!(context, "std.modulo", args, 2, [
+		"pow" => parse_args!(context, "std.modulo", args, 2, [
 			0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			Ok(Val::Num(x.powf(n)))
 		})?,
-		("std", "extVar") => parse_args!(context, "std.extVar", args, 1, [
+		"extVar" => parse_args!(context, "std.extVar", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
 				|| UndefinedExternalVariable(x),
 			)?)
 		})?,
-		("std", "native") => parse_args!(context, "std.native", args, 1, [
+		"native" => parse_args!(context, "std.native", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or_else(
 				|| UndefinedExternalFunction(x),
 			)?)
 		})?,
-		("std", "filter") => parse_args!(context, "std.filter", args, 2, [
+		"filter" => parse_args!(context, "std.filter", args, 2, [
 			0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
@@ -181,7 +180,7 @@ pub fn call_builtin(
 			)))
 		})?,
 		// faster
-		("std", "foldl") => parse_args!(context, "std.foldl", args, 3, [
+		"foldl" => parse_args!(context, "std.foldl", args, 3, [
 			0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 			2, init, vec![];
@@ -193,7 +192,7 @@ pub fn call_builtin(
 			Ok(acc)
 		})?,
 		// faster
-		("std", "foldr") => parse_args!(context, "std.foldr", args, 3, [
+		"foldr" => parse_args!(context, "std.foldr", args, 3, [
 			0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 			2, init, vec![];
@@ -206,7 +205,7 @@ pub fn call_builtin(
 		})?,
 		// faster
 		#[allow(non_snake_case)]
-		("std", "sortImpl") => parse_args!(context, "std.sort", args, 2, [
+		"sortImpl" => parse_args!(context, "std.sort", args, 2, [
 			0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 			1, keyF: [Val::Func]!!Val::Func, vec![ValType::Func];
 		], {
@@ -216,7 +215,7 @@ pub fn call_builtin(
 			Ok(Val::Arr(sort::sort(context, arr, &keyF)?))
 		})?,
 		// faster
-		("std", "format") => parse_args!(context, "std.format", args, 2, [
+		"format" => parse_args!(context, "std.format", args, 2, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			1, vals, vec![]
 		], {
@@ -229,7 +228,7 @@ pub fn call_builtin(
 			})
 		})?,
 		// faster
-		("std", "range") => parse_args!(context, "std.range", args, 2, [
+		"range" => parse_args!(context, "std.range", args, 2, [
 			0, from: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, to: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
@@ -239,7 +238,7 @@ pub fn call_builtin(
 			}
 			Ok(Val::Arr(Rc::new(out)))
 		})?,
-		("std", "char") => parse_args!(context, "std.char", args, 1, [
+		"char" => parse_args!(context, "std.char", args, 1, [
 			0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			let mut out = String::new();
@@ -248,18 +247,18 @@ pub fn call_builtin(
 			)?);
 			Ok(Val::Str(out.into()))
 		})?,
-		("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
+		"encodeUTF8" => parse_args!(context, "std.encodeUtf8", args, 1, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect())))
 		})?,
-		("std", "md5") => parse_args!(context, "std.md5", args, 1, [
+		"md5" => parse_args!(context, "std.md5", args, 1, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(Val::Str(format!("{:x}", md5::compute(&str.as_bytes())).into()))
 		})?,
 		// faster
-		("std", "base64") => parse_args!(context, "std.base64", args, 1, [
+		"base64" => parse_args!(context, "std.base64", args, 1, [
 			0, input: [Val::Str | Val::Arr], vec![ValType::Arr, ValType::Str];
 		], {
 			Ok(Val::Str(match input {
@@ -275,7 +274,7 @@ pub fn call_builtin(
 			}))
 		})?,
 		// faster
-		("std", "join") => parse_args!(context, "std.join", args, 2, [
+		"join" => parse_args!(context, "std.join", args, 2, [
 			0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
@@ -322,13 +321,13 @@ pub fn call_builtin(
 			})
 		})?,
 		// Faster
-		("std", "escapeStringJson") => parse_args!(context, "std.escapeStringJson", args, 1, [
+		"escapeStringJson" => parse_args!(context, "std.escapeStringJson", args, 1, [
 			0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(Val::Str(escape_string_json(&str_).into()))
 		})?,
 		// Faster
-		("std", "manifestJsonEx") => parse_args!(context, "std.manifestJsonEx", args, 2, [
+		"manifestJsonEx" => parse_args!(context, "std.manifestJsonEx", args, 2, [
 			0, value, vec![];
 			1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
@@ -338,18 +337,18 @@ pub fn call_builtin(
 			})?.into()))
 		})?,
 		// Faster
-		("std", "reverse") => parse_args!(context, "std.reverse", args, 1, [
+		"reverse" => parse_args!(context, "std.reverse", args, 1, [
 			0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
 			let mut marr = arr;
 			Rc::make_mut(&mut marr).reverse();
 			Ok(Val::Arr(marr))
 		})?,
-		("std", "id") => parse_args!(context, "std.id", args, 1, [
+		"id" => parse_args!(context, "std.id", args, 1, [
 			0, v, vec![];
 		], {
 			Ok(v)
 		})?,
-		(ns, name) => throw!(IntrinsicNotFound(ns.into(), name.into())),
+		name => throw!(IntrinsicNotFound(name.into())),
 	})
 }

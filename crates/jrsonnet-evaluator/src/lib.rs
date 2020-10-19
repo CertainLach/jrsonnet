@@ -893,4 +893,12 @@ pub mod tests {
 		)?;
 		Ok(())
 	}
+
+	#[test]
+	fn constant_intrinsic() -> crate::error::Result<()> {
+		assert_eval!(
+			"local std2 = std; local std = std2 { primitiveEquals(a, b):: false }; 1 == 1"
+		);
+		Ok(())
+	}
 }
