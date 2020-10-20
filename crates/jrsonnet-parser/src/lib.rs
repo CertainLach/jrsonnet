@@ -221,18 +221,12 @@ parser! {
 				a:(@) _ "&" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
 				--
 				a:(@) _ "==" _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("equals".into()))
-					)),
+					el!(Expr::Intrinsic("equals".into())),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))}
 				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("equals".into()))
-					)),
+					el!(Expr::Intrinsic("equals".into())),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))))}
@@ -242,10 +236,7 @@ parser! {
 				a:(@) _ "<=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lte, b))}
 				a:(@) _ ">=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
 				a:(@) _ keyword("in") _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("objectHasEx".into()))
-					)), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
+					el!(Expr::Intrinsic("objectHasEx".into())), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
 					true
 				))}
 				--
@@ -258,10 +249,7 @@ parser! {
 				a:(@) _ "*" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
 				a:(@) _ "/" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
 				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("mod".into()))
-					)), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
+					el!(Expr::Intrinsic("mod".into())), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					false
 				))}
 				--
@@ -270,10 +258,7 @@ parser! {
 						"~" _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
 				--
 				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("slice".into())),
-					)),
+					el!(Expr::Intrinsic("slice".into())),
 					ArgsDesc(vec![
 						Arg(None, a),
 						Arg(None, s.start.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),

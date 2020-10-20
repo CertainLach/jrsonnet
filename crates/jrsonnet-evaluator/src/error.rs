@@ -8,8 +8,8 @@ use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
-	#[error("intrinsic not found: {0}.{1}")]
-	IntrinsicNotFound(Rc<str>, Rc<str>),
+	#[error("intrinsic not found: {0}")]
+	IntrinsicNotFound(Rc<str>),
 	#[error("argument reordering in intrisics not supported yet")]
 	IntrinsicArgumentReorderingIsNotSupportedYet,
 

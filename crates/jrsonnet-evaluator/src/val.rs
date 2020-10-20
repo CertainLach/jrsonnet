@@ -76,7 +76,7 @@ pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intrinsic(Rc<str>, Rc<str>),
+	Intrinsic(Rc<str>),
 	/// Library functions implemented in native
 	NativeExt(Rc<str>, Rc<NativeCallback>),
 }
@@ -85,7 +85,7 @@ impl PartialEq for FuncVal {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(Self::Normal(a), Self::Normal(b)) => a == b,
-			(Self::Intrinsic(ans, an), Self::Intrinsic(bns, bn)) => ans == bns && an == bn,
+			(Self::Intrinsic(an), Self::Intrinsic(bn)) => an == bn,
 			(Self::NativeExt(an, _), Self::NativeExt(bn, _)) => an == bn,
 			(..) => false,
 		}
@@ -93,12 +93,12 @@ impl PartialEq for FuncVal {
 }
 impl FuncVal {
 	pub fn is_ident(&self) -> bool {
-		matches!(&self, Self::Intrinsic(ns, n) if ns as &str == "std" && n as &str == "id")
+		matches!(&self, Self::Intrinsic(n) if n as &str == "id")
 	}
 	pub fn name(&self) -> Rc<str> {
 		match self {
 			Self::Normal(normal) => normal.name.clone(),
-			Self::Intrinsic(ns, name) => format!("intrinsic.{}.{}", ns, name).into(),
+			Self::Intrinsic(name) => format!("std.{}", name).into(),
 			Self::NativeExt(n, _) => format!("native.{}", n).into(),
 		}
 	}
@@ -120,7 +120,7 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			Self::Intrinsic(ns, name) => call_builtin(call_ctx, loc, ns, name, args),
+			Self::Intrinsic(name) => call_builtin(call_ctx, loc, name, args),
 			Self::NativeExt(_name, handler) => {
 				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
 				let mut out_args = Vec::with_capacity(handler.params.len());
@@ -149,7 +149,7 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			Self::Intrinsic(_, _) => todo!(),
+			Self::Intrinsic(_) => todo!(),
 			Self::NativeExt(_, _) => todo!(),
 		}
 	}
@@ -160,7 +160,7 @@ impl FuncVal {
 				let ctx = place_args(call_ctx, Some(func.ctx.clone()), &func.params, args)?;
 				evaluate(ctx, &func.body)
 			}
-			Self::Intrinsic(_, _) => todo!(),
+			Self::Intrinsic(_) => todo!(),
 			Self::NativeExt(_, _) => todo!(),
 		}
 	}

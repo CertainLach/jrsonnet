@@ -311,6 +311,8 @@ pub enum Expr {
 	Index(LocExpr, LocExpr),
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
+	/// std.primitiveEquals
+	Intrinsic(Rc<str>),
 	/// if true == false then 1 else 2
 	IfElse {
 		cond: IfSpecData,
