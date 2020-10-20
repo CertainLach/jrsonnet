@@ -32,7 +32,7 @@ pub enum LazyValBody {
 }
 impl From<LazyValBody> for LazyVal {
 	fn from(body: LazyValBody) -> Self {
-		LazyVal(Rc::new(RefCell::new(body)))
+		Self(Rc::new(RefCell::new(body)))
 	}
 }
 
@@ -358,7 +358,7 @@ impl Val {
 					for v in arr.iter() {
 						out.push_str("---\n");
 						out.push_str(&v.manifest(format)?);
-						out.push_str("\n");
+						out.push('\n');
 					}
 					out.push_str("...");
 				}

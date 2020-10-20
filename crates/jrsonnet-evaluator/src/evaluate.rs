@@ -9,13 +9,16 @@ use jrsonnet_parser::{
 };
 use std::{collections::HashMap, rc::Rc};
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
-	let b = b.clone();
+pub fn evaluate_binding(
+	spec: &BindSpec,
+	context_creator: ContextCreator,
+) -> (Rc<str>, LazyBinding) {
+	let spec = spec.clone();
 	(
-		b.name.clone(),
+		spec.name.clone(),
 		LazyBinding::EvaluateBinding {
-			context_creator: context_creator.clone(),
-			spec: b.clone(),
+			context_creator,
+			spec,
 		},
 	)
 }
@@ -306,7 +309,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
 					let key = evaluate(ctx.clone(), &obj.key)?;
 					let value = LazyBinding::ObjComp {
-						ctx: ctx.clone(),
+						ctx,
 						value: obj.value.clone(),
 					};
 
@@ -373,18 +376,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
 	Ok(match &**expr {
-		Literal(LiteralType::This) => Val::Obj(
-			context
-				.this()
-				.clone()
-				.ok_or_else(|| CantUseSelfOutsideOfObject)?,
-		),
-		Literal(LiteralType::Dollar) => Val::Obj(
-			context
-				.dollar()
-				.clone()
-				.ok_or_else(|| NoTopLevelObjectFound)?,
-		),
+		Literal(LiteralType::This) => {
+			Val::Obj(context.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
+		}
+		Literal(LiteralType::Dollar) => {
+			Val::Obj(context.dollar().clone().ok_or(NoTopLevelObjectFound)?)
+		}
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,

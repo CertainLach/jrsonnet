@@ -58,22 +58,22 @@ impl Debug for LazyBinding {
 impl LazyBinding {
 	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
 		Ok(match self {
-			LazyBinding::EvaluateBinding {
+			Self::EvaluateBinding {
 				context_creator,
 				spec,
 			} => LazyValBody::EvaluateBinding {
 				context_creator: context_creator.clone(),
-				this: this.clone(),
-				super_obj: super_obj.clone(),
+				this,
+				super_obj,
 				spec: spec.clone(),
 			}
 			.into(),
-			LazyBinding::Bound(v) => v.clone(),
-			LazyBinding::Evaluate(context_creator, value) => {
-				LazyValBody::Resolved(evaluate(context_creator.create(this, super_obj)?, &value)?)
+			Self::Bound(v) => v.clone(),
+			Self::Evaluate(context_creator, value) => {
+				LazyValBody::Resolved(evaluate(context_creator.create(this, super_obj)?, value)?)
 					.into()
 			}
-			LazyBinding::ObjComp { ctx, value } => LazyValBody::Resolved(evaluate(
+			Self::ObjComp { ctx, value } => LazyValBody::Resolved(evaluate(
 				ctx.clone().extend(FxHashMap::default(), None, this, None),
 				value,
 			)?)

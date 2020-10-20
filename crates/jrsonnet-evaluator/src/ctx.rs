@@ -20,7 +20,7 @@ pub enum ContextCreator {
 impl ContextCreator {
 	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
 		Ok(match self {
-			ContextCreator::MemberList {
+			Self::MemberList {
 				context,
 				new_bindings,
 				has_this,
@@ -35,7 +35,7 @@ impl ContextCreator {
 					super_obj,
 				)?
 			}
-			ContextCreator::Future(future) => future.clone().unwrap(),
+			Self::Future(future) => future.clone().unwrap(),
 		})
 	}
 }
@@ -180,21 +180,5 @@ impl Default for Context {
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
 		Rc::ptr_eq(&self.0, &other.0)
-	}
-}
-
-#[cfg(feature = "unstable")]
-#[derive(Debug, Clone)]
-pub struct WeakContext(std::rc::Weak<ContextInternals>);
-#[cfg(feature = "unstable")]
-impl WeakContext {
-	pub fn upgrade(&self) -> Context {
-		Context(self.0.upgrade().expect("context is removed"))
-	}
-}
-#[cfg(feature = "unstable")]
-impl PartialEq for WeakContext {
-	fn eq(&self, other: &Self) -> bool {
-		self.0.ptr_eq(&other.0)
 	}
 }
