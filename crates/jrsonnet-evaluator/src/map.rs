@@ -42,7 +42,7 @@ impl<V: Trace + 'static> LayeredHashMap<V> {
 		}))
 	}
 
-	pub fn get<'s>(&'s self, key: GcStr) -> Option<&'s V> {
+	pub fn get(&self, key: GcStr) -> Option<&V> {
 		(self.0)
 			.current
 			.get(&key)

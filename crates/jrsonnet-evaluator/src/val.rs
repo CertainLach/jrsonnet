@@ -305,7 +305,7 @@ impl Val {
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
-				&v,
+				v,
 				&ManifestJsonOptions {
 					padding: "",
 					mtype: ManifestType::ToString,
@@ -483,7 +483,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Obj(_), Val::Obj(_)) => throw!(RuntimeError(
 			"primitiveEquals operates on primitive types, got object".into(),
 		)),
-		(a, b) if is_function_like(&a) && is_function_like(&b) => {
+		(a, b) if is_function_like(a) && is_function_like(b) => {
 			throw!(RuntimeError("cannot test equality of functions".into()))
 		}
 		(_, _) => false,
@@ -523,6 +523,6 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			}
 			Ok(true)
 		}
-		(a, b) => Ok(primitive_equals(&a, &b)?),
+		(a, b) => Ok(primitive_equals(a, b)?),
 	}
 }

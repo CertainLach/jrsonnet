@@ -42,7 +42,7 @@ fn manifest_json_ex_buf(
 			}
 		}
 		Val::Null => buf.push_str("null"),
-		Val::Str(s) => buf.push_str(&escape_string_json(&s)),
+		Val::Str(s) => buf.push_str(&escape_string_json(s)),
 		Val::Num(n) => write!(buf, "{}", n).unwrap(),
 		Val::Arr(items) => {
 			buf.push('[');

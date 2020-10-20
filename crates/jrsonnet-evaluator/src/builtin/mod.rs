@@ -148,7 +148,7 @@ pub fn call_builtin(
 			0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
-			Ok(Val::Num(x.powf(n.clone())))
+			Ok(Val::Num(x.powf(*n)))
 		})?,
 		("std", "extVar") => parse_args!(context, "std.extVar", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
@@ -214,7 +214,7 @@ pub fn call_builtin(
 			if arr.len() <= 1 {
 				return Ok(Val::Arr(arr.clone()))
 			}
-			Ok(Val::Arr(sort::sort(context, arr.clone(), &keyF)?))
+			Ok(Val::Arr(sort::sort(context, arr.clone(), keyF)?))
 		})?,
 		// faster
 		("std", "format") => parse_args!(context, "std.format", args, 2, [
@@ -223,9 +223,9 @@ pub fn call_builtin(
 		], {
 			push(&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)), ||format!("std.format of {}", str), ||{
 				Ok(match &vals {
-					Val::Arr(vals) => Val::Str(format_arr(&str, &vals)?.into()),
-					Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
-					o => Val::Str(format_arr(&str, &[o.clone()])?.into()),
+					Val::Arr(vals) => Val::Str(format_arr(str, vals)?.into()),
+					Val::Obj(obj) => Val::Str(format_obj(str, obj)?.into()),
+					o => Val::Str(format_arr(str, &[o.clone()])?.into()),
 				})
 			})
 		})?,
@@ -308,10 +308,10 @@ pub fn call_builtin(
 					for item in arr.iter().cloned() {
 						if let Val::Str(item) = &item.unwrap_if_lazy()? {
 							if !first {
-								out += &sep;
+								out += sep;
 							}
 							first = false;
-							out += &item;
+							out += item;
 						} else {
 							throw!(RuntimeError("in std.join all items should be strings".into()));
 						}
@@ -326,7 +326,7 @@ pub fn call_builtin(
 		("std", "escapeStringJson") => parse_args!(context, "std.escapeStringJson", args, 1, [
 			0, str_: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(Val::Str(escape_string_json(&str_).into()))
+			Ok(Val::Str(escape_string_json(str_).into()))
 		})?,
 		// Faster
 		("std", "manifestJsonEx") => parse_args!(context, "std.manifestJsonEx", args, 2, [
@@ -334,7 +334,7 @@ pub fn call_builtin(
 			1, indent: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
 			Ok(Val::Str(manifest_json_ex(&value, &ManifestJsonOptions {
-				padding: &indent,
+				padding: indent,
 				mtype: ManifestType::Std,
 			})?.into()))
 		})?,
@@ -342,7 +342,7 @@ pub fn call_builtin(
 		("std", "reverse") => parse_args!(context, "std.reverse", args, 1, [
 			0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
-			let mut marr = (&arr as &Vec<_>).clone();
+			let mut marr = (arr as &Vec<_>).clone();
 			marr.reverse();
 			Ok(Val::Arr(Gc::new(marr)))
 		})?,

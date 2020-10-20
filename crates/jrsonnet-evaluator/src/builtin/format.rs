@@ -584,7 +584,7 @@ pub fn format_code(
 						format!("%c expected 1 char string, got {}", s.chars().count()).into(),
 					));
 				}
-				tmp_out.push_str(&s);
+				tmp_out.push_str(s);
 			}
 			_ => {
 				throw!(TypeMismatch(
