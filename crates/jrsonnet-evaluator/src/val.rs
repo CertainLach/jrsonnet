@@ -9,35 +9,36 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ContextCreator, ObjValue, Result,
 };
+use gc::{Finalize, Gc, GcCell, Trace};
 use jrsonnet_parser::{
-	el, Arg, ArgsDesc, BindSpec, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc,
+	el, Arg, ArgsDesc, BindSpec, Expr, ExprLocation, GcStr, LiteralType, LocExpr, ParamsDesc,
 };
 use std::{
-	cell::RefCell,
 	collections::HashMap,
 	fmt::{Debug, Display},
 	rc::Rc,
 };
 
+#[derive(Trace, Finalize)]
 pub enum LazyValBody {
 	Resolved(Val),
 	EvaluateBinding {
 		context_creator: ContextCreator,
 		this: Option<ObjValue>,
 		super_obj: Option<ObjValue>,
-
+		#[unsafe_ignore_trace]
 		spec: BindSpec,
 	},
-	Evaluate(Context, LocExpr),
+	Evaluate(Context, #[unsafe_ignore_trace] LocExpr),
 }
 impl From<LazyValBody> for LazyVal {
 	fn from(body: LazyValBody) -> Self {
-		Self(Rc::new(RefCell::new(body)))
+		Self(Gc::new(GcCell::new(body)))
 	}
 }
 
-#[derive(Clone)]
-pub struct LazyVal(Rc<RefCell<LazyValBody>>);
+#[derive(Clone, Trace, Finalize)]
+pub struct LazyVal(Gc<GcCell<LazyValBody>>);
 impl LazyVal {
 	pub fn evaluate(&self) -> Result<Val> {
 		let new_value = match &*self.0.borrow() {
@@ -77,26 +78,28 @@ impl Debug for LazyVal {
 }
 impl PartialEq for LazyVal {
 	fn eq(&self, other: &Self) -> bool {
-		Rc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct FuncDesc {
-	pub name: Rc<str>,
+	pub name: GcStr,
 	pub ctx: Context,
+	#[unsafe_ignore_trace]
 	pub params: ParamsDesc,
+	#[unsafe_ignore_trace]
 	pub body: LocExpr,
 }
 
-#[derive(Debug)]
+#[derive(Debug, Trace, Finalize)]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intrinsic(Rc<str>, Rc<str>),
+	Intrinsic(GcStr, GcStr),
 	/// Library functions implemented in native
-	NativeExt(Rc<str>, Rc<NativeCallback>),
+	NativeExt(GcStr, #[unsafe_ignore_trace] Rc<NativeCallback>),
 }
 
 impl PartialEq for FuncVal {
@@ -113,7 +116,7 @@ impl FuncVal {
 	pub fn is_ident(&self) -> bool {
 		matches!(&self, Self::Intrinsic(ns, n) if ns as &str == "std" && n as &str == "id")
 	}
-	pub fn name(&self) -> Rc<str> {
+	pub fn name(&self) -> GcStr {
 		match self {
 			Self::Normal(normal) => normal.name.clone(),
 			Self::Intrinsic(ns, name) => format!("intrinsic.{}.{}", ns, name).into(),
@@ -151,7 +154,7 @@ impl FuncVal {
 		}
 	}
 
-	pub fn evaluate_map(&self, args: &HashMap<Rc<str>, Val>, tailstrict: bool) -> Result<Val> {
+	pub fn evaluate_map(&self, args: &HashMap<GcStr, Val>, tailstrict: bool) -> Result<Val> {
 		match self {
 			Self::Normal(func) => {
 				let ctx =
@@ -214,16 +217,16 @@ pub enum ManifestFormat {
 	String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub enum Val {
 	Bool(bool),
 	Null,
-	Str(Rc<str>),
+	Str(GcStr),
 	Num(f64),
 	Lazy(LazyVal),
-	Arr(Rc<Vec<Val>>),
+	Arr(Gc<Vec<Val>>),
 	Obj(ObjValue),
-	Func(Rc<FuncVal>),
+	Func(Gc<FuncVal>),
 }
 
 macro_rules! matches_unwrap {
@@ -257,9 +260,13 @@ impl Val {
 		self.assert_type(context, ValType::Bool)?;
 		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Bool(v), v))
 	}
-	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
+	pub fn try_cast_str(self, context: &'static str) -> Result<GcStr> {
 		self.assert_type(context, ValType::Str)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Str(v), v))
+		Ok(matches_unwrap!(
+			&self.unwrap_if_lazy()?,
+			Self::Str(v),
+			v.clone()
+		))
 	}
 	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
 		self.assert_type(context, ValType::Num)?;
@@ -291,12 +298,12 @@ impl Val {
 		})
 	}
 
-	pub fn to_string(&self) -> Result<Rc<str>> {
-		Ok(match self.unwrap_if_lazy()? {
+	pub fn to_string(&self) -> Result<GcStr> {
+		Ok(match &self.unwrap_if_lazy()? {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
-			Self::Str(s) => s,
+			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
 				&v,
 				&ManifestJsonOptions {
@@ -309,7 +316,7 @@ impl Val {
 	}
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(GcStr, GcStr)>> {
 		let obj = match self {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
@@ -327,7 +334,7 @@ impl Val {
 	}
 
 	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<Rc<str>>> {
+	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<GcStr>> {
 		let arr = match self {
 			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
@@ -339,7 +346,7 @@ impl Val {
 		Ok(out)
 	}
 
-	pub fn manifest(&self, ty: &ManifestFormat) -> Result<Rc<str>> {
+	pub fn manifest(&self, ty: &ManifestFormat) -> Result<GcStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
@@ -376,7 +383,7 @@ impl Val {
 	}
 
 	/// For manifestification
-	pub fn to_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_json(&self, padding: usize) -> Result<GcStr> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -393,7 +400,7 @@ impl Val {
 
 	/// Calls `std.manifestJson`
 	#[cfg(feature = "faster")]
-	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_std_json(&self, padding: usize) -> Result<GcStr> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -406,7 +413,7 @@ impl Val {
 
 	/// Calls `std.manifestJson`
 	#[cfg(not(feature = "faster"))]
-	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_std_json(&self, padding: usize) -> Result<GcStr> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
@@ -428,7 +435,7 @@ impl Val {
 			.try_cast_str("to json")?)
 		})
 	}
-	pub fn to_yaml(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_yaml(&self, padding: usize) -> Result<GcStr> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
@@ -465,7 +472,7 @@ const fn is_function_like(val: &Val) -> bool {
 
 /// Native implementation of `std.primitiveEquals`
 pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
-	Ok(match (val_a.unwrap_if_lazy()?, val_b.unwrap_if_lazy()?) {
+	Ok(match (&val_a.unwrap_if_lazy()?, &val_b.unwrap_if_lazy()?) {
 		(Val::Bool(a), Val::Bool(b)) => a == b,
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
@@ -491,7 +498,7 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	if val_a.value_type()? != val_b.value_type()? {
 		return Ok(false);
 	}
-	match (val_a, val_b) {
+	match (&val_a, &val_b) {
 		// Cant test for ptr equality, because all fields needs to be evaluated
 		(Val::Arr(a), Val::Arr(b)) => {
 			if a.len() != b.len() {

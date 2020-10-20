@@ -91,6 +91,27 @@ dependencies = [
 ]
 
 [[package]]
+name = "gc"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c94b8d46989f31474299e1483db243a9ed1f8a7d8508a78c91449e76e9ef6756"
+dependencies = [
+ "gc_derive",
+]
+
+[[package]]
+name = "gc_derive"
+version = "0.3.6"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "52c734b94d1d53fcc70e42c83cd7c6e108c9a4f6da8e78098a7d212805e86151"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "hashbrown"
 version = "0.9.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -158,6 +179,7 @@ dependencies = [
  "annotate-snippets",
  "base64",
  "bincode",
+ "gc",
  "indexmap",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
@@ -174,6 +196,7 @@ dependencies = [
 name = "jrsonnet-parser"
 version = "0.3.1"
 dependencies = [
+ "gc",
  "jrsonnet-stdlib",
  "peg",
  "serde",
@@ -190,6 +213,7 @@ version = "0.3.1"
 name = "jsonnet"
 version = "0.3.1"
 dependencies = [
+ "gc",
  "jrsonnet-evaluator",
  "jrsonnet-parser",
 ]
@@ -400,6 +424,18 @@ dependencies = [
  "proc-macro2",
  "quote",
  "syn",
+]
+
+[[package]]
+name = "synstructure"
+version = "0.12.4"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "b834f2d66f734cb897113e34aaff2f1ab4719ca946f9a7358dba8f8064148701"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "unicode-xid",
 ]
 
 [[package]]

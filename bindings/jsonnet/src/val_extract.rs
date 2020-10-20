@@ -9,7 +9,7 @@ use std::{
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &EvaluationState, v: &Val) -> *mut c_char {
-	match v.unwrap_if_lazy().unwrap() {
+	match &v.unwrap_if_lazy().unwrap() {
 		Val::Str(s) => CString::new(&*s as &str).unwrap().into_raw(),
 		_ => std::ptr::null_mut(),
 	}

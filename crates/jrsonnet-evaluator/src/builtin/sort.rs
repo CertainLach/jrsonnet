@@ -2,7 +2,7 @@ use crate::{
 	error::{Error, LocError, Result},
 	throw, Context, FuncVal, Val,
 };
-use std::rc::Rc;
+use gc::Gc;
 
 #[derive(Debug, Clone, thiserror::Error)]
 pub enum SortError {
@@ -60,13 +60,13 @@ fn get_sort_type<T>(
 	Ok(sort_type)
 }
 
-pub fn sort(ctx: Context, mut values: Rc<Vec<Val>>, key_getter: &FuncVal) -> Result<Rc<Vec<Val>>> {
+pub fn sort(ctx: Context, values: Gc<Vec<Val>>, key_getter: &FuncVal) -> Result<Gc<Vec<Val>>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
 	if key_getter.is_ident() {
-		let mvalues = Rc::make_mut(&mut values);
-		let sort_type = get_sort_type(mvalues, |k| k)?;
+		let mut mvalues = (&values as &Vec<_>).clone();
+		let sort_type = get_sort_type(&mut mvalues, |k| k)?;
 		match sort_type {
 			SortKeyType::Number => mvalues.sort_by_key(|v| match v {
 				Val::Num(n) => NonNaNF64(*n),
@@ -78,7 +78,7 @@ pub fn sort(ctx: Context, mut values: Rc<Vec<Val>>, key_getter: &FuncVal) -> Res
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(values)
+		Ok(Gc::new(mvalues))
 	} else {
 		let mut vk = Vec::with_capacity(values.len());
 		for value in values.iter() {
@@ -99,6 +99,6 @@ pub fn sort(ctx: Context, mut values: Rc<Vec<Val>>, key_getter: &FuncVal) -> Res
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Rc::new(vk.into_iter().map(|v| v.0).collect()))
+		Ok(Gc::new(vk.into_iter().map(|v| v.0).collect()))
 	}
 }

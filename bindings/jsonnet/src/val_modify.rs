@@ -2,9 +2,10 @@
 //! Only tested with variables, which haven't altered by code before appearing here
 //! In jrsonnet every value is immutable, and this code is probally broken
 
+use gc::Gc;
 use jrsonnet_evaluator::{EvaluationState, LazyBinding, LazyValBody, ObjMember, ObjValue, Val};
 use jrsonnet_parser::Visibility;
-use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
+use std::{collections::HashMap, ffi::CStr, os::raw::c_char};
 
 /// # Safety
 ///
@@ -15,11 +16,12 @@ pub unsafe extern "C" fn jsonnet_json_array_append(
 	arr: *mut Val,
 	val: &Val,
 ) {
-	match *Box::from_raw(arr) {
+	match &*Box::from_raw(arr) {
 		Val::Arr(old) => {
-			let mut new = Rc::try_unwrap(old).expect("arr with no refs");
-			new.push(val.clone());
-			*arr = Val::Arr(Rc::new(new));
+			todo!()
+			// let mut new = Rc::try_unwrap(old).expect("arr with no refs");
+			// new.push(val.clone());
+			// *arr = Val::Arr(Gc::new(new));
 		}
 		_ => panic!("should receive array"),
 	}
@@ -47,7 +49,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 					location: None,
 				},
 			);
-			let new_obj = ObjValue::new(Some(old.clone()), Rc::new(new));
+			let new_obj = ObjValue::new(Some(old.clone()), Gc::new(new));
 			*obj = Val::Obj(new_obj);
 		}
 		_ => panic!("should receive object"),

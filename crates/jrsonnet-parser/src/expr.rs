@@ -1,3 +1,4 @@
+use gc::{Finalize, Trace};
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -14,10 +15,42 @@ use structdump_derive::Codegen;
 #[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[derive(Debug, PartialEq, Eq, Hash, PartialOrd, Ord, Trace, Finalize, Clone)]
+pub struct GcStr(#[unsafe_ignore_trace] Rc<str>);
+impl Display for GcStr {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", &self.0)
+	}
+}
+impl Deref for GcStr {
+	type Target = str;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+impl From<&str> for GcStr {
+	fn from(s: &str) -> Self {
+		Self(s.into())
+	}
+}
+impl From<String> for GcStr {
+	fn from(s: String) -> Self {
+		Self(s.into())
+	}
+}
+impl From<Rc<str>> for GcStr {
+	fn from(s: Rc<str>) -> Self {
+		Self(s)
+	}
+}
+#[cfg_attr(feature = "dump", derive(Codegen))]
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum FieldName {
 	/// {fixed: 2}
-	Fixed(Rc<str>),
+	Fixed(GcStr),
 	/// {["dyn"+"amic"]: 3}
 	Dyn(LocExpr),
 }
@@ -147,7 +180,7 @@ impl Display for BinaryOpType {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
-pub struct Param(pub Rc<str>, pub Option<LocExpr>);
+pub struct Param(pub GcStr, pub Option<LocExpr>);
 
 /// Defined function parameters
 #[cfg_attr(feature = "dump", derive(Codegen))]
@@ -185,7 +218,7 @@ impl Deref for ArgsDesc {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct BindSpec {
-	pub name: Rc<str>,
+	pub name: GcStr,
 	pub params: Option<ParamsDesc>,
 	pub value: LocExpr,
 }
@@ -200,7 +233,7 @@ pub struct IfSpecData(pub LocExpr);
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
-pub struct ForSpecData(pub Rc<str>, pub LocExpr);
+pub struct ForSpecData(pub GcStr, pub LocExpr);
 
 #[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
@@ -261,11 +294,11 @@ pub enum Expr {
 	Literal(LiteralType),
 
 	/// String value: "hello"
-	Str(Rc<str>),
+	Str(GcStr),
 	/// Number: 1, 2.0, 2e+20
 	Num(f64),
 	/// Variable name: test
-	Var(Rc<str>),
+	Var(GcStr),
 
 	/// Array of expressions: [1, 2, "Hello"]
 	Arr(Vec<LocExpr>),

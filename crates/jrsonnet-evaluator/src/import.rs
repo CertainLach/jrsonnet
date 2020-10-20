@@ -3,6 +3,7 @@ use crate::{
 	throw,
 };
 use fs::File;
+use jrsonnet_parser::GcStr;
 use std::fs;
 use std::io::Read;
 use std::{any::Any, cell::RefCell, collections::HashMap, path::PathBuf, rc::Rc};
@@ -15,7 +16,7 @@ pub trait ImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>>;
 
 	/// Reads file from filesystem, should be used only with path received from `resolve_file`
-	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>>;
+	fn load_file_contents(&self, resolved: &PathBuf) -> Result<GcStr>;
 
 	/// # Safety
 	///
@@ -32,7 +33,7 @@ impl ImportResolver for DummyImportResolver {
 		throw!(ImportNotSupported(from.clone(), path.clone()))
 	}
 
-	fn load_file_contents(&self, _resolved: &PathBuf) -> Result<Rc<str>> {
+	fn load_file_contents(&self, _resolved: &PathBuf) -> Result<GcStr> {
 		// Can be only caused by library direct consumer, not by supplied jsonnet
 		panic!("dummy resolver can't load any file")
 	}
@@ -72,7 +73,7 @@ impl ImportResolver for FileImportResolver {
 			throw!(ImportFileNotFound(from.clone(), path.clone()))
 		}
 	}
-	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
+	fn load_file_contents(&self, id: &PathBuf) -> Result<GcStr> {
 		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
 		let mut out = String::new();
 		file.read_to_string(&mut out)
@@ -89,7 +90,7 @@ type ResolutionData = (PathBuf, PathBuf);
 /// Caches results of the underlying resolver
 pub struct CachingImportResolver {
 	resolution_cache: RefCell<HashMap<ResolutionData, Result<Rc<PathBuf>>>>,
-	loading_cache: RefCell<HashMap<PathBuf, Result<Rc<str>>>>,
+	loading_cache: RefCell<HashMap<PathBuf, Result<GcStr>>>,
 	inner: Box<dyn ImportResolver>,
 }
 impl ImportResolver for CachingImportResolver {
@@ -101,7 +102,7 @@ impl ImportResolver for CachingImportResolver {
 			.clone()
 	}
 
-	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>> {
+	fn load_file_contents(&self, resolved: &PathBuf) -> Result<GcStr> {
 		self.loading_cache
 			.borrow_mut()
 			.entry(resolved.clone())

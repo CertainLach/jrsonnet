@@ -2,12 +2,12 @@ use crate::{
 	error::{Error::*, LocError, Result},
 	throw, LazyBinding, LazyValBody, ObjMember, ObjValue, Val,
 };
+use gc::Gc;
 use jrsonnet_parser::Visibility;
 use serde_json::{Map, Number, Value};
 use std::{
 	collections::HashMap,
 	convert::{TryFrom, TryInto},
-	rc::Rc,
 };
 
 impl TryFrom<&Val> for Value {
@@ -57,7 +57,7 @@ impl From<&Value> for Val {
 				for v in a {
 					out.push(v.into());
 				}
-				Self::Arr(Rc::new(out))
+				Self::Arr(Gc::new(out))
 			}
 			Value::Object(o) => {
 				let mut entries = HashMap::with_capacity(o.len());
@@ -72,7 +72,7 @@ impl From<&Value> for Val {
 						},
 					);
 				}
-				Self::Obj(ObjValue::new(None, Rc::new(entries)))
+				Self::Obj(ObjValue::new(None, Gc::new(entries)))
 			}
 		}
 	}

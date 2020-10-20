@@ -38,6 +38,8 @@ rustc-hash = "1.1.0"
 
 thiserror = "1.0.21"
 
+gc = { version = "0.3.6", features = ["derive"] }
+
 # Serialized stdlib
 [dependencies.serde]
 version = "1.0.117"

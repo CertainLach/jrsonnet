@@ -21,6 +21,7 @@ pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
+use gc::{Finalize, Trace};
 pub use import::*;
 use jrsonnet_parser::*;
 use native::NativeCallback;
@@ -36,15 +37,17 @@ use std::{
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
 
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub enum LazyBinding {
 	EvaluateBinding {
 		context_creator: ContextCreator,
+		#[unsafe_ignore_trace]
 		spec: BindSpec,
 	},
-	Evaluate(ContextCreator, LocExpr),
+	Evaluate(ContextCreator, #[unsafe_ignore_trace] LocExpr),
 	ObjComp {
 		ctx: Context,
+		#[unsafe_ignore_trace]
 		value: LocExpr,
 	},
 	Bound(LazyVal),
@@ -88,13 +91,13 @@ pub struct EvaluationSettings {
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
 	/// Used for s`td.extVar`
-	pub ext_vars: HashMap<Rc<str>, Val>,
+	pub ext_vars: HashMap<GcStr, Val>,
 	/// Used for ext.native
-	pub ext_natives: HashMap<Rc<str>, Rc<NativeCallback>>,
+	pub ext_natives: HashMap<GcStr, Rc<NativeCallback>>,
 	/// TLA vars
-	pub tla_vars: HashMap<Rc<str>, Val>,
+	pub tla_vars: HashMap<GcStr, Val>,
 	/// Global variables are inserted in default context
-	pub globals: HashMap<Rc<str>, Val>,
+	pub globals: HashMap<GcStr, Val>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: Box<dyn ImportResolver>,
 	/// Used in manifestification functions
@@ -127,11 +130,11 @@ struct EvaluationData {
 	stack_depth: usize,
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
 	files: HashMap<Rc<PathBuf>, FileData>,
-	str_files: HashMap<Rc<PathBuf>, Rc<str>>,
+	str_files: HashMap<Rc<PathBuf>, GcStr>,
 }
 
 pub struct FileData {
-	source_code: Rc<str>,
+	source_code: GcStr,
 	parsed: LocExpr,
 	evaluated: Option<Val>,
 }
@@ -169,7 +172,7 @@ pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
 	/// Parses and adds file as loaded
-	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
+	pub fn add_file(&self, path: Rc<PathBuf>, source_code: GcStr) -> Result<()> {
 		self.add_parsed_file(
 			path.clone(),
 			source_code.clone(),
@@ -194,7 +197,7 @@ impl EvaluationState {
 	pub fn add_parsed_file(
 		&self,
 		name: Rc<PathBuf>,
-		source_code: Rc<str>,
+		source_code: GcStr,
 		parsed: LocExpr,
 	) -> Result<()> {
 		self.data_mut().files.insert(
@@ -208,7 +211,7 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &PathBuf) -> Option<Rc<str>> {
+	pub fn get_source(&self, name: &PathBuf) -> Option<GcStr> {
 		let ro_map = &self.data().files;
 		ro_map.get(name).map(|value| value.source_code.clone())
 	}
@@ -228,7 +231,7 @@ impl EvaluationState {
 		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_loaded_file_raw(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<str>> {
+	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<GcStr> {
 		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
 			let file_str = self.load_file_contents(&path)?;
@@ -280,7 +283,7 @@ impl EvaluationState {
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self) -> Result<Context> {
 		let globals = &self.settings().globals;
-		let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		let mut new_bindings: HashMap<GcStr, LazyBinding> = HashMap::new();
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
@@ -344,22 +347,22 @@ impl EvaluationState {
 		out
 	}
 
-	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
+	pub fn manifest(&self, val: Val) -> Result<GcStr> {
 		self.run_in_state(|| val.manifest(&self.manifest_format()))
 	}
-	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(GcStr, GcStr)>> {
 		self.run_in_state(|| val.manifest_multi(&self.manifest_format()))
 	}
-	pub fn manifest_stream(&self, val: Val) -> Result<Vec<Rc<str>>> {
+	pub fn manifest_stream(&self, val: Val) -> Result<Vec<GcStr>> {
 		self.run_in_state(|| val.manifest_stream(&self.manifest_format()))
 	}
 
 	/// If passed value is function then call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
-			Ok(match val {
+			Ok(match &val {
 				Val::Func(func) => func.evaluate_map(&self.settings().tla_vars, true)?,
-				v => v,
+				v => v.clone(),
 			})
 		})
 	}
@@ -390,7 +393,7 @@ impl EvaluationState {
 		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
 	}
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {
+	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: GcStr) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
@@ -410,26 +413,26 @@ impl EvaluationState {
 
 /// Settings utilities
 impl EvaluationState {
-	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
+	pub fn add_ext_var(&self, name: GcStr, value: Val) {
 		self.settings_mut().ext_vars.insert(name, value);
 	}
-	pub fn add_ext_str(&self, name: Rc<str>, value: Rc<str>) {
+	pub fn add_ext_str(&self, name: GcStr, value: GcStr) {
 		self.add_ext_var(name, Val::Str(value));
 	}
-	pub fn add_ext_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+	pub fn add_ext_code(&self, name: GcStr, code: GcStr) -> Result<()> {
 		let value =
 			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("ext_code {}", name))), code)?;
 		self.add_ext_var(name, value);
 		Ok(())
 	}
 
-	pub fn add_tla(&self, name: Rc<str>, value: Val) {
+	pub fn add_tla(&self, name: GcStr, value: Val) {
 		self.settings_mut().tla_vars.insert(name, value);
 	}
-	pub fn add_tla_str(&self, name: Rc<str>, value: Rc<str>) {
+	pub fn add_tla_str(&self, name: GcStr, value: GcStr) {
 		self.add_tla(name, Val::Str(value));
 	}
-	pub fn add_tla_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+	pub fn add_tla_code(&self, name: GcStr, code: GcStr) -> Result<()> {
 		let value =
 			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("tla_code {}", name))), code)?;
 		self.add_tla(name, value);
@@ -439,7 +442,7 @@ impl EvaluationState {
 	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
 		Ok(self.settings().import_resolver.resolve_file(from, path)?)
 	}
-	pub fn load_file_contents(&self, path: &PathBuf) -> Result<Rc<str>> {
+	pub fn load_file_contents(&self, path: &PathBuf) -> Result<GcStr> {
 		Ok(self.settings().import_resolver.load_file_contents(path)?)
 	}
 
@@ -450,7 +453,7 @@ impl EvaluationState {
 		self.settings_mut().import_resolver = resolver;
 	}
 
-	pub fn add_native(&self, name: Rc<str>, cb: Rc<NativeCallback>) {
+	pub fn add_native(&self, name: GcStr, cb: Rc<NativeCallback>) {
 		self.settings_mut().ext_natives.insert(name, cb);
 	}
 

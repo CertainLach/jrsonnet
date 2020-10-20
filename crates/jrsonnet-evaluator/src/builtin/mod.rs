@@ -5,6 +5,7 @@ use crate::{
 	ValType,
 };
 use format::{format_arr, format_obj};
+use gc::Gc;
 use jrsonnet_parser::{ArgsDesc, ExprLocation};
 use manifest::{escape_string_json, manifest_json_ex, ManifestJsonOptions, ManifestType};
 use std::{path::PathBuf, rc::Rc};
@@ -29,7 +30,7 @@ pub fn call_builtin(
 		("std", "length") => parse_args!(context, "std.length", args, 1, [
 			0, x: [Val::Str|Val::Arr|Val::Obj], vec![ValType::Str, ValType::Arr, ValType::Obj];
 		], {
-			Ok(match x {
+			Ok(match &x {
 				Val::Str(n) => Val::Num(n.chars().count() as f64),
 				Val::Arr(i) => Val::Num(i.len() as f64),
 				Val::Obj(o) => Val::Num(
@@ -52,17 +53,17 @@ pub fn call_builtin(
 			0, sz: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 		], {
-			if sz < 0.0 {
+			if *sz < 0.0 {
 				throw!(RuntimeError(format!("makeArray requires size >= 0, got {}", sz).into()));
 			}
-			let mut out = Vec::with_capacity(sz as usize);
-			for i in 0..sz as usize {
+			let mut out = Vec::with_capacity(*sz as usize);
+			for i in 0..*sz as usize {
 				out.push(func.evaluate_values(
 					Context::new(),
 					&[Val::Num(i as f64)]
 				)?)
 			}
-			Ok(Val::Arr(Rc::new(out)))
+			Ok(Val::Arr(Gc::new(out)))
 		})?,
 		// string
 		("std", "codepoint") => parse_args!(context, "std.codepoint", args, 1, [
@@ -81,11 +82,11 @@ pub fn call_builtin(
 		], {
 			let mut out = obj.fields_visibility()
 				.into_iter()
-				.filter(|(_k, v)| *v || inc_hidden)
+				.filter(|(_k, v)| *v || *inc_hidden)
 				.map(|(k, _v)|k)
 				.collect::<Vec<_>>();
 			out.sort();
-			Ok(Val::Arr(Rc::new(out.into_iter().map(Val::Str).collect())))
+			Ok(Val::Arr(Gc::new(out.into_iter().map(Val::Str).collect())))
 		})?,
 		// object, field, includeHidden
 		("std", "objectHasEx") => parse_args!(context, "std.objectHasEx", args, 3, [
@@ -96,8 +97,8 @@ pub fn call_builtin(
 			Ok(Val::Bool(
 				obj.fields_visibility()
 					.into_iter()
-					.filter(|(_k, v)| *v || inc_hidden)
-					.any(|(k, _v)| *k == *f),
+					.filter(|(_k, v)| *v || *inc_hidden)
+					.any(|(k, _v)| k == *f),
 			))
 		})?,
 		("std", "primitiveEquals") => parse_args!(context, "std.primitiveEquals", args, 2, [
@@ -147,27 +148,27 @@ pub fn call_builtin(
 			0, x: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
-			Ok(Val::Num(x.powf(n)))
+			Ok(Val::Num(x.powf(n.clone())))
 		})?,
 		("std", "extVar") => parse_args!(context, "std.extVar", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
-				|| UndefinedExternalVariable(x),
+			Ok(with_state(|s| s.settings().ext_vars.get(&x.clone()).cloned()).ok_or_else(
+				|| UndefinedExternalVariable(x.clone()),
 			)?)
 		})?,
 		("std", "native") => parse_args!(context, "std.native", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or_else(
-				|| UndefinedExternalFunction(x),
+			Ok(with_state(|s| s.settings().ext_natives.get(&x.clone()).cloned()).map(|v| Val::Func(Gc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or_else(
+				|| UndefinedExternalFunction(x.clone()),
 			)?)
 		})?,
 		("std", "filter") => parse_args!(context, "std.filter", args, 2, [
 			0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
-			Ok(Val::Arr(Rc::new(
+			Ok(Val::Arr(Gc::new(
 				arr.iter()
 					.cloned()
 					.filter(|e| {
@@ -211,9 +212,9 @@ pub fn call_builtin(
 			1, keyF: [Val::Func]!!Val::Func, vec![ValType::Func];
 		], {
 			if arr.len() <= 1 {
-				return Ok(Val::Arr(arr))
+				return Ok(Val::Arr(arr.clone()))
 			}
-			Ok(Val::Arr(sort::sort(context, arr, &keyF)?))
+			Ok(Val::Arr(sort::sort(context, arr.clone(), &keyF)?))
 		})?,
 		// faster
 		("std", "format") => parse_args!(context, "std.format", args, 2, [
@@ -221,10 +222,10 @@ pub fn call_builtin(
 			1, vals, vec![]
 		], {
 			push(&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)), ||format!("std.format of {}", str), ||{
-				Ok(match vals {
+				Ok(match &vals {
 					Val::Arr(vals) => Val::Str(format_arr(&str, &vals)?.into()),
 					Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
-					o => Val::Str(format_arr(&str, &[o])?.into()),
+					o => Val::Str(format_arr(&str, &[o.clone()])?.into()),
 				})
 			})
 		})?,
@@ -233,25 +234,25 @@ pub fn call_builtin(
 			0, from: [Val::Num]!!Val::Num, vec![ValType::Num];
 			1, to: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
-			let mut out = Vec::with_capacity((1+to as usize-from as usize).max(0));
-			for i in from as usize..=to as usize {
+			let mut out = Vec::with_capacity((1+*to as usize-*from as usize).max(0));
+			for i in *from as usize..=*to as usize {
 				out.push(Val::Num(i as f64));
 			}
-			Ok(Val::Arr(Rc::new(out)))
+			Ok(Val::Arr(Gc::new(out)))
 		})?,
 		("std", "char") => parse_args!(context, "std.char", args, 1, [
 			0, n: [Val::Num]!!Val::Num, vec![ValType::Num];
 		], {
 			let mut out = String::new();
-			out.push(std::char::from_u32(n as u32).ok_or_else(||
-				InvalidUnicodeCodepointGot(n as u32)
+			out.push(std::char::from_u32(*n as u32).ok_or_else(||
+				InvalidUnicodeCodepointGot(*n as u32)
 			)?);
 			Ok(Val::Str(out.into()))
 		})?,
 		("std", "encodeUTF8") => parse_args!(context, "std.encodeUtf8", args, 1, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(Val::Arr(Rc::new(str.bytes().map(|b| Val::Num(b as f64)).collect())))
+			Ok(Val::Arr(Gc::new(str.bytes().map(|b| Val::Num(b as f64)).collect())))
 		})?,
 		("std", "md5") => parse_args!(context, "std.md5", args, 1, [
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
@@ -262,7 +263,7 @@ pub fn call_builtin(
 		("std", "base64") => parse_args!(context, "std.base64", args, 1, [
 			0, input: [Val::Str | Val::Arr], vec![ValType::Arr, ValType::Str];
 		], {
-			Ok(Val::Str(match input {
+			Ok(Val::Str(match &input {
 				Val::Str(s) => {
 					base64::encode(s.bytes().collect::<Vec<_>>()).into()
 				},
@@ -279,13 +280,13 @@ pub fn call_builtin(
 			0, sep: [Val::Str|Val::Arr], vec![ValType::Str, ValType::Arr];
 			1, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
-			Ok(match sep {
+			Ok(match &sep {
 				Val::Arr(joiner_items) => {
 					let mut out = Vec::new();
 
 					let mut first = true;
 					for item in arr.iter().cloned() {
-						if let Val::Arr(items) = item.unwrap_if_lazy()? {
+						if let Val::Arr(items) = &item.unwrap_if_lazy()? {
 							if !first {
 								out.reserve(joiner_items.len());
 								out.extend(joiner_items.iter().cloned());
@@ -298,14 +299,14 @@ pub fn call_builtin(
 						}
 					}
 
-					Val::Arr(Rc::new(out))
+					Val::Arr(Gc::new(out))
 				},
 				Val::Str(sep) => {
 					let mut out = String::new();
 
 					let mut first = true;
 					for item in arr.iter().cloned() {
-						if let Val::Str(item) = item.unwrap_if_lazy()? {
+						if let Val::Str(item) = &item.unwrap_if_lazy()? {
 							if !first {
 								out += &sep;
 							}
@@ -341,9 +342,9 @@ pub fn call_builtin(
 		("std", "reverse") => parse_args!(context, "std.reverse", args, 1, [
 			0, arr: [Val::Arr]!!Val::Arr, vec![ValType::Arr];
 		], {
-			let mut marr = arr;
-			Rc::make_mut(&mut marr).reverse();
-			Ok(Val::Arr(marr))
+			let mut marr = (&arr as &Vec<_>).clone();
+			marr.reverse();
+			Ok(Val::Arr(Gc::new(marr)))
 		})?,
 		("std", "id") => parse_args!(context, "std.id", args, 1, [
 			0, v, vec![];

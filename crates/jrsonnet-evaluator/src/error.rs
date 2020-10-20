@@ -2,14 +2,14 @@ use crate::{
 	builtin::{format::FormatError, sort::SortError},
 	ValType,
 };
-use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, ExprLocation, GcStr, UnaryOpType};
 use std::{path::PathBuf, rc::Rc};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
 	#[error("intrinsic not found: {0}.{1}")]
-	IntrinsicNotFound(Rc<str>, Rc<str>),
+	IntrinsicNotFound(GcStr, GcStr),
 	#[error("argument reordering in intrisics not supported yet")]
 	IntrinsicArgumentReorderingIsNotSupportedYet,
 
@@ -32,36 +32,36 @@ pub enum Error {
 	ArrayBoundsError(usize, usize),
 
 	#[error("assert failed: {0}")]
-	AssertionFailed(Rc<str>),
+	AssertionFailed(GcStr),
 
 	#[error("variable is not defined: {0}")]
-	VariableIsNotDefined(Rc<str>),
+	VariableIsNotDefined(GcStr),
 	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {0}")]
-	NoSuchField(Rc<str>),
+	NoSuchField(GcStr),
 
 	#[error("only functions can be called, got {0}")]
 	OnlyFunctionsCanBeCalledGot(ValType),
 	#[error("parameter {0} is not defined")]
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
-	BindingParameterASecondTime(Rc<str>),
+	BindingParameterASecondTime(GcStr),
 	#[error("too many args, function has {0}")]
 	TooManyArgsFunctionHas(usize),
 	#[error("founction argument is not passed: {0}")]
-	FunctionParameterNotBoundInCall(Rc<str>),
+	FunctionParameterNotBoundInCall(GcStr),
 
 	#[error("external variable is not defined: {0}")]
-	UndefinedExternalVariable(Rc<str>),
+	UndefinedExternalVariable(GcStr),
 	#[error("native is not defined: {0}")]
-	UndefinedExternalFunction(Rc<str>),
+	UndefinedExternalFunction(GcStr),
 
 	#[error("field name should be string, got {0}")]
 	FieldMustBeStringGot(ValType),
 
 	#[error("attempted to index array with string {0}")]
-	AttemptedIndexAnArrayWithString(Rc<str>),
+	AttemptedIndexAnArrayWithString(GcStr),
 	#[error("{0} index type should be {1}, got {2}")]
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
 	#[error("cant index into {0}")]
@@ -81,12 +81,12 @@ pub enum Error {
 	#[error("syntax error")]
 	ImportSyntaxError {
 		path: Rc<PathBuf>,
-		source_code: Rc<str>,
+		source_code: GcStr,
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 
 	#[error("runtime error: {0}")]
-	RuntimeError(Rc<str>),
+	RuntimeError(GcStr),
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
 	#[error("tried to index by fractional value")]

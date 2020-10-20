@@ -2,17 +2,15 @@ use crate::{
 	error::Error::*, future_wrapper, push, throw, with_state, Context, ContextCreator, FuncDesc,
 	FuncVal, LazyBinding, LazyValBody, ObjMember, ObjValue, Result, Val, ValType,
 };
+use gc::Gc;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
-	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
+	ForSpecData, GcStr, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
 use std::{collections::HashMap, rc::Rc};
 
-pub fn evaluate_binding(
-	spec: &BindSpec,
-	context_creator: ContextCreator,
-) -> (Rc<str>, LazyBinding) {
+pub fn evaluate_binding(spec: &BindSpec, context_creator: ContextCreator) -> (GcStr, LazyBinding) {
 	let spec = spec.clone();
 	(
 		spec.name.clone(),
@@ -23,8 +21,8 @@ pub fn evaluate_binding(
 	)
 }
 
-pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(Rc::new(FuncVal::Normal(FuncDesc {
+pub fn evaluate_method(ctx: Context, name: GcStr, params: ParamsDesc, body: LocExpr) -> Val {
+	Val::Func(Gc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -35,7 +33,7 @@ pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: Lo
 pub fn evaluate_field_name(
 	context: Context,
 	field_name: &jrsonnet_parser::FieldName,
-) -> Result<Option<Rc<str>>> {
+) -> Result<Option<GcStr>> {
 	Ok(match field_name {
 		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jrsonnet_parser::FieldName::Dyn(expr) => {
@@ -72,7 +70,7 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().to_string()?, s).into()),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
-		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
+		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Gc::new([&a[..], &b[..]].concat())),
 		(Val::Num(v1), Val::Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
@@ -161,7 +159,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	})
 }
 
-future_wrapper!(HashMap<Rc<str>, LazyBinding>, FutureNewBindings);
+future_wrapper!(HashMap<GcStr, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 pub fn evaluate_comp<T>(
@@ -179,7 +177,7 @@ pub fn evaluate_comp<T>(
 			}
 		}
 		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
-			match evaluate(context.clone(), expr)?.unwrap_if_lazy()? {
+			match &evaluate(context.clone(), expr)?.unwrap_if_lazy()? {
 				Val::Arr(list) => {
 					let mut out = Vec::new();
 					for item in list.iter() {
@@ -207,7 +205,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		has_this: true,
 	};
 	{
-		let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		let mut bindings: HashMap<GcStr, LazyBinding> = HashMap::new();
 		for (n, b) in members
 			.iter()
 			.filter_map(|m| match m {
@@ -278,7 +276,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 			Member::AssertStmt(_) => {}
 		}
 	}
-	Ok(future_this.fill(ObjValue::new(None, Rc::new(new_members))))
+	Ok(future_this.fill(ObjValue::new(None, Gc::new(new_members))))
 }
 
 pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
@@ -296,7 +294,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 						new_bindings: new_bindings.clone(),
 						has_this: false,
 					};
-					let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+					let mut bindings: HashMap<GcStr, LazyBinding> = HashMap::new();
 					for (n, b) in obj
 						.pre_locals
 						.iter()
@@ -319,11 +317,11 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 			)?
 			.unwrap()
 			{
-				match k {
+				match &k {
 					Val::Null => {}
 					Val::Str(n) => {
 						new_members.insert(
-							n,
+							n.clone(),
 							ObjMember {
 								add: false,
 								visibility: Visibility::Normal,
@@ -336,7 +334,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				}
 			}
 
-			future_this.fill(ObjValue::new(None, Rc::new(new_members)))
+			future_this.fill(ObjValue::new(None, Gc::new(new_members)))
 		}
 	})
 }
@@ -350,7 +348,7 @@ pub fn evaluate_apply(
 ) -> Result<Val> {
 	let lazy = evaluate(context.clone(), value)?;
 	let value = lazy.unwrap_if_lazy()?;
-	Ok(match value {
+	Ok(match &value {
 		Val::Func(f) => {
 			let body = || f.evaluate(context, loc, args, tailstrict);
 			if tailstrict {
@@ -363,7 +361,7 @@ pub fn evaluate_apply(
 	})
 }
 
-pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: Rc<str>) -> Result<Val> {
+pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: GcStr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, _loc) = lexpr;
 	Ok(match &**expr {
@@ -406,8 +404,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Index(value, index) => {
 			match (
-				evaluate(context.clone(), value)?.unwrap_if_lazy()?,
-				evaluate(context, index)?,
+				&evaluate(context.clone(), value)?.unwrap_if_lazy()?,
+				&evaluate(context, index)?,
 			) {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
@@ -418,11 +416,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							if let Some(v) = v.get(s.clone())? {
 								Ok(v.unwrap_if_lazy()?)
 							} else if let Some(Val::Str(n)) =
-								v.get("__intrinsic_namespace__".into())?
+								&v.get("__intrinsic_namespace__".into())?
 							{
-								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(n, s))))
+								Ok(Val::Func(Gc::new(FuncVal::Intrinsic(n.clone(), s.clone()))))
 							} else {
-								throw!(NoSuchField(s))
+								throw!(NoSuchField(s.clone()))
 							}
 						},
 					)?
@@ -437,12 +435,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					if n.fract() > f64::EPSILON {
 						throw!(FractionalIndex)
 					}
-					v.get(n as usize)
-						.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+					v.get(*n as usize)
+						.ok_or_else(|| ArrayBoundsError(*n as usize, v.len()))?
 						.clone()
 						.unwrap_if_lazy()?
 				}
-				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
+				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n.clone())),
 				(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Arr,
 					ValType::Num,
@@ -451,7 +449,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 
 				(Val::Str(s), Val::Num(n)) => Val::Str(
 					s.chars()
-						.skip(n as usize)
+						.skip(*n as usize)
 						.take(1)
 						.collect::<String>()
 						.into(),
@@ -466,7 +464,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+			let mut new_bindings: HashMap<GcStr, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
 			let context_creator = ContextCreator::Future(future_context.clone());
@@ -490,11 +488,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					LazyValBody::Evaluate(context.clone(), item.clone()).into(),
 				));
 			}
-			Val::Arr(Rc::new(out))
+			Val::Arr(Gc::new(out))
 		}
 		ArrComp(expr, comp_specs) => Val::Arr(
 			// First comp_spec should be for_spec, so no "None" possible here
-			Rc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?.unwrap()),
+			Gc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?.unwrap()),
 		),
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(

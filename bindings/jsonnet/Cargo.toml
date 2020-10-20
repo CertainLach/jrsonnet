@@ -9,6 +9,7 @@ edition = "2018"
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.1" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.1" }
+gc = { version = "0.3.6", features = ["derive"] }
 
 [lib]
 crate-type = ["cdylib"]

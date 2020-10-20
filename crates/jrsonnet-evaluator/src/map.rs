@@ -1,50 +1,64 @@
+use gc::{Finalize, Gc, Trace};
+use jrsonnet_parser::GcStr;
 use rustc_hash::FxHashMap;
-use std::{borrow::Borrow, hash::Hash, rc::Rc};
 
-#[derive(Default, Debug)]
-struct LayeredHashMapInternals<K: Hash, V> {
-	parent: Option<LayeredHashMap<K, V>>,
-	current: FxHashMap<K, V>,
+#[derive(Default, Debug, Trace, Finalize)]
+struct LayeredHashMapInternals<V: Trace + 'static> {
+	parent: Option<LayeredHashMap<V>>,
+	current: FxHashMap<GcStr, V>,
 }
 
-#[derive(Debug)]
-pub struct LayeredHashMap<K: Hash, V>(Rc<LayeredHashMapInternals<K, V>>);
-
-impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
-	pub fn extend(self, new_layer: FxHashMap<K, V>) -> Self {
-		match Rc::try_unwrap(self.0) {
-			Ok(mut map) => {
-				map.current.extend(new_layer);
-				Self(Rc::new(map))
-			}
-			Err(this) => Self(Rc::new(LayeredHashMapInternals {
-				parent: Some(Self(this)),
-				current: new_layer,
-			})),
-		}
+#[derive(Debug, Finalize)]
+pub struct LayeredHashMap<V: Trace + 'static>(Gc<LayeredHashMapInternals<V>>);
+unsafe impl<V: Trace + 'static> Trace for LayeredHashMap<V> {
+	/// Marks all contained `Gc`s.
+	unsafe fn trace(&self) {
+		self.0.trace()
 	}
 
-	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
-	where
-		K: Borrow<Q>,
-		Q: Hash + Eq,
-	{
+	/// Increments the root-count of all contained `Gc`s.
+	unsafe fn root(&self) {
+		self.0.root()
+	}
+
+	/// Decrements the root-count of all contained `Gc`s.
+	unsafe fn unroot(&self) {
+		self.0.unroot()
+	}
+
+	/// Runs Finalize::finalize() on this object and all
+	/// contained subobjects
+	fn finalize_glue(&self) {
+		self.0.finalize_glue()
+	}
+}
+
+impl<V: Trace + 'static> LayeredHashMap<V> {
+	pub fn extend(self, new_layer: FxHashMap<GcStr, V>) -> Self {
+		let this = self.0;
+		Self(Gc::new(LayeredHashMapInternals {
+			parent: Some(Self(this)),
+			current: new_layer,
+		}))
+	}
+
+	pub fn get<'s>(&'s self, key: GcStr) -> Option<&'s V> {
 		(self.0)
 			.current
-			.get(key)
+			.get(&key)
 			.or_else(|| self.0.parent.as_ref().and_then(|p| p.get(key)))
 	}
 }
 
-impl<K: Hash, V> Clone for LayeredHashMap<K, V> {
+impl<V: Trace + 'static> Clone for LayeredHashMap<V> {
 	fn clone(&self) -> Self {
 		Self(self.0.clone())
 	}
 }
 
-impl<K: Hash + Eq, V> Default for LayeredHashMap<K, V> {
+impl<V: Trace + 'static> Default for LayeredHashMap<V> {
 	fn default() -> Self {
-		Self(Rc::new(LayeredHashMapInternals {
+		Self(Gc::new(LayeredHashMapInternals {
 			parent: None,
 			current: FxHashMap::default(),
 		}))

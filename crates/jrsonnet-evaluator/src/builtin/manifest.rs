@@ -33,9 +33,9 @@ fn manifest_json_ex_buf(
 ) -> Result<()> {
 	use std::fmt::Write;
 	let mtype = options.mtype;
-	match val.unwrap_if_lazy()? {
+	match &val.unwrap_if_lazy()? {
 		Val::Bool(v) => {
-			if v {
+			if *v {
 				buf.push_str("true");
 			} else {
 				buf.push_str("false");

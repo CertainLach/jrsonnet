@@ -1,14 +1,14 @@
 #[macro_export]
 macro_rules! future_wrapper {
 	($orig: ty, $wrapper: ident) => {
-		#[derive(Debug, Clone)]
-		pub struct $wrapper(pub std::rc::Rc<std::cell::RefCell<Option<$orig>>>);
+		#[derive(Debug, Clone, gc::Trace, gc::Finalize)]
+		pub struct $wrapper(pub gc::Gc<gc::GcCell<Option<$orig>>>);
 		impl $wrapper {
 			pub fn unwrap(self) -> $orig {
 				self.0.borrow().as_ref().map(|e| e.clone()).unwrap()
 			}
 			pub fn new() -> Self {
-				$wrapper(std::rc::Rc::new(std::cell::RefCell::new(None)))
+				$wrapper(gc::Gc::new(gc::GcCell::new(None)))
 			}
 			pub fn fill(self, val: $orig) -> $orig {
 				if self.0.borrow().is_some() {

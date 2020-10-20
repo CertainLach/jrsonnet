@@ -1,26 +1,26 @@
 use crate::{evaluate_add_op, LazyBinding, Result, Val};
+use gc::{Finalize, Gc, Trace};
 use indexmap::IndexMap;
-use jrsonnet_parser::{ExprLocation, Visibility};
+use jrsonnet_parser::{ExprLocation, GcStr, Visibility};
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
-#[derive(Debug)]
+#[derive(Debug, Trace, Finalize)]
 pub struct ObjMember {
 	pub add: bool,
+	#[unsafe_ignore_trace]
 	pub visibility: Visibility,
 	pub invoke: LazyBinding,
+	#[unsafe_ignore_trace]
 	pub location: Option<ExprLocation>,
 }
 
-// Field => This
-type CacheKey = (Rc<str>, usize);
-#[derive(Debug)]
+#[derive(Debug, Trace, Finalize)]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
-	this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
-	value_cache: RefCell<HashMap<CacheKey, Option<Val>>>,
+	this_entries: Gc<HashMap<GcStr, ObjMember>>,
 }
-#[derive(Clone)]
-pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
+#[derive(Clone, Trace, Finalize)]
+pub struct ObjValue(pub(crate) Gc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(super_obj) = self.0.super_obj.as_ref() {
@@ -47,15 +47,14 @@ impl Debug for ObjValue {
 }
 
 impl ObjValue {
-	pub fn new(super_obj: Option<Self>, this_entries: Rc<HashMap<Rc<str>, ObjMember>>) -> Self {
-		Self(Rc::new(ObjValueInternals {
+	pub fn new(super_obj: Option<Self>, this_entries: Gc<HashMap<GcStr, ObjMember>>) -> Self {
+		Self(Gc::new(ObjValueInternals {
 			super_obj,
 			this_entries,
-			value_cache: RefCell::new(HashMap::new()),
 		}))
 	}
 	pub fn new_empty() -> Self {
-		Self::new(None, Rc::new(HashMap::new()))
+		Self::new(None, Gc::new(HashMap::new()))
 	}
 	pub fn with_super(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
@@ -63,7 +62,7 @@ impl ObjValue {
 			Some(v) => Self::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
 		}
 	}
-	pub fn enum_fields(&self, handler: &impl Fn(&Rc<str>, &Visibility)) {
+	pub fn enum_fields(&self, handler: &impl Fn(&GcStr, &Visibility)) {
 		if let Some(s) = &self.0.super_obj {
 			s.enum_fields(handler);
 		}
@@ -71,7 +70,7 @@ impl ObjValue {
 			handler(name, &member.visibility);
 		}
 	}
-	pub fn fields_visibility(&self) -> IndexMap<Rc<str>, bool> {
+	pub fn fields_visibility(&self) -> IndexMap<GcStr, bool> {
 		let out = Rc::new(RefCell::new(IndexMap::new()));
 		self.enum_fields(&|name, visibility| {
 			let mut out = out.borrow_mut();
@@ -91,7 +90,7 @@ impl ObjValue {
 		});
 		Rc::try_unwrap(out).unwrap().into_inner()
 	}
-	pub fn visible_fields(&self) -> Vec<Rc<str>> {
+	pub fn visible_fields(&self) -> Vec<GcStr> {
 		let mut visible_fields: Vec<_> = self
 			.fields_visibility()
 			.into_iter()
@@ -101,15 +100,11 @@ impl ObjValue {
 		visible_fields.sort();
 		visible_fields
 	}
-	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
+	pub fn get(&self, key: GcStr) -> Result<Option<Val>> {
 		Ok(self.get_raw(key, self)?)
 	}
-	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: &Self) -> Result<Option<Val>> {
-		let cache_key = (key.clone(), Rc::as_ptr(&real_this.0) as usize);
-
-		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
-			return Ok(v.clone());
-		}
+	// TODO: Return value cache
+	pub(crate) fn get_raw(&self, key: GcStr, real_this: &Self) -> Result<Option<Val>> {
 		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
 			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
 			(Some(k), Some(s)) => {
@@ -126,10 +121,6 @@ impl ObjValue {
 			(None, Some(s)) => s.get_raw(key, real_this),
 			(None, None) => Ok(None),
 		}?;
-		self.0
-			.value_cache
-			.borrow_mut()
-			.insert(cache_key, value.clone());
 		Ok(value)
 	}
 	fn evaluate_this(&self, v: &ObjMember, real_this: &Self) -> Result<Val> {
@@ -140,6 +131,6 @@ impl ObjValue {
 }
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		Rc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }

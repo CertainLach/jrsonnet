@@ -1,7 +1,7 @@
 use crate::{error::Error::*, evaluate, throw, Context, LazyValBody, Result, Val};
-use jrsonnet_parser::{ArgsDesc, ParamsDesc};
+use jrsonnet_parser::{ArgsDesc, GcStr, ParamsDesc};
 use rustc_hash::FxHashMap;
-use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
+use std::{collections::HashMap, hash::BuildHasherDefault};
 
 /// Creates correct [context](Context) for function body evaluation returning error on invalid call.
 ///
@@ -62,7 +62,7 @@ pub fn parse_function_call(
 pub fn parse_function_call_map(
 	body_ctx: Context,
 	params: &ParamsDesc,
-	args: &HashMap<Rc<str>, Val>,
+	args: &HashMap<GcStr, Val>,
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
@@ -163,7 +163,7 @@ macro_rules! parse_args {
 					)),
 				};
 				$(
-					let $name = match $name {
+					let $name = match &$name {
 						$a(v) => v,
 						_ =>throw!(TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?)),
 					};

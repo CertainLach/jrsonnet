@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val, ValType};
+use jrsonnet_parser::GcStr;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -19,7 +20,7 @@ pub enum FormatError {
 	#[error("mapping keys required")]
 	MappingKeysRequired,
 	#[error("no such format field: {0}")]
-	NoSuchFormatField(Rc<str>),
+	NoSuchFormatField(GcStr),
 }
 
 impl From<FormatError> for LocError {
@@ -28,7 +29,6 @@ impl From<FormatError> for LocError {
 	}
 }
 
-use std::rc::Rc;
 use FormatError::*;
 
 type ParseResult<'t, T> = std::result::Result<(T, &'t str), FormatError>;
@@ -573,10 +573,10 @@ pub fn format_code(
 				);
 			}
 		}
-		ConvTypeV::Char => match value.clone().unwrap_if_lazy()? {
+		ConvTypeV::Char => match &value.clone().unwrap_if_lazy()? {
 			Val::Num(n) => tmp_out.push(
-				std::char::from_u32(n as u32)
-					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
+				std::char::from_u32(*n as u32)
+					.ok_or_else(|| InvalidUnicodeCodepointGot(*n as u32))?,
 			),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
@@ -650,17 +650,17 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 
 				// %% should not consume a value
 				let value = if c.convtype == ConvTypeV::Percent {
-					&Val::Null
+					Val::Null
 				} else {
 					if values.is_empty() {
 						throw!(NotEnoughValues);
 					}
 					let value = &values[0];
 					values = &values[1..];
-					value
+					value.clone()
 				};
 
-				format_code(&mut out, value, &c, width, precision)?;
+				format_code(&mut out, &value, &c, width, precision)?;
 			}
 		}
 	}
@@ -679,7 +679,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 			}
 			Element::Code(c) => {
 				// TODO: Operate on ref
-				let f: Rc<str> = c.mkey.into();
+				let f: GcStr = c.mkey.into();
 				let width = match c.width {
 					Width::Star => {
 						throw!(CannotUseStarWidthWithObject);

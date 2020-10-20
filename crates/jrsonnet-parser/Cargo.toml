@@ -21,5 +21,7 @@ serde = { version = "1.0.117", features = ["derive", "rc"], optional = true }
 structdump = { version = "0.1.2", optional = true }
 structdump-derive = { version = "0.1.2", optional = true }
 
+gc = { version = "0.3.6", features = ["derive"] }
+
 [dev-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.1" }
