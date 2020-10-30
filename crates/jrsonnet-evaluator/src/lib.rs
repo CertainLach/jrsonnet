@@ -193,8 +193,10 @@ impl EvaluationState {
 	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
-			let files = &self.data().files;
+			let data = self.data();
+			let files = &data.files;
 			if files.contains_key(&file_path) {
+				drop(data);
 				return self.evaluate_loaded_file_raw(&file_path);
 			}
 		}
