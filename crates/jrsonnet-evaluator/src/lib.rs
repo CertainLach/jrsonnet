@@ -193,8 +193,10 @@ impl EvaluationState {
 	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
-			let files = &self.data().files;
+			let data = self.data();
+			let files = &data.files;
 			if files.contains_key(&file_path) {
+				drop(data);
 				return self.evaluate_loaded_file_raw(&file_path);
 			}
 		}
@@ -900,5 +902,27 @@ pub mod tests {
 			"local std2 = std; local std = std2 { primitiveEquals(a, b):: false }; 1 == 1"
 		);
 		Ok(())
+	}
+
+	struct TestImportResolver(Rc<str>);
+	impl crate::import::ImportResolver for TestImportResolver {
+		fn resolve_file(&self, _: &PathBuf, _: &PathBuf) -> crate::error::Result<Rc<PathBuf>> {
+			Ok(Rc::new(PathBuf::from("/test")))
+		}
+
+		fn load_file_contents(&self, _: &PathBuf) -> crate::error::Result<Rc<str>> {
+			Ok(self.0.clone())
+		}
+
+		unsafe fn as_any(&self) -> &dyn std::any::Any {
+			panic!()
+		}
+	}
+
+	#[test]
+	fn issue_23() {
+		let state = EvaluationState::default();
+		state.set_import_resolver(Box::new(TestImportResolver(r#"import "/test""#.into())));
+		let _ = state.evaluate_file_raw(&PathBuf::from("/test"));
 	}
 }
