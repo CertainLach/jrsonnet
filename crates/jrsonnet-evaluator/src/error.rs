@@ -78,7 +78,11 @@ pub enum Error {
 	ImportBadFileUtf8(PathBuf),
 	#[error("tried to import {1} from {0}, but imports is not supported")]
 	ImportNotSupported(PathBuf, PathBuf),
-	#[error("syntax error")]
+	#[error(
+		"syntax error, expected one of {}, got {:?}",
+		.error.expected,
+		.source_code.chars().nth(error.location.offset).map(|c| c.to_string()).unwrap_or_else(|| "EOF".into())
+	)]
 	ImportSyntaxError {
 		path: Rc<PathBuf>,
 		source_code: Rc<str>,

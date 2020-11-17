@@ -349,7 +349,7 @@ impl Val {
 					for v in arr.iter() {
 						out.push_str("---\n");
 						out.push_str(&v.manifest(format)?);
-						out.push_str("\n");
+						out.push('\n');
 					}
 					out.push_str("...");
 				}

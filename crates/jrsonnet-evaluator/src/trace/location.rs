@@ -1,5 +1,7 @@
 #[derive(Clone, PartialEq, Debug)]
 pub struct CodeLocation {
+	pub offset: usize,
+
 	pub line: usize,
 	pub column: usize,
 
@@ -25,6 +27,7 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 
 	let mut out = vec![
 		CodeLocation {
+			offset: 0,
 			column: 0,
 			line: 0,
 			line_start_offset: 0,
@@ -40,6 +43,7 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 			Some(x) if x.0 == pos => {
 				let out_idx = x.1;
 				with_no_known_line_ending.push(out_idx);
+				out[out_idx].offset = pos;
 				out[out_idx].line = line;
 				out[out_idx].column = column;
 				out[out_idx].line_start_offset = this_line_offset;
@@ -82,12 +86,14 @@ pub mod tests {
 			),
 			vec![
 				CodeLocation {
+					offset: 0,
 					line: 1,
 					column: 2,
 					line_start_offset: 0,
-					line_end_offset: 11
+					line_end_offset: 11,
 				},
 				CodeLocation {
+					offset: 14,
 					line: 2,
 					column: 4,
 					line_start_offset: 12,

@@ -55,6 +55,7 @@ optional = true
 # Explaining traces
 [dependencies.annotate-snippets]
 version = "0.9.0"
+features = ["color"]
 optional = true
 
 [build-dependencies]
