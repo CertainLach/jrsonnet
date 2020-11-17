@@ -64,7 +64,7 @@ checksum = "b1be3409f94d7bdceeb5f5fac551039d9b3f00e25da7a74fc4d33400a0d96368"
 [[package]]
 name = "clap"
 version = "3.0.0-beta.2"
-source = "git+https://github.com/clap-rs/clap?rev=1d0b21908f93478e75b4b1a21533d86325d39386#1d0b21908f93478e75b4b1a21533d86325d39386"
+source = "git+https://github.com/clap-rs/clap?rev=821d79aac784980656f1a3be378f57cf32ea6828#821d79aac784980656f1a3be378f57cf32ea6828"
 dependencies = [
  "atty",
  "bitflags",
@@ -82,7 +82,7 @@ dependencies = [
 [[package]]
 name = "clap_derive"
 version = "3.0.0-beta.2"
-source = "git+https://github.com/clap-rs/clap?rev=1d0b21908f93478e75b4b1a21533d86325d39386#1d0b21908f93478e75b4b1a21533d86325d39386"
+source = "git+https://github.com/clap-rs/clap?rev=821d79aac784980656f1a3be378f57cf32ea6828#821d79aac784980656f1a3be378f57cf32ea6828"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -241,9 +241,9 @@ dependencies = [
 
 [[package]]
 name = "os_str_bytes"
-version = "2.3.1"
+version = "2.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06de47b848347d8c4c94219ad8ecd35eb90231704b067e67e6ae2e36ee023510"
+checksum = "afb2e1c3ee07430c2cf76151675e583e0f19985fa6efae47d6848a3e2c824f85"
 
 [[package]]
 name = "pathdiff"
@@ -306,9 +306,9 @@ dependencies = [
 
 [[package]]
 name = "proc-macro2"
-version = "1.0.18"
+version = "1.0.24"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "beae6331a816b1f65d04c45b078fd8e6c93e8071771f41b8163255bbd8d7c8fa"
+checksum = "1e0704ee1a7e00d7bb417d0770ea303c1bccbabf0ef1667dae92b5967f5f8a71"
 dependencies = [
  "unicode-xid",
 ]
@@ -390,9 +390,9 @@ dependencies = [
 
 [[package]]
 name = "syn"
-version = "1.0.33"
+version = "1.0.48"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e8d5d96e8cbb005d6959f119f773bfaebb5684296108fb32600c00cde305b2cd"
+checksum = "cc371affeffc477f42a221a1e4297aedcea33d47d19b61455588bd9d8f6b19ac"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -430,18 +430,18 @@ dependencies = [
 
 [[package]]
 name = "thiserror"
-version = "1.0.21"
+version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "318234ffa22e0920fe9a40d7b8369b5f649d490980cf7aadcf1eb91594869b42"
+checksum = "0e9ae34b84616eedaaf1e9dd6026dbe00dcafa92aa0c8077cb69df1fcfe5e53e"
 dependencies = [
  "thiserror-impl",
 ]
 
 [[package]]
 name = "thiserror-impl"
-version = "1.0.21"
+version = "1.0.22"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cae2447b6282786c3493999f40a9be2a6ad20cb8bd268b0a0dbf5a065535c0ab"
+checksum = "9ba20f23e85b10754cd195504aebf6a27e2e6cbe28c17778a0c930724628dd56"
 dependencies = [
  "proc-macro2",
  "quote",
