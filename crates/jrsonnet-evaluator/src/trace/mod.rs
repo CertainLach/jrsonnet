@@ -1,6 +1,6 @@
 mod location;
 
-use crate::{EvaluationState, LocError};
+use crate::{error::Error, EvaluationState, LocError};
 pub use location::*;
 use std::path::PathBuf;
 
@@ -87,6 +87,34 @@ impl TraceFormat for CompactFormat {
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		writeln!(out, "{}", error.error())?;
+		match error.error() {
+			Error::ImportSyntaxError {
+				path,
+				source_code,
+				error,
+			} => {
+				use std::fmt::Write;
+				let mut n = self.resolver.resolve(&path);
+				let mut offset = error.location.offset;
+				let mut is_eof = false;
+				if offset >= source_code.len() {
+					offset = source_code.len() - 1;
+					is_eof = true;
+				}
+				let mut location = offset_to_location(&source_code, &[offset])
+					.into_iter()
+					.next()
+					.unwrap();
+				if is_eof {
+					location.column += 1;
+				}
+
+				write!(n, ":").unwrap();
+				print_code_location(&mut n, &location, &location).unwrap();
+				write!(out, "{:<p$}{}", "", n, p = self.padding,)?;
+			}
+			_ => {}
+		}
 		let file_names = error
 			.trace()
 			.0
@@ -167,52 +195,103 @@ impl TraceFormat for ExplainingFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		use annotate_snippets::{
-			display_list::{DisplayList, FormatOptions},
-			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
-		};
 		writeln!(out, "{}", error.error())?;
+		match error.error() {
+			Error::ImportSyntaxError {
+				path,
+				source_code,
+				error,
+			} => {
+				let mut offset = error.location.offset;
+				if offset >= source_code.len() {
+					offset = source_code.len() - 1;
+				}
+				let mut location = offset_to_location(&source_code, &[offset])
+					.into_iter()
+					.next()
+					.unwrap();
+				if location.column >= 1 {
+					location.column -= 1;
+				}
+
+				self.print_snippet(
+					out,
+					&source_code,
+					&path,
+					&location,
+					&location,
+					"^ syntax error",
+				)?;
+			}
+			_ => {}
+		}
 		let trace = &error.trace();
 		for item in trace.0.iter() {
 			let desc = &item.desc;
 			let source = item.location.clone();
 			let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
 
-			let source_fragment: String = evaluation_state
-				.get_source(&source.0)
-				.unwrap()
-				.chars()
-				.skip(start_end[0].line_start_offset)
-				.take(start_end[1].line_end_offset - start_end[0].line_start_offset)
-				.collect();
-
-			let origin = self.resolver.resolve(&source.0);
-			let snippet = Snippet {
-				opt: FormatOptions {
-					color: true,
-					..Default::default()
-				},
-				title: None,
-				footer: vec![],
-				slices: vec![Slice {
-					source: &source_fragment,
-					line_start: start_end[0].line,
-					origin: Some(&origin),
-					fold: false,
-					annotations: vec![SourceAnnotation {
-						label: desc,
-						annotation_type: AnnotationType::Error,
-						range: (
-							source.1 - start_end[0].line_start_offset,
-							source.2 - start_end[0].line_start_offset,
-						),
-					}],
-				}],
-			};
-
-			let dl = DisplayList::from(snippet);
-			writeln!(out, "{}", dl)?;
+			self.print_snippet(
+				out,
+				&evaluation_state.get_source(&source.0).unwrap(),
+				&source.0,
+				&start_end[0],
+				&start_end[1],
+				desc,
+			)?;
 		}
+		Ok(())
+	}
+}
+
+impl ExplainingFormat {
+	fn print_snippet(
+		&self,
+		out: &mut dyn std::fmt::Write,
+		source: &str,
+		origin: &PathBuf,
+		start: &CodeLocation,
+		end: &CodeLocation,
+		desc: &str,
+	) -> Result<(), std::fmt::Error> {
+		use annotate_snippets::{
+			display_list::{DisplayList, FormatOptions},
+			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
+		};
+
+		let source_fragment: String = source
+			.chars()
+			.skip(start.line_start_offset)
+			.take(end.line_end_offset - end.line_start_offset)
+			.collect();
+
+		let origin = self.resolver.resolve(&origin);
+		let snippet = Snippet {
+			opt: FormatOptions {
+				color: true,
+				..Default::default()
+			},
+			title: None,
+			footer: vec![],
+			slices: vec![Slice {
+				source: &source_fragment,
+				line_start: start.line,
+				origin: Some(&origin),
+				fold: false,
+				annotations: vec![SourceAnnotation {
+					label: desc,
+					annotation_type: AnnotationType::Error,
+					range: (
+						start.offset - start.line_start_offset,
+						end.offset - start.line_start_offset,
+					),
+				}],
+			}],
+		};
+
+		let dl = DisplayList::from(snippet);
+		writeln!(out, "{}", dl)?;
+
 		Ok(())
 	}
 }
