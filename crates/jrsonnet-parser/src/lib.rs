@@ -37,7 +37,7 @@ parser! {
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
 		rule id() = quiet!{ !reserved() alpha() (alpha() / digit())*} / expected!("<identifier>")
 
-		rule keyword(id: &'static str)
+		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
 		// Adds location data information to existing expression
 		rule l(s: &ParserSettings, x: rule<Expr>) -> LocExpr
@@ -85,11 +85,11 @@ parser! {
 			  [' ' | '\t']*<, {prefix.len() - 1}> "|||"
 			  {let mut l = empty_lines.to_owned(); l.push_str(first_line); l.extend(lines); l}
 		pub rule string() -> String
-			= "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
+			= quiet!{ "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
 			/ "'" str:$(("\\'" / "\\\\" / (!['\''][_]))*) "'" {unescape::unescape(str).unwrap()}
 			/ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
 			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
-			/ string_block()
+			/ string_block() } / expected!("<string>")
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
 			= name:$(id()) {expr::FieldName::Fixed(name.into())}
@@ -208,54 +208,59 @@ parser! {
 				SliceDesc { start, end, step }
 			}
 
+		rule binop(x: rule<()>) -> ()
+			= quiet!{ x() } / expected!("<binary op>")
+		rule unaryop(x: rule<()>) -> ()
+			= quiet!{ x() } / expected!("<unary op>")
+
 		rule expr(s: &ParserSettings) -> LocExpr
 			= start:position!() a:precedence! {
-				a:(@) _ "||" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Or, b))}
+				a:(@) _ binop(<"||">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Or, b))}
 				--
-				a:(@) _ "&&" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::And, b))}
+				a:(@) _ binop(<"&&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::And, b))}
 				--
-				a:(@) _ "|" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitOr, b))}
+				a:(@) _ binop(<"|">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitOr, b))}
 				--
-				a:@ _ "^" _ b:(@) {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitXor, b))}
+				a:@ _ binop(<"^">) _ b:(@) {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitXor, b))}
 				--
-				a:(@) _ "&" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
+				a:(@) _ binop(<"&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
 				--
-				a:(@) _ "==" _ b:@ {loc_expr_todo!(Expr::Apply(
+				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Intrinsic("equals".into())),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))}
-				a:(@) _ "!=" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
+				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
 					el!(Expr::Intrinsic("equals".into())),
 					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					true
 				))))}
 				--
-				a:(@) _ "<" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
-				a:(@) _ ">" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
-				a:(@) _ "<=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lte, b))}
-				a:(@) _ ">=" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
-				a:(@) _ keyword("in") _ b:@ {loc_expr_todo!(Expr::Apply(
+				a:(@) _ binop(<"<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
+				a:(@) _ binop(<">">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
+				a:(@) _ binop(<"<=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lte, b))}
+				a:(@) _ binop(<">=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
+				a:(@) _ binop(<keyword("in")>) _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Intrinsic("objectHasEx".into())), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
 					true
 				))}
 				--
-				a:(@) _ "<<" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lhs, b))}
-				a:(@) _ ">>" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Rhs, b))}
+				a:(@) _ binop(<"<<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lhs, b))}
+				a:(@) _ binop(<">>">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Rhs, b))}
 				--
-				a:(@) _ "+" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Add, b))}
-				a:(@) _ "-" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Sub, b))}
+				a:(@) _ binop(<"+">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Add, b))}
+				a:(@) _ binop(<"-">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Sub, b))}
 				--
-				a:(@) _ "*" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
-				a:(@) _ "/" _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
-				a:(@) _ "%" _ b:@ {loc_expr_todo!(Expr::Apply(
+				a:(@) _ binop(<"*">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
+				a:(@) _ binop(<"/">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
+				a:(@) _ binop(<"%">) _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Intrinsic("mod".into())), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					false
 				))}
 				--
-						"-" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
-						"!" _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
-						"~" _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
+						unaryop(<"-">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
+						unaryop(<"!">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
+						unaryop(<"~">) _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
 				--
 				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Intrinsic("slice".into())),
