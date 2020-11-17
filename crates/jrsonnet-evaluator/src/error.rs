@@ -81,7 +81,7 @@ pub enum Error {
 	#[error(
 		"syntax error, expected one of {}, got {:?}",
 		.error.expected,
-		.source_code.chars().nth(error.location.offset).map(|c| c.to_string()).unwrap_or("EOF".into())
+		.source_code.chars().nth(error.location.offset).map(|c| c.to_string()).unwrap_or_else(|| "EOF".into())
 	)]
 	ImportSyntaxError {
 		path: Rc<PathBuf>,

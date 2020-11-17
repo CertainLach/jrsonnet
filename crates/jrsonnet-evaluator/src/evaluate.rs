@@ -419,18 +419,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
 	Ok(match &**expr {
-		Literal(LiteralType::This) => Val::Obj(
-			context
-				.this()
-				.clone()
-				.ok_or_else(|| CantUseSelfOutsideOfObject)?,
-		),
-		Literal(LiteralType::Dollar) => Val::Obj(
-			context
-				.dollar()
-				.clone()
-				.ok_or_else(|| NoTopLevelObjectFound)?,
-		),
+		Literal(LiteralType::This) => {
+			Val::Obj(context.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
+		}
+		Literal(LiteralType::Dollar) => {
+			Val::Obj(context.dollar().clone().ok_or(NoTopLevelObjectFound)?)
+		}
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,

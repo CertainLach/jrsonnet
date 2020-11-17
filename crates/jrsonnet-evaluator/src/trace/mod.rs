@@ -87,33 +87,32 @@ impl TraceFormat for CompactFormat {
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		writeln!(out, "{}", error.error())?;
-		match error.error() {
-			Error::ImportSyntaxError {
-				path,
-				source_code,
-				error,
-			} => {
-				use std::fmt::Write;
-				let mut n = self.resolver.resolve(&path);
-				let mut offset = error.location.offset;
-				let mut is_eof = false;
-				if offset >= source_code.len() {
-					offset = source_code.len() - 1;
-					is_eof = true;
-				}
-				let mut location = offset_to_location(&source_code, &[offset])
-					.into_iter()
-					.next()
-					.unwrap();
-				if is_eof {
-					location.column += 1;
-				}
-
-				write!(n, ":").unwrap();
-				print_code_location(&mut n, &location, &location).unwrap();
-				write!(out, "{:<p$}{}", "", n, p = self.padding,)?;
+		if let Error::ImportSyntaxError {
+			path,
+			source_code,
+			error,
+		} = error.error()
+		{
+			use std::fmt::Write;
+			let mut n = self.resolver.resolve(path);
+			let mut offset = error.location.offset;
+			let is_eof = if offset >= source_code.len() {
+				offset = source_code.len() - 1;
+				true
+			} else {
+				false
+			};
+			let mut location = offset_to_location(source_code, &[offset])
+				.into_iter()
+				.next()
+				.unwrap();
+			if is_eof {
+				location.column += 1;
 			}
-			_ => {}
+
+			write!(n, ":").unwrap();
+			print_code_location(&mut n, &location, &location).unwrap();
+			write!(out, "{:<p$}{}", "", n, p = self.padding,)?;
 		}
 		let file_names = error
 			.trace()
@@ -196,34 +195,32 @@ impl TraceFormat for ExplainingFormat {
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		writeln!(out, "{}", error.error())?;
-		match error.error() {
-			Error::ImportSyntaxError {
-				path,
-				source_code,
-				error,
-			} => {
-				let mut offset = error.location.offset;
-				if offset >= source_code.len() {
-					offset = source_code.len() - 1;
-				}
-				let mut location = offset_to_location(&source_code, &[offset])
-					.into_iter()
-					.next()
-					.unwrap();
-				if location.column >= 1 {
-					location.column -= 1;
-				}
-
-				self.print_snippet(
-					out,
-					&source_code,
-					&path,
-					&location,
-					&location,
-					"^ syntax error",
-				)?;
+		if let Error::ImportSyntaxError {
+			path,
+			source_code,
+			error,
+		} = error.error()
+		{
+			let mut offset = error.location.offset;
+			if offset >= source_code.len() {
+				offset = source_code.len() - 1;
 			}
-			_ => {}
+			let mut location = offset_to_location(source_code, &[offset])
+				.into_iter()
+				.next()
+				.unwrap();
+			if location.column >= 1 {
+				location.column -= 1;
+			}
+
+			self.print_snippet(
+				out,
+				source_code,
+				path,
+				&location,
+				&location,
+				"^ syntax error",
+			)?;
 		}
 		let trace = &error.trace();
 		for item in trace.0.iter() {
@@ -265,7 +262,7 @@ impl ExplainingFormat {
 			.take(end.line_end_offset - end.line_start_offset)
 			.collect();
 
-		let origin = self.resolver.resolve(&origin);
+		let origin = self.resolver.resolve(origin);
 		let snippet = Snippet {
 			opt: FormatOptions {
 				color: true,
