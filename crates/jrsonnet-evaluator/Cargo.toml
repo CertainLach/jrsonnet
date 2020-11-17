@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-evaluator"
 description = "jsonnet interpreter"
-version = "0.3.1"
+version = "0.3.2"
 authors = ["Лач <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
@@ -26,8 +26,8 @@ explaining-traces = ["annotate-snippets"]
 unstable = []
 
 [dependencies]
-jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.1" }
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.1" }
+jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.2" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.2" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"
