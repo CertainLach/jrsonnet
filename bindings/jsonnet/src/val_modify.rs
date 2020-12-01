@@ -12,17 +12,10 @@ use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_array_append(
 	_vm: &EvaluationState,
-	arr: *mut Val,
-	val: &Val,
+	_arr: *mut Val,
+	_val: &Val,
 ) {
-	match *Box::from_raw(arr) {
-		Val::Arr(old) => {
-			let mut new = Rc::try_unwrap(old).expect("arr with no refs");
-			new.push(val.clone());
-			*arr = Val::Arr(Rc::new(new));
-		}
-		_ => panic!("should receive array"),
-	}
+	todo!()
 }
 
 /// # Safety
