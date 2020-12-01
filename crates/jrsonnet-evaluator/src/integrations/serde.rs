@@ -22,11 +22,10 @@ impl TryFrom<&Val> for Value {
 			} else {
 				Number::from_f64(*n).expect("to json number")
 			}),
-			Val::Lazy(v) => (&v.evaluate()?).try_into()?,
 			Val::Arr(a) => {
 				let mut out = Vec::with_capacity(a.len());
 				for item in a.iter() {
-					out.push(item.try_into()?);
+					out.push((&item?).try_into()?);
 				}
 				Self::Array(out)
 			}
@@ -55,9 +54,9 @@ impl From<&Value> for Val {
 			Value::Array(a) => {
 				let mut out = Vec::with_capacity(a.len());
 				for v in a {
-					out.push(v.into());
+					out.push(LazyVal::new_resolved(v.into()));
 				}
-				Self::Arr(Rc::new(out))
+				Self::Arr(out.into())
 			}
 			Value::Object(o) => {
 				let mut entries = HashMap::with_capacity(o.len());

@@ -102,9 +102,10 @@ impl ObjValue {
 		visible_fields
 	}
 	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
-		Ok(self.get_raw(key, self)?)
+		Ok(self.get_raw(key, None)?)
 	}
-	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: &Self) -> Result<Option<Val>> {
+	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: Option<&Self>) -> Result<Option<Val>> {
+		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), Rc::as_ptr(&real_this.0) as usize);
 
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
@@ -115,7 +116,7 @@ impl ObjValue {
 			(Some(k), Some(s)) => {
 				let our = self.evaluate_this(k, real_this)?;
 				if k.add {
-					s.get_raw(key, real_this)?
+					s.get_raw(key, Some(real_this))?
 						.map_or(Ok(Some(our.clone())), |v| {
 							Ok(Some(evaluate_add_op(&v, &our)?))
 						})
@@ -123,7 +124,7 @@ impl ObjValue {
 					Ok(Some(our))
 				}
 			}
-			(None, Some(s)) => s.get_raw(key, real_this),
+			(None, Some(s)) => s.get_raw(key, Some(real_this)),
 			(None, None) => Ok(None),
 		}?;
 		self.0

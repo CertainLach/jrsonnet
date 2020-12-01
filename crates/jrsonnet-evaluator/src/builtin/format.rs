@@ -1,7 +1,8 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val, ValType};
+use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
+use jrsonnet_types::ValType;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error)]
@@ -573,7 +574,7 @@ pub fn format_code(
 				);
 			}
 		}
-		ConvTypeV::Char => match value.clone().unwrap_if_lazy()? {
+		ConvTypeV::Char => match value.clone() {
 			Val::Num(n) => tmp_out.push(
 				std::char::from_u32(n as u32)
 					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
@@ -590,7 +591,7 @@ pub fn format_code(
 				throw!(TypeMismatch(
 					"%c requires number/string",
 					vec![ValType::Num, ValType::Str],
-					value.value_type()?,
+					value.value_type(),
 				));
 			}
 		},

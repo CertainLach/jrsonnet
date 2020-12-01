@@ -97,6 +97,7 @@ pub enum BinaryOpType {
 	Mul,
 	Div,
 
+	/// Implemented as intrinsic, put here for completeness
 	Mod,
 
 	Add,

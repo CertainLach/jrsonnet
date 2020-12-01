@@ -10,12 +10,8 @@ use crate::{
 	throw, with_state, Context, ObjValue, Result,
 };
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
-use std::{
-	cell::RefCell,
-	collections::HashMap,
-	fmt::{Debug, Display},
-	rc::Rc,
-};
+use jrsonnet_types::ValType;
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 enum LazyValInternals {
 	Computed(Val),
@@ -166,36 +162,6 @@ impl FuncVal {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ValType {
-	Bool,
-	Null,
-	Str,
-	Num,
-	Arr,
-	Obj,
-	Func,
-}
-impl ValType {
-	pub const fn name(&self) -> &'static str {
-		use ValType::*;
-		match self {
-			Bool => "boolean",
-			Null => "null",
-			Str => "string",
-			Num => "number",
-			Arr => "array",
-			Obj => "object",
-			Func => "function",
-		}
-	}
-}
-impl Display for ValType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.name())
-	}
-}
-
 #[derive(Clone)]
 pub enum ManifestFormat {
 	YamlStream(Box<ManifestFormat>),
@@ -206,13 +172,107 @@ pub enum ManifestFormat {
 }
 
 #[derive(Debug, Clone)]
+pub enum ArrValue {
+	Lazy(Rc<Vec<LazyVal>>),
+	Eager(Rc<Vec<Val>>),
+}
+impl ArrValue {
+	pub fn len(&self) -> usize {
+		match self {
+			ArrValue::Lazy(l) => l.len(),
+			ArrValue::Eager(e) => e.len(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
+	pub fn get(&self, index: usize) -> Result<Option<Val>> {
+		match self {
+			ArrValue::Lazy(vec) => {
+				if let Some(v) = vec.get(index) {
+					Ok(Some(v.evaluate()?))
+				} else {
+					Ok(None)
+				}
+			}
+			ArrValue::Eager(vec) => Ok(vec.get(index).cloned()),
+		}
+	}
+
+	pub fn get_lazy(&self, index: usize) -> Option<LazyVal> {
+		match self {
+			ArrValue::Lazy(vec) => vec.get(index).cloned(),
+			ArrValue::Eager(vec) => vec
+				.get(index)
+				.cloned()
+				.map(|val| LazyVal::new_resolved(val)),
+		}
+	}
+
+	pub fn evaluated(&self) -> Result<Rc<Vec<Val>>> {
+		Ok(match self {
+			ArrValue::Lazy(vec) => {
+				let mut out = Vec::with_capacity(vec.len());
+				for item in vec.iter() {
+					out.push(item.evaluate()?);
+				}
+				Rc::new(out)
+			}
+			ArrValue::Eager(vec) => vec.clone(),
+		})
+	}
+
+	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
+		(0..self.len()).map(move |idx| match self {
+			ArrValue::Lazy(l) => l[idx].evaluate(),
+			ArrValue::Eager(e) => Ok(e[idx].clone()),
+		})
+	}
+
+	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
+		(0..self.len()).map(move |idx| match self {
+			ArrValue::Lazy(l) => l[idx].clone(),
+			ArrValue::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
+		})
+	}
+
+	pub fn reversed(self) -> Self {
+		match self {
+			ArrValue::Lazy(vec) => {
+				let mut out = (&vec as &Vec<_>).clone();
+				out.reverse();
+				Self::Lazy(Rc::new(out))
+			}
+			ArrValue::Eager(vec) => {
+				let mut out = (&vec as &Vec<_>).clone();
+				out.reverse();
+				Self::Eager(Rc::new(out))
+			}
+		}
+	}
+}
+
+impl From<Vec<LazyVal>> for ArrValue {
+	fn from(v: Vec<LazyVal>) -> Self {
+		Self::Lazy(Rc::new(v))
+	}
+}
+
+impl From<Vec<Val>> for ArrValue {
+	fn from(v: Vec<Val>) -> Self {
+		Self::Eager(Rc::new(v))
+	}
+}
+
+#[derive(Debug, Clone)]
 pub enum Val {
 	Bool(bool),
 	Null,
 	Str(Rc<str>),
 	Num(f64),
-	Lazy(LazyVal),
-	Arr(Rc<Vec<Val>>),
+	Arr(ArrValue),
 	Obj(ObjValue),
 	Func(Rc<FuncVal>),
 }
@@ -237,40 +297,33 @@ impl Val {
 	}
 
 	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
-		let this_type = self.value_type()?;
+		let this_type = self.value_type();
 		if this_type != val_type {
 			throw!(TypeMismatch(context, vec![val_type], this_type))
 		} else {
 			Ok(())
 		}
 	}
+	pub fn unwrap_num(self) -> Result<f64> {
+		Ok(matches_unwrap!(self, Self::Num(v), v))
+	}
+	pub fn unwrap_func(self) -> Result<Rc<FuncVal>> {
+		Ok(matches_unwrap!(self, Self::Func(v), v))
+	}
 	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {
 		self.assert_type(context, ValType::Bool)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Bool(v), v))
+		Ok(matches_unwrap!(self, Self::Bool(v), v))
 	}
 	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
 		self.assert_type(context, ValType::Str)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Str(v), v))
+		Ok(matches_unwrap!(self, Self::Str(v), v))
 	}
 	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
 		self.assert_type(context, ValType::Num)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Num(v), v))
+		self.unwrap_num()
 	}
-	pub fn inplace_unwrap(&mut self) -> Result<()> {
-		while let Self::Lazy(lazy) = self {
-			*self = lazy.evaluate()?;
-		}
-		Ok(())
-	}
-	pub fn unwrap_if_lazy(&self) -> Result<Self> {
-		Ok(if let Self::Lazy(v) = self {
-			v.evaluate()?.unwrap_if_lazy()?
-		} else {
-			self.clone()
-		})
-	}
-	pub fn value_type(&self) -> Result<ValType> {
-		Ok(match self {
+	pub fn value_type(&self) -> ValType {
+		match self {
 			Self::Str(..) => ValType::Str,
 			Self::Num(..) => ValType::Num,
 			Self::Arr(..) => ValType::Arr,
@@ -278,16 +331,15 @@ impl Val {
 			Self::Bool(_) => ValType::Bool,
 			Self::Null => ValType::Null,
 			Self::Func(..) => ValType::Func,
-			Self::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
-		})
+		}
 	}
 
 	pub fn to_string(&self) -> Result<Rc<str>> {
-		Ok(match self.unwrap_if_lazy()? {
+		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
-			Self::Str(s) => s,
+			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
 				&v,
 				&ManifestJsonOptions {
@@ -325,7 +377,7 @@ impl Val {
 		};
 		let mut out = Vec::with_capacity(arr.len());
 		for i in arr.iter() {
-			out.push(i.manifest(ty)?);
+			out.push(i?.manifest(ty)?);
 		}
 		Ok(out)
 	}
@@ -348,7 +400,7 @@ impl Val {
 				if !arr.is_empty() {
 					for v in arr.iter() {
 						out.push_str("---\n");
-						out.push_str(&v.manifest(format)?);
+						out.push_str(&v?.manifest(format)?);
 						out.push('\n');
 					}
 					out.push_str("...");
@@ -456,7 +508,7 @@ const fn is_function_like(val: &Val) -> bool {
 
 /// Native implementation of `std.primitiveEquals`
 pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
-	Ok(match (val_a.unwrap_if_lazy()?, val_b.unwrap_if_lazy()?) {
+	Ok(match (val_a, val_b) {
 		(Val::Bool(a), Val::Bool(b)) => a == b,
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
@@ -476,10 +528,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 
 /// Native implementation of `std.equals`
 pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
-	let val_a = val_a.unwrap_if_lazy()?;
-	let val_b = val_b.unwrap_if_lazy()?;
-
-	if val_a.value_type()? != val_b.value_type()? {
+	if val_a.value_type() != val_b.value_type() {
 		return Ok(false);
 	}
 	match (val_a, val_b) {
@@ -489,7 +538,7 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 				return Ok(false);
 			}
 			for (a, b) in a.iter().zip(b.iter()) {
-				if !equals(&a.unwrap_if_lazy()?, &b.unwrap_if_lazy()?)? {
+				if !equals(&a?, &b?)? {
 					return Ok(false);
 				}
 			}
