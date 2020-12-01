@@ -4,8 +4,9 @@ members = [
 	"crates/jrsonnet-evaluator",
 	"crates/jrsonnet-stdlib",
 	"crates/jrsonnet-cli",
+	"crates/jrsonnet-types",
 	"bindings/jsonnet",
-	"cmds/jrsonnet"
+	"cmds/jrsonnet",
 ]
 
 [profile.test]

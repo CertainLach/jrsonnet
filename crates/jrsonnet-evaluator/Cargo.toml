@@ -26,6 +26,7 @@ unstable = []
 [dependencies]
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.3" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.3" }
+jrsonnet-types = { path = "../jrsonnet-types", version = "0.3.3" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"

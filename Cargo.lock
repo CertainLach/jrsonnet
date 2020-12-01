@@ -169,6 +169,7 @@ dependencies = [
  "indexmap",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
+ "jrsonnet-types",
  "md5",
  "pathdiff",
  "rustc-hash",
@@ -193,6 +194,10 @@ dependencies = [
 [[package]]
 name = "jrsonnet-stdlib"
 version = "0.3.3"
+
+[[package]]
+name = "jrsonnet-types"
+version = "0.3.2"
 
 [[package]]
 name = "jsonnet"

@@ -65,7 +65,7 @@ fn print_code_location(
 			out,
 			"{}:{}-{}:{}",
 			start.line,
-			end.column - 1,
+			end.column.saturating_sub(1),
 			start.line,
 			end.column
 		)?;

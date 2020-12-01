@@ -1,8 +1,9 @@
 use crate::{
 	builtin::{format::FormatError, sort::SortError},
-	ValType,
+	typed::TypeLocError,
 };
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_types::ValType;
 use std::{path::PathBuf, rc::Rc};
 use thiserror::Error;
 
@@ -117,6 +118,8 @@ pub enum Error {
 
 	#[error("format error: {0}")]
 	Format(#[from] FormatError),
+	#[error("type error: {0}")]
+	TypeError(TypeLocError),
 	#[error("sort error: {0}")]
 	Sort(#[from] SortError),
 }
@@ -143,6 +146,9 @@ impl LocError {
 
 	pub const fn error(&self) -> &Error {
 		&(self.0).0
+	}
+	pub fn error_mut(&mut self) -> &mut Error {
+		&mut (self.0).0
 	}
 	pub const fn trace(&self) -> &StackTrace {
 		&(self.0).1
