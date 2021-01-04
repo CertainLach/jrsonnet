@@ -263,7 +263,7 @@ parser! {
 						unaryop(<"~">) _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
 				--
 				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("slice".into())),
+					el!(Expr::Index(el!(Expr::Var("std".into())), el!(Expr::Str("slice".into())))),
 					ArgsDesc(vec![
 						Arg(None, a),
 						Arg(None, s.start.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
