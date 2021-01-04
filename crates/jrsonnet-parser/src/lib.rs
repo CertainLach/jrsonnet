@@ -254,7 +254,7 @@ parser! {
 				a:(@) _ binop(<"*">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
 				a:(@) _ binop(<"/">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
 				a:(@) _ binop(<"%">) _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("mod".into())), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
+					el!(Expr::Index(el!(Expr::Var("std".into())), el!(Expr::Str("mod".into())))), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					false
 				))}
 				--
