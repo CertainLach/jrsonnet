@@ -63,7 +63,7 @@ impl Context {
 			.bindings
 			.get(&name)
 			.cloned()
-			.ok_or_else(|| VariableIsNotDefined(name))?)
+			.ok_or(VariableIsNotDefined(name))?)
 	}
 	pub fn into_future(self, ctx: FutureContext) -> Self {
 		{

@@ -212,16 +212,12 @@ pub fn call_builtin(
 		"extVar" => parse_args!(context, "std.extVar", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or_else(
-				|| UndefinedExternalVariable(x),
-			)?)
+			Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or(UndefinedExternalVariable(x))?)
 		})?,
 		"native" => parse_args!(context, "std.native", args, 1, [
 			0, x: [Val::Str]!!Val::Str, vec![ValType::Str];
 		], {
-			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or_else(
-				|| UndefinedExternalFunction(x),
-			)?)
+			Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or(UndefinedExternalFunction(x))?)
 		})?,
 		"filter" => parse_args!(context, "std.filter", args, 2, [
 			0, func: [Val::Func]!!Val::Func, vec![ValType::Func];
