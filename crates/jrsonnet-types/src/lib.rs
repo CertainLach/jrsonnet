@@ -88,13 +88,13 @@ impl ValType {
 	pub const fn name(&self) -> &'static str {
 		use ValType::*;
 		match self {
-			Bool => "bool",
+			Bool => "boolean",
 			Null => "null",
-			Str => "str",
-			Num => "num",
-			Arr => "[any]",
-			Obj => "obj",
-			Func => "fn.any",
+			Str => "string",
+			Num => "number",
+			Arr => "array",
+			Obj => "object",
+			Func => "function",
 		}
 	}
 }
