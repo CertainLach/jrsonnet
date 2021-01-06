@@ -2,7 +2,7 @@
 name = "jrsonnet-parser"
 description = "jsonnet language parser and AST"
 version = "0.3.2"
-authors = ["Лач <iam@lach.pw>"]
+authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
 
