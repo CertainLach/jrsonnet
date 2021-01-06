@@ -139,7 +139,7 @@ checksum = "dc6f3ad7b9d11a0c00842ff8de1b60ee58661048eb8049ed33c73594f359d7e6"
 
 [[package]]
 name = "jrsonnet"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "clap",
  "jrsonnet-cli",
@@ -151,7 +151,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-cli"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
@@ -160,7 +160,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "annotate-snippets",
  "base64",
@@ -180,7 +180,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "jrsonnet-stdlib",
  "peg",
@@ -192,11 +192,11 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.3.2"
+version = "0.3.3"
 
 [[package]]
 name = "jsonnet"
-version = "0.3.2"
+version = "0.3.3"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-parser",

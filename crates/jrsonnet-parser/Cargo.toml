@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-parser"
 description = "jsonnet language parser and AST"
-version = "0.3.2"
+version = "0.3.3"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
@@ -22,4 +22,4 @@ structdump = { version = "0.1.2", optional = true }
 structdump-derive = { version = "0.1.2", optional = true }
 
 [dev-dependencies]
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.2" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.3" }
