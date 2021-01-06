@@ -16,6 +16,20 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
+fn std_format(str: Rc<str>, vals: Val) -> Result<Val> {
+	push(
+		&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
+		|| format!("std.format of {}", str),
+		|| {
+			Ok(match vals {
+				Val::Arr(vals) => Val::Str(format_arr(&str, &vals)?.into()),
+				Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
+				o => Val::Str(format_arr(&str, &[o])?.into()),
+			})
+		},
+	)
+}
+
 #[allow(clippy::cognitive_complexity)]
 pub fn call_builtin(
 	context: Context,
@@ -99,6 +113,43 @@ pub fn call_builtin(
 					.any(|(k, _v)| *k == *f),
 			))
 		})?,
+
+		// faster
+		"slice" => parse_args!(context, "slice", args, 4, [
+			0, indexable: [Val::Str | Val::Arr], vec![ValType::Str, ValType::Arr];
+			1, index, vec![ValType::Num, ValType::Null];
+			2, end, vec![ValType::Num, ValType::Null];
+			3, step, vec![ValType::Num, ValType::Null];
+		], {
+			let index = match index {
+				Val::Num(v) => v as usize,
+				Val::Null => 0,
+				_ => unreachable!(),
+			};
+			let end = match end {
+				Val::Num(v) => v as usize,
+				Val::Null => match &indexable {
+					Val::Str(s) => s.chars().count(),
+					Val::Arr(v) => v.len(),
+					_ => unreachable!()
+				},
+				_ => unreachable!()
+			};
+			let step = match step {
+				Val::Num(v) => v as usize,
+				Val::Null => 1,
+				_ => unreachable!()
+			};
+			match &indexable {
+				Val::Str(s) => {
+					Ok(Val::Str((s.chars().skip(index).take(end-index).step_by(step).collect::<String>()).into()))
+				}
+				Val::Arr(arr) => {
+					Ok(Val::Arr((arr.iter().skip(index).take(end-index).step_by(step).cloned().collect::<Vec<Val>>()).into()))
+				}
+				_ => unreachable!()
+			}
+		})?,
 		"primitiveEquals" => parse_args!(context, "std.primitiveEquals", args, 2, [
 			0, a, vec![];
 			1, b, vec![];
@@ -111,6 +162,16 @@ pub fn call_builtin(
 			1, b, vec![];
 		], {
 			Ok(Val::Bool(equals(&a, &b)?))
+		})?,
+		"mod" => parse_args!(context, "std.mod", args, 2, [
+			0, a: [Val::Num | Val::Str], vec![ValType::Num, ValType::Str];
+			1, b, vec![];
+		], {
+			match (a, b) {
+				(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a % b)),
+				(Val::Str(str), vals) => std_format(str, vals),
+				(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(jrsonnet_parser::BinaryOpType::Mod, a.value_type()?, b.value_type()?))
+			}
 		})?,
 		"modulo" => parse_args!(context, "std.modulo", args, 2, [
 			0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
@@ -219,13 +280,7 @@ pub fn call_builtin(
 			0, str: [Val::Str]!!Val::Str, vec![ValType::Str];
 			1, vals, vec![]
 		], {
-			push(&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)), ||format!("std.format of {}", str), ||{
-				Ok(match vals {
-					Val::Arr(vals) => Val::Str(format_arr(&str, &vals)?.into()),
-					Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
-					o => Val::Str(format_arr(&str, &[o])?.into()),
-				})
-			})
+			std_format(str, vals)
 		})?,
 		// faster
 		"range" => parse_args!(context, "std.range", args, 2, [

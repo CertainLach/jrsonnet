@@ -39,7 +39,8 @@ fn main() {
 								if **name == *"join" || **name == *"manifestJsonEx" ||
 								**name == *"escapeStringJson" || **name == *"equals" ||
 								**name == *"base64" || **name == *"foldl" || **name == *"foldr" ||
-								**name == *"sortImpl" || **name == *"format" || **name == *"range" || **name == *"reverse"
+								**name == *"sortImpl" || **name == *"format" || **name == *"range" ||
+								**name == *"reverse" || **name == *"slice" || **name == *"mod"
 							)
 						})
 						.collect(),

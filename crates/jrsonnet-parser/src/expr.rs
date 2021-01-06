@@ -97,6 +97,8 @@ pub enum BinaryOpType {
 	Mul,
 	Div,
 
+	Mod,
+
 	Add,
 	Sub,
 
@@ -124,6 +126,7 @@ impl Display for BinaryOpType {
 			match self {
 				Mul => "*",
 				Div => "/",
+				Mod => "%",
 				Add => "+",
 				Sub => "-",
 				Lhs => "<<",
