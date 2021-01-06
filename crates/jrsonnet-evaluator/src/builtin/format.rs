@@ -2,6 +2,7 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
+use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -20,7 +21,7 @@ pub enum FormatError {
 	#[error("mapping keys required")]
 	MappingKeysRequired,
 	#[error("no such format field: {0}")]
-	NoSuchFormatField(Rc<str>),
+	NoSuchFormatField(IStr),
 }
 
 impl From<FormatError> for LocError {
@@ -29,7 +30,6 @@ impl From<FormatError> for LocError {
 	}
 }
 
-use std::rc::Rc;
 use FormatError::*;
 
 type ParseResult<'t, T> = std::result::Result<(T, &'t str), FormatError>;
@@ -680,7 +680,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 			}
 			Element::Code(c) => {
 				// TODO: Operate on ref
-				let f: Rc<str> = c.mkey.into();
+				let f: IStr = c.mkey.into();
 				let width = match c.width {
 					Width::Star => {
 						throw!(CannotUseStarWidthWithObject);

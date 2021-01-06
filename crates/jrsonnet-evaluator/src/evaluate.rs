@@ -3,6 +3,7 @@ use crate::{
 	ContextCreator, FuncDesc, FuncVal, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
@@ -12,7 +13,7 @@ use jrsonnet_types::ValType;
 use rustc_hash::FxHashMap;
 use std::{collections::HashMap, rc::Rc};
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
+pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr, LazyBinding) {
 	let b = b.clone();
 	if let Some(params) = &b.params {
 		let params = params.clone();
@@ -45,7 +46,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 	}
 }
 
-pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {
+pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
 	Val::Func(Rc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
@@ -57,7 +58,7 @@ pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: Lo
 pub fn evaluate_field_name(
 	context: Context,
 	field_name: &jrsonnet_parser::FieldName,
-) -> Result<Option<Rc<str>>> {
+) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jrsonnet_parser::FieldName::Dyn(expr) => {
@@ -182,7 +183,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	})
 }
 
-future_wrapper!(HashMap<Rc<str>, LazyBinding>, FutureNewBindings);
+future_wrapper!(HashMap<IStr, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 pub fn evaluate_comp<T>(
@@ -230,7 +231,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		})
 	);
 	{
-		let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 		for (n, b) in members
 			.iter()
 			.filter_map(|m| match m {
@@ -334,7 +335,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							)?)
 						})
 					);
-					let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+					let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 					for (n, b) in obj
 						.pre_locals
 						.iter()
@@ -401,7 +402,7 @@ pub fn evaluate_apply(
 	})
 }
 
-pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: Rc<str>) -> Result<Val> {
+pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: IStr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, _loc) = lexpr;
 	Ok(match &**expr {
@@ -498,7 +499,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+			let mut new_bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
 			let context_creator = context_creator!(

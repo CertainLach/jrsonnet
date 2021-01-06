@@ -9,6 +9,7 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
@@ -61,7 +62,7 @@ impl PartialEq for LazyVal {
 
 #[derive(Debug, PartialEq)]
 pub struct FuncDesc {
-	pub name: Rc<str>,
+	pub name: IStr,
 	pub ctx: Context,
 	pub params: ParamsDesc,
 	pub body: LocExpr,
@@ -72,9 +73,9 @@ pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intrinsic(Rc<str>),
+	Intrinsic(IStr),
 	/// Library functions implemented in native
-	NativeExt(Rc<str>, Rc<NativeCallback>),
+	NativeExt(IStr, Rc<NativeCallback>),
 }
 
 impl PartialEq for FuncVal {
@@ -91,7 +92,7 @@ impl FuncVal {
 	pub fn is_ident(&self) -> bool {
 		matches!(&self, Self::Intrinsic(n) if n as &str == "id")
 	}
-	pub fn name(&self) -> Rc<str> {
+	pub fn name(&self) -> IStr {
 		match self {
 			Self::Normal(normal) => normal.name.clone(),
 			Self::Intrinsic(name) => format!("std.{}", name).into(),
@@ -131,7 +132,7 @@ impl FuncVal {
 	pub fn evaluate_map(
 		&self,
 		call_ctx: Context,
-		args: &HashMap<Rc<str>, Val>,
+		args: &HashMap<IStr, Val>,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
@@ -270,7 +271,7 @@ impl From<Vec<Val>> for ArrValue {
 pub enum Val {
 	Bool(bool),
 	Null,
-	Str(Rc<str>),
+	Str(IStr),
 	Num(f64),
 	Arr(ArrValue),
 	Obj(ObjValue),
@@ -314,7 +315,7 @@ impl Val {
 		self.assert_type(context, ValType::Bool)?;
 		Ok(matches_unwrap!(self, Self::Bool(v), v))
 	}
-	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
+	pub fn try_cast_str(self, context: &'static str) -> Result<IStr> {
 		self.assert_type(context, ValType::Str)?;
 		Ok(matches_unwrap!(self, Self::Str(v), v))
 	}
@@ -334,7 +335,7 @@ impl Val {
 		}
 	}
 
-	pub fn to_string(&self) -> Result<Rc<str>> {
+	pub fn to_string(&self) -> Result<IStr> {
 		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
@@ -352,7 +353,7 @@ impl Val {
 	}
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
 		let obj = match self {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
@@ -370,7 +371,7 @@ impl Val {
 	}
 
 	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<Rc<str>>> {
+	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
 		let arr = match self {
 			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
@@ -382,7 +383,7 @@ impl Val {
 		Ok(out)
 	}
 
-	pub fn manifest(&self, ty: &ManifestFormat) -> Result<Rc<str>> {
+	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
@@ -419,7 +420,7 @@ impl Val {
 	}
 
 	/// For manifestification
-	pub fn to_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_json(&self, padding: usize) -> Result<IStr> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -471,7 +472,7 @@ impl Val {
 			.try_cast_str("to json")?)
 		})
 	}
-	pub fn to_yaml(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?

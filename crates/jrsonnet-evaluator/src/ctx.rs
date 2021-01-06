@@ -2,6 +2,7 @@ use crate::{
 	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
+use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasherDefault;
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
@@ -18,7 +19,7 @@ struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: LayeredHashMap<Rc<str>, LazyVal>,
+	bindings: LayeredHashMap<IStr, LazyVal>,
 }
 impl Debug for ContextInternals {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -57,7 +58,7 @@ impl Context {
 		}))
 	}
 
-	pub fn binding(&self, name: Rc<str>) -> Result<LazyVal> {
+	pub fn binding(&self, name: IStr) -> Result<LazyVal> {
 		Ok(self
 			.0
 			.bindings
@@ -72,7 +73,7 @@ impl Context {
 		ctx.unwrap()
 	}
 
-	pub fn with_var(self, name: Rc<str>, value: Val) -> Self {
+	pub fn with_var(self, name: IStr, value: Val) -> Self {
 		let mut new_bindings =
 			FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new_bindings.insert(name, resolved_lazy_val!(value));
@@ -81,7 +82,7 @@ impl Context {
 
 	pub fn extend(
 		self,
-		new_bindings: FxHashMap<Rc<str>, LazyVal>,
+		new_bindings: FxHashMap<IStr, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -123,7 +124,7 @@ impl Context {
 	}
 	pub fn extend_unbound(
 		self,
-		new_bindings: HashMap<Rc<str>, LazyBinding>,
+		new_bindings: HashMap<IStr, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,

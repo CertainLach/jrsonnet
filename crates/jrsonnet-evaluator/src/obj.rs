@@ -1,5 +1,6 @@
 use crate::{evaluate_add_op, LazyBinding, Result, Val};
 use indexmap::IndexMap;
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -12,11 +13,11 @@ pub struct ObjMember {
 }
 
 // Field => This
-type CacheKey = (Rc<str>, usize);
+type CacheKey = (IStr, usize);
 #[derive(Debug)]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
-	this_entries: Rc<HashMap<Rc<str>, ObjMember>>,
+	this_entries: Rc<HashMap<IStr, ObjMember>>,
 	value_cache: RefCell<HashMap<CacheKey, Option<Val>>>,
 }
 #[derive(Clone)]
@@ -33,7 +34,7 @@ impl Debug for ObjValue {
 		}
 		let mut debug = f.debug_struct("ObjValue");
 		for (name, member) in self.0.this_entries.iter() {
-			debug.field(name, member);
+			debug.field(&name, member);
 		}
 		#[cfg(feature = "unstable")]
 		{
@@ -47,7 +48,7 @@ impl Debug for ObjValue {
 }
 
 impl ObjValue {
-	pub fn new(super_obj: Option<Self>, this_entries: Rc<HashMap<Rc<str>, ObjMember>>) -> Self {
+	pub fn new(super_obj: Option<Self>, this_entries: Rc<HashMap<IStr, ObjMember>>) -> Self {
 		Self(Rc::new(ObjValueInternals {
 			super_obj,
 			this_entries,
@@ -63,7 +64,7 @@ impl ObjValue {
 			Some(v) => Self::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
 		}
 	}
-	pub fn enum_fields(&self, handler: &impl Fn(&Rc<str>, &Visibility)) {
+	pub fn enum_fields(&self, handler: &impl Fn(&IStr, &Visibility)) {
 		if let Some(s) = &self.0.super_obj {
 			s.enum_fields(handler);
 		}
@@ -71,7 +72,7 @@ impl ObjValue {
 			handler(name, &member.visibility);
 		}
 	}
-	pub fn fields_visibility(&self) -> IndexMap<Rc<str>, bool> {
+	pub fn fields_visibility(&self) -> IndexMap<IStr, bool> {
 		let out = Rc::new(RefCell::new(IndexMap::new()));
 		self.enum_fields(&|name, visibility| {
 			let mut out = out.borrow_mut();
@@ -91,7 +92,7 @@ impl ObjValue {
 		});
 		Rc::try_unwrap(out).unwrap().into_inner()
 	}
-	pub fn visible_fields(&self) -> Vec<Rc<str>> {
+	pub fn visible_fields(&self) -> Vec<IStr> {
 		let mut visible_fields: Vec<_> = self
 			.fields_visibility()
 			.into_iter()
@@ -101,10 +102,10 @@ impl ObjValue {
 		visible_fields.sort();
 		visible_fields
 	}
-	pub fn get(&self, key: Rc<str>) -> Result<Option<Val>> {
+	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		Ok(self.get_raw(key, None)?)
 	}
-	pub(crate) fn get_raw(&self, key: Rc<str>, real_this: Option<&Self>) -> Result<Option<Val>> {
+	pub(crate) fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), Rc::as_ptr(&real_this.0) as usize);
 

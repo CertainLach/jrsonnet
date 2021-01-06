@@ -10,7 +10,6 @@ use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 };
-use structdump::CodegenResult;
 
 fn main() {
 	let parsed = parse(
@@ -36,11 +35,11 @@ fn main() {
 									name: FieldName::Fixed(name),
 									..
 								})
-								if **name == *"join" || **name == *"manifestJsonEx" ||
-								**name == *"escapeStringJson" || **name == *"equals" ||
-								**name == *"base64" || **name == *"foldl" || **name == *"foldr" ||
-								**name == *"sortImpl" || **name == *"format" || **name == *"range" ||
-								**name == *"reverse" || **name == *"slice" || **name == *"mod"
+								if name == "join" || name == "manifestJsonEx" ||
+								name == "escapeStringJson" || name == "equals" ||
+								name == "base64" || name == "foldl" || name == "foldr" ||
+								name == "sortImpl" || name == "format" || name == "range" ||
+								name == "reverse" || name == "slice" || name == "mod"
 							)
 						})
 						.collect(),
@@ -52,15 +51,6 @@ fn main() {
 	} else {
 		parsed
 	};
-	{
-		let mut codegen = CodegenResult::default();
-		let code = codegen.codegen(&parsed);
-
-		let out_dir = env::var("OUT_DIR").unwrap();
-		let dest_path = Path::new(&out_dir).join("stdlib.rs");
-		let mut f = File::create(&dest_path).unwrap();
-		f.write_all(&code.as_bytes()).unwrap();
-	}
 	{
 		let out_dir = env::var("OUT_DIR").unwrap();
 		let dest_path = Path::new(&out_dir).join("stdlib.bincode");

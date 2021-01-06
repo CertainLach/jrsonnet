@@ -6,6 +6,7 @@ use crate::{
 	with_state, ArrValue, Context, FuncVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, BinaryOpType, ExprLocation};
 use jrsonnet_types::ty;
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
@@ -19,7 +20,7 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
-fn std_format(str: Rc<str>, vals: Val) -> Result<Val> {
+fn std_format(str: IStr, vals: Val) -> Result<Val> {
 	push(
 		&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
 		|| format!("std.format of {}", str),
