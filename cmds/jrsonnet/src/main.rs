@@ -43,15 +43,19 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
+	let success;
 	if let Some(size) = opts.debug.os_stack {
-		std::thread::Builder::new()
+		success = std::thread::Builder::new()
 			.stack_size(size * 1024 * 1024)
 			.spawn(|| main_catch(opts))
 			.expect("new thread spawned")
 			.join()
 			.expect("thread finished successfully");
 	} else {
-		main_catch(opts)
+		success = main_catch(opts)
+	}
+	if !success {
+		std::process::exit(1);
 	}
 }
 
@@ -71,15 +75,17 @@ impl From<LocError> for Error {
 	}
 }
 
-fn main_catch(opts: Opts) {
+fn main_catch(opts: Opts) -> bool {
 	let state = EvaluationState::default();
 	if let Err(e) = main_real(&state, opts) {
 		if let Error::Evaluation(e) = e {
-			println!("{}", state.stringify_err(&e));
+			eprintln!("{}", state.stringify_err(&e));
 		} else {
-			println!("{}", e);
+			eprintln!("{}", e);
 		}
+		return false;
 	}
+	true
 }
 
 fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
