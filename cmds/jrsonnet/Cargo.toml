@@ -17,8 +17,8 @@ jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.2" }
 jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.3.2" }
 # TODO: Fix mimalloc compile errors, and use them
 mimallocator = { version = "0.1.3", optional = true }
-thiserror = "1.0.22"
+thiserror = "1.0"
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
-rev = "821d79aac784980656f1a3be378f57cf32ea6828"
+rev = "50fb4ca63dc7e8fb8aa2914de5c8a5b4413f2c62"

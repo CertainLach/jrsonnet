@@ -17,7 +17,7 @@ dump = ["structdump", "structdump-derive"]
 peg = "0.6.3"
 unescape = "0.1.0"
 
-serde = { version = "1.0.117", features = ["derive", "rc"], optional = true }
+serde = { version = "1.0", features = ["derive", "rc"], optional = true }
 structdump = { version = "0.1.2", optional = true }
 structdump-derive = { version = "0.1.2", optional = true }
 
