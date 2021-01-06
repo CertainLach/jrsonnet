@@ -3,6 +3,7 @@ use std::fmt::Display;
 #[macro_export]
 macro_rules! ty {
 	([$inner:tt]) => {{
+		use $crate::{ComplexValType, ValType, ty};
 		static VAL: &'static ComplexValType = &ty!($inner);
 		match VAL {
 			ComplexValType::Any => ComplexValType::Simple(ValType::Arr),
@@ -10,43 +11,43 @@ macro_rules! ty {
 		}
 	}};
 	(bool) => {
-		ComplexValType::Simple(ValType::Bool)
+		$crate::ComplexValType::Simple($crate::ValType::Bool)
 	};
 	(null) => {
-		ComplexValType::Simple(ValType::Null)
+		$crate::ComplexValType::Simple($crate::ValType::Null)
 	};
 	(str) => {
-		ComplexValType::Simple(ValType::Str)
+		$crate::ComplexValType::Simple($crate::ValType::Str)
 	};
 	(char) => {
-		ComplexValType::Char
+		$crate::ComplexValType::Char
 	};
 	(num) => {
-		ComplexValType::Simple(ValType::Num)
+		$crate::ComplexValType::Simple($crate::ValType::Num)
 	};
 	(number(($min:expr)..($max:expr))) => {{
-		ComplexValType::BoundedNumber($min, $max)
+		$crate::ComplexValType::BoundedNumber($min, $max)
 	}};
 	(obj) => {
-		ComplexValType::Simple(ValType::Obj)
+		$crate::ComplexValType::Simple($crate::ValType::Obj)
 	};
 	(any) => {
-		ComplexValType::Any
+		$crate::ComplexValType::Any
 	};
 	(fn.any) => {
-		ComplexValType::Simple(ValType::Func)
+		$crate::ComplexValType::Simple($crate::ValType::Func)
 	};
 	(($($a:tt) |+)) => {{
-		static CONTENTS: &'static [ComplexValType] = &[
+		static CONTENTS: &'static [$crate::ComplexValType] = &[
 			$(ty!($a)),+
 		];
-		ComplexValType::UnionRef(CONTENTS)
+		$crate::ComplexValType::UnionRef(CONTENTS)
 	}};
 	(($($a:tt) &+)) => {{
-		static CONTENTS: &'static [ComplexValType] = &[
+		static CONTENTS: &'static [$crate::ComplexValType] = &[
 			$(ty!($a)),+
 		];
-		ComplexValType::SumRef(CONTENTS)
+		$crate::ComplexValType::SumRef(CONTENTS)
 	}};
 }
 

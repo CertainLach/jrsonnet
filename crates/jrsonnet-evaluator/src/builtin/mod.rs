@@ -7,8 +7,8 @@ use crate::{
 };
 use format::{format_arr, format_obj};
 use jrsonnet_parser::{ArgsDesc, BinaryOpType, ExprLocation};
-use jrsonnet_types::{ty, ComplexValType, ValType};
-use std::{collections::HashMap, path::PathBuf, rc::Rc};
+use jrsonnet_types::ty;
+use std::{path::PathBuf, rc::Rc};
 
 pub mod stdlib;
 pub use stdlib::*;
@@ -31,32 +31,6 @@ fn std_format(str: Rc<str>, vals: Val) -> Result<Val> {
 			})
 		},
 	)
-}
-
-thread_local! {
-	pub static INTRINSICS: HashMap<&'static str, fn(Context, &Option<ExprLocation>, &ArgsDesc) -> Result<Val>> = {
-		let mut out: HashMap<&'static str, _> = HashMap::new();
-		out.insert("length", intrinsic_length);
-		out
-	};
-}
-
-fn intrinsic_length(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
-	Ok(parse_args!(context, "length", args, 1, [
-		0, x: ty!((str | obj | [any]));
-	], {
-		Ok(match x {
-			Val::Str(n) => Val::Num(n.chars().count() as f64),
-			Val::Arr(a) => Val::Num(a.len() as f64),
-			Val::Obj(o) => Val::Num(
-				o.fields_visibility()
-					.into_iter()
-					.filter(|(_k, v)| *v)
-					.count() as f64,
-			),
-			_ => unreachable!(),
-		})
-	})?)
 }
 
 #[allow(clippy::cognitive_complexity)]
