@@ -555,10 +555,18 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			)?;
 			if assertion_result {
 				evaluate(context, returned)?
-			} else if let Some(msg) = msg {
-				throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
 			} else {
-				throw!(AssertionFailed(Val::Null.to_string()?));
+				push(
+					&value.1,
+					|| "assertion failure".to_owned(),
+					|| {
+						if let Some(msg) = msg {
+							throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
+						} else {
+							throw!(AssertionFailed(Val::Null.to_string()?));
+						}
+					},
+				)?
 			}
 		}
 		ErrorStmt(e) => push(
