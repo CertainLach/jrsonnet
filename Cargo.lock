@@ -167,6 +167,7 @@ dependencies = [
  "bincode",
  "closure",
  "indexmap",
+ "jrsonnet-interner",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
  "jrsonnet-types",
@@ -175,19 +176,25 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
- "structdump",
  "thiserror",
+]
+
+[[package]]
+name = "jrsonnet-interner"
+version = "0.3.3"
+dependencies = [
+ "rustc-hash",
+ "serde",
 ]
 
 [[package]]
 name = "jrsonnet-parser"
 version = "0.3.3"
 dependencies = [
+ "jrsonnet-interner",
  "jrsonnet-stdlib",
  "peg",
  "serde",
- "structdump",
- "structdump-derive",
  "unescape",
 ]
 
@@ -197,13 +204,14 @@ version = "0.3.3"
 
 [[package]]
 name = "jrsonnet-types"
-version = "0.3.2"
+version = "0.3.3"
 
 [[package]]
 name = "jsonnet"
 version = "0.3.3"
 dependencies = [
  "jrsonnet-evaluator",
+ "jrsonnet-interner",
  "jrsonnet-parser",
 ]
 
@@ -375,23 +383,6 @@ name = "strsim"
 version = "0.10.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "73473c0e59e6d5812c5dfe2a064a6444949f089e20eec9a2e5506596494e4623"
-
-[[package]]
-name = "structdump"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2e16ec33a0342fdb67d13913b4ffae6527ebccfa04b5d7da174bdc7a31db29b8"
-
-[[package]]
-name = "structdump-derive"
-version = "0.1.2"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "06c337fdc077e02ccbfcc62af0090564a4af342975c3b7be09705efab90c1888"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
-]
 
 [[package]]
 name = "syn"
