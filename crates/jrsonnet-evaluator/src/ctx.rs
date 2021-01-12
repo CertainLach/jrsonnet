@@ -19,7 +19,7 @@ struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: LayeredHashMap<IStr, LazyVal>,
+	bindings: LayeredHashMap<LazyVal>,
 }
 impl Debug for ContextInternals {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
