@@ -74,7 +74,7 @@ fn manifest_json_ex_buf(
 			} else if mtype == ManifestType::Std {
 				buf.push_str("\n\n");
 				buf.push_str(cur_padding);
-			} else if mtype == ManifestType::ToString {
+			} else if mtype == ManifestType::ToString || mtype == ManifestType::Manifest {
 				buf.push(' ');
 			}
 			buf.push(']');
@@ -112,7 +112,7 @@ fn manifest_json_ex_buf(
 			} else if mtype == ManifestType::Std {
 				buf.push_str("\n\n");
 				buf.push_str(cur_padding);
-			} else if mtype == ManifestType::ToString {
+			} else if mtype == ManifestType::ToString || mtype == ManifestType::Manifest {
 				buf.push(' ');
 			}
 			buf.push('}');
