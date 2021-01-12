@@ -110,9 +110,12 @@ pub enum ComplexValType {
 	Char,
 	Simple(ValType),
 	BoundedNumber(Option<f64>, Option<f64>),
+	Array(Box<ComplexValType>),
 	ArrayRef(&'static ComplexValType),
 	ObjectRef(&'static [(&'static str, ComplexValType)]),
+	Union(Vec<ComplexValType>),
 	UnionRef(&'static [ComplexValType]),
+	Sum(Vec<ComplexValType>),
 	SumRef(&'static [ComplexValType]),
 }
 impl From<ValType> for ComplexValType {
@@ -128,7 +131,7 @@ fn write_union(
 ) -> std::fmt::Result {
 	for (i, v) in union.iter().enumerate() {
 		let should_add_braces = match v {
-			ComplexValType::UnionRef(_) if !is_union => true,
+			ComplexValType::UnionRef(_) | ComplexValType::Union(_) if !is_union => true,
 			_ => false,
 		};
 		if i != 0 {
@@ -145,6 +148,15 @@ fn write_union(
 	Ok(())
 }
 
+fn print_array(a: &ComplexValType, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	if *a == ComplexValType::Any {
+		write!(f, "array")?
+	} else {
+		write!(f, "Array<{}>", a)?
+	}
+	Ok(())
+}
+
 impl Display for ComplexValType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
@@ -157,13 +169,8 @@ impl Display for ComplexValType {
 				a.map(|e| e.to_string()).unwrap_or_else(|| "".into()),
 				b.map(|e| e.to_string()).unwrap_or_else(|| "".into())
 			)?,
-			ComplexValType::ArrayRef(a) => {
-				if **a == ComplexValType::Any {
-					write!(f, "array")?
-				} else {
-					write!(f, "Array<{}>", a)?
-				}
-			}
+			ComplexValType::ArrayRef(a) => print_array(a, f)?,
+			ComplexValType::Array(a) => print_array(a, f)?,
 			ComplexValType::ObjectRef(fields) => {
 				write!(f, "{{")?;
 				for (i, (k, v)) in fields.iter().enumerate() {
@@ -174,9 +181,93 @@ impl Display for ComplexValType {
 				}
 				write!(f, "}}")?;
 			}
+			ComplexValType::Union(v) => write_union(f, true, v)?,
 			ComplexValType::UnionRef(v) => write_union(f, true, v)?,
+			ComplexValType::Sum(v) => write_union(f, false, v)?,
 			ComplexValType::SumRef(v) => write_union(f, false, v)?,
 		};
 		Ok(())
+	}
+}
+
+peg::parser!{
+pub grammar parser() for str {
+	rule number() -> f64
+		= n:$(['0'..='9']+) { n.parse().unwrap() }
+
+	rule any_ty() -> ComplexValType = "any" { ComplexValType::Any }
+	rule char_ty() -> ComplexValType = "character" { ComplexValType::Char }
+	rule bool_ty() -> ComplexValType = "boolean" { ComplexValType::Simple(ValType::Bool) }
+	rule null_ty() -> ComplexValType = "null" { ComplexValType::Simple(ValType::Null) }
+	rule str_ty() -> ComplexValType = "string" { ComplexValType::Simple(ValType::Str) }
+	rule num_ty() -> ComplexValType = "number" { ComplexValType::Simple(ValType::Num) }
+	rule simple_array_ty() -> ComplexValType = "array" { ComplexValType::Simple(ValType::Arr) }
+	rule simple_object_ty() -> ComplexValType = "object" { ComplexValType::Simple(ValType::Obj) }
+	rule simple_function_ty() -> ComplexValType = "function" { ComplexValType::Simple(ValType::Func) }
+	
+	rule array_ty() -> ComplexValType
+		= "Array<" t:ty() ">" { ComplexValType::Array(Box::new(t)) }
+
+	rule bounded_number_ty() -> ComplexValType
+		= "BoundedNumber<" a:number() ", " b:number() ">" { ComplexValType::BoundedNumber(Some(a), Some(b)) }
+
+	rule ty_basic() -> ComplexValType
+		= any_ty()
+		/ char_ty()
+		/ bool_ty()
+		/ null_ty()
+		/ str_ty()
+		/ num_ty()
+		/ simple_array_ty()
+		/ simple_object_ty()
+		/ simple_function_ty()
+		/ array_ty()
+		/ bounded_number_ty()
+
+	pub rule ty() -> ComplexValType
+		= precedence! {
+			a:(@) " | " b:@ {
+				match a {
+					ComplexValType::Union(mut a) => {
+						a.push(b);
+						ComplexValType::Union(a)
+					}
+					_ => ComplexValType::Union(vec![a, b]),
+				}
+			}
+			--
+			a:(@) " & " b:@ {
+				match a {
+					ComplexValType::Sum(mut a) => {
+						a.push(b);
+						ComplexValType::Sum(a)
+					}
+					_ => ComplexValType::Sum(vec![a, b]),
+				}
+			}
+			--
+			"(" t:ty() ")" { t }
+			t:ty_basic() { t }
+		}
+}
+}
+
+#[cfg(test)]
+pub mod tests {
+	use super::parser;
+
+	#[test]
+	fn precedence() {
+		assert_eq!(parser::ty("(any & any) | (any | any) & any").unwrap().to_string(), "any & any | (any | any) & any");
+	}
+
+	#[test]
+	fn array() {
+		assert_eq!(parser::ty("Array<any>").unwrap().to_string(), "array");
+		assert_eq!(parser::ty("Array<number>").unwrap().to_string(), "Array<number>");
+	}
+	#[test]
+	fn bounded_number() {
+		assert_eq!(parser::ty("BoundedNumber<1, 2>").unwrap().to_string(), "BoundedNumber<1, 2>");
 	}
 }

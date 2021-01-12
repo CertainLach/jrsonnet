@@ -158,6 +158,20 @@ impl CheckType for ComplexValType {
 					Err(TypeError::ExpectedGot(self.clone(), value.value_type()).into())
 				}
 			}
+			ComplexValType::Array(elem_type) => match value {
+				Val::Arr(a) => {
+					for (i, item) in a.iter().enumerate() {
+						push_type(
+							&None,
+							|| format!("array index {}", i),
+							|| ValuePathItem::Index(i as u64),
+							|| Ok(elem_type.check(&item.clone()?)?),
+						)?;
+					}
+					Ok(())
+				}
+				v => return Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
+			},
 			ComplexValType::ArrayRef(elem_type) => match value {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
@@ -192,6 +206,21 @@ impl CheckType for ComplexValType {
 				}
 				v => return Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
+			ComplexValType::Union(types) => {
+				let mut errors = Vec::new();
+				for ty in types.iter() {
+					match ty.check(value) {
+						Ok(()) => {
+							return Ok(());
+						}
+						Err(e) => match e.error() {
+							Error::TypeError(e) => errors.push(e.clone()),
+							_ => return Err(e),
+						},
+					}
+				}
+				return Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into());
+			}
 			ComplexValType::UnionRef(types) => {
 				let mut errors = Vec::new();
 				for ty in types.iter() {
@@ -206,6 +235,12 @@ impl CheckType for ComplexValType {
 					}
 				}
 				return Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into());
+			}
+			ComplexValType::Sum(types) => {
+				for ty in types.iter() {
+					ty.check(value)?
+				}
+				Ok(())
 			}
 			ComplexValType::SumRef(types) => {
 				for ty in types.iter() {
