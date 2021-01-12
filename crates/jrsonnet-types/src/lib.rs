@@ -69,7 +69,10 @@ fn test() {
 		"string & number | object & null"
 	);
 	assert_eq!(format!("{}", ty!((string | array))), "string | array");
-	assert_eq!(format!("{}", ty!(((string & number) | array))), "string & number | array");
+	assert_eq!(
+		format!("{}", ty!(((string & number) | array))),
+		"string & number | array"
+	);
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -190,7 +193,7 @@ impl Display for ComplexValType {
 	}
 }
 
-peg::parser!{
+peg::parser! {
 pub grammar parser() for str {
 	rule number() -> f64
 		= n:$(['0'..='9']+) { n.parse().unwrap() }
@@ -204,7 +207,7 @@ pub grammar parser() for str {
 	rule simple_array_ty() -> ComplexValType = "array" { ComplexValType::Simple(ValType::Arr) }
 	rule simple_object_ty() -> ComplexValType = "object" { ComplexValType::Simple(ValType::Obj) }
 	rule simple_function_ty() -> ComplexValType = "function" { ComplexValType::Simple(ValType::Func) }
-	
+
 	rule array_ty() -> ComplexValType
 		= "Array<" t:ty() ">" { ComplexValType::Array(Box::new(t)) }
 
@@ -258,16 +261,27 @@ pub mod tests {
 
 	#[test]
 	fn precedence() {
-		assert_eq!(parser::ty("(any & any) | (any | any) & any").unwrap().to_string(), "any & any | (any | any) & any");
+		assert_eq!(
+			parser::ty("(any & any) | (any | any) & any")
+				.unwrap()
+				.to_string(),
+			"any & any | (any | any) & any"
+		);
 	}
 
 	#[test]
 	fn array() {
 		assert_eq!(parser::ty("Array<any>").unwrap().to_string(), "array");
-		assert_eq!(parser::ty("Array<number>").unwrap().to_string(), "Array<number>");
+		assert_eq!(
+			parser::ty("Array<number>").unwrap().to_string(),
+			"Array<number>"
+		);
 	}
 	#[test]
 	fn bounded_number() {
-		assert_eq!(parser::ty("BoundedNumber<1, 2>").unwrap().to_string(), "BoundedNumber<1, 2>");
+		assert_eq!(
+			parser::ty("BoundedNumber<1, 2>").unwrap().to_string(),
+			"BoundedNumber<1, 2>"
+		);
 	}
 }

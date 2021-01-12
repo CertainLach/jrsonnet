@@ -143,7 +143,7 @@ impl CheckType for ComplexValType {
 			ComplexValType::Any => Ok(()),
 			ComplexValType::Simple(s) => s.check(value),
 			ComplexValType::Char => match value {
-				Val::Str(s) if s.chars().count() == 1 => Ok(()),
+				Val::Str(s) if s.len() == 1 || s.chars().count() == 1 => Ok(()),
 				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
 			ComplexValType::BoundedNumber(from, to) => {

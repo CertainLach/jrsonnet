@@ -453,7 +453,6 @@ fn builtin_base64(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-
 fn builtin_join(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "join", args, 2, [
 		0, sep: ty!((string | array));
@@ -559,7 +558,11 @@ fn builtin_id(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) ->
 }
 
 // faster
-fn builtin_str_replace(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_str_replace(
+	context: Context,
+	_loc: &Option<ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
 	parse_args!(context, "strReplace", args, 3, [
 		0, str: ty!(string) => Val::Str;
 		1, from: ty!(string) => Val::Str;
