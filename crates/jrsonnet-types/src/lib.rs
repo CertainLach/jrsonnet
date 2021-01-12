@@ -68,9 +68,10 @@ fn test() {
 	);
 	assert_eq!(
 		format!("{}", ty!(((str & num) | (obj & null)))),
-		"((str & num) | (obj & null))"
+		"string & number | object & null"
 	);
-	assert_eq!(format!("{}", ty!((str | [any]))), "(str | [any])");
+	assert_eq!(format!("{}", ty!((str | [any]))), "string | array");
+	assert_eq!(format!("{}", ty!(((str & num) | [any]))), "string & number | array");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
@@ -122,25 +123,27 @@ impl From<ValType> for ComplexValType {
 	}
 }
 
-impl ComplexValType {
-	fn needs_brackets(&self) -> bool {
-		matches!(self, ComplexValType::UnionRef(_) | ComplexValType::SumRef(_))
-	}
-}
-
 fn write_union(
 	f: &mut std::fmt::Formatter<'_>,
-	ch: char,
+	is_union: bool,
 	union: &[ComplexValType],
 ) -> std::fmt::Result {
-	write!(f, "(")?;
 	for (i, v) in union.iter().enumerate() {
+		let should_add_braces = match v {
+			ComplexValType::UnionRef(_) if !is_union => true,
+			_ => false,
+		};
 		if i != 0 {
-			write!(f, " {} ", ch)?;
+			write!(f, " {} ", if is_union { '|' } else { '&' })?;
+		}
+		if should_add_braces {
+			write!(f, "(")?;
 		}
 		write!(f, "{}", v)?;
+		if should_add_braces {
+			write!(f, ")")?;
+		}
 	}
-	write!(f, ")")?;
 	Ok(())
 }
 
@@ -152,19 +155,16 @@ impl Display for ComplexValType {
 			ComplexValType::Char => write!(f, "char")?,
 			ComplexValType::BoundedNumber(a, b) => write!(
 				f,
-				"number({}..{})",
+				"BoundedNumber<{}, {}>",
 				a.map(|e| e.to_string()).unwrap_or_else(|| "".into()),
 				b.map(|e| e.to_string()).unwrap_or_else(|| "".into())
 			)?,
 			ComplexValType::ArrayRef(a) => {
-				if a.needs_brackets() {
-					write!(f, "(")?;
+				if **a == ComplexValType::Any {
+					write!(f, "array")?
+				} else {
+					write!(f, "Array<{}>", a)?
 				}
-				write!(f, "{}", a)?;
-				if a.needs_brackets() {
-					write!(f, ")")?;
-				}
-				write!(f, "[]")?;
 			}
 			ComplexValType::ObjectRef(fields) => {
 				write!(f, "{{")?;
@@ -176,8 +176,8 @@ impl Display for ComplexValType {
 				}
 				write!(f, "}}")?;
 			}
-			ComplexValType::UnionRef(v) => write_union(f, '|', v)?,
-			ComplexValType::SumRef(v) => write_union(f, '&', v)?,
+			ComplexValType::UnionRef(v) => write_union(f, true, v)?,
+			ComplexValType::SumRef(v) => write_union(f, false, v)?,
 		};
 		Ok(())
 	}
