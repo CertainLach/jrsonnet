@@ -139,6 +139,10 @@ impl ObjValue {
 			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
 			.evaluate()?)
 	}
+
+	pub fn ptr_eq(a: &ObjValue, b: &ObjValue) -> bool {
+		Rc::ptr_eq(&a.0, &b.0)
+	}
 }
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {

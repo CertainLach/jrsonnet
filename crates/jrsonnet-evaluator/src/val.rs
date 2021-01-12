@@ -253,6 +253,14 @@ impl ArrValue {
 			}
 		}
 	}
+
+	pub fn ptr_eq(a: &ArrValue, b: &ArrValue) -> bool {
+		match (a, b) {
+			(ArrValue::Lazy(a), ArrValue::Lazy(b)) => Rc::ptr_eq(a, b),
+			(ArrValue::Eager(a), ArrValue::Eager(b)) => Rc::ptr_eq(a, b),
+			_ => false,
+		}
+	}
 }
 
 impl From<Vec<LazyVal>> for ArrValue {
@@ -533,8 +541,10 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		return Ok(false);
 	}
 	match (val_a, val_b) {
-		// Cant test for ptr equality, because all fields needs to be evaluated
 		(Val::Arr(a), Val::Arr(b)) => {
+			if ArrValue::ptr_eq(a, b) {
+				return Ok(true);
+			}
 			if a.len() != b.len() {
 				return Ok(false);
 			}
@@ -546,6 +556,9 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			Ok(true)
 		}
 		(Val::Obj(a), Val::Obj(b)) => {
+			if ObjValue::ptr_eq(a, b) {
+				return Ok(true);
+			}
 			let fields = a.visible_fields();
 			if fields != b.visible_fields() {
 				return Ok(false);
