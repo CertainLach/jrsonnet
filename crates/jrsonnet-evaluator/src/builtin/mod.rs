@@ -79,7 +79,7 @@ thread_local! {
 
 fn builtin_length(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "length", args, 1, [
-		0, x: ty!((str | obj | [any]));
+		0, x: ty!((string | object | array));
 	], {
 		Ok(match x {
 			Val::Str(n) => Val::Num(n.chars().count() as f64),
@@ -109,8 +109,8 @@ fn builtin_make_array(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "makeArray", args, 2, [
-		0, sz: ty!(number((Some(0.0))..(None))) => Val::Num;
-		1, func: ty!(fn.any) => Val::Func;
+		0, sz: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
+		1, func: ty!(function) => Val::Func;
 	], {
 		let mut out = Vec::with_capacity(sz as usize);
 		for i in 0..sz as usize {
@@ -141,8 +141,8 @@ fn builtin_object_fields_ex(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "objectFieldsEx", args, 2, [
-		0, obj: ty!(obj) => Val::Obj;
-		1, inc_hidden: ty!(bool) => Val::Bool;
+		0, obj: ty!(object) => Val::Obj;
+		1, inc_hidden: ty!(boolean) => Val::Bool;
 	], {
 		let mut out = obj.fields_visibility()
 			.into_iter()
@@ -160,9 +160,9 @@ fn builtin_object_has_ex(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "objectHasEx", args, 3, [
-		0, obj: ty!(obj) => Val::Obj;
-		1, f: ty!(str) => Val::Str;
-		2, inc_hidden: ty!(bool) => Val::Bool;
+		0, obj: ty!(object) => Val::Obj;
+		1, f: ty!(string) => Val::Str;
+		2, inc_hidden: ty!(boolean) => Val::Bool;
 	], {
 		Ok(Val::Bool(
 			obj.fields_visibility()
@@ -176,10 +176,10 @@ fn builtin_object_has_ex(
 // faster
 fn builtin_slice(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "slice", args, 4, [
-		0, indexable: ty!((str | [any]));
-		1, index: ty!((num | null));
-		2, end: ty!((num | null));
-		3, step: ty!((num | null));
+		0, indexable: ty!((string | array));
+		1, index: ty!((number | null));
+		2, end: ty!((number | null));
+		3, step: ty!((number | null));
 	], {
 		let index = match index {
 			Val::Num(v) => v as usize,
@@ -238,8 +238,8 @@ fn builtin_equals(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 
 fn builtin_modulo(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "modulo", args, 2, [
-		0, a: ty!(num) => Val::Num;
-		1, b: ty!(num) => Val::Num;
+		0, a: ty!(number) => Val::Num;
+		1, b: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(a % b))
 	})
@@ -247,7 +247,7 @@ fn builtin_modulo(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 
 fn builtin_mod(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "mod", args, 2, [
-		0, a: ty!((num | str));
+		0, a: ty!((number | string));
 		1, b: ty!(any);
 	], {
 		match (a, b) {
@@ -260,7 +260,7 @@ fn builtin_mod(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 
 fn builtin_floor(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "floor", args, 1, [
-		0, x: ty!(num) => Val::Num;
+		0, x: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.floor()))
 	})
@@ -268,7 +268,7 @@ fn builtin_floor(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 
 fn builtin_log(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "log", args, 1, [
-		0, n: ty!(num) => Val::Num;
+		0, n: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(n.ln()))
 	})
@@ -276,8 +276,8 @@ fn builtin_log(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 
 fn builtin_pow(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "pow", args, 2, [
-		0, x: ty!(num) => Val::Num;
-		1, n: ty!(num) => Val::Num;
+		0, x: ty!(number) => Val::Num;
+		1, n: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.powf(n)))
 	})
@@ -285,7 +285,7 @@ fn builtin_pow(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 
 fn builtin_ext_var(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "extVar", args, 1, [
-		0, x: ty!(str) => Val::Str;
+		0, x: ty!(string) => Val::Str;
 	], {
 		Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or(UndefinedExternalVariable(x))?)
 	})
@@ -293,7 +293,7 @@ fn builtin_ext_var(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDes
 
 fn builtin_native(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "native", args, 1, [
-		0, x: ty!(str) => Val::Str;
+		0, x: ty!(string) => Val::Str;
 	], {
 		Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Rc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or(UndefinedExternalFunction(x))?)
 	})
@@ -301,8 +301,8 @@ fn builtin_native(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 
 fn builtin_filter(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "filter", args, 2, [
-		0, func: ty!(fn.any) => Val::Func;
-		1, arr: ty!([any]) => Val::Arr;
+		0, func: ty!(function) => Val::Func;
+		1, arr: ty!(array) => Val::Arr;
 	], {
 		let mut out = Vec::new();
 		for item in arr.iter() {
@@ -319,8 +319,8 @@ fn builtin_filter(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 
 fn builtin_foldl(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "foldl", args, 3, [
-		0, func: ty!(fn.any) => Val::Func;
-		1, arr: ty!([any]) => Val::Arr;
+		0, func: ty!(function) => Val::Func;
+		1, arr: ty!(array) => Val::Arr;
 		2, init: ty!(any);
 	], {
 		let mut acc = init;
@@ -333,8 +333,8 @@ fn builtin_foldl(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 
 fn builtin_foldr(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "foldr", args, 3, [
-		0, func: ty!(fn.any) => Val::Func;
-		1, arr: ty!([any]) => Val::Arr;
+		0, func: ty!(function) => Val::Func;
+		1, arr: ty!(array) => Val::Arr;
 		2, init: ty!(any);
 	], {
 		let mut acc = init;
@@ -352,8 +352,8 @@ fn builtin_sort_impl(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "sort", args, 2, [
-		0, arr: ty!([any]) => Val::Arr;
-		1, keyF: ty!(fn.any) => Val::Func;
+		0, arr: ty!(array) => Val::Arr;
+		1, keyF: ty!(function) => Val::Func;
 	], {
 		if arr.len() <= 1 {
 			return Ok(Val::Arr(arr))
@@ -365,7 +365,7 @@ fn builtin_sort_impl(
 // faster
 fn builtin_format(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "format", args, 2, [
-		0, str: ty!(str) => Val::Str;
+		0, str: ty!(string) => Val::Str;
 		1, vals: ty!(any)
 	], {
 		std_format(str, vals)
@@ -374,8 +374,8 @@ fn builtin_format(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 
 fn builtin_range(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "range", args, 2, [
-		0, from: ty!(num) => Val::Num;
-		1, to: ty!(num) => Val::Num;
+		0, from: ty!(number) => Val::Num;
+		1, to: ty!(number) => Val::Num;
 	], {
 		let mut out = Vec::with_capacity((1+to as usize-from as usize).max(0));
 		for i in from as usize..=to as usize {
@@ -387,7 +387,7 @@ fn builtin_range(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 
 fn builtin_char(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "char", args, 1, [
-		0, n: ty!(num) => Val::Num;
+		0, n: ty!(number) => Val::Num;
 	], {
 		let mut out = String::new();
 		out.push(std::char::from_u32(n as u32).ok_or_else(||
@@ -403,7 +403,7 @@ fn builtin_encode_utf8(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "encodeUTF8", args, 1, [
-		0, str: ty!(str) => Val::Str;
+		0, str: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Arr((str.bytes().map(|b| Val::Num(b as f64)).collect::<Vec<Val>>()).into()))
 	})
@@ -411,7 +411,7 @@ fn builtin_encode_utf8(
 
 fn builtin_md5(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "md5", args, 1, [
-		0, str: ty!(str) => Val::Str;
+		0, str: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Str(format!("{:x}", md5::compute(&str.as_bytes())).into()))
 	})
@@ -419,7 +419,7 @@ fn builtin_md5(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 
 fn builtin_trace(context: Context, loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "trace", args, 2, [
-		0, str: ty!(str) => Val::Str;
+		0, str: ty!(string) => Val::Str;
 		1, rest: ty!(any);
 	], {
 		eprint!("TRACE:");
@@ -436,7 +436,7 @@ fn builtin_trace(context: Context, loc: &Option<ExprLocation>, args: &ArgsDesc) 
 
 fn builtin_base64(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "base64", args, 1, [
-		0, input: ty!((str | [num]));
+		0, input: ty!((string | (Array<number>)));
 	], {
 		Ok(Val::Str(match input {
 			Val::Str(s) => {
@@ -452,10 +452,11 @@ fn builtin_base64(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
+
 fn builtin_join(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "join", args, 2, [
-		0, sep: ty!((str | [any]));
-		1, arr: ty!([any]) => Val::Arr;
+		0, sep: ty!((string | array));
+		1, arr: ty!(array) => Val::Arr;
 	], {
 		Ok(match sep {
 			Val::Arr(joiner_items) => {
@@ -516,7 +517,7 @@ fn builtin_escape_string_json(
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "escapeStringJson", args, 1, [
-		0, str_: ty!(str) => Val::Str;
+		0, str_: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Str(escape_string_json(&str_).into()))
 	})
@@ -530,7 +531,7 @@ fn builtin_manifest_json_ex(
 ) -> Result<Val> {
 	parse_args!(context, "manifestJsonEx", args, 2, [
 		0, value: ty!(any);
-		1, indent: ty!(str) => Val::Str;
+		1, indent: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Str(manifest_json_ex(&value, &ManifestJsonOptions {
 			padding: &indent,
@@ -542,7 +543,7 @@ fn builtin_manifest_json_ex(
 // faster
 fn builtin_reverse(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "reverse", args, 1, [
-		0, value: ty!([any]) => Val::Arr;
+		0, value: ty!(array) => Val::Arr;
 	], {
 		Ok(Val::Arr(value.reversed()))
 	})

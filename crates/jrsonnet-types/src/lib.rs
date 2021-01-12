@@ -2,39 +2,37 @@ use std::fmt::Display;
 
 #[macro_export]
 macro_rules! ty {
-	([$inner:tt]) => {{
-		use $crate::{ComplexValType, ValType, ty};
-		static VAL: &'static ComplexValType = &ty!($inner);
-		match VAL {
-			ComplexValType::Any => ComplexValType::Simple(ValType::Arr),
-			_ => ComplexValType::ArrayRef(&VAL),
-		}
+	((Array<number>)) => {{
+		$crate::ComplexValType::ArrayRef(&$crate::ComplexValType::Simple($crate::ValType::Num))
 	}};
-	(bool) => {
+	(array) => {
+		$crate::ComplexValType::Simple($crate::ValType::Arr)
+	};
+	(boolean) => {
 		$crate::ComplexValType::Simple($crate::ValType::Bool)
 	};
 	(null) => {
 		$crate::ComplexValType::Simple($crate::ValType::Null)
 	};
-	(str) => {
+	(string) => {
 		$crate::ComplexValType::Simple($crate::ValType::Str)
 	};
 	(char) => {
 		$crate::ComplexValType::Char
 	};
-	(num) => {
+	(number) => {
 		$crate::ComplexValType::Simple($crate::ValType::Num)
 	};
-	(number(($min:expr)..($max:expr))) => {{
+	(BoundedNumber<($min:expr), ($max:expr)>) => {{
 		$crate::ComplexValType::BoundedNumber($min, $max)
 	}};
-	(obj) => {
+	(object) => {
 		$crate::ComplexValType::Simple($crate::ValType::Obj)
 	};
 	(any) => {
 		$crate::ComplexValType::Any
 	};
-	(fn.any) => {
+	(function) => {
 		$crate::ComplexValType::Simple($crate::ValType::Func)
 	};
 	(($($a:tt) |+)) => {{
@@ -54,24 +52,24 @@ macro_rules! ty {
 #[test]
 fn test() {
 	assert_eq!(
-		ty!([num]),
+		ty!((Array<number>)),
 		ComplexValType::ArrayRef(&ComplexValType::Simple(ValType::Num))
 	);
-	assert_eq!(ty!([any]), ComplexValType::Simple(ValType::Arr));
+	assert_eq!(ty!(array), ComplexValType::Simple(ValType::Arr));
 	assert_eq!(ty!(any), ComplexValType::Any);
 	assert_eq!(
-		ty!((str | num)),
+		ty!((string | number)),
 		ComplexValType::UnionRef(&[
 			ComplexValType::Simple(ValType::Str),
 			ComplexValType::Simple(ValType::Num)
 		])
 	);
 	assert_eq!(
-		format!("{}", ty!(((str & num) | (obj & null)))),
+		format!("{}", ty!(((string & number) | (object & null)))),
 		"string & number | object & null"
 	);
-	assert_eq!(format!("{}", ty!((str | [any]))), "string | array");
-	assert_eq!(format!("{}", ty!(((str & num) | [any]))), "string & number | array");
+	assert_eq!(format!("{}", ty!((string | array))), "string | array");
+	assert_eq!(format!("{}", ty!(((string & number) | array))), "string & number | array");
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
