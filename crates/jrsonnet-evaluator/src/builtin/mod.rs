@@ -73,6 +73,7 @@ thread_local! {
 			("manifestJsonEx".into(), builtin_manifest_json_ex),
 			("reverse".into(), builtin_reverse),
 			("id".into(), builtin_id),
+			("strReplace".into(), builtin_str_replace),
 		].iter().cloned().collect()
 	};
 }
@@ -131,7 +132,7 @@ fn builtin_codepoint(
 	parse_args!(context, "codepoint", args, 1, [
 		0, str: ty!(char) => Val::Str;
 	], {
-		Ok(Val::Num(str.chars().take(1).next().unwrap() as u32 as f64))
+		Ok(Val::Num(str.chars().next().unwrap() as u32 as f64))
 	})
 }
 
@@ -554,6 +555,28 @@ fn builtin_id(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) ->
 		0, v: ty!(any);
 	], {
 		Ok(v)
+	})
+}
+
+// faster
+fn builtin_str_replace(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "strReplace", args, 3, [
+		0, str: ty!(string) => Val::Str;
+		1, from: ty!(string) => Val::Str;
+		2, to: ty!(string) => Val::Str;
+	], {
+		let mut out = String::new();
+		let mut last_idx = 0;
+		while let Some(idx) = (&str[last_idx..]).find(&from as &str) {
+			out.push_str(&str[last_idx..last_idx+idx]);
+			out.push_str(&to);
+			last_idx += idx + from.len();
+		}
+		if last_idx == 0 {
+			return Ok(Val::Str(str))
+		}
+		out.push_str(&str[last_idx..]);
+		Ok(Val::Str(out.into()))
 	})
 }
 
