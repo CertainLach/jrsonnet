@@ -540,7 +540,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
-		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc.as_ref(), *tailstrict)?,
+		Apply(value, args, tailstrict) => {
+			evaluate_apply(context, value, args, loc.as_ref(), *tailstrict)?
+		}
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}

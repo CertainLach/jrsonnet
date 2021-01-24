@@ -1,20 +1,25 @@
 use crate::{error::Result, Val};
 use jrsonnet_parser::ParamsDesc;
 use std::fmt::Debug;
+use std::path::PathBuf;
+use std::rc::Rc;
 
 pub struct NativeCallback {
 	pub params: ParamsDesc,
-	handler: Box<dyn Fn(&[Val]) -> Result<Val>>,
+	handler: Box<dyn Fn(Option<Rc<PathBuf>>, &[Val]) -> Result<Val>>,
 }
 impl NativeCallback {
-	pub fn new(params: ParamsDesc, handler: impl Fn(&[Val]) -> Result<Val> + 'static) -> Self {
+	pub fn new(
+		params: ParamsDesc,
+		handler: impl Fn(Option<Rc<PathBuf>>, &[Val]) -> Result<Val> + 'static,
+	) -> Self {
 		Self {
 			params,
 			handler: Box::new(handler),
 		}
 	}
-	pub fn call(&self, args: &[Val]) -> Result<Val> {
-		(self.handler)(args)
+	pub fn call(&self, caller: Option<Rc<PathBuf>>, args: &[Val]) -> Result<Val> {
+		(self.handler)(caller, args)
 	}
 }
 impl Debug for NativeCallback {

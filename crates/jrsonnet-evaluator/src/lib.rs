@@ -886,14 +886,20 @@ pub mod tests {
 					Param("a".into(), None),
 					Param("b".into(), None),
 				])),
-				|args| match (&args[0], &args[1]) {
-					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
-					(_, _) => todo!(),
+				|caller, args| {
+					assert_eq!(
+						caller.unwrap(),
+						Rc::new(PathBuf::from("native_caller.jsonnet"))
+					);
+					match (&args[0], &args[1]) {
+						(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
+						(_, _) => unreachable!(),
+					}
 				},
 			)),
 		);
 		evaluator.evaluate_snippet_raw(
-			Rc::new(PathBuf::from("test.jsonnet")),
+			Rc::new(PathBuf::from("native_caller.jsonnet")),
 			"std.assertEqual(std.native(\"native_add\")(1, 2), 3)".into(),
 		)?;
 		Ok(())

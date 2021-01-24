@@ -124,7 +124,7 @@ impl FuncVal {
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
 				}
-				Ok(handler.call(&out_args)?)
+				Ok(handler.call(loc.clone().map(|l| l.0.clone()), &out_args)?)
 			}
 		}
 	}
