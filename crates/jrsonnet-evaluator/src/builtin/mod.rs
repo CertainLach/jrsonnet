@@ -379,7 +379,7 @@ fn builtin_range(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 		1, to: ty!(number) => Val::Num;
 	], {
 		if to < from {
-			return Ok(Val::Arr(Rc::new(Vec::new())))
+			return Ok(Val::Arr(ArrValue::new_eager()))
 		}
 		let mut out = Vec::with_capacity((1+to as usize-from as usize).max(0));
 		for i in from as usize..=to as usize {

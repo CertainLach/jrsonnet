@@ -179,6 +179,10 @@ pub enum ArrValue {
 	Extended(Box<(Self, Self)>),
 }
 impl ArrValue {
+	pub fn new_eager() -> Self {
+		Self::Eager(Rc::new(Vec::new()))
+	}
+
 	pub fn len(&self) -> usize {
 		match self {
 			Self::Lazy(l) => l.len(),
