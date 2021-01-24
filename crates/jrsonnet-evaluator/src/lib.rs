@@ -14,7 +14,7 @@ mod map;
 pub mod native;
 mod obj;
 pub mod trace;
-mod typed;
+pub mod typed;
 mod val;
 
 pub use ctx::*;
