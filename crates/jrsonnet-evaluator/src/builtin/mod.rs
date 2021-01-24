@@ -445,7 +445,7 @@ fn builtin_base64(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc
 			},
 			Val::Arr(a) => {
 				base64::encode(a.iter().map(|v| {
-					Ok(v?.clone().unwrap_num()? as u8)
+					Ok(v?.unwrap_num()? as u8)
 				}).collect::<Result<Vec<_>>>()?).into()
 			},
 			_ => unreachable!()
@@ -589,7 +589,7 @@ pub fn call_builtin(
 	name: &str,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	if let Some(f) = BUILTINS.with(|builtins| builtins.get(name).map(|f| *f)) {
+	if let Some(f) = BUILTINS.with(|builtins| builtins.get(name).copied()) {
 		return Ok(f(context, loc, args)?);
 	}
 	throw!(IntrinsicNotFound(name.into()))

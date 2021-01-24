@@ -176,14 +176,14 @@ pub enum ManifestFormat {
 pub enum ArrValue {
 	Lazy(Rc<Vec<LazyVal>>),
 	Eager(Rc<Vec<Val>>),
-	Extended(Box<(ArrValue, ArrValue)>),
+	Extended(Box<(Self, Self)>),
 }
 impl ArrValue {
 	pub fn len(&self) -> usize {
 		match self {
-			ArrValue::Lazy(l) => l.len(),
-			ArrValue::Eager(e) => e.len(),
-			ArrValue::Extended(v) => v.0.len() + v.1.len(),
+			Self::Lazy(l) => l.len(),
+			Self::Eager(e) => e.len(),
+			Self::Extended(v) => v.0.len() + v.1.len(),
 		}
 	}
 
@@ -193,15 +193,15 @@ impl ArrValue {
 
 	pub fn get(&self, index: usize) -> Result<Option<Val>> {
 		match self {
-			ArrValue::Lazy(vec) => {
+			Self::Lazy(vec) => {
 				if let Some(v) = vec.get(index) {
 					Ok(Some(v.evaluate()?))
 				} else {
 					Ok(None)
 				}
 			}
-			ArrValue::Eager(vec) => Ok(vec.get(index).cloned()),
-			ArrValue::Extended(v) => {
+			Self::Eager(vec) => Ok(vec.get(index).cloned()),
+			Self::Extended(v) => {
 				let a_len = v.0.len();
 				if a_len > index {
 					v.0.get(index)
@@ -214,12 +214,9 @@ impl ArrValue {
 
 	pub fn get_lazy(&self, index: usize) -> Option<LazyVal> {
 		match self {
-			ArrValue::Lazy(vec) => vec.get(index).cloned(),
-			ArrValue::Eager(vec) => vec
-				.get(index)
-				.cloned()
-				.map(|val| LazyVal::new_resolved(val)),
-			ArrValue::Extended(v) => {
+			Self::Lazy(vec) => vec.get(index).cloned(),
+			Self::Eager(vec) => vec.get(index).cloned().map(LazyVal::new_resolved),
+			Self::Extended(v) => {
 				let a_len = v.0.len();
 				if a_len > index {
 					v.0.get_lazy(index)
@@ -232,15 +229,15 @@ impl ArrValue {
 
 	pub fn evaluated(&self) -> Result<Rc<Vec<Val>>> {
 		Ok(match self {
-			ArrValue::Lazy(vec) => {
+			Self::Lazy(vec) => {
 				let mut out = Vec::with_capacity(vec.len());
 				for item in vec.iter() {
 					out.push(item.evaluate()?);
 				}
 				Rc::new(out)
 			}
-			ArrValue::Eager(vec) => vec.clone(),
-			ArrValue::Extended(v) => {
+			Self::Eager(vec) => vec.clone(),
+			Self::Extended(_v) => {
 				let mut out = Vec::with_capacity(self.len());
 				for item in self.iter() {
 					out.push(item?);
@@ -252,40 +249,40 @@ impl ArrValue {
 
 	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
-			ArrValue::Lazy(l) => l[idx].evaluate(),
-			ArrValue::Eager(e) => Ok(e[idx].clone()),
-			ArrValue::Extended(_) => self.get(idx).map(|e| e.unwrap()),
+			Self::Lazy(l) => l[idx].evaluate(),
+			Self::Eager(e) => Ok(e[idx].clone()),
+			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
 		})
 	}
 
 	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
 		(0..self.len()).map(move |idx| match self {
-			ArrValue::Lazy(l) => l[idx].clone(),
-			ArrValue::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
-			ArrValue::Extended(_) => self.get_lazy(idx).unwrap(),
+			Self::Lazy(l) => l[idx].clone(),
+			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
+			Self::Extended(_) => self.get_lazy(idx).unwrap(),
 		})
 	}
 
 	pub fn reversed(self) -> Self {
 		match self {
-			ArrValue::Lazy(vec) => {
+			Self::Lazy(vec) => {
 				let mut out = (&vec as &Vec<_>).clone();
 				out.reverse();
 				Self::Lazy(Rc::new(out))
 			}
-			ArrValue::Eager(vec) => {
+			Self::Eager(vec) => {
 				let mut out = (&vec as &Vec<_>).clone();
 				out.reverse();
 				Self::Eager(Rc::new(out))
 			}
-			ArrValue::Extended(b) => ArrValue::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
+			Self::Extended(b) => Self::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
 		}
 	}
 
-	pub fn ptr_eq(a: &ArrValue, b: &ArrValue) -> bool {
+	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		match (a, b) {
-			(ArrValue::Lazy(a), ArrValue::Lazy(b)) => Rc::ptr_eq(a, b),
-			(ArrValue::Eager(a), ArrValue::Eager(b)) => Rc::ptr_eq(a, b),
+			(Self::Lazy(a), Self::Lazy(b)) => Rc::ptr_eq(a, b),
+			(Self::Eager(a), Self::Eager(b)) => Rc::ptr_eq(a, b),
 			_ => false,
 		}
 	}
@@ -359,7 +356,7 @@ impl Val {
 		self.assert_type(context, ValType::Num)?;
 		self.unwrap_num()
 	}
-	pub fn value_type(&self) -> ValType {
+	pub const fn value_type(&self) -> ValType {
 		match self {
 			Self::Str(..) => ValType::Str,
 			Self::Num(..) => ValType::Num,
@@ -378,7 +375,7 @@ impl Val {
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
-				&v,
+				v,
 				&ManifestJsonOptions {
 					padding: "",
 					mtype: ManifestType::ToString,
@@ -556,7 +553,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Obj(_), Val::Obj(_)) => throw!(RuntimeError(
 			"primitiveEquals operates on primitive types, got object".into(),
 		)),
-		(a, b) if is_function_like(&a) && is_function_like(&b) => {
+		(a, b) if is_function_like(a) && is_function_like(b) => {
 			throw!(RuntimeError("cannot test equality of functions".into()))
 		}
 		(_, _) => false,
@@ -598,6 +595,6 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			}
 			Ok(true)
 		}
-		(a, b) => Ok(primitive_equals(&a, &b)?),
+		(a, b) => Ok(primitive_equals(a, b)?),
 	}
 }

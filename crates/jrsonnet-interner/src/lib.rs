@@ -68,7 +68,7 @@ impl From<&str> for IStr {
 		IStr(STR_POOL.with(|pool| {
 			let mut pool = pool.borrow_mut();
 			if let Some((k, _)) = pool.get_key_value(str) {
-				return k.clone();
+				k.clone()
 			} else {
 				let rc: Rc<str> = str.into();
 				pool.insert(rc.clone(), ());

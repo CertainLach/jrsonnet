@@ -1,3 +1,5 @@
+#![allow(clippy::type_complexity)]
+
 use crate::{error::Result, Val};
 use jrsonnet_parser::ParamsDesc;
 use std::fmt::Debug;

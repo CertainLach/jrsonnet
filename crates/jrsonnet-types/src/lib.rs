@@ -133,10 +133,8 @@ fn write_union(
 	union: &[ComplexValType],
 ) -> std::fmt::Result {
 	for (i, v) in union.iter().enumerate() {
-		let should_add_braces = match v {
-			ComplexValType::UnionRef(_) | ComplexValType::Union(_) if !is_union => true,
-			_ => false,
-		};
+		let should_add_braces =
+			matches!(v, ComplexValType::UnionRef(_) | ComplexValType::Union(_) if !is_union);
 		if i != 0 {
 			write!(f, " {} ", if is_union { '|' } else { '&' })?;
 		}

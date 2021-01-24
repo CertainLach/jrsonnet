@@ -473,7 +473,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					}
 					v.get(n as usize)?
 						.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
-						.clone()
 				}
 				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
 				(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(

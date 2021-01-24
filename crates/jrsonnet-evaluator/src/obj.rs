@@ -34,7 +34,7 @@ impl Debug for ObjValue {
 		}
 		let mut debug = f.debug_struct("ObjValue");
 		for (name, member) in self.0.this_entries.iter() {
-			debug.field(&name, member);
+			debug.field(name, member);
 		}
 		#[cfg(feature = "unstable")]
 		{
@@ -140,7 +140,7 @@ impl ObjValue {
 			.evaluate()?)
 	}
 
-	pub fn ptr_eq(a: &ObjValue, b: &ObjValue) -> bool {
+	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		Rc::ptr_eq(&a.0, &b.0)
 	}
 }

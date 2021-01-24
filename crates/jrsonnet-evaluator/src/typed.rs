@@ -29,7 +29,7 @@ impl From<TypeError> for LocError {
 pub struct TypeLocError(Box<TypeError>, ValuePathStack);
 impl From<TypeError> for TypeLocError {
 	fn from(e: TypeError) -> Self {
-		TypeLocError(Box::new(e), ValuePathStack(Vec::new()))
+		Self(Box::new(e), ValuePathStack(Vec::new()))
 	}
 }
 impl From<TypeLocError> for LocError {
@@ -61,7 +61,7 @@ impl Display for TypeLocErrorList {
 			write!(out, "{}", err)?;
 
 			for (i, line) in out.lines().enumerate() {
-				if line.trim().len() == 0 {
+				if line.trim().is_empty() {
 					continue;
 				}
 				if i != 0 {
@@ -118,8 +118,8 @@ enum ValuePathItem {
 impl Display for ValuePathItem {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			ValuePathItem::Field(name) => write!(f, ".{}", name)?,
-			ValuePathItem::Index(idx) => write!(f, "[{}]", idx)?,
+			Self::Field(name) => write!(f, ".{}", name)?,
+			Self::Index(idx) => write!(f, "[{}]", idx)?,
 		}
 		Ok(())
 	}
@@ -140,25 +140,25 @@ impl Display for ValuePathStack {
 impl CheckType for ComplexValType {
 	fn check(&self, value: &Val) -> Result<()> {
 		match self {
-			ComplexValType::Any => Ok(()),
-			ComplexValType::Simple(s) => s.check(value),
-			ComplexValType::Char => match value {
+			Self::Any => Ok(()),
+			Self::Simple(s) => s.check(value),
+			Self::Char => match value {
 				Val::Str(s) if s.len() == 1 || s.chars().count() == 1 => Ok(()),
 				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
-			ComplexValType::BoundedNumber(from, to) => {
+			Self::BoundedNumber(from, to) => {
 				if let Val::Num(n) = value {
 					if from.map(|from| from > *n).unwrap_or(false)
 						|| to.map(|to| to <= *n).unwrap_or(false)
 					{
-						return Err(TypeError::BoundsFailed(*n, from.clone(), to.clone()).into());
+						return Err(TypeError::BoundsFailed(*n, *from, *to).into());
 					}
 					Ok(())
 				} else {
 					Err(TypeError::ExpectedGot(self.clone(), value.value_type()).into())
 				}
 			}
-			ComplexValType::Array(elem_type) => match value {
+			Self::Array(elem_type) => match value {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
 						push_type(
@@ -170,9 +170,9 @@ impl CheckType for ComplexValType {
 					}
 					Ok(())
 				}
-				v => return Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
+				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
-			ComplexValType::ArrayRef(elem_type) => match value {
+			Self::ArrayRef(elem_type) => match value {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
 						push_type(
@@ -184,9 +184,9 @@ impl CheckType for ComplexValType {
 					}
 					Ok(())
 				}
-				v => return Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
+				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
-			ComplexValType::ObjectRef(elems) => match value {
+			Self::ObjectRef(elems) => match value {
 				Val::Obj(obj) => {
 					for (k, v) in elems.iter() {
 						if let Some(got_v) = obj.get((*k).into())? {
@@ -202,11 +202,11 @@ impl CheckType for ComplexValType {
 							);
 						}
 					}
-					return Ok(());
+					Ok(())
 				}
-				v => return Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
+				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
-			ComplexValType::Union(types) => {
+			Self::Union(types) => {
 				let mut errors = Vec::new();
 				for ty in types.iter() {
 					match ty.check(value) {
@@ -219,9 +219,9 @@ impl CheckType for ComplexValType {
 						},
 					}
 				}
-				return Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into());
+				Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into())
 			}
-			ComplexValType::UnionRef(types) => {
+			Self::UnionRef(types) => {
 				let mut errors = Vec::new();
 				for ty in types.iter() {
 					match ty.check(value) {
@@ -234,15 +234,15 @@ impl CheckType for ComplexValType {
 						},
 					}
 				}
-				return Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into());
+				Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into())
 			}
-			ComplexValType::Sum(types) => {
+			Self::Sum(types) => {
 				for ty in types.iter() {
 					ty.check(value)?
 				}
 				Ok(())
 			}
-			ComplexValType::SumRef(types) => {
+			Self::SumRef(types) => {
 				for ty in types.iter() {
 					ty.check(value)?
 				}
