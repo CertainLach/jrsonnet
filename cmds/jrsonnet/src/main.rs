@@ -136,7 +136,10 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 		let mut file = File::create(path)?;
 		writeln!(file, "{}", state.manifest(val)?)?;
 	} else {
-		println!("{}", state.manifest(val)?);
+		let output = state.manifest(val)?;
+		if !output.is_empty() {
+			println!("{}", output);
+		}
 	}
 
 	Ok(())
