@@ -176,12 +176,14 @@ pub enum ManifestFormat {
 pub enum ArrValue {
 	Lazy(Rc<Vec<LazyVal>>),
 	Eager(Rc<Vec<Val>>),
+	Extended(Box<(ArrValue, ArrValue)>),
 }
 impl ArrValue {
 	pub fn len(&self) -> usize {
 		match self {
 			ArrValue::Lazy(l) => l.len(),
 			ArrValue::Eager(e) => e.len(),
+			ArrValue::Extended(v) => v.0.len() + v.1.len(),
 		}
 	}
 
@@ -199,6 +201,14 @@ impl ArrValue {
 				}
 			}
 			ArrValue::Eager(vec) => Ok(vec.get(index).cloned()),
+			ArrValue::Extended(v) => {
+				let a_len = v.0.len();
+				if a_len > index {
+					v.0.get(index)
+				} else {
+					v.1.get(index - a_len)
+				}
+			}
 		}
 	}
 
@@ -209,6 +219,14 @@ impl ArrValue {
 				.get(index)
 				.cloned()
 				.map(|val| LazyVal::new_resolved(val)),
+			ArrValue::Extended(v) => {
+				let a_len = v.0.len();
+				if a_len > index {
+					v.0.get_lazy(index)
+				} else {
+					v.1.get_lazy(index - a_len)
+				}
+			}
 		}
 	}
 
@@ -222,6 +240,13 @@ impl ArrValue {
 				Rc::new(out)
 			}
 			ArrValue::Eager(vec) => vec.clone(),
+			ArrValue::Extended(v) => {
+				let mut out = Vec::with_capacity(self.len());
+				for item in self.iter() {
+					out.push(item?);
+				}
+				Rc::new(out)
+			}
 		})
 	}
 
@@ -229,6 +254,7 @@ impl ArrValue {
 		(0..self.len()).map(move |idx| match self {
 			ArrValue::Lazy(l) => l[idx].evaluate(),
 			ArrValue::Eager(e) => Ok(e[idx].clone()),
+			ArrValue::Extended(_) => self.get(idx).map(|e| e.unwrap()),
 		})
 	}
 
@@ -236,6 +262,7 @@ impl ArrValue {
 		(0..self.len()).map(move |idx| match self {
 			ArrValue::Lazy(l) => l[idx].clone(),
 			ArrValue::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
+			ArrValue::Extended(_) => self.get_lazy(idx).unwrap(),
 		})
 	}
 
@@ -251,6 +278,7 @@ impl ArrValue {
 				out.reverse();
 				Self::Eager(Rc::new(out))
 			}
+			ArrValue::Extended(b) => ArrValue::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
 		}
 	}
 
