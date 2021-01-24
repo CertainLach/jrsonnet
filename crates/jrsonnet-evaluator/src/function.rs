@@ -146,6 +146,8 @@ macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
 		$($id: expr, $name: ident: $ty: expr $(=>$match: path)?);+ $(;)?
 	], $handler:block) => {{
+		use $crate::{error::Error::*, throw, evaluate, push, typed::CheckType};
+
 		let args = $args;
 		if args.len() > $total_args {
 			throw!(TooManyArgsFunctionHas($total_args));

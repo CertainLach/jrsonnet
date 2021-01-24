@@ -205,6 +205,9 @@ version = "0.3.3"
 [[package]]
 name = "jrsonnet-types"
 version = "0.3.3"
+dependencies = [
+ "peg",
+]
 
 [[package]]
 name = "jsonnet"

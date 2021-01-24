@@ -8,6 +8,18 @@ use jrsonnet_parser::ExprLocation;
 use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
 
+#[macro_export]
+macro_rules! unwrap_type {
+	($desc: expr, $value: expr, $typ: expr => $match: path) => {{
+		use $crate::{push, typed::CheckType};
+		push(None, $desc, || Ok($typ.check(&$value)?))?;
+		match $value {
+			$match(v) => v,
+			_ => unreachable!(),
+		}
+	}}
+}
+
 #[derive(Debug, Error, Clone)]
 pub enum TypeError {
 	#[error("expected {0}, got {1}")]

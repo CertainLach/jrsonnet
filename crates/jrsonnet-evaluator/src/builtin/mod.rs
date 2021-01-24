@@ -1,8 +1,7 @@
 use crate::{
 	equals,
 	error::{Error::*, Result},
-	evaluate, parse_args, primitive_equals, push, throw,
-	typed::CheckType,
+	parse_args, primitive_equals, push, throw,
 	with_state, ArrValue, Context, FuncVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
