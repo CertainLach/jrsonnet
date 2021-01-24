@@ -160,7 +160,7 @@ macro_rules! parse_args {
 					throw!(IntrinsicArgumentReorderingIsNotSupportedYet);
 				}
 			}
-			let $name = push(&None, || format!("evaluating argument"), || {
+			let $name = push(None, || format!("evaluating argument"), || {
 				let value = evaluate($ctx.clone(), &$name.1)?;
 				$ty.check(&value)?;
 				Ok(value)

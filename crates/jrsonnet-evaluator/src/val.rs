@@ -102,7 +102,7 @@ impl FuncVal {
 	pub fn evaluate(
 		&self,
 		call_ctx: Context,
-		loc: &Option<ExprLocation>,
+		loc: Option<&ExprLocation>,
 		args: &ArgsDesc,
 		tailstrict: bool,
 	) -> Result<Val> {

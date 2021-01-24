@@ -78,7 +78,7 @@ impl Display for TypeLocErrorList {
 }
 
 fn push_type(
-	location: &Option<ExprLocation>,
+	location: Option<&ExprLocation>,
 	error_reason: impl Fn() -> String,
 	path: impl Fn() -> ValuePathItem,
 	item: impl Fn() -> Result<()>,
@@ -162,7 +162,7 @@ impl CheckType for ComplexValType {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
 						push_type(
-							&None,
+							None,
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
 							|| Ok(elem_type.check(&item.clone()?)?),
@@ -176,7 +176,7 @@ impl CheckType for ComplexValType {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
 						push_type(
-							&None,
+							None,
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
 							|| Ok(elem_type.check(&item.clone()?)?),
@@ -191,7 +191,7 @@ impl CheckType for ComplexValType {
 					for (k, v) in elems.iter() {
 						if let Some(got_v) = obj.get((*k).into())? {
 							push_type(
-								&None,
+								None,
 								|| format!("property {}", k),
 								|| ValuePathItem::Field((*k).into()),
 								|| v.check(&got_v),

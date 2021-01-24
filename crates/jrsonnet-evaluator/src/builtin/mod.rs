@@ -22,7 +22,7 @@ pub mod sort;
 
 fn std_format(str: IStr, vals: Val) -> Result<Val> {
 	push(
-		&Some(ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
+		Some(&ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
 		|| format!("std.format of {}", str),
 		|| {
 			Ok(match vals {
@@ -34,7 +34,7 @@ fn std_format(str: IStr, vals: Val) -> Result<Val> {
 	)
 }
 
-type Builtin = fn(context: Context, loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val>;
+type Builtin = fn(context: Context, loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val>;
 
 type BuiltinsType = HashMap<Box<str>, Builtin>;
 
@@ -78,7 +78,7 @@ thread_local! {
 	};
 }
 
-fn builtin_length(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_length(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "length", args, 1, [
 		0, x: ty!((string | object | array));
 	], {
@@ -96,7 +96,7 @@ fn builtin_length(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_type(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_type(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "type", args, 1, [
 		0, x: ty!(any);
 	], {
@@ -106,7 +106,7 @@ fn builtin_type(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) 
 
 fn builtin_make_array(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "makeArray", args, 2, [
@@ -126,7 +126,7 @@ fn builtin_make_array(
 
 fn builtin_codepoint(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "codepoint", args, 1, [
@@ -138,7 +138,7 @@ fn builtin_codepoint(
 
 fn builtin_object_fields_ex(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "objectFieldsEx", args, 2, [
@@ -157,7 +157,7 @@ fn builtin_object_fields_ex(
 
 fn builtin_object_has_ex(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "objectHasEx", args, 3, [
@@ -175,7 +175,7 @@ fn builtin_object_has_ex(
 }
 
 // faster
-fn builtin_slice(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "slice", args, 4, [
 		0, indexable: ty!((string | array));
 		1, index: ty!((number | null));
@@ -216,7 +216,7 @@ fn builtin_slice(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 // faster
 fn builtin_primitive_equals(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "primitiveEquals", args, 2, [
@@ -228,7 +228,7 @@ fn builtin_primitive_equals(
 }
 
 // faster
-fn builtin_equals(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_equals(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "equals", args, 2, [
 		0, a: ty!(any);
 		1, b: ty!(any);
@@ -237,7 +237,7 @@ fn builtin_equals(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_modulo(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_modulo(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "modulo", args, 2, [
 		0, a: ty!(number) => Val::Num;
 		1, b: ty!(number) => Val::Num;
@@ -246,7 +246,7 @@ fn builtin_modulo(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_mod(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_mod(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "mod", args, 2, [
 		0, a: ty!((number | string));
 		1, b: ty!(any);
@@ -259,7 +259,7 @@ fn builtin_mod(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 	})
 }
 
-fn builtin_floor(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_floor(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "floor", args, 1, [
 		0, x: ty!(number) => Val::Num;
 	], {
@@ -267,7 +267,7 @@ fn builtin_floor(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 	})
 }
 
-fn builtin_log(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_log(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "log", args, 1, [
 		0, n: ty!(number) => Val::Num;
 	], {
@@ -275,7 +275,7 @@ fn builtin_log(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 	})
 }
 
-fn builtin_pow(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_pow(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "pow", args, 2, [
 		0, x: ty!(number) => Val::Num;
 		1, n: ty!(number) => Val::Num;
@@ -284,7 +284,7 @@ fn builtin_pow(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 	})
 }
 
-fn builtin_ext_var(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_ext_var(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "extVar", args, 1, [
 		0, x: ty!(string) => Val::Str;
 	], {
@@ -292,7 +292,7 @@ fn builtin_ext_var(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDes
 	})
 }
 
-fn builtin_native(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_native(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "native", args, 1, [
 		0, x: ty!(string) => Val::Str;
 	], {
@@ -300,7 +300,7 @@ fn builtin_native(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_filter(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_filter(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "filter", args, 2, [
 		0, func: ty!(function) => Val::Func;
 		1, arr: ty!(array) => Val::Arr;
@@ -318,7 +318,7 @@ fn builtin_filter(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_foldl(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_foldl(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "foldl", args, 3, [
 		0, func: ty!(function) => Val::Func;
 		1, arr: ty!(array) => Val::Arr;
@@ -332,7 +332,7 @@ fn builtin_foldl(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 	})
 }
 
-fn builtin_foldr(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_foldr(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "foldr", args, 3, [
 		0, func: ty!(function) => Val::Func;
 		1, arr: ty!(array) => Val::Arr;
@@ -349,7 +349,7 @@ fn builtin_foldr(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 #[allow(non_snake_case)]
 fn builtin_sort_impl(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "sort", args, 2, [
@@ -364,7 +364,7 @@ fn builtin_sort_impl(
 }
 
 // faster
-fn builtin_format(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_format(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "format", args, 2, [
 		0, str: ty!(string) => Val::Str;
 		1, vals: ty!(any)
@@ -373,7 +373,7 @@ fn builtin_format(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_range(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_range(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "range", args, 2, [
 		0, from: ty!(number) => Val::Num;
 		1, to: ty!(number) => Val::Num;
@@ -386,7 +386,7 @@ fn builtin_range(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc)
 	})
 }
 
-fn builtin_char(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_char(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "char", args, 1, [
 		0, n: ty!(number) => Val::Num;
 	], {
@@ -400,7 +400,7 @@ fn builtin_char(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) 
 
 fn builtin_encode_utf8(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "encodeUTF8", args, 1, [
@@ -410,7 +410,7 @@ fn builtin_encode_utf8(
 	})
 }
 
-fn builtin_md5(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_md5(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "md5", args, 1, [
 		0, str: ty!(string) => Val::Str;
 	], {
@@ -418,7 +418,7 @@ fn builtin_md5(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -
 	})
 }
 
-fn builtin_trace(context: Context, loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_trace(context: Context, loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "trace", args, 2, [
 		0, str: ty!(string) => Val::Str;
 		1, rest: ty!(any);
@@ -435,7 +435,7 @@ fn builtin_trace(context: Context, loc: &Option<ExprLocation>, args: &ArgsDesc) 
 	})
 }
 
-fn builtin_base64(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_base64(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "base64", args, 1, [
 		0, input: ty!((string | (Array<number>)));
 	], {
@@ -453,7 +453,7 @@ fn builtin_base64(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc
 	})
 }
 
-fn builtin_join(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_join(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "join", args, 2, [
 		0, sep: ty!((string | array));
 		1, arr: ty!(array) => Val::Arr;
@@ -513,7 +513,7 @@ fn builtin_join(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) 
 // faster
 fn builtin_escape_string_json(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "escapeStringJson", args, 1, [
@@ -526,7 +526,7 @@ fn builtin_escape_string_json(
 // faster
 fn builtin_manifest_json_ex(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "manifestJsonEx", args, 2, [
@@ -541,7 +541,7 @@ fn builtin_manifest_json_ex(
 }
 
 // faster
-fn builtin_reverse(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_reverse(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "reverse", args, 1, [
 		0, value: ty!(array) => Val::Arr;
 	], {
@@ -549,7 +549,7 @@ fn builtin_reverse(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDes
 	})
 }
 
-fn builtin_id(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+fn builtin_id(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "id", args, 1, [
 		0, v: ty!(any);
 	], {
@@ -560,7 +560,7 @@ fn builtin_id(context: Context, _loc: &Option<ExprLocation>, args: &ArgsDesc) ->
 // faster
 fn builtin_str_replace(
 	context: Context,
-	_loc: &Option<ExprLocation>,
+	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
 	parse_args!(context, "strReplace", args, 3, [
@@ -583,10 +583,9 @@ fn builtin_str_replace(
 	})
 }
 
-#[allow(clippy::cognitive_complexity)]
 pub fn call_builtin(
 	context: Context,
-	loc: &Option<ExprLocation>,
+	loc: Option<&ExprLocation>,
 	name: &str,
 	args: &ArgsDesc,
 ) -> Result<Val> {

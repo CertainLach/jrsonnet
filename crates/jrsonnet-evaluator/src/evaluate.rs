@@ -385,7 +385,7 @@ pub fn evaluate_apply(
 	context: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: &Option<ExprLocation>,
+	loc: Option<&ExprLocation>,
 	tailstrict: bool,
 ) -> Result<Val> {
 	let value = evaluate(context.clone(), value)?;
@@ -430,7 +430,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(
-			loc,
+			loc.as_ref(),
 			|| format!("variable <{}>", name),
 			|| Ok(context.binding(name.clone())?.evaluate()?),
 		)?,
@@ -448,7 +448,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
 					push(
-						loc,
+						loc.as_ref(),
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
@@ -540,14 +540,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
-		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
+		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc.as_ref(), *tailstrict)?,
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
 		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(
-				&value.1,
+				value.1.as_ref(),
 				|| "assertion condition".to_owned(),
 				|| {
 					evaluate(context.clone(), value)?
@@ -558,7 +558,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				evaluate(context, returned)?
 			} else {
 				push(
-					&value.1,
+					value.1.as_ref(),
 					|| "assertion failure".to_owned(),
 					|| {
 						if let Some(msg) = msg {
@@ -571,7 +571,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		ErrorStmt(e) => push(
-			loc,
+			loc.as_ref(),
 			|| "error statement".to_owned(),
 			|| {
 				throw!(RuntimeError(
@@ -585,7 +585,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_else,
 		} => {
 			if push(
-				loc,
+				loc.as_ref(),
 				|| "if condition".to_owned(),
 				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
 			)? {
@@ -605,7 +605,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
 			push(
-				loc,
+				loc.as_ref(),
 				|| format!("import {:?}", path),
 				|| with_state(|s| s.import_file(import_location, path)),
 			)?
