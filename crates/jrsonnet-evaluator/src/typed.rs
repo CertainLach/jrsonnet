@@ -11,8 +11,8 @@ use thiserror::Error;
 #[macro_export]
 macro_rules! unwrap_type {
 	($desc: expr, $value: expr, $typ: expr => $match: path) => {{
-		use $crate::{push, typed::CheckType};
-		push(None, $desc, || Ok($typ.check(&$value)?))?;
+		use $crate::{push_stack_frame, typed::CheckType};
+		push_stack_frame(None, $desc, || Ok($typ.check(&$value)?))?;
 		match $value {
 			$match(v) => v,
 			_ => unreachable!(),

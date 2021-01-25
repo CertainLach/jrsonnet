@@ -146,7 +146,7 @@ macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
 		$($id: expr, $name: ident: $ty: expr $(=>$match: path)?);+ $(;)?
 	], $handler:block) => {{
-		use $crate::{error::Error::*, throw, evaluate, push, typed::CheckType};
+		use $crate::{error::Error::*, throw, evaluate, push_stack_frame, typed::CheckType};
 
 		let args = $args;
 		if args.len() > $total_args {
@@ -162,7 +162,7 @@ macro_rules! parse_args {
 					throw!(IntrinsicArgumentReorderingIsNotSupportedYet);
 				}
 			}
-			let $name = push(None, || format!("evaluating argument"), || {
+			let $name = push_stack_frame(None, || format!("evaluating argument"), || {
 				let value = evaluate($ctx.clone(), &$name.1)?;
 				$ty.check(&value)?;
 				Ok(value)
