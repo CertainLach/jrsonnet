@@ -132,7 +132,7 @@ impl From<Error> for LocError {
 
 #[derive(Clone, Debug)]
 pub struct StackTraceElement {
-	pub location: ExprLocation,
+	pub location: Option<ExprLocation>,
 	pub desc: String,
 }
 #[derive(Debug, Clone)]

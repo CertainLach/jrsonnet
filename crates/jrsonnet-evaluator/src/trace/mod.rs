@@ -118,21 +118,18 @@ impl TraceFormat for CompactFormat {
 			.trace()
 			.0
 			.iter()
-			.map(|el| {
-				let resolved_path = self.resolver.resolve(&el.location.0);
+			.map(|el| el.location.as_ref().map(|l| {
+				use std::fmt::Write;
+				let mut resolved_path = self.resolver.resolve(&l.0);
 				// TODO: Process all trace elements first
 				let location = evaluation_state
-					.map_source_locations(&el.location.0, &[el.location.1, el.location.2]);
-				(resolved_path, location)
-			})
-			.map(|(mut n, location)| {
-				use std::fmt::Write;
-				write!(n, ":").unwrap();
-				print_code_location(&mut n, &location[0], &location[1]).unwrap();
-				n
-			})
+					.map_source_locations(&l.0, &[l.1, l.2]);
+				write!(resolved_path, ":").unwrap();
+				print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
+				resolved_path
+			}))
 			.collect::<Vec<_>>();
-		let align = file_names.iter().map(|e| e.len()).max().unwrap_or(0);
+		let align = file_names.iter().flatten().map(|e| e.len()).max().unwrap_or(0);
 		for (i, (el, file)) in error.trace().0.iter().zip(file_names).enumerate() {
 			if i != 0 {
 				writeln!(out)?;
@@ -141,7 +138,7 @@ impl TraceFormat for CompactFormat {
 				out,
 				"{:<p$}{:<w$}: {}",
 				"",
-				file,
+				file.unwrap_or_else(|| "".to_owned()),
 				el.desc,
 				p = self.padding,
 				w = align
@@ -165,17 +162,24 @@ impl TraceFormat for JSFormat {
 				writeln!(out)?;
 			}
 			let desc = &item.desc;
-			let source = item.location.clone();
-			let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+			if let Some (source) = &item.location {
+				let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
 
-			write!(
-				out,
-				"    at {} ({}:{}:{})",
-				desc,
-				source.0.to_str().unwrap(),
-				start_end[0].line,
-				start_end[0].column,
-			)?;
+				write!(
+					out,
+					"    at {} ({}:{}:{})",
+					desc,
+					source.0.to_str().unwrap(),
+					start_end[0].line,
+					start_end[0].column,
+				)?;
+			} else {
+				write!(
+					out,
+					"    at {}",
+					desc,
+				)?;
+			}
 		}
 		Ok(())
 	}
@@ -225,17 +229,19 @@ impl TraceFormat for ExplainingFormat {
 		let trace = &error.trace();
 		for item in trace.0.iter() {
 			let desc = &item.desc;
-			let source = item.location.clone();
-			let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
-
-			self.print_snippet(
-				out,
-				&evaluation_state.get_source(&source.0).unwrap(),
-				&source.0,
-				&start_end[0],
-				&start_end[1],
-				desc,
-			)?;
+			if let Some(source) = &item.location {
+				let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+				self.print_snippet(
+					out,
+					&evaluation_state.get_source(&source.0).unwrap(),
+					&source.0,
+					&start_end[0],
+					&start_end[1],
+					desc,
+				)?;
+			} else {
+				write!(out, "{}", desc)?;
+			}
 		}
 		Ok(())
 	}

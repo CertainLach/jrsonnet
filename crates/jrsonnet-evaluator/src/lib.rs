@@ -132,11 +132,15 @@ pub(crate) fn push<T>(
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
-	if let Some(v) = e {
-		with_state(|s| s.push(v, frame_desc, f))
-	} else {
-		f()
-	}
+	with_state(|s| s.push(e, frame_desc, f))
+}
+
+pub fn push_stack_frame<T>(
+	e: Option<&ExprLocation>,
+	frame_desc: impl FnOnce() -> String,
+	f: impl FnOnce() -> Result<T>,
+ ) -> Result<T> {
+	push(e, frame_desc, f)
 }
 
 /// Maintains stack trace and import resolution
@@ -271,7 +275,7 @@ impl EvaluationState {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: &ExprLocation,
+		e: Option<&ExprLocation>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -290,7 +294,7 @@ impl EvaluationState {
 		self.data_mut().stack_depth -= 1;
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: e.clone(),
+				location: e.cloned(),
 				desc: frame_desc(),
 			});
 			return Err(err);
@@ -336,11 +340,11 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => func.evaluate_map(
+				Val::Func(func) => push(None, || "during TLA call".to_owned(), || Ok(func.evaluate_map(
 					self.create_default_context()?,
 					&self.settings().tla_vars,
 					true,
-				)?,
+				)?))?,
 				v => v,
 			})
 		})
