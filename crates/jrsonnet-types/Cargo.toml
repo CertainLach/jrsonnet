@@ -1,6 +1,6 @@
 [package]
 name = "jrsonnet-types"
-version = "0.3.3"
+version = "0.3.4"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 edition = "2018"
 
