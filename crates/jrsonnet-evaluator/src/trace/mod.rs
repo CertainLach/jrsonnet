@@ -118,18 +118,24 @@ impl TraceFormat for CompactFormat {
 			.trace()
 			.0
 			.iter()
-			.map(|el| el.location.as_ref().map(|l| {
-				use std::fmt::Write;
-				let mut resolved_path = self.resolver.resolve(&l.0);
-				// TODO: Process all trace elements first
-				let location = evaluation_state
-					.map_source_locations(&l.0, &[l.1, l.2]);
-				write!(resolved_path, ":").unwrap();
-				print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
-				resolved_path
-			}))
+			.map(|el| {
+				el.location.as_ref().map(|l| {
+					use std::fmt::Write;
+					let mut resolved_path = self.resolver.resolve(&l.0);
+					// TODO: Process all trace elements first
+					let location = evaluation_state.map_source_locations(&l.0, &[l.1, l.2]);
+					write!(resolved_path, ":").unwrap();
+					print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
+					resolved_path
+				})
+			})
 			.collect::<Vec<_>>();
-		let align = file_names.iter().flatten().map(|e| e.len()).max().unwrap_or(0);
+		let align = file_names
+			.iter()
+			.flatten()
+			.map(|e| e.len())
+			.max()
+			.unwrap_or(0);
 		for (i, (el, file)) in error.trace().0.iter().zip(file_names).enumerate() {
 			if i != 0 {
 				writeln!(out)?;
@@ -162,8 +168,9 @@ impl TraceFormat for JSFormat {
 				writeln!(out)?;
 			}
 			let desc = &item.desc;
-			if let Some (source) = &item.location {
-				let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+			if let Some(source) = &item.location {
+				let start_end =
+					evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
 
 				write!(
 					out,
@@ -174,11 +181,7 @@ impl TraceFormat for JSFormat {
 					start_end[0].column,
 				)?;
 			} else {
-				write!(
-					out,
-					"    at {}",
-					desc,
-				)?;
+				write!(out, "    at {}", desc,)?;
 			}
 		}
 		Ok(())
@@ -230,7 +233,8 @@ impl TraceFormat for ExplainingFormat {
 		for item in trace.0.iter() {
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end = evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+				let start_end =
+					evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
 				self.print_snippet(
 					out,
 					&evaluation_state.get_source(&source.0).unwrap(),

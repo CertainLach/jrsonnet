@@ -139,7 +139,7 @@ pub fn push_stack_frame<T>(
 	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
- ) -> Result<T> {
+) -> Result<T> {
 	push(e, frame_desc, f)
 }
 
@@ -340,11 +340,17 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => push(None, || "during TLA call".to_owned(), || Ok(func.evaluate_map(
-					self.create_default_context()?,
-					&self.settings().tla_vars,
-					true,
-				)?))?,
+				Val::Func(func) => push(
+					None,
+					|| "during TLA call".to_owned(),
+					|| {
+						Ok(func.evaluate_map(
+							self.create_default_context()?,
+							&self.settings().tla_vars,
+							true,
+						)?)
+					},
+				)?,
 				v => v,
 			})
 		})

@@ -1,8 +1,8 @@
 use crate::{
 	equals,
 	error::{Error::*, Result},
-	parse_args, primitive_equals, push, throw,
-	with_state, ArrValue, Context, FuncVal, LazyVal, Val,
+	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, FuncVal, LazyVal,
+	Val,
 };
 use format::{format_arr, format_obj};
 use jrsonnet_interner::IStr;

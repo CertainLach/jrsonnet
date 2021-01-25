@@ -16,8 +16,8 @@ macro_rules! unwrap_type {
 		match $value {
 			$match(v) => v,
 			_ => unreachable!(),
-		}
-	}}
+			}
+		}};
 }
 
 #[derive(Debug, Error, Clone)]
