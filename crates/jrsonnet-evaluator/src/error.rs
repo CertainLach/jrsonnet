@@ -1,15 +1,17 @@
 use crate::{
 	builtin::{format::FormatError, sort::SortError},
-	ValType,
+	typed::TypeLocError,
 };
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_types::ValType;
 use std::{path::PathBuf, rc::Rc};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
-	IntrinsicNotFound(Rc<str>),
+	IntrinsicNotFound(IStr),
 	#[error("argument reordering in intrisics not supported yet")]
 	IntrinsicArgumentReorderingIsNotSupportedYet,
 
@@ -32,36 +34,36 @@ pub enum Error {
 	ArrayBoundsError(usize, usize),
 
 	#[error("assert failed: {0}")]
-	AssertionFailed(Rc<str>),
+	AssertionFailed(IStr),
 
 	#[error("variable is not defined: {0}")]
-	VariableIsNotDefined(Rc<str>),
+	VariableIsNotDefined(IStr),
 	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {0}")]
-	NoSuchField(Rc<str>),
+	NoSuchField(IStr),
 
 	#[error("only functions can be called, got {0}")]
 	OnlyFunctionsCanBeCalledGot(ValType),
 	#[error("parameter {0} is not defined")]
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
-	BindingParameterASecondTime(Rc<str>),
+	BindingParameterASecondTime(IStr),
 	#[error("too many args, function has {0}")]
 	TooManyArgsFunctionHas(usize),
 	#[error("founction argument is not passed: {0}")]
-	FunctionParameterNotBoundInCall(Rc<str>),
+	FunctionParameterNotBoundInCall(IStr),
 
 	#[error("external variable is not defined: {0}")]
-	UndefinedExternalVariable(Rc<str>),
+	UndefinedExternalVariable(IStr),
 	#[error("native is not defined: {0}")]
-	UndefinedExternalFunction(Rc<str>),
+	UndefinedExternalFunction(IStr),
 
 	#[error("field name should be string, got {0}")]
 	FieldMustBeStringGot(ValType),
 
 	#[error("attempted to index array with string {0}")]
-	AttemptedIndexAnArrayWithString(Rc<str>),
+	AttemptedIndexAnArrayWithString(IStr),
 	#[error("{0} index type should be {1}, got {2}")]
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
 	#[error("cant index into {0}")]
@@ -85,12 +87,12 @@ pub enum Error {
 	)]
 	ImportSyntaxError {
 		path: Rc<PathBuf>,
-		source_code: Rc<str>,
+		source_code: IStr,
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 
 	#[error("runtime error: {0}")]
-	RuntimeError(Rc<str>),
+	RuntimeError(IStr),
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
 	#[error("tried to index by fractional value")]
@@ -117,6 +119,8 @@ pub enum Error {
 
 	#[error("format error: {0}")]
 	Format(#[from] FormatError),
+	#[error("type error: {0}")]
+	TypeError(TypeLocError),
 	#[error("sort error: {0}")]
 	Sort(#[from] SortError),
 }
@@ -128,7 +132,7 @@ impl From<Error> for LocError {
 
 #[derive(Clone, Debug)]
 pub struct StackTraceElement {
-	pub location: ExprLocation,
+	pub location: Option<ExprLocation>,
 	pub desc: String,
 }
 #[derive(Debug, Clone)]
@@ -143,6 +147,9 @@ impl LocError {
 
 	pub const fn error(&self) -> &Error {
 		&(self.0).0
+	}
+	pub fn error_mut(&mut self) -> &mut Error {
+		&mut (self.0).0
 	}
 	pub const fn trace(&self) -> &StackTrace {
 		&(self.0).1

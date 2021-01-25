@@ -1,17 +1,18 @@
+use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
-use std::{borrow::Borrow, hash::Hash, rc::Rc};
+use std::rc::Rc;
 
 #[derive(Default, Debug)]
-struct LayeredHashMapInternals<K: Hash, V> {
-	parent: Option<LayeredHashMap<K, V>>,
-	current: FxHashMap<K, V>,
+struct LayeredHashMapInternals<V> {
+	parent: Option<LayeredHashMap<V>>,
+	current: FxHashMap<IStr, V>,
 }
 
 #[derive(Debug)]
-pub struct LayeredHashMap<K: Hash, V>(Rc<LayeredHashMapInternals<K, V>>);
+pub struct LayeredHashMap<V>(Rc<LayeredHashMapInternals<V>>);
 
-impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
-	pub fn extend(self, new_layer: FxHashMap<K, V>) -> Self {
+impl<V> LayeredHashMap<V> {
+	pub fn extend(self, new_layer: FxHashMap<IStr, V>) -> Self {
 		match Rc::try_unwrap(self.0) {
 			Ok(mut map) => {
 				map.current.extend(new_layer);
@@ -24,11 +25,7 @@ impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
 		}
 	}
 
-	pub fn get<Q: ?Sized>(&self, key: &Q) -> Option<&V>
-	where
-		K: Borrow<Q>,
-		Q: Hash + Eq,
-	{
+	pub fn get(&self, key: &IStr) -> Option<&V> {
 		(self.0)
 			.current
 			.get(key)
@@ -36,13 +33,13 @@ impl<K: Hash + Eq, V> LayeredHashMap<K, V> {
 	}
 }
 
-impl<K: Hash, V> Clone for LayeredHashMap<K, V> {
+impl<V> Clone for LayeredHashMap<V> {
 	fn clone(&self) -> Self {
 		Self(self.0.clone())
 	}
 }
 
-impl<K: Hash + Eq, V> Default for LayeredHashMap<K, V> {
+impl<V> Default for LayeredHashMap<V> {
 	fn default() -> Self {
 		Self(Rc::new(LayeredHashMapInternals {
 			parent: None,

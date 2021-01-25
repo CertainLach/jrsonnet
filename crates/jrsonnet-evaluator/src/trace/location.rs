@@ -37,7 +37,11 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 	];
 	let mut with_no_known_line_ending = vec![];
 	let mut this_line_offset = 0;
-	for (pos, ch) in file.chars().enumerate() {
+	for (pos, ch) in file
+		.chars()
+		.enumerate()
+		.chain(std::iter::once((file.len(), ' ')))
+	{
 		column += 1;
 		match offset_map.last() {
 			Some(x) if x.0 == pos => {

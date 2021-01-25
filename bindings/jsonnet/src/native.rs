@@ -35,7 +35,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 
 	vm.add_native(
 		name,
-		Rc::new(NativeCallback::new(params, move |args| {
+		Rc::new(NativeCallback::new(params, move |_caller, args| {
 			let mut n_args = Vec::new();
 			for a in args {
 				n_args.push(Some(Box::new(a.clone())));

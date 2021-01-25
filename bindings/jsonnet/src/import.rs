@@ -4,6 +4,7 @@ use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	throw, EvaluationState, ImportResolver,
 };
+use jrsonnet_interner::IStr;
 use std::{
 	any::Any,
 	cell::RefCell,
@@ -30,7 +31,7 @@ pub struct CallbackImportResolver {
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
 
-	out: RefCell<HashMap<PathBuf, Rc<str>>>,
+	out: RefCell<HashMap<PathBuf, IStr>>,
 }
 impl ImportResolver for CallbackImportResolver {
 	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
@@ -75,7 +76,7 @@ impl ImportResolver for CallbackImportResolver {
 
 		Ok(Rc::new(found_here_buf))
 	}
-	fn load_file_contents(&self, resolved: &PathBuf) -> Result<Rc<str>> {
+	fn load_file_contents(&self, resolved: &PathBuf) -> Result<IStr> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {
@@ -124,7 +125,7 @@ impl ImportResolver for NativeImportResolver {
 			throw!(ImportFileNotFound(from.clone(), path.clone()))
 		}
 	}
-	fn load_file_contents(&self, id: &PathBuf) -> Result<Rc<str>> {
+	fn load_file_contents(&self, id: &PathBuf) -> Result<IStr> {
 		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
 		let mut out = String::new();
 		file.read_to_string(&mut out)

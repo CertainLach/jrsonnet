@@ -1,3 +1,4 @@
+use jrsonnet_interner::IStr;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
 #[cfg(feature = "serialize")]
@@ -8,21 +9,17 @@ use std::{
 	path::PathBuf,
 	rc::Rc,
 };
-#[cfg(feature = "dump")]
-use structdump_derive::Codegen;
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
 pub enum FieldName {
 	/// {fixed: 2}
-	Fixed(Rc<str>),
+	Fixed(IStr),
 	/// {["dyn"+"amic"]: 3}
 	Dyn(LocExpr),
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -35,13 +32,11 @@ pub enum Visibility {
 	Unhide,
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -53,7 +48,6 @@ pub struct FieldMember {
 	pub value: LocExpr,
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -63,7 +57,6 @@ pub enum Member {
 	AssertStmt(AssertStmt),
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -89,7 +82,6 @@ impl Display for UnaryOpType {
 	}
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq)]
@@ -97,6 +89,7 @@ pub enum BinaryOpType {
 	Mul,
 	Div,
 
+	/// Implemented as intrinsic, put here for completeness
 	Mod,
 
 	Add,
@@ -146,14 +139,12 @@ impl Display for BinaryOpType {
 }
 
 /// name, default value
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
-pub struct Param(pub Rc<str>, pub Option<LocExpr>);
+pub struct Param(pub IStr, pub Option<LocExpr>);
 
 /// Defined function parameters
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
@@ -165,13 +156,11 @@ impl Deref for ParamsDesc {
 	}
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct Arg(pub Option<String>, pub LocExpr);
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -183,29 +172,25 @@ impl Deref for ArgsDesc {
 	}
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct BindSpec {
-	pub name: Rc<str>,
+	pub name: IStr,
 	pub params: Option<ParamsDesc>,
 	pub value: LocExpr,
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
 pub struct IfSpecData(pub LocExpr);
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
-pub struct ForSpecData(pub Rc<str>, pub LocExpr);
+pub struct ForSpecData(pub IStr, pub LocExpr);
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -214,7 +199,6 @@ pub enum CompSpec {
 	ForSpec(ForSpecData),
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -226,7 +210,6 @@ pub struct ObjComp {
 	pub compspecs: Vec<CompSpec>,
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -235,7 +218,6 @@ pub enum ObjBody {
 	ObjComp(ObjComp),
 }
 
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq, Clone, Copy)]
@@ -256,7 +238,6 @@ pub struct SliceDesc {
 }
 
 /// Syntax base
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -264,11 +245,11 @@ pub enum Expr {
 	Literal(LiteralType),
 
 	/// String value: "hello"
-	Str(Rc<str>),
+	Str(IStr),
 	/// Number: 1, 2.0, 2e+20
 	Num(f64),
 	/// Variable name: test
-	Var(Rc<str>),
+	Var(IStr),
 
 	/// Array of expressions: [1, 2, "Hello"]
 	Arr(Vec<LocExpr>),
@@ -315,7 +296,7 @@ pub enum Expr {
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
 	/// std.primitiveEquals
-	Intrinsic(Rc<str>),
+	Intrinsic(IStr),
 	/// if true == false then 1 else 2
 	IfElse {
 		cond: IfSpecData,
@@ -325,7 +306,6 @@ pub enum Expr {
 }
 
 /// file, begin offset, end offset
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Clone, PartialEq)]
@@ -337,7 +317,6 @@ impl Debug for ExprLocation {
 }
 
 /// Holds AST expression and its location in source file
-#[cfg_attr(feature = "dump", derive(Codegen))]
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Clone, PartialEq)]

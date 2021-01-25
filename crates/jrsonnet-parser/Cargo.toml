@@ -10,16 +10,14 @@ edition = "2018"
 default = []
 serialize = ["serde"]
 deserialize = ["serde"]
-# Adds ability to dump AST as source code for easy embedding
-dump = ["structdump", "structdump-derive"]
 
 [dependencies]
+jrsonnet-interner = { path = "../jrsonnet-interner" }
+
 peg = "0.6.3"
 unescape = "0.1.0"
 
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
-structdump = { version = "0.1.2", optional = true }
-structdump-derive = { version = "0.1.2", optional = true }
 
 [dev-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.3" }

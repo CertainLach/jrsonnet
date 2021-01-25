@@ -1,0 +1,8 @@
+[package]
+name = "jrsonnet-types"
+version = "0.3.3"
+authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
+edition = "2018"
+
+[dependencies]
+peg = "0.6.3"

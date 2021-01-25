@@ -14,6 +14,7 @@ mod map;
 pub mod native;
 mod obj;
 pub mod trace;
+pub mod typed;
 mod val;
 
 pub use ctx::*;
@@ -22,6 +23,7 @@ use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
 pub use import::*;
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
 use native::NativeCallback;
 pub use obj::*;
@@ -62,13 +64,13 @@ pub struct EvaluationSettings {
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
 	/// Used for s`td.extVar`
-	pub ext_vars: HashMap<Rc<str>, Val>,
+	pub ext_vars: HashMap<IStr, Val>,
 	/// Used for ext.native
-	pub ext_natives: HashMap<Rc<str>, Rc<NativeCallback>>,
+	pub ext_natives: HashMap<IStr, Rc<NativeCallback>>,
 	/// TLA vars
-	pub tla_vars: HashMap<Rc<str>, Val>,
+	pub tla_vars: HashMap<IStr, Val>,
 	/// Global variables are inserted in default context
-	pub globals: HashMap<Rc<str>, Val>,
+	pub globals: HashMap<IStr, Val>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: Box<dyn ImportResolver>,
 	/// Used in manifestification functions
@@ -101,11 +103,11 @@ struct EvaluationData {
 	stack_depth: usize,
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
 	files: HashMap<Rc<PathBuf>, FileData>,
-	str_files: HashMap<Rc<PathBuf>, Rc<str>>,
+	str_files: HashMap<Rc<PathBuf>, IStr>,
 }
 
 pub struct FileData {
-	source_code: Rc<str>,
+	source_code: IStr,
 	parsed: LocExpr,
 	evaluated: Option<Val>,
 }
@@ -126,15 +128,19 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
 pub(crate) fn push<T>(
-	e: &Option<ExprLocation>,
+	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
-	if let Some(v) = e {
-		with_state(|s| s.push(v, frame_desc, f))
-	} else {
-		f()
-	}
+	with_state(|s| s.push(e, frame_desc, f))
+}
+
+pub fn push_stack_frame<T>(
+	e: Option<&ExprLocation>,
+	frame_desc: impl FnOnce() -> String,
+	f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+	push(e, frame_desc, f)
 }
 
 /// Maintains stack trace and import resolution
@@ -143,7 +149,7 @@ pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
 	/// Parses and adds file as loaded
-	pub fn add_file(&self, path: Rc<PathBuf>, source_code: Rc<str>) -> Result<()> {
+	pub fn add_file(&self, path: Rc<PathBuf>, source_code: IStr) -> Result<()> {
 		self.add_parsed_file(
 			path.clone(),
 			source_code.clone(),
@@ -168,7 +174,7 @@ impl EvaluationState {
 	pub fn add_parsed_file(
 		&self,
 		name: Rc<PathBuf>,
-		source_code: Rc<str>,
+		source_code: IStr,
 		parsed: LocExpr,
 	) -> Result<()> {
 		self.data_mut().files.insert(
@@ -182,7 +188,7 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &PathBuf) -> Option<Rc<str>> {
+	pub fn get_source(&self, name: &PathBuf) -> Option<IStr> {
 		let ro_map = &self.data().files;
 		ro_map.get(name).map(|value| value.source_code.clone())
 	}
@@ -204,7 +210,7 @@ impl EvaluationState {
 		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_loaded_file_raw(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<str>> {
+	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<IStr> {
 		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
 			let file_str = self.load_file_contents(&path)?;
@@ -256,7 +262,7 @@ impl EvaluationState {
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self) -> Result<Context> {
 		let globals = &self.settings().globals;
-		let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		let mut new_bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 		for (name, value) in globals.iter() {
 			new_bindings.insert(
 				name.clone(),
@@ -269,7 +275,7 @@ impl EvaluationState {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: &ExprLocation,
+		e: Option<&ExprLocation>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -288,7 +294,7 @@ impl EvaluationState {
 		self.data_mut().stack_depth -= 1;
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: e.clone(),
+				location: e.cloned(),
 				desc: frame_desc(),
 			});
 			return Err(err);
@@ -320,13 +326,13 @@ impl EvaluationState {
 		out
 	}
 
-	pub fn manifest(&self, val: Val) -> Result<Rc<str>> {
+	pub fn manifest(&self, val: Val) -> Result<IStr> {
 		self.run_in_state(|| val.manifest(&self.manifest_format()))
 	}
-	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(IStr, IStr)>> {
 		self.run_in_state(|| val.manifest_multi(&self.manifest_format()))
 	}
-	pub fn manifest_stream(&self, val: Val) -> Result<Vec<Rc<str>>> {
+	pub fn manifest_stream(&self, val: Val) -> Result<Vec<IStr>> {
 		self.run_in_state(|| val.manifest_stream(&self.manifest_format()))
 	}
 
@@ -334,10 +340,16 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => func.evaluate_map(
-					self.create_default_context()?,
-					&self.settings().tla_vars,
-					true,
+				Val::Func(func) => push(
+					None,
+					|| "during TLA call".to_owned(),
+					|| {
+						Ok(func.evaluate_map(
+							self.create_default_context()?,
+							&self.settings().tla_vars,
+							true,
+						)?)
+					},
 				)?,
 				v => v,
 			})
@@ -370,7 +382,7 @@ impl EvaluationState {
 		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
 	}
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: Rc<str>) -> Result<Val> {
+	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: IStr) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
@@ -390,26 +402,26 @@ impl EvaluationState {
 
 /// Settings utilities
 impl EvaluationState {
-	pub fn add_ext_var(&self, name: Rc<str>, value: Val) {
+	pub fn add_ext_var(&self, name: IStr, value: Val) {
 		self.settings_mut().ext_vars.insert(name, value);
 	}
-	pub fn add_ext_str(&self, name: Rc<str>, value: Rc<str>) {
+	pub fn add_ext_str(&self, name: IStr, value: IStr) {
 		self.add_ext_var(name, Val::Str(value));
 	}
-	pub fn add_ext_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+	pub fn add_ext_code(&self, name: IStr, code: IStr) -> Result<()> {
 		let value =
 			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("ext_code {}", name))), code)?;
 		self.add_ext_var(name, value);
 		Ok(())
 	}
 
-	pub fn add_tla(&self, name: Rc<str>, value: Val) {
+	pub fn add_tla(&self, name: IStr, value: Val) {
 		self.settings_mut().tla_vars.insert(name, value);
 	}
-	pub fn add_tla_str(&self, name: Rc<str>, value: Rc<str>) {
+	pub fn add_tla_str(&self, name: IStr, value: IStr) {
 		self.add_tla(name, Val::Str(value));
 	}
-	pub fn add_tla_code(&self, name: Rc<str>, code: Rc<str>) -> Result<()> {
+	pub fn add_tla_code(&self, name: IStr, code: IStr) -> Result<()> {
 		let value =
 			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("tla_code {}", name))), code)?;
 		self.add_tla(name, value);
@@ -419,7 +431,7 @@ impl EvaluationState {
 	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
 		Ok(self.settings().import_resolver.resolve_file(from, path)?)
 	}
-	pub fn load_file_contents(&self, path: &PathBuf) -> Result<Rc<str>> {
+	pub fn load_file_contents(&self, path: &PathBuf) -> Result<IStr> {
 		Ok(self.settings().import_resolver.load_file_contents(path)?)
 	}
 
@@ -430,7 +442,7 @@ impl EvaluationState {
 		self.settings_mut().import_resolver = resolver;
 	}
 
-	pub fn add_native(&self, name: Rc<str>, cb: Rc<NativeCallback>) {
+	pub fn add_native(&self, name: IStr, cb: Rc<NativeCallback>) {
 		self.settings_mut().ext_natives.insert(name, cb);
 	}
 
@@ -467,6 +479,7 @@ impl EvaluationState {
 pub mod tests {
 	use super::Val;
 	use crate::{error::Error::*, primitive_equals, EvaluationState};
+	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
 
@@ -477,11 +490,19 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					&ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
+					Some(&ExprLocation(
+						Rc::new(PathBuf::from("test1.jsonnet")),
+						10,
+						20,
+					)),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
+							Some(&ExprLocation(
+								Rc::new(PathBuf::from("test2.jsonnet")),
+								30,
+								40,
+							)),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
@@ -883,14 +904,20 @@ pub mod tests {
 					Param("a".into(), None),
 					Param("b".into(), None),
 				])),
-				|args| match (&args[0], &args[1]) {
-					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
-					(_, _) => todo!(),
+				|caller, args| {
+					assert_eq!(
+						caller.unwrap(),
+						Rc::new(PathBuf::from("native_caller.jsonnet"))
+					);
+					match (&args[0], &args[1]) {
+						(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
+						(_, _) => unreachable!(),
+					}
 				},
 			)),
 		);
 		evaluator.evaluate_snippet_raw(
-			Rc::new(PathBuf::from("test.jsonnet")),
+			Rc::new(PathBuf::from("native_caller.jsonnet")),
 			"std.assertEqual(std.native(\"native_add\")(1, 2), 3)".into(),
 		)?;
 		Ok(())
@@ -904,13 +931,13 @@ pub mod tests {
 		Ok(())
 	}
 
-	struct TestImportResolver(Rc<str>);
+	struct TestImportResolver(IStr);
 	impl crate::import::ImportResolver for TestImportResolver {
 		fn resolve_file(&self, _: &PathBuf, _: &PathBuf) -> crate::error::Result<Rc<PathBuf>> {
 			Ok(Rc::new(PathBuf::from("/test")))
 		}
 
-		fn load_file_contents(&self, _: &PathBuf) -> crate::error::Result<Rc<str>> {
+		fn load_file_contents(&self, _: &PathBuf) -> crate::error::Result<IStr> {
 			Ok(self.0.clone())
 		}
 

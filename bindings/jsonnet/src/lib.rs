@@ -8,6 +8,7 @@ pub mod vars_tlas;
 
 use import::NativeImportResolver;
 use jrsonnet_evaluator::{EvaluationState, ManifestFormat, Val};
+use jrsonnet_interner::IStr;
 use std::{
 	alloc::Layout,
 	ffi::{CStr, CString},
@@ -161,7 +162,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	})
 }
 
-fn multi_to_raw(multi: Vec<(Rc<str>, Rc<str>)>) -> *const c_char {
+fn multi_to_raw(multi: Vec<(IStr, IStr)>) -> *const c_char {
 	let mut out = Vec::new();
 	for (i, (k, v)) in multi.iter().enumerate() {
 		if i != 0 {
@@ -237,7 +238,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	})
 }
 
-fn stream_to_raw(multi: Vec<Rc<str>>) -> *const c_char {
+fn stream_to_raw(multi: Vec<IStr>) -> *const c_char {
 	let mut out = Vec::new();
 	for (i, v) in multi.iter().enumerate() {
 		if i != 0 {

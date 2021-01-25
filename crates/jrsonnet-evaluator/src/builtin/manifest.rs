@@ -33,16 +33,16 @@ fn manifest_json_ex_buf(
 ) -> Result<()> {
 	use std::fmt::Write;
 	let mtype = options.mtype;
-	match val.unwrap_if_lazy()? {
+	match val {
 		Val::Bool(v) => {
-			if v {
+			if *v {
 				buf.push_str("true");
 			} else {
 				buf.push_str("false");
 			}
 		}
 		Val::Null => buf.push_str("null"),
-		Val::Str(s) => buf.push_str(&escape_string_json(&s)),
+		Val::Str(s) => buf.push_str(&escape_string_json(s)),
 		Val::Num(n) => write!(buf, "{}", n).unwrap(),
 		Val::Arr(items) => {
 			buf.push('[');
@@ -63,7 +63,7 @@ fn manifest_json_ex_buf(
 						}
 					}
 					buf.push_str(cur_padding);
-					manifest_json_ex_buf(item, buf, cur_padding, options)?;
+					manifest_json_ex_buf(&item?, buf, cur_padding, options)?;
 				}
 				cur_padding.truncate(old_len);
 
@@ -118,7 +118,6 @@ fn manifest_json_ex_buf(
 			buf.push('}');
 		}
 		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
-		Val::Lazy(_) => unreachable!(),
 	};
 	Ok(())
 }

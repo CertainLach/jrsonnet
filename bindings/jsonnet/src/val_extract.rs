@@ -9,7 +9,7 @@ use std::{
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &EvaluationState, v: &Val) -> *mut c_char {
-	match v.unwrap_if_lazy().unwrap() {
+	match v {
 		Val::Str(s) => CString::new(&*s as &str).unwrap().into_raw(),
 		_ => std::ptr::null_mut(),
 	}
@@ -20,9 +20,9 @@ pub extern "C" fn jsonnet_json_extract_number(
 	v: &Val,
 	out: &mut c_double,
 ) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
+	match v {
 		Val::Num(n) => {
-			*out = n;
+			*out = *n;
 			1
 		}
 		_ => 0,
@@ -30,7 +30,7 @@ pub extern "C" fn jsonnet_json_extract_number(
 }
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_bool(_vm: &EvaluationState, v: &Val) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
+	match v {
 		Val::Bool(false) => 0,
 		Val::Bool(true) => 1,
 		_ => 2,
@@ -38,7 +38,7 @@ pub extern "C" fn jsonnet_json_extract_bool(_vm: &EvaluationState, v: &Val) -> c
 }
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_null(_vm: &EvaluationState, v: &Val) -> c_int {
-	match v.unwrap_if_lazy().unwrap() {
+	match v {
 		Val::Null => 1,
 		_ => 0,
 	}

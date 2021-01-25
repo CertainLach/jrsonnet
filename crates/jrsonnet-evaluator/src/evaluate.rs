@@ -1,18 +1,19 @@
 use crate::{
 	context_creator, error::Error::*, future_wrapper, lazy_val, push, throw, with_state, Context,
 	ContextCreator, FuncDesc, FuncVal, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
-	ValType,
 };
 use closure::closure;
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
 	Visibility,
 };
+use jrsonnet_types::ValType;
 use rustc_hash::FxHashMap;
 use std::{collections::HashMap, rc::Rc};
 
-pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<str>, LazyBinding) {
+pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr, LazyBinding) {
 	let b = b.clone();
 	if let Some(params) = &b.params {
 		let params = params.clone();
@@ -45,7 +46,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (Rc<st
 	}
 }
 
-pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: LocExpr) -> Val {
+pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
 	Val::Func(Rc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
@@ -57,12 +58,11 @@ pub fn evaluate_method(ctx: Context, name: Rc<str>, params: ParamsDesc, body: Lo
 pub fn evaluate_field_name(
 	context: Context,
 	field_name: &jrsonnet_parser::FieldName,
-) -> Result<Option<Rc<str>>> {
+) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jrsonnet_parser::FieldName::Dyn(expr) => {
-			let lazy = evaluate(context, expr)?;
-			let value = lazy.unwrap_if_lazy()?;
+			let value = evaluate(context, expr)?;
 			if matches!(value, Val::Null) {
 				None
 			} else {
@@ -74,11 +74,10 @@ pub fn evaluate_field_name(
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	Ok(match (op, b) {
-		(o, Val::Lazy(l)) => evaluate_unary_op(o, &l.evaluate()?)?,
 		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
 		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
 		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
-		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type()?)),
+		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
 
@@ -94,12 +93,17 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().to_string()?, s).into()),
 
 		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
-		(Val::Arr(a), Val::Arr(b)) => Val::Arr(Rc::new([&a[..], &b[..]].concat())),
+		(Val::Arr(a), Val::Arr(b)) => {
+			let mut out = Vec::with_capacity(a.len() + b.len());
+			out.extend(a.iter_lazy());
+			out.extend(b.iter_lazy());
+			Val::Arr(out.into())
+		}
 		(Val::Num(v1), Val::Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
-			a.value_type()?,
-			b.value_type()?,
+			a.value_type(),
+			b.value_type(),
 		)),
 	})
 }
@@ -110,15 +114,11 @@ pub fn evaluate_binary_op_special(
 	op: BinaryOpType,
 	b: &LocExpr,
 ) -> Result<Val> {
-	Ok(
-		match (evaluate(context.clone(), a)?.unwrap_if_lazy()?, op, b) {
-			(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
-			(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
-			(a, op, eb) => {
-				evaluate_binary_op_normal(&a, op, &evaluate(context, eb)?.unwrap_if_lazy()?)?
-			}
-		},
-	)
+	Ok(match (evaluate(context.clone(), a)?, op, b) {
+		(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
+		(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
+		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(context, eb)?)?,
+	})
 }
 
 pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
@@ -177,13 +177,13 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			op,
-			a.value_type()?,
-			b.value_type()?,
+			a.value_type(),
+			b.value_type(),
 		)),
 	})
 }
 
-future_wrapper!(HashMap<Rc<str>, LazyBinding>, FutureNewBindings);
+future_wrapper!(HashMap<IStr, LazyBinding>, FutureNewBindings);
 future_wrapper!(ObjValue, FutureObjValue);
 
 pub fn evaluate_comp<T>(
@@ -200,23 +200,20 @@ pub fn evaluate_comp<T>(
 				None
 			}
 		}
-		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
-			match evaluate(context.clone(), expr)?.unwrap_if_lazy()? {
-				Val::Arr(list) => {
-					let mut out = Vec::new();
-					for item in list.iter() {
-						let item = item.unwrap_if_lazy()?;
-						out.push(evaluate_comp(
-							context.clone().with_var(var.clone(), item.clone()),
-							value,
-							&specs[1..],
-						)?);
-					}
-					Some(out.into_iter().flatten().flatten().collect())
+		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => match evaluate(context.clone(), expr)? {
+			Val::Arr(list) => {
+				let mut out = Vec::new();
+				for item in list.iter() {
+					out.push(evaluate_comp(
+						context.clone().with_var(var.clone(), item?.clone()),
+						value,
+						&specs[1..],
+					)?);
 				}
-				_ => throw!(InComprehensionCanOnlyIterateOverArray),
+				Some(out.into_iter().flatten().flatten().collect())
 			}
-		}
+			_ => throw!(InComprehensionCanOnlyIterateOverArray),
+		},
 	})
 }
 
@@ -234,7 +231,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		})
 	);
 	{
-		let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+		let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 		for (n, b) in members
 			.iter()
 			.filter_map(|m| match m {
@@ -338,7 +335,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							)?)
 						})
 					);
-					let mut bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+					let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 					for (n, b) in obj
 						.pre_locals
 						.iter()
@@ -375,7 +372,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							},
 						);
 					}
-					v => throw!(FieldMustBeStringGot(v.value_type()?)),
+					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}
 			}
 
@@ -388,11 +385,10 @@ pub fn evaluate_apply(
 	context: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: &Option<ExprLocation>,
+	loc: Option<&ExprLocation>,
 	tailstrict: bool,
 ) -> Result<Val> {
-	let lazy = evaluate(context.clone(), value)?;
-	let value = lazy.unwrap_if_lazy()?;
+	let value = evaluate(context.clone(), value)?;
 	Ok(match value {
 		Val::Func(f) => {
 			let body = || f.evaluate(context, loc, args, tailstrict);
@@ -402,11 +398,11 @@ pub fn evaluate_apply(
 				push(loc, || format!("function <{}> call", f.name()), body)?
 			}
 		}
-		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type()?)),
+		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type())),
 	})
 }
 
-pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: Rc<str>) -> Result<Val> {
+pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: IStr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, _loc) = lexpr;
 	Ok(match &**expr {
@@ -434,9 +430,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push(
-			loc,
+			loc.as_ref(),
 			|| format!("variable <{}>", name),
-			|| Ok(Val::Lazy(context.binding(name.clone())?).unwrap_if_lazy()?),
+			|| Ok(context.binding(name.clone())?.evaluate()?),
 		)?,
 		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
@@ -444,22 +440,19 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.super_obj()
 				.clone()
 				.expect("no super found")
-				.get_raw(name, &context.this().clone().expect("no this found"))?
+				.get_raw(name, Some(&context.this().clone().expect("no this found")))?
 				.expect("value not found")
 		}
 		Index(value, index) => {
-			match (
-				evaluate(context.clone(), value)?.unwrap_if_lazy()?,
-				evaluate(context, index)?,
-			) {
+			match (evaluate(context.clone(), value)?, evaluate(context, index)?) {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
 					push(
-						loc,
+						loc.as_ref(),
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
-								Ok(v.unwrap_if_lazy()?)
+								Ok(v)
 							} else if v.get("__intrinsic_namespace__".into())?.is_some() {
 								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(s))))
 							} else {
@@ -471,23 +464,21 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Obj,
 					ValType::Str,
-					n.value_type()?,
+					n.value_type(),
 				)),
 
 				(Val::Arr(v), Val::Num(n)) => {
 					if n.fract() > f64::EPSILON {
 						throw!(FractionalIndex)
 					}
-					v.get(n as usize)
+					v.get(n as usize)?
 						.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
-						.clone()
-						.unwrap_if_lazy()?
 				}
 				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
 				(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Arr,
 					ValType::Num,
-					n.value_type()?,
+					n.value_type(),
 				)),
 
 				(Val::Str(s), Val::Num(n)) => Val::Str(
@@ -500,14 +491,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Str,
 					ValType::Num,
-					n.value_type()?,
+					n.value_type(),
 				)),
 
-				(v, _) => throw!(CantIndexInto(v.value_type()?)),
+				(v, _) => throw!(CantIndexInto(v.value_type())),
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<Rc<str>, LazyBinding> = HashMap::new();
+			let mut new_bindings: HashMap<IStr, LazyBinding> = HashMap::new();
 			let future_context = Context::new_future();
 
 			let context_creator = context_creator!(
@@ -529,31 +520,35 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Arr(items) => {
 			let mut out = Vec::with_capacity(items.len());
 			for item in items {
-				out.push(Val::Lazy(lazy_val!(
+				out.push(LazyVal::new(Box::new(
 					closure!(clone context, clone item, || {
 						evaluate(context.clone(), &item)
-					})
+					}),
 				)));
 			}
-			Val::Arr(Rc::new(out))
+			Val::Arr(out.into())
 		}
 		ArrComp(expr, comp_specs) => Val::Arr(
 			// First comp_spec should be for_spec, so no "None" possible here
-			Rc::new(evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?.unwrap()),
+			evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?
+				.unwrap()
+				.into(),
 		),
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
-		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
+		Apply(value, args, tailstrict) => {
+			evaluate_apply(context, value, args, loc.as_ref(), *tailstrict)?
+		}
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
 		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(AssertStmt(value, msg), returned) => {
 			let assertion_result = push(
-				&value.1,
+				value.1.as_ref(),
 				|| "assertion condition".to_owned(),
 				|| {
 					evaluate(context.clone(), value)?
@@ -562,14 +557,22 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			)?;
 			if assertion_result {
 				evaluate(context, returned)?
-			} else if let Some(msg) = msg {
-				throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
 			} else {
-				throw!(AssertionFailed(Val::Null.to_string()?));
+				push(
+					value.1.as_ref(),
+					|| "assertion failure".to_owned(),
+					|| {
+						if let Some(msg) = msg {
+							throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
+						} else {
+							throw!(AssertionFailed(Val::Null.to_string()?));
+						}
+					},
+				)?
 			}
 		}
 		ErrorStmt(e) => push(
-			loc,
+			loc.as_ref(),
 			|| "error statement".to_owned(),
 			|| {
 				throw!(RuntimeError(
@@ -583,7 +586,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_else,
 		} => {
 			if push(
-				loc,
+				loc.as_ref(),
 				|| "if condition".to_owned(),
 				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
 			)? {
@@ -603,7 +606,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let import_location = Rc::make_mut(&mut tmp);
 			import_location.pop();
 			push(
-				loc,
+				loc.as_ref(),
 				|| format!("import {:?}", path),
 				|| with_state(|s| s.import_file(import_location, path)),
 			)?

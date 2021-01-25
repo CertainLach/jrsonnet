@@ -46,7 +46,6 @@ fn get_sort_type<T>(
 	let mut sort_type = SortKeyType::Unknown;
 	for i in values.iter_mut() {
 		let i = key_getter(i);
-		i.inplace_unwrap()?;
 		match (i, sort_type) {
 			(Val::Str(_), SortKeyType::Unknown) => sort_type = SortKeyType::String,
 			(Val::Num(_), SortKeyType::Unknown) => sort_type = SortKeyType::Number,

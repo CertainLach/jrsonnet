@@ -12,8 +12,6 @@ default = ["serialized-stdlib", "faster", "explaining-traces", "serde-json"]
 serialized-stdlib = ["serde", "bincode", "jrsonnet-parser/deserialize"]
 # Allow to convert Val into serde_json::Value and backwards
 serde-json = ["serde", "serde_json"]
-# Same as above, but with generated code instead of serde. Reduces memory usage, but increases binary size and compilation time
-codegenerated-stdlib = []
 # Replace some standard library functions with faster implementations (I.e manifestJsonEx)
 # Library works fine without this feature, but requires more memory and time for std function calls
 faster = []
@@ -24,8 +22,10 @@ explaining-traces = ["annotate-snippets"]
 unstable = []
 
 [dependencies]
+jrsonnet-interner = { path = "../jrsonnet-interner" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.3" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.3" }
+jrsonnet-types = { path = "../jrsonnet-types", version = "0.3.3" }
 pathdiff = "0.2.0"
 
 closure = "0.3.0"
@@ -57,8 +57,7 @@ features = ["color"]
 optional = true
 
 [build-dependencies]
-jrsonnet-parser = { path = "../jrsonnet-parser", features = ["dump", "serialize", "deserialize"], version = "0.3.3" }
+jrsonnet-parser = { path = "../jrsonnet-parser", features = ["serialize", "deserialize"], version = "0.3.3" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.3" }
-structdump = "0.1.2"
 serde = "1.0"
 bincode = "1.3.1"

@@ -2,7 +2,9 @@
 //! Only tested with variables, which haven't altered by code before appearing here
 //! In jrsonnet every value is immutable, and this code is probally broken
 
-use jrsonnet_evaluator::{EvaluationState, LazyBinding, LazyVal, ObjMember, ObjValue, Val};
+use jrsonnet_evaluator::{
+	ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+};
 use jrsonnet_parser::Visibility;
 use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
 
@@ -12,14 +14,17 @@ use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_array_append(
 	_vm: &EvaluationState,
-	arr: *mut Val,
+	arr: &mut Val,
 	val: &Val,
 ) {
-	match *Box::from_raw(arr) {
+	match arr {
 		Val::Arr(old) => {
-			let mut new = Rc::try_unwrap(old).expect("arr with no refs");
-			new.push(val.clone());
-			*arr = Val::Arr(Rc::new(new));
+			let mut new = Vec::new();
+			for item in old.iter_lazy() {
+				new.push(item);
+			}
+			new.push(LazyVal::new_resolved(val.clone()));
+			*arr = Val::Arr(ArrValue::Lazy(Rc::new(new)));
 		}
 		_ => panic!("should receive array"),
 	}

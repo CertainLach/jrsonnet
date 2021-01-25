@@ -1,8 +1,9 @@
 use crate::{error::Error::*, evaluate, lazy_val, resolved_lazy_val, throw, Context, Result, Val};
 use closure::closure;
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, ParamsDesc};
 use rustc_hash::FxHashMap;
-use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
+use std::{collections::HashMap, hash::BuildHasherDefault};
 
 const NO_DEFAULT_CONTEXT: &str =
 	"no default context set for call with defined default parameter value";
@@ -66,7 +67,7 @@ pub fn parse_function_call_map(
 	ctx: Context,
 	body_ctx: Option<Context>,
 	params: &ParamsDesc,
-	args: &HashMap<Rc<str>, Val>,
+	args: &HashMap<IStr, Val>,
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
@@ -143,9 +144,10 @@ pub fn place_args(
 #[macro_export]
 macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
-		$($id: expr, $name: ident $(: [$($p: path)|+] $(!! $a: path)?)?, $nt: expr);+ $(;)?
+		$($id: expr, $name: ident: $ty: expr $(=>$match: path)?);+ $(;)?
 	], $handler:block) => {{
-		use crate::{throw, error::Error::*};
+		use $crate::{error::Error::*, throw, evaluate, push_stack_frame, typed::CheckType};
+
 		let args = $args;
 		if args.len() > $total_args {
 			throw!(TooManyArgsFunctionHas($total_args));
@@ -160,47 +162,19 @@ macro_rules! parse_args {
 					throw!(IntrinsicArgumentReorderingIsNotSupportedYet);
 				}
 			}
-			let $name = evaluate($ctx.clone(), &$name.1)?;
+			let $name = push_stack_frame(None, || format!("evaluating argument"), || {
+				let value = evaluate($ctx.clone(), &$name.1)?;
+				$ty.check(&value)?;
+				Ok(value)
+			})?;
 			$(
-				match $name {
-					$($p(_))|+ => {},
-					_ => throw!(TypeMismatch(
-						concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"),
-						$nt, $name.value_type()?
-					)),
+				let $name = if let $match(v) = $name {
+					v
+				} else {
+					unreachable!();
 				};
-				$(
-					let $name = match $name {
-						$a(v) => v,
-						_ =>throw!(TypeMismatch(concat!($fn_name, " ", stringify!($id), "nd (", stringify!($name), ") argument"), $nt, $name.value_type()?)),
-					};
-				)*
-			)*
+			)?
 		)+
 		($handler as crate::Result<_>)
 	}};
-}
-
-#[test]
-fn test() -> Result<()> {
-	use crate::val::ValType;
-	use jrsonnet_parser::*;
-	let state = crate::EvaluationState::default();
-	let evaluator = state.with_stdlib();
-	let ctx = evaluator.create_default_context()?;
-	evaluator.run_in_state(|| {
-		parse_args!(ctx, "test", ArgsDesc(vec![
-			Arg(None, el!(Expr::Num(2.0))),
-			Arg(Some("b".into()), el!(Expr::Num(1.0))),
-		]), 2, [
-			0, a: [Val::Num]!!Val::Num, vec![ValType::Num];
-			1, b: [Val::Num]!!Val::Num, vec![ValType::Num];
-		], {
-			assert!((a - 2.0).abs() <= f64::EPSILON);
-			assert!((b - 1.0).abs() <= f64::EPSILON);
-			Ok(())
-		})
-		.unwrap();
-		Ok(())
-	})
 }

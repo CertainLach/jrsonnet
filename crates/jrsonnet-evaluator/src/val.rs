@@ -9,13 +9,10 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
+use jrsonnet_interner::IStr;
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
-use std::{
-	cell::RefCell,
-	collections::HashMap,
-	fmt::{Debug, Display},
-	rc::Rc,
-};
+use jrsonnet_types::ValType;
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 enum LazyValInternals {
 	Computed(Val),
@@ -65,7 +62,7 @@ impl PartialEq for LazyVal {
 
 #[derive(Debug, PartialEq)]
 pub struct FuncDesc {
-	pub name: Rc<str>,
+	pub name: IStr,
 	pub ctx: Context,
 	pub params: ParamsDesc,
 	pub body: LocExpr,
@@ -76,9 +73,9 @@ pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intrinsic(Rc<str>),
+	Intrinsic(IStr),
 	/// Library functions implemented in native
-	NativeExt(Rc<str>, Rc<NativeCallback>),
+	NativeExt(IStr, Rc<NativeCallback>),
 }
 
 impl PartialEq for FuncVal {
@@ -95,7 +92,7 @@ impl FuncVal {
 	pub fn is_ident(&self) -> bool {
 		matches!(&self, Self::Intrinsic(n) if n as &str == "id")
 	}
-	pub fn name(&self) -> Rc<str> {
+	pub fn name(&self) -> IStr {
 		match self {
 			Self::Normal(normal) => normal.name.clone(),
 			Self::Intrinsic(name) => format!("std.{}", name).into(),
@@ -105,7 +102,7 @@ impl FuncVal {
 	pub fn evaluate(
 		&self,
 		call_ctx: Context,
-		loc: &Option<ExprLocation>,
+		loc: Option<&ExprLocation>,
 		args: &ArgsDesc,
 		tailstrict: bool,
 	) -> Result<Val> {
@@ -127,7 +124,7 @@ impl FuncVal {
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
 				}
-				Ok(handler.call(&out_args)?)
+				Ok(handler.call(loc.clone().map(|l| l.0.clone()), &out_args)?)
 			}
 		}
 	}
@@ -135,7 +132,7 @@ impl FuncVal {
 	pub fn evaluate_map(
 		&self,
 		call_ctx: Context,
-		args: &HashMap<Rc<str>, Val>,
+		args: &HashMap<IStr, Val>,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
@@ -166,36 +163,6 @@ impl FuncVal {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq)]
-pub enum ValType {
-	Bool,
-	Null,
-	Str,
-	Num,
-	Arr,
-	Obj,
-	Func,
-}
-impl ValType {
-	pub const fn name(&self) -> &'static str {
-		use ValType::*;
-		match self {
-			Bool => "boolean",
-			Null => "null",
-			Str => "string",
-			Num => "number",
-			Arr => "array",
-			Obj => "object",
-			Func => "function",
-		}
-	}
-}
-impl Display for ValType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{}", self.name())
-	}
-}
-
 #[derive(Clone)]
 pub enum ManifestFormat {
 	YamlStream(Box<ManifestFormat>),
@@ -206,13 +173,144 @@ pub enum ManifestFormat {
 }
 
 #[derive(Debug, Clone)]
+pub enum ArrValue {
+	Lazy(Rc<Vec<LazyVal>>),
+	Eager(Rc<Vec<Val>>),
+	Extended(Box<(Self, Self)>),
+}
+impl ArrValue {
+	pub fn new_eager() -> Self {
+		Self::Eager(Rc::new(Vec::new()))
+	}
+
+	pub fn len(&self) -> usize {
+		match self {
+			Self::Lazy(l) => l.len(),
+			Self::Eager(e) => e.len(),
+			Self::Extended(v) => v.0.len() + v.1.len(),
+		}
+	}
+
+	pub fn is_empty(&self) -> bool {
+		self.len() == 0
+	}
+
+	pub fn get(&self, index: usize) -> Result<Option<Val>> {
+		match self {
+			Self::Lazy(vec) => {
+				if let Some(v) = vec.get(index) {
+					Ok(Some(v.evaluate()?))
+				} else {
+					Ok(None)
+				}
+			}
+			Self::Eager(vec) => Ok(vec.get(index).cloned()),
+			Self::Extended(v) => {
+				let a_len = v.0.len();
+				if a_len > index {
+					v.0.get(index)
+				} else {
+					v.1.get(index - a_len)
+				}
+			}
+		}
+	}
+
+	pub fn get_lazy(&self, index: usize) -> Option<LazyVal> {
+		match self {
+			Self::Lazy(vec) => vec.get(index).cloned(),
+			Self::Eager(vec) => vec.get(index).cloned().map(LazyVal::new_resolved),
+			Self::Extended(v) => {
+				let a_len = v.0.len();
+				if a_len > index {
+					v.0.get_lazy(index)
+				} else {
+					v.1.get_lazy(index - a_len)
+				}
+			}
+		}
+	}
+
+	pub fn evaluated(&self) -> Result<Rc<Vec<Val>>> {
+		Ok(match self {
+			Self::Lazy(vec) => {
+				let mut out = Vec::with_capacity(vec.len());
+				for item in vec.iter() {
+					out.push(item.evaluate()?);
+				}
+				Rc::new(out)
+			}
+			Self::Eager(vec) => vec.clone(),
+			Self::Extended(_v) => {
+				let mut out = Vec::with_capacity(self.len());
+				for item in self.iter() {
+					out.push(item?);
+				}
+				Rc::new(out)
+			}
+		})
+	}
+
+	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
+		(0..self.len()).map(move |idx| match self {
+			Self::Lazy(l) => l[idx].evaluate(),
+			Self::Eager(e) => Ok(e[idx].clone()),
+			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
+		})
+	}
+
+	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
+		(0..self.len()).map(move |idx| match self {
+			Self::Lazy(l) => l[idx].clone(),
+			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
+			Self::Extended(_) => self.get_lazy(idx).unwrap(),
+		})
+	}
+
+	pub fn reversed(self) -> Self {
+		match self {
+			Self::Lazy(vec) => {
+				let mut out = (&vec as &Vec<_>).clone();
+				out.reverse();
+				Self::Lazy(Rc::new(out))
+			}
+			Self::Eager(vec) => {
+				let mut out = (&vec as &Vec<_>).clone();
+				out.reverse();
+				Self::Eager(Rc::new(out))
+			}
+			Self::Extended(b) => Self::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
+		}
+	}
+
+	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
+		match (a, b) {
+			(Self::Lazy(a), Self::Lazy(b)) => Rc::ptr_eq(a, b),
+			(Self::Eager(a), Self::Eager(b)) => Rc::ptr_eq(a, b),
+			_ => false,
+		}
+	}
+}
+
+impl From<Vec<LazyVal>> for ArrValue {
+	fn from(v: Vec<LazyVal>) -> Self {
+		Self::Lazy(Rc::new(v))
+	}
+}
+
+impl From<Vec<Val>> for ArrValue {
+	fn from(v: Vec<Val>) -> Self {
+		Self::Eager(Rc::new(v))
+	}
+}
+
+#[derive(Debug, Clone)]
 pub enum Val {
 	Bool(bool),
 	Null,
-	Str(Rc<str>),
+	Str(IStr),
 	Num(f64),
-	Lazy(LazyVal),
-	Arr(Rc<Vec<Val>>),
+	Arr(ArrValue),
 	Obj(ObjValue),
 	Func(Rc<FuncVal>),
 }
@@ -237,40 +335,33 @@ impl Val {
 	}
 
 	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
-		let this_type = self.value_type()?;
+		let this_type = self.value_type();
 		if this_type != val_type {
 			throw!(TypeMismatch(context, vec![val_type], this_type))
 		} else {
 			Ok(())
 		}
 	}
+	pub fn unwrap_num(self) -> Result<f64> {
+		Ok(matches_unwrap!(self, Self::Num(v), v))
+	}
+	pub fn unwrap_func(self) -> Result<Rc<FuncVal>> {
+		Ok(matches_unwrap!(self, Self::Func(v), v))
+	}
 	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {
 		self.assert_type(context, ValType::Bool)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Bool(v), v))
+		Ok(matches_unwrap!(self, Self::Bool(v), v))
 	}
-	pub fn try_cast_str(self, context: &'static str) -> Result<Rc<str>> {
+	pub fn try_cast_str(self, context: &'static str) -> Result<IStr> {
 		self.assert_type(context, ValType::Str)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Str(v), v))
+		Ok(matches_unwrap!(self, Self::Str(v), v))
 	}
 	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
 		self.assert_type(context, ValType::Num)?;
-		Ok(matches_unwrap!(self.unwrap_if_lazy()?, Self::Num(v), v))
+		self.unwrap_num()
 	}
-	pub fn inplace_unwrap(&mut self) -> Result<()> {
-		while let Self::Lazy(lazy) = self {
-			*self = lazy.evaluate()?;
-		}
-		Ok(())
-	}
-	pub fn unwrap_if_lazy(&self) -> Result<Self> {
-		Ok(if let Self::Lazy(v) = self {
-			v.evaluate()?.unwrap_if_lazy()?
-		} else {
-			self.clone()
-		})
-	}
-	pub fn value_type(&self) -> Result<ValType> {
-		Ok(match self {
+	pub const fn value_type(&self) -> ValType {
+		match self {
 			Self::Str(..) => ValType::Str,
 			Self::Num(..) => ValType::Num,
 			Self::Arr(..) => ValType::Arr,
@@ -278,18 +369,17 @@ impl Val {
 			Self::Bool(_) => ValType::Bool,
 			Self::Null => ValType::Null,
 			Self::Func(..) => ValType::Func,
-			Self::Lazy(_) => self.clone().unwrap_if_lazy()?.value_type()?,
-		})
+		}
 	}
 
-	pub fn to_string(&self) -> Result<Rc<str>> {
-		Ok(match self.unwrap_if_lazy()? {
+	pub fn to_string(&self) -> Result<IStr> {
+		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
-			Self::Str(s) => s,
+			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
-				&v,
+				v,
 				&ManifestJsonOptions {
 					padding: "",
 					mtype: ManifestType::ToString,
@@ -300,7 +390,7 @@ impl Val {
 	}
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(Rc<str>, Rc<str>)>> {
+	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
 		let obj = match self {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
@@ -318,19 +408,19 @@ impl Val {
 	}
 
 	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<Rc<str>>> {
+	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
 		let arr = match self {
 			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
 		};
 		let mut out = Vec::with_capacity(arr.len());
 		for i in arr.iter() {
-			out.push(i.manifest(ty)?);
+			out.push(i?.manifest(ty)?);
 		}
 		Ok(out)
 	}
 
-	pub fn manifest(&self, ty: &ManifestFormat) -> Result<Rc<str>> {
+	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
@@ -348,7 +438,7 @@ impl Val {
 				if !arr.is_empty() {
 					for v in arr.iter() {
 						out.push_str("---\n");
-						out.push_str(&v.manifest(format)?);
+						out.push_str(&v?.manifest(format)?);
 						out.push('\n');
 					}
 					out.push_str("...");
@@ -367,7 +457,7 @@ impl Val {
 	}
 
 	/// For manifestification
-	pub fn to_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_json(&self, padding: usize) -> Result<IStr> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -419,7 +509,7 @@ impl Val {
 			.try_cast_str("to json")?)
 		})
 	}
-	pub fn to_yaml(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
 		with_state(|s| {
 			let ctx = s
 				.create_default_context()?
@@ -456,7 +546,7 @@ const fn is_function_like(val: &Val) -> bool {
 
 /// Native implementation of `std.primitiveEquals`
 pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
-	Ok(match (val_a.unwrap_if_lazy()?, val_b.unwrap_if_lazy()?) {
+	Ok(match (val_a, val_b) {
 		(Val::Bool(a), Val::Bool(b)) => a == b,
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
@@ -467,7 +557,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Obj(_), Val::Obj(_)) => throw!(RuntimeError(
 			"primitiveEquals operates on primitive types, got object".into(),
 		)),
-		(a, b) if is_function_like(&a) && is_function_like(&b) => {
+		(a, b) if is_function_like(a) && is_function_like(b) => {
 			throw!(RuntimeError("cannot test equality of functions".into()))
 		}
 		(_, _) => false,
@@ -476,26 +566,28 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 
 /// Native implementation of `std.equals`
 pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
-	let val_a = val_a.unwrap_if_lazy()?;
-	let val_b = val_b.unwrap_if_lazy()?;
-
-	if val_a.value_type()? != val_b.value_type()? {
+	if val_a.value_type() != val_b.value_type() {
 		return Ok(false);
 	}
 	match (val_a, val_b) {
-		// Cant test for ptr equality, because all fields needs to be evaluated
 		(Val::Arr(a), Val::Arr(b)) => {
+			if ArrValue::ptr_eq(a, b) {
+				return Ok(true);
+			}
 			if a.len() != b.len() {
 				return Ok(false);
 			}
 			for (a, b) in a.iter().zip(b.iter()) {
-				if !equals(&a.unwrap_if_lazy()?, &b.unwrap_if_lazy()?)? {
+				if !equals(&a?, &b?)? {
 					return Ok(false);
 				}
 			}
 			Ok(true)
 		}
 		(Val::Obj(a), Val::Obj(b)) => {
+			if ObjValue::ptr_eq(a, b) {
+				return Ok(true);
+			}
 			let fields = a.visible_fields();
 			if fields != b.visible_fields() {
 				return Ok(false);
@@ -507,6 +599,6 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			}
 			Ok(true)
 		}
-		(a, b) => Ok(primitive_equals(&a, &b)?),
+		(a, b) => Ok(primitive_equals(a, b)?),
 	}
 }
