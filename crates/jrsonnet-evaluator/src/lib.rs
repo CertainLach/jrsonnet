@@ -490,11 +490,19 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					&ExprLocation(Rc::new(PathBuf::from("test1.jsonnet")), 10, 20),
+					Some(&ExprLocation(
+						Rc::new(PathBuf::from("test1.jsonnet")),
+						10,
+						20,
+					)),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							&ExprLocation(Rc::new(PathBuf::from("test2.jsonnet")), 30, 40),
+							Some(&ExprLocation(
+								Rc::new(PathBuf::from("test2.jsonnet")),
+								30,
+								40,
+							)),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
