@@ -123,10 +123,10 @@ pub enum Error {
 	TypeError(TypeLocError),
 	#[error("sort error: {0}")]
 	Sort(#[from] SortError),
-	
+
 	#[cfg(feature = "anyhow-error")]
 	#[error(transparent)]
-	Other(Rc<anyhow::Error>)
+	Other(Rc<anyhow::Error>),
 }
 
 #[cfg(feature = "anyhow-error")]
