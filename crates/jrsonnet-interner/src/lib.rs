@@ -42,7 +42,7 @@ impl Drop for IStr {
 	fn drop(&mut self) {
 		// First reference - current object, second - POOL
 		if Rc::strong_count(&self.0) <= 2 {
-			STR_POOL.with(|pool| pool.borrow_mut().remove(&self.0));
+			let _result = STR_POOL.try_with(|pool| pool.borrow_mut().remove(&self.0));
 		}
 	}
 }
