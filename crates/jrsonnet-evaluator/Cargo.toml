@@ -17,6 +17,8 @@ serde-json = ["serde", "serde_json"]
 faster = []
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
+# Allows library authors to throw custom errors
+anyhow-error = ["anyhow"]
 
 # Unlocks extra features, but works only on unstable
 unstable = []
@@ -36,6 +38,10 @@ base64 = "0.13.0"
 rustc-hash = "1.1.0"
 
 thiserror = "1.0"
+
+[dependencies.anyhow]
+version = "1.0"
+optional = true
 
 # Serialized stdlib
 [dependencies.serde]

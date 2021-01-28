@@ -123,7 +123,19 @@ pub enum Error {
 	TypeError(TypeLocError),
 	#[error("sort error: {0}")]
 	Sort(#[from] SortError),
+	
+	#[cfg(feature = "anyhow-error")]
+	#[error(transparent)]
+	Other(Rc<anyhow::Error>)
 }
+
+#[cfg(feature = "anyhow-error")]
+impl From<anyhow::Error> for LocError {
+	fn from(e: anyhow::Error) -> Self {
+		Self::new(Error::Other(Rc::new(e)))
+	}
+}
+
 impl From<Error> for LocError {
 	fn from(e: Error) -> Self {
 		Self::new(e)
