@@ -62,10 +62,10 @@ impl ObjValue {
 	pub fn new_empty() -> Self {
 		Self::new(None, Rc::new(FxHashMap::default()))
 	}
-	pub fn with_super(&self, super_obj: Self) -> Self {
+	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
 			None => Self::new(Some(super_obj), self.0.this_entries.clone()),
-			Some(v) => Self::new(Some(v.with_super(super_obj)), self.0.this_entries.clone()),
+			Some(v) => Self::new(Some(v.extend_from(super_obj)), self.0.this_entries.clone()),
 		}
 	}
 	pub fn with_this(&self, this_obj: Self) -> Self {

@@ -92,7 +92,7 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().to_string()?).into()),
 		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().to_string()?, s).into()),
 
-		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.with_super(v1.clone())),
+		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.extend_from(v1.clone())),
 		(Val::Arr(a), Val::Arr(b)) => {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a.iter_lazy());
