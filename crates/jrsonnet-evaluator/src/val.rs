@@ -395,7 +395,7 @@ impl Val {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
 		};
-		let keys = obj.visible_fields();
+		let keys = obj.fields();
 		let mut out = Vec::with_capacity(keys.len());
 		for key in keys {
 			let value = obj
@@ -588,8 +588,8 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			if ObjValue::ptr_eq(a, b) {
 				return Ok(true);
 			}
-			let fields = a.visible_fields();
-			if fields != b.visible_fields() {
+			let fields = a.fields();
+			if fields != b.fields() {
 				return Ok(false);
 			}
 			for field in fields {

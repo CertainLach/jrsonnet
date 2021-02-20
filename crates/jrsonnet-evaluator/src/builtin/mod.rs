@@ -144,12 +144,7 @@ fn builtin_object_fields_ex(
 		0, obj: ty!(object) => Val::Obj;
 		1, inc_hidden: ty!(boolean) => Val::Bool;
 	], {
-		let mut out = obj.fields_visibility()
-			.into_iter()
-			.filter(|(_k, v)| *v || inc_hidden)
-			.map(|(k, _v)|k)
-			.collect::<Vec<_>>();
-		out.sort();
+		let out = obj.fields_ex(inc_hidden);
 		Ok(Val::Arr(out.into_iter().map(Val::Str).collect::<Vec<_>>().into()))
 	})
 }
@@ -164,12 +159,7 @@ fn builtin_object_has_ex(
 		1, f: ty!(string) => Val::Str;
 		2, inc_hidden: ty!(boolean) => Val::Bool;
 	], {
-		Ok(Val::Bool(
-			obj.fields_visibility()
-				.into_iter()
-				.filter(|(_k, v)| *v || inc_hidden)
-				.any(|(k, _v)| *k == *f),
-		))
+		Ok(Val::Bool(obj.has_field_ex(f, inc_hidden)))
 	})
 }
 

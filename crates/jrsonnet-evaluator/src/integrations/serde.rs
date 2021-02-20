@@ -3,10 +3,12 @@ use crate::{
 	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
 use jrsonnet_parser::Visibility;
+use rustc_hash::FxHasher;
 use serde_json::{Map, Number, Value};
 use std::{
 	collections::HashMap,
 	convert::{TryFrom, TryInto},
+	hash::BuildHasherDefault,
 	rc::Rc,
 };
 
@@ -31,7 +33,7 @@ impl TryFrom<&Val> for Value {
 			}
 			Val::Obj(o) => {
 				let mut out = Map::new();
-				for key in o.visible_fields() {
+				for key in o.fields() {
 					out.insert(
 						(&key as &str).into(),
 						(&o.get(key)?.expect("field exists")).try_into()?,
@@ -59,7 +61,10 @@ impl From<&Value> for Val {
 				Self::Arr(out.into())
 			}
 			Value::Object(o) => {
-				let mut entries = HashMap::with_capacity(o.len());
+				let mut entries = HashMap::with_capacity_and_hasher(
+					o.len(),
+					BuildHasherDefault::<FxHasher>::default(),
+				);
 				for (k, v) in o {
 					entries.insert(
 						(k as &str).into(),

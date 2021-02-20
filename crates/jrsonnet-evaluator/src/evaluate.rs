@@ -245,7 +245,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		new_bindings.fill(bindings);
 	}
 
-	let mut new_members = HashMap::new();
+	let mut new_members = FxHashMap::default();
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -320,7 +320,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 		ObjBody::MemberList(members) => evaluate_member_list_object(context, members)?,
 		ObjBody::ObjComp(obj) => {
 			let future_this = FutureObjValue::new();
-			let mut new_members = HashMap::new();
+			let mut new_members = FxHashMap::default();
 			for (k, v) in evaluate_comp(
 				context.clone(),
 				&|ctx| {
