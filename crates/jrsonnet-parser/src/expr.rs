@@ -32,6 +32,12 @@ pub enum Visibility {
 	Unhide,
 }
 
+impl Visibility {
+	pub fn is_visible(&self) -> bool {
+		matches!(self, Self::Normal | Self::Unhide)
+	}
+}
+
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq)]
@@ -337,8 +343,8 @@ macro_rules! loc_expr {
 				Some(ExprLocation($name, $start, $end))
 			} else {
 				None
-				},
-			)
+			},
+		)
 	};
 }
 

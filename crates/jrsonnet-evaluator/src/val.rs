@@ -343,7 +343,7 @@ macro_rules! matches_unwrap {
 		match $e {
 			$p => $r,
 			_ => panic!("no match"),
-			}
+		}
 	};
 }
 impl Val {
@@ -537,7 +537,7 @@ impl Val {
 			let ctx = s
 				.create_default_context()?
 				.with_var("__tmp__to_json__".into(), self.clone());
-			Ok(evaluate(
+			evaluate(
 				ctx,
 				&el!(Expr::Apply(
 					el!(Expr::Index(
@@ -558,7 +558,7 @@ impl Val {
 					false
 				)),
 			)?
-			.try_cast_str("to json")?)
+			.try_cast_str("to json")
 		})
 	}
 }

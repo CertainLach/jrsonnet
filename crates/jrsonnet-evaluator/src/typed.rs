@@ -16,8 +16,8 @@ macro_rules! unwrap_type {
 		match $value {
 			$match(v) => v,
 			_ => unreachable!(),
-			}
-		}};
+		}
+	}};
 }
 
 #[derive(Debug, Error, Clone)]
@@ -177,7 +177,7 @@ impl CheckType for ComplexValType {
 							None,
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
-							|| Ok(elem_type.check(&item.clone()?)?),
+							|| elem_type.check(&item.clone()?),
 						)?;
 					}
 					Ok(())
@@ -191,7 +191,7 @@ impl CheckType for ComplexValType {
 							None,
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
-							|| Ok(elem_type.check(&item.clone()?)?),
+							|| elem_type.check(&item.clone()?),
 						)?;
 					}
 					Ok(())

@@ -222,12 +222,12 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 	let future_this = FutureObjValue::new();
 	let context_creator = context_creator!(
 		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-			Ok(context.clone().extend_unbound(
+			context.clone().extend_unbound(
 				new_bindings.clone().unwrap(),
 				context.dollar().clone().or_else(||this.clone()),
 				Some(this.unwrap()),
 				super_obj
-			)?)
+			)
 		})
 	);
 	{
@@ -327,12 +327,12 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					let new_bindings = FutureNewBindings::new();
 					let context_creator = context_creator!(
 						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-							Ok(context.clone().extend_unbound(
+							context.clone().extend_unbound(
 								new_bindings.clone().unwrap(),
 								context.dollar().clone().or_else(||this.clone()),
 								None,
 								super_obj
-							)?)
+							)
 						})
 					);
 					let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
@@ -439,7 +439,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Var(name) => push(
 			loc.as_ref(),
 			|| format!("variable <{}>", name),
-			|| Ok(context.binding(name.clone())?.evaluate()?),
+			|| context.binding(name.clone())?.evaluate(),
 		)?,
 		Index(value, index) => {
 			match (evaluate(context.clone(), value)?, evaluate(context, index)?) {

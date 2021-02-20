@@ -319,8 +319,8 @@ pub mod tests {
 				&ParserSettings {
 					loc_data: false,
 					file_name: Rc::new(PathBuf::from("/test.jsonnet")),
-					},
-				)
+				},
+			)
 			.unwrap()
 		};
 	}

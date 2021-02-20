@@ -344,11 +344,11 @@ impl EvaluationState {
 					None,
 					|| "during TLA call".to_owned(),
 					|| {
-						Ok(func.evaluate_map(
+						func.evaluate_map(
 							self.create_default_context()?,
 							&self.settings().tla_vars,
 							true,
-						)?)
+						)
 					},
 				)?,
 				v => v,
@@ -432,7 +432,7 @@ impl EvaluationState {
 		Ok(self.settings().import_resolver.resolve_file(from, path)?)
 	}
 	pub fn load_file_contents(&self, path: &PathBuf) -> Result<IStr> {
-		Ok(self.settings().import_resolver.load_file_contents(path)?)
+		self.settings().import_resolver.load_file_contents(path)
 	}
 
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
@@ -548,8 +548,8 @@ pub mod tests {
 					.to_json(0)
 					.unwrap()
 					.replace("\n", "")
-				})
-			}};
+			})
+		}};
 	}
 
 	/// Asserts given code returns `true`
