@@ -3,7 +3,7 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 use std::hash::{Hash, Hasher};
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, hash::BuildHasherDefault, rc::Rc};
 
 #[derive(Debug)]
 pub struct ObjMember {
@@ -169,6 +169,13 @@ impl ObjValue {
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		self.get_raw(key, self.0.this_obj.as_ref())
 	}
+
+	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
+		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
+		new.insert(key, value);
+		ObjValue::new(Some(self), Rc::new(new))
+	}
+
 	pub(crate) fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), real_this.clone());

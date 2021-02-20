@@ -2,11 +2,9 @@
 //! Only tested with variables, which haven't altered by code before appearing here
 //! In jrsonnet every value is immutable, and this code is probally broken
 
-use jrsonnet_evaluator::{
-	ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
-};
+use jrsonnet_evaluator::{ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, Val};
 use jrsonnet_parser::Visibility;
-use std::{collections::HashMap, ffi::CStr, os::raw::c_char, rc::Rc};
+use std::{ffi::CStr, os::raw::c_char, rc::Rc};
 
 /// # Safety
 ///
@@ -42,8 +40,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 ) {
 	match obj {
 		Val::Obj(old) => {
-			let mut new = HashMap::new();
-			new.insert(
+			let new_obj = old.clone().extend_with_field(
 				CStr::from_ptr(name).to_str().unwrap().into(),
 				ObjMember {
 					add: false,
@@ -52,7 +49,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 					location: None,
 				},
 			);
-			let new_obj = ObjValue::new(Some(old.clone()), Rc::new(new));
+
 			*obj = Val::Obj(new_obj);
 		}
 		_ => panic!("should receive object"),
