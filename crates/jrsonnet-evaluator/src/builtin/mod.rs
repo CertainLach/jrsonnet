@@ -57,6 +57,7 @@ thread_local! {
 			("extVar".into(), builtin_ext_var),
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
+			("map".into(), builtin_map),
 			("foldl".into(), builtin_foldl),
 			("foldr".into(), builtin_foldr),
 			("sortImpl".into(), builtin_sort_impl),
@@ -294,16 +295,19 @@ fn builtin_filter(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc
 		0, func: ty!(function) => Val::Func;
 		1, arr: ty!(array) => Val::Arr;
 	], {
-		let mut out = Vec::new();
-		for item in arr.iter() {
-			let item = item?;
-			if func
-						.evaluate_values(context.clone(), &[item.clone()])?
-						.try_cast_bool("filter predicate")? {
-							out.push(item);
-						}
-		}
-		Ok(Val::Arr(out.into()))
+		Ok(Val::Arr(arr.filter(|val| func
+			.evaluate_values(context.clone(), &[val.clone()])?
+			.try_cast_bool("filter predicate"))?))
+	})
+}
+
+fn builtin_map(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "map", args, 2, [
+		0, func: ty!(function) => Val::Func;
+		1, arr: ty!(array) => Val::Arr;
+	], {
+		Ok(Val::Arr(arr.map(|val| func
+			.evaluate_values(context.clone(), &[val]))?))
 	})
 }
 

@@ -40,7 +40,7 @@ fn main() {
 								name == "base64" || name == "foldl" || name == "foldr" ||
 								name == "sortImpl" || name == "format" || name == "range" ||
 								name == "reverse" || name == "slice" || name == "mod" ||
-								name == "strReplace"
+								name == "strReplace" || name == "map"
 							)
 						})
 						.collect(),

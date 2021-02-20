@@ -283,6 +283,29 @@ impl ArrValue {
 		}
 	}
 
+	pub fn map(self, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
+		let mut out = Vec::with_capacity(self.len());
+
+		for value in self.iter() {
+			out.push(mapper(value?)?);
+		}
+
+		Ok(Self::Eager(Rc::new(out)))
+	}
+
+	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
+		let mut out = Vec::with_capacity(self.len());
+
+		for value in self.iter() {
+			let value = value?;
+			if filter(&value)? {
+				out.push(value);
+			}
+		}
+
+		Ok(Self::Eager(Rc::new(out)))
+	}
+
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		match (a, b) {
 			(Self::Lazy(a), Self::Lazy(b)) => Rc::ptr_eq(a, b),
