@@ -931,6 +931,25 @@ pub mod tests {
 		Ok(())
 	}
 
+	#[test]
+	fn standalone_super() -> crate::error::Result<()> {
+		assert_eval!(
+			r#"
+			local obj = {
+				a: 1,
+				b: 2,
+				c: 3,
+			};
+			local test = obj + {
+				fields: std.objectFields(super),
+				d: 5,
+			};
+			test.fields == ['a', 'b', 'c']
+		"#
+		);
+		Ok(())
+	}
+
 	struct TestImportResolver(IStr);
 	impl crate::import::ImportResolver for TestImportResolver {
 		fn resolve_file(&self, _: &PathBuf, _: &PathBuf) -> crate::error::Result<Rc<PathBuf>> {

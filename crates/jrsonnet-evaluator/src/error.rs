@@ -24,8 +24,8 @@ pub enum Error {
 	NoTopLevelObjectFound,
 	#[error("self is only usable inside objects")]
 	CantUseSelfOutsideOfObject,
-	#[error("super is only usable inside objects")]
-	CantUseSuperOutsideOfObject,
+	#[error("no super found")]
+	NoSuperFound,
 
 	#[error("for loop can only iterate over arrays")]
 	InComprehensionCanOnlyIterateOverArray,

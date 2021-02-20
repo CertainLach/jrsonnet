@@ -418,6 +418,13 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::This) => {
 			Val::Obj(context.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
 		}
+		Literal(LiteralType::Super) => Val::Obj(
+			context
+				.super_obj()
+				.clone()
+				.ok_or(NoSuperFound)?
+				.with_this(context.this().clone().unwrap()),
+		),
 		Literal(LiteralType::Dollar) => {
 			Val::Obj(context.dollar().clone().ok_or(NoTopLevelObjectFound)?)
 		}
@@ -434,15 +441,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{}>", name),
 			|| Ok(context.binding(name.clone())?.evaluate()?),
 		)?,
-		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
-			let name = evaluate(context.clone(), index)?.try_cast_str("object index")?;
-			context
-				.super_obj()
-				.clone()
-				.expect("no super found")
-				.get_raw(name, Some(&context.this().clone().expect("no this found")))?
-				.expect("value not found")
-		}
 		Index(value, index) => {
 			match (evaluate(context.clone(), value)?, evaluate(context, index)?) {
 				(Val::Obj(v), Val::Str(s)) => {
@@ -620,6 +618,5 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(import_location, path))?)
 		}
-		Literal(LiteralType::Super) => throw!(StandaloneSuper),
 	})
 }
