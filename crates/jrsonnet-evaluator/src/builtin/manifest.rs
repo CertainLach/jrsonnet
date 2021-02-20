@@ -81,7 +81,7 @@ fn manifest_json_ex_buf(
 		}
 		Val::Obj(obj) => {
 			buf.push('{');
-			let fields = obj.visible_fields();
+			let fields = obj.fields();
 			if !fields.is_empty() {
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push('\n');
