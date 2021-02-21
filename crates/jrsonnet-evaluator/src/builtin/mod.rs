@@ -585,7 +585,7 @@ pub fn call_builtin(
 	name: &str,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	BUILTINS.with(|builtins| builtins.get(name).copied()).ok_or_else(||
-		IntrinsicNotFound(name.into())
-	)?(context, loc, args)
+	BUILTINS
+		.with(|builtins| builtins.get(name).copied())
+		.ok_or_else(|| IntrinsicNotFound(name.into()))?(context, loc, args)
 }
