@@ -1,19 +1,17 @@
 use crate::{
-	error::Error::*, future_wrapper, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val,
+	error::Error::*, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, FutureWrapper,
 	LazyBinding, LazyVal, ObjValue, Result, Val,
 };
 use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasherDefault;
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
+use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
 rc_fn_helper!(
 	ContextCreator,
 	context_creator,
 	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Context>
 );
-
-future_wrapper!(Context, FutureContext);
 
 struct ContextInternals {
 	dollar: Option<ObjValue>,
@@ -33,8 +31,8 @@ impl Debug for ContextInternals {
 #[derive(Debug, Clone)]
 pub struct Context(Rc<ContextInternals>);
 impl Context {
-	pub fn new_future() -> FutureContext {
-		FutureContext(Rc::new(RefCell::new(None)))
+	pub fn new_future() -> FutureWrapper<Context> {
+		FutureWrapper::new()
 	}
 
 	pub fn dollar(&self) -> &Option<ObjValue> {
@@ -66,7 +64,7 @@ impl Context {
 			.cloned()
 			.ok_or(VariableIsNotDefined(name))?)
 	}
-	pub fn into_future(self, ctx: FutureContext) -> Self {
+	pub fn into_future(self, ctx: FutureWrapper<Context>) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
 		}

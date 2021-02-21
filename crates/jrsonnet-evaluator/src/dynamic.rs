@@ -1,31 +1,26 @@
-#[macro_export]
-macro_rules! future_wrapper {
-	($orig: ty, $wrapper: ident) => {
-		#[derive(Debug, Clone)]
-		pub struct $wrapper(pub std::rc::Rc<std::cell::RefCell<Option<$orig>>>);
-		impl $wrapper {
-			pub fn unwrap(self) -> $orig {
-				self.0.borrow().as_ref().map(|e| e.clone()).unwrap()
-			}
-			pub fn new() -> Self {
-				$wrapper(std::rc::Rc::new(std::cell::RefCell::new(None)))
-			}
-			pub fn fill(self, val: $orig) -> $orig {
-				if self.0.borrow().is_some() {
-					panic!("wrapper is filled already");
-				}
-				{
-					self.0.borrow_mut().replace(val);
-				}
-				self.unwrap()
-			}
-		}
-		impl Default for $wrapper {
-			fn default() -> Self {
-				Self::new()
-			}
-		}
-	};
+use std::{cell::RefCell, rc::Rc};
+
+#[derive(Clone)]
+pub struct FutureWrapper<V>(pub Rc<RefCell<Option<V>>>);
+impl<T> FutureWrapper<T> {
+	pub fn new() -> Self {
+		Self(Rc::new(RefCell::new(None)))
+	}
+	pub fn fill(self, value: T) {
+		assert!(self.0.borrow().is_none(), "wrapper is filled already");
+		self.0.borrow_mut().replace(value);
+	}
+}
+impl<T: Clone> FutureWrapper<T> {
+	pub fn unwrap(self) -> T {
+		self.0.borrow().as_ref().cloned().unwrap()
+	}
+}
+
+impl<T> Default for FutureWrapper<T> {
+	fn default() -> Self {
+		Self::new()
+	}
 }
 
 #[macro_export]

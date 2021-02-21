@@ -1,6 +1,6 @@
 use crate::{
-	context_creator, error::Error::*, future_wrapper, lazy_val, push, throw, with_state, Context,
-	ContextCreator, FuncDesc, FuncVal, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	context_creator, error::Error::*, lazy_val, push, throw, with_state, Context, ContextCreator,
+	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jrsonnet_interner::IStr;
@@ -183,9 +183,6 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	})
 }
 
-future_wrapper!(HashMap<IStr, LazyBinding>, FutureNewBindings);
-future_wrapper!(ObjValue, FutureObjValue);
-
 pub fn evaluate_comp<T>(
 	context: Context,
 	value: &impl Fn(Context) -> Result<T>,
@@ -218,8 +215,8 @@ pub fn evaluate_comp<T>(
 }
 
 pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Result<ObjValue> {
-	let new_bindings = FutureNewBindings::new();
-	let future_this = FutureObjValue::new();
+	let new_bindings = FutureWrapper::new();
+	let future_this = FutureWrapper::new();
 	let context_creator = context_creator!(
 		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
 			context.clone().extend_unbound(
@@ -312,19 +309,21 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 			Member::AssertStmt(_) => {}
 		}
 	}
-	Ok(future_this.fill(ObjValue::new(None, Rc::new(new_members))))
+	let this = ObjValue::new(None, Rc::new(new_members));
+	future_this.fill(this.clone());
+	Ok(this)
 }
 
 pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 	Ok(match object {
 		ObjBody::MemberList(members) => evaluate_member_list_object(context, members)?,
 		ObjBody::ObjComp(obj) => {
-			let future_this = FutureObjValue::new();
+			let future_this = FutureWrapper::new();
 			let mut new_members = FxHashMap::default();
 			for (k, v) in evaluate_comp(
 				context.clone(),
 				&|ctx| {
-					let new_bindings = FutureNewBindings::new();
+					let new_bindings = FutureWrapper::new();
 					let context_creator = context_creator!(
 						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
 							context.clone().extend_unbound(
@@ -344,7 +343,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					{
 						bindings.insert(n, b);
 					}
-					let bindings = new_bindings.fill(bindings);
+					new_bindings.fill(bindings.clone());
 					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
 					let key = evaluate(ctx.clone(), &obj.key)?;
 					let value = LazyBinding::Bindable(Rc::new(
@@ -376,7 +375,9 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				}
 			}
 
-			future_this.fill(ObjValue::new(None, Rc::new(new_members)))
+			let this = ObjValue::new(None, Rc::new(new_members));
+			future_this.fill(this.clone());
+			this
 		}
 	})
 }
