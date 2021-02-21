@@ -173,7 +173,6 @@ dependencies = [
  "base64",
  "bincode",
  "closure",
- "indexmap",
  "jrsonnet-interner",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
