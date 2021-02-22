@@ -1,6 +1,6 @@
 use crate::{
-	context_creator, error::Error::*, lazy_val, push, throw, with_state, Context, ContextCreator,
-	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	error::Error::*, lazy_val, push, throw, with_state, Context, ContextCreator, FuncDesc, FuncVal,
+	FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jrsonnet_interner::IStr;
@@ -10,8 +10,30 @@ use jrsonnet_parser::{
 	Visibility,
 };
 use jrsonnet_types::ValType;
-use rustc_hash::FxHashMap;
-use std::{collections::HashMap, rc::Rc};
+use rustc_hash::{FxHashMap, FxHasher};
+use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
+
+pub fn evaluate_binding_in_future(
+	b: &BindSpec,
+	context_creator: FutureWrapper<Context>,
+) -> LazyVal {
+	let b = b.clone();
+	if let Some(params) = &b.params {
+		let params = params.clone();
+		LazyVal::new(Box::new(move || {
+			Ok(evaluate_method(
+				context_creator.unwrap(),
+				b.name.clone(),
+				params.clone(),
+				b.value.clone(),
+			))
+		}))
+	} else {
+		LazyVal::new(Box::new(move || {
+			evaluate_named(context_creator.unwrap(), &b.value, b.name.clone())
+		}))
+	}
+}
 
 pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr, LazyBinding) {
 	let b = b.clone();
@@ -22,7 +44,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(
 					closure!(clone b, clone params, clone context_creator, || Ok(evaluate_method(
-						context_creator.0(this.clone(), super_obj.clone())?,
+						context_creator.create(this.clone(), super_obj.clone())?,
 						b.name.clone(),
 						params.clone(),
 						b.value.clone(),
@@ -35,11 +57,11 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			b.name.clone(),
 			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
 				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
-						evaluate_named(
-							context_creator.0(this.clone(), super_obj.clone())?,
-							&b.value,
-							b.name.clone()
-						)
+					evaluate_named(
+						context_creator.create(this.clone(), super_obj.clone())?,
+						&b.value,
+						b.name.clone()
+					)
 				)))
 			})),
 		)
@@ -217,18 +239,10 @@ pub fn evaluate_comp<T>(
 pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Result<ObjValue> {
 	let new_bindings = FutureWrapper::new();
 	let future_this = FutureWrapper::new();
-	let context_creator = context_creator!(
-		closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-			context.clone().extend_unbound(
-				new_bindings.clone().unwrap(),
-				context.dollar().clone().or_else(||this.clone()),
-				Some(this.unwrap()),
-				super_obj
-			)
-		})
-	);
+	let context_creator = ContextCreator(context.clone(), new_bindings.clone());
 	{
-		let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
+		let mut bindings: FxHashMap<IStr, LazyBinding> =
+			FxHashMap::with_capacity_and_hasher(members.len(), BuildHasherDefault::default());
 		for (n, b) in members
 			.iter()
 			.filter_map(|m| match m {
@@ -265,7 +279,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						invoke: LazyBinding::Bindable(Rc::new(
 							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
 								Ok(LazyVal::new_resolved(evaluate(
-									context_creator.0(this, super_obj)?,
+									context_creator.create(this, super_obj)?,
 									&value,
 								)?))
 							}),
@@ -294,7 +308,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 							closure!(clone value, clone context_creator, clone params, clone name, |this, super_obj| {
 								// TODO: Assert
 								Ok(LazyVal::new_resolved(evaluate_method(
-									context_creator.0(this, super_obj)?,
+									context_creator.create(this, super_obj)?,
 									name.clone(),
 									params.clone(),
 									value.clone(),
@@ -324,17 +338,8 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				context.clone(),
 				&|ctx| {
 					let new_bindings = FutureWrapper::new();
-					let context_creator = context_creator!(
-						closure!(clone context, clone new_bindings, |this: Option<ObjValue>, super_obj: Option<ObjValue>| {
-							context.clone().extend_unbound(
-								new_bindings.clone().unwrap(),
-								context.dollar().clone().or_else(||this.clone()),
-								None,
-								super_obj
-							)
-						})
-					);
-					let mut bindings: HashMap<IStr, LazyBinding> = HashMap::new();
+					let context_creator = ContextCreator(context.clone(), new_bindings.clone());
+					let mut bindings: FxHashMap<IStr, LazyBinding> = FxHashMap::with_capacity_and_hasher(obj.pre_locals.len() + obj.post_locals.len(), BuildHasherDefault::default());
 					for (n, b) in obj
 						.pre_locals
 						.iter()
@@ -497,22 +502,19 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: HashMap<IStr, LazyBinding> = HashMap::new();
-			let future_context = Context::new_future();
-
-			let context_creator = context_creator!(
-				closure!(clone future_context, |_, _| Ok(future_context.clone().unwrap()))
+			let mut new_bindings: FxHashMap<IStr, LazyVal> = HashMap::with_capacity_and_hasher(
+				bindings.len(),
+				BuildHasherDefault::<FxHasher>::default(),
 			);
-
-			for (k, v) in bindings
-				.iter()
-				.map(|b| evaluate_binding(b, context_creator.clone()))
-			{
-				new_bindings.insert(k, v);
+			let future_context = Context::new_future();
+			for b in bindings {
+				new_bindings.insert(
+					b.name.clone(),
+					evaluate_binding_in_future(b, future_context.clone()),
+				);
 			}
-
 			let context = context
-				.extend_unbound(new_bindings, None, None, None)?
+				.extend_bound(new_bindings)
 				.into_future(future_context);
 			evaluate(context, &returned.clone())?
 		}

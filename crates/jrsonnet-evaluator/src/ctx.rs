@@ -1,17 +1,24 @@
 use crate::{
-	error::Error::*, map::LayeredHashMap, rc_fn_helper, resolved_lazy_val, FutureWrapper,
-	LazyBinding, LazyVal, ObjValue, Result, Val,
+	error::Error::*, map::LayeredHashMap, resolved_lazy_val, FutureWrapper, LazyBinding, LazyVal,
+	ObjValue, Result, Val,
 };
 use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
 use std::hash::BuildHasherDefault;
-use std::{collections::HashMap, fmt::Debug, rc::Rc};
+use std::{fmt::Debug, rc::Rc};
 
-rc_fn_helper!(
-	ContextCreator,
-	context_creator,
-	dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<Context>
-);
+#[derive(Clone)]
+pub struct ContextCreator(pub Context, pub FutureWrapper<FxHashMap<IStr, LazyBinding>>);
+impl ContextCreator {
+	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
+		self.0.clone().extend_unbound(
+			self.1.clone().unwrap(),
+			self.0.dollar().clone().or_else(|| this.clone()),
+			this,
+			super_obj,
+		)
+	}
+}
 
 struct ContextInternals {
 	dollar: Option<ObjValue>,
@@ -120,9 +127,14 @@ impl Context {
 			}
 		}
 	}
+	pub fn extend_bound(self, new_bindings: FxHashMap<IStr, LazyVal>) -> Self {
+		let new_this = self.0.this.clone();
+		let new_super_obj = self.0.super_obj.clone();
+		self.extend(new_bindings, None, new_this, new_super_obj)
+	}
 	pub fn extend_unbound(
 		self,
-		new_bindings: HashMap<IStr, LazyBinding>,
+		new_bindings: FxHashMap<IStr, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,

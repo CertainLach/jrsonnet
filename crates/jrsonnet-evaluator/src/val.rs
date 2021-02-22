@@ -535,7 +535,7 @@ impl Val {
 	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
 		with_state(|s| {
 			let ctx = s
-				.create_default_context()?
+				.create_default_context()
 				.with_var("__tmp__to_json__".into(), self.clone());
 			evaluate(
 				ctx,

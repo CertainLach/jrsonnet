@@ -27,10 +27,12 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
 use native::NativeCallback;
 pub use obj::*;
+use rustc_hash::FxHashMap;
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::Debug,
+	hash::BuildHasherDefault,
 	path::PathBuf,
 	rc::Rc,
 };
@@ -230,7 +232,7 @@ impl EvaluationState {
 			}
 			value.parsed.clone()
 		};
-		let value = evaluate(self.create_default_context()?, &expr)?;
+		let value = evaluate(self.create_default_context(), &expr)?;
 		{
 			self.data_mut()
 				.files
@@ -260,16 +262,14 @@ impl EvaluationState {
 	}
 
 	/// Creates context with all passed global variables
-	pub fn create_default_context(&self) -> Result<Context> {
+	pub fn create_default_context(&self) -> Context {
 		let globals = &self.settings().globals;
-		let mut new_bindings: HashMap<IStr, LazyBinding> = HashMap::new();
+		let mut new_bindings: FxHashMap<IStr, LazyVal> =
+			FxHashMap::with_capacity_and_hasher(globals.len(), BuildHasherDefault::default());
 		for (name, value) in globals.iter() {
-			new_bindings.insert(
-				name.clone(),
-				LazyBinding::Bound(resolved_lazy_val!(value.clone())),
-			);
+			new_bindings.insert(name.clone(), resolved_lazy_val!(value.clone()));
 		}
-		Context::new().extend_unbound(new_bindings, None, None, None)
+		Context::new().extend_bound(new_bindings)
 	}
 
 	/// Executes code creating a new stack frame
@@ -345,7 +345,7 @@ impl EvaluationState {
 					|| "during TLA call".to_owned(),
 					|| {
 						func.evaluate_map(
-							self.create_default_context()?,
+							self.create_default_context(),
 							&self.settings().tla_vars,
 							true,
 						)
@@ -396,7 +396,7 @@ impl EvaluationState {
 	}
 	/// Evaluates the parsed expression
 	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
-		self.run_in_state(|| evaluate(self.create_default_context()?, &code))
+		self.run_in_state(|| evaluate(self.create_default_context(), &code))
 	}
 }
 
@@ -947,6 +947,23 @@ pub mod tests {
 			test.fields == ['a', 'b', 'c']
 		"#
 		);
+		Ok(())
+	}
+
+	#[test]
+	fn comp_self() -> crate::error::Result<()> {
+		assert_eval!(
+			r#"
+			std.objectFields({
+				a:{
+					[name]: name for name in std.objectFields(self)
+				},
+				b: 2,
+				c: 3,
+			}.a) == ['a', 'b', 'c']
+			"#
+		);
+
 		Ok(())
 	}
 
