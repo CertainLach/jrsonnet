@@ -154,8 +154,8 @@ impl TraceFormat for CompactFormat {
 	}
 }
 
-pub struct JSFormat;
-impl TraceFormat for JSFormat {
+pub struct JsFormat;
+impl TraceFormat for JsFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,

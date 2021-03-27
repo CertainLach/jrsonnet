@@ -26,14 +26,14 @@ enum SortKeyType {
 }
 
 #[derive(PartialEq)]
-struct NonNaNF64(f64);
-impl PartialOrd for NonNaNF64 {
+struct NonNaNf64(f64);
+impl PartialOrd for NonNaNf64 {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
 		self.0.partial_cmp(&other.0)
 	}
 }
-impl Eq for NonNaNF64 {}
-impl Ord for NonNaNF64 {
+impl Eq for NonNaNf64 {}
+impl Ord for NonNaNf64 {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
 		self.partial_cmp(other).expect("non nan")
 	}
@@ -68,7 +68,7 @@ pub fn sort(ctx: Context, mut values: Rc<Vec<Val>>, key_getter: &FuncVal) -> Res
 		let sort_type = get_sort_type(mvalues, |k| k)?;
 		match sort_type {
 			SortKeyType::Number => mvalues.sort_by_key(|v| match v {
-				Val::Num(n) => NonNaNF64(*n),
+				Val::Num(n) => NonNaNf64(*n),
 				_ => unreachable!(),
 			}),
 			SortKeyType::String => mvalues.sort_by_key(|v| match v {
@@ -89,7 +89,7 @@ pub fn sort(ctx: Context, mut values: Rc<Vec<Val>>, key_getter: &FuncVal) -> Res
 		let sort_type = get_sort_type(&mut vk, |v| &mut v.1)?;
 		match sort_type {
 			SortKeyType::Number => vk.sort_by_key(|v| match v.1 {
-				Val::Num(n) => NonNaNF64(n),
+				Val::Num(n) => NonNaNf64(n),
 				_ => unreachable!(),
 			}),
 			SortKeyType::String => vk.sort_by_key(|v| match &v.1 {

@@ -46,9 +46,9 @@ pub unsafe extern "C" fn jrsonnet_apply_static_native_callback(
 
 #[no_mangle]
 pub extern "C" fn jrsonnet_set_trace_format(vm: &EvaluationState, format: u8) {
-	use jrsonnet_evaluator::trace::JSFormat;
+	use jrsonnet_evaluator::trace::JsFormat;
 	match format {
-		1 => vm.set_trace_format(Box::new(JSFormat)),
+		1 => vm.set_trace_format(Box::new(JsFormat)),
 		_ => panic!("unknown trace format"),
 	}
 }
