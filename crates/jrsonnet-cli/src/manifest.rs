@@ -23,22 +23,22 @@ impl FromStr for ManifestFormatName {
 }
 
 #[derive(Clap)]
-#[clap(group = clap::ArgGroup::new("output_format"), help_heading = "MANIFESTIFICATION OUTPUT")]
+#[clap(help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
 	/// Output format, wraps resulting value to corresponding std.manifest call.
 	/// If set to `string` then plain string value is expected to be returned,
 	/// otherwise output will be serialized to the specified format.
-	#[clap(long, short = 'f', default_value = "json", possible_values = &["string", "json", "yaml"]/*, group = "output_format"*/)]
+	#[clap(long, short = 'f', default_value = "json", possible_values = &["string", "json", "yaml"])]
 	format: ManifestFormatName,
 	/// Expect plain string as output.
 	/// Shortcut for `--format=string` thus this option is mutually exclusive with `format` option.
-	#[clap(long, short = 'S', group = "output_format")]
+	#[clap(long, short = 'S')]
 	string: bool,
 	/// Write output as YAML stream, can be used with --format json/yaml
 	#[clap(long, short = 'y')]
 	yaml_stream: bool,
 	/// Number of spaces to pad output manifest with.
-	/// `0` for hard tabs, `-1` for single line output/
+	/// `0` for hard tabs, `-1` for single line output
 	#[clap(long, default_value = "3")]
 	line_padding: usize,
 }
