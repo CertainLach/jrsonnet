@@ -278,9 +278,10 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						visibility: *visibility,
 						invoke: LazyBinding::Bindable(Rc::new(
 							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-								Ok(LazyVal::new_resolved(evaluate(
+								Ok(LazyVal::new_resolved(evaluate_named(
 									context_creator.create(this, super_obj)?,
 									&value,
+									name.clone(),
 								)?))
 							}),
 						)),
