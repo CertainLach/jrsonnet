@@ -1,5 +1,7 @@
-pub mod import;
+#[cfg(feature = "interop")]
 pub mod interop;
+
+pub mod import;
 pub mod native;
 pub mod val_extract;
 pub mod val_make;

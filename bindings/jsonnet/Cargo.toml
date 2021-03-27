@@ -11,3 +11,6 @@ jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.4" }
 
 [lib]
 crate-type = ["cdylib"]
+
+[features]
+interop = []
