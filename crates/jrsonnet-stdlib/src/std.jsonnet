@@ -1268,6 +1268,12 @@
   objectHasAll(o, f)::
     std.objectHasEx(o, f, true),
 
+  objectValues(o)::
+    [o[k] for k in std.objectFields(o)],
+
+  objectValuesAll(o)::
+    [o[k] for k in std.objectFieldsAll(o)],
+
   equals(a, b)::
     local ta = std.type(a);
     local tb = std.type(b);
