@@ -86,13 +86,14 @@ impl TraceFormat for CompactFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{}", error.error())?;
+		write!(out, "{}", error.error())?;
 		if let Error::ImportSyntaxError {
 			path,
 			source_code,
 			error,
 		} = error.error()
 		{
+			writeln!(out)?;
 			use std::fmt::Write;
 			let mut n = self.resolver.resolve(path);
 			let mut offset = error.location.offset;
@@ -136,10 +137,8 @@ impl TraceFormat for CompactFormat {
 			.map(|e| e.len())
 			.max()
 			.unwrap_or(0);
-		for (i, (el, file)) in error.trace().0.iter().zip(file_names).enumerate() {
-			if i != 0 {
-				writeln!(out)?;
-			}
+		for (el, file) in error.trace().0.iter().zip(file_names) {
+			writeln!(out)?;
 			write!(
 				out,
 				"{:<p$}{:<w$}: {}",
@@ -162,11 +161,9 @@ impl TraceFormat for JsFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{}", error.error())?;
-		for (i, item) in error.trace().0.iter().enumerate() {
-			if i != 0 {
-				writeln!(out)?;
-			}
+		write!(out, "{}", error.error())?;
+		for item in error.trace().0.iter() {
+			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
 				let start_end =
@@ -201,13 +198,14 @@ impl TraceFormat for ExplainingFormat {
 		evaluation_state: &EvaluationState,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
-		writeln!(out, "{}", error.error())?;
+		write!(out, "{}", error.error())?;
 		if let Error::ImportSyntaxError {
 			path,
 			source_code,
 			error,
 		} = error.error()
 		{
+			writeln!(out)?;
 			let mut offset = error.location.offset;
 			if offset >= source_code.len() {
 				offset = source_code.len() - 1;
@@ -231,6 +229,7 @@ impl TraceFormat for ExplainingFormat {
 		}
 		let trace = &error.trace();
 		for item in trace.0.iter() {
+			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
 				let start_end =
@@ -297,7 +296,7 @@ impl ExplainingFormat {
 		};
 
 		let dl = DisplayList::from(snippet);
-		writeln!(out, "{}", dl)?;
+		write!(out, "{}", dl)?;
 
 		Ok(())
 	}
