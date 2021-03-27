@@ -21,4 +21,4 @@ thiserror = "1.0"
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"
-rev = "50fb4ca63dc7e8fb8aa2914de5c8a5b4413f2c62"
+rev = "52814b893c87e1c0350cae13fc1988fe2aa9886a"
