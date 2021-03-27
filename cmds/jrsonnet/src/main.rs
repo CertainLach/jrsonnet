@@ -1,5 +1,4 @@
-use clap::AppSettings;
-use clap::Clap;
+use clap::{AppSettings, Clap, IntoApp};
 use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, EvaluationState, ManifestFormat};
 use std::{
@@ -8,6 +7,7 @@ use std::{
 	io::Write,
 	path::PathBuf,
 	rc::Rc,
+	str::FromStr,
 };
 
 #[cfg(feature = "mimalloc")]
@@ -21,6 +21,29 @@ struct DebugOpts {
 	/// This shouldn't be changed unless jrsonnet is failing with stack overflow error.
 	#[clap(long, name = "size")]
 	pub os_stack: Option<usize>,
+	/// Generate completions script
+	#[clap(long)]
+	generate: Option<GenerateTarget>,
+}
+
+enum GenerateTarget {
+	Bash,
+	Zsh,
+	Fish,
+	PowerShell,
+}
+impl FromStr for GenerateTarget {
+	type Err = &'static str;
+
+	fn from_str(s: &str) -> Result<Self, Self::Err> {
+		match s {
+			"bash" => Ok(Self::Bash),
+			"zsh" => Ok(Self::Zsh),
+			"fish" => Ok(Self::Fish),
+			"powershell" => Ok(Self::PowerShell),
+			_ => Err("unknown target"),
+		}
+	}
 }
 
 #[derive(Clap)]
@@ -43,6 +66,22 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
+
+	if let Some(target) = opts.debug.generate {
+		use clap_generate::{generate, generators};
+		use GenerateTarget::*;
+		let app = &mut Opts::into_app();
+		let buf = &mut std::io::stdout();
+		let bin = "jrsonnet";
+		match target {
+			Bash => generate::<generators::Bash, _>(app, bin, buf),
+			Zsh => generate::<generators::Zsh, _>(app, bin, buf),
+			Fish => generate::<generators::Fish, _>(app, bin, buf),
+			PowerShell => generate::<generators::PowerShell, _>(app, bin, buf),
+		}
+		std::process::exit(0);
+	};
+
 	let success;
 	if let Some(size) = opts.debug.os_stack {
 		success = std::thread::Builder::new()
