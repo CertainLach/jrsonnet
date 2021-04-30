@@ -14,7 +14,7 @@ deserialize = ["serde"]
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner" }
 
-peg = "0.6.3"
+peg = "0.7.0"
 unescape = "0.1.0"
 
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
