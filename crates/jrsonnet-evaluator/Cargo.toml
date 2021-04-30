@@ -24,7 +24,7 @@ anyhow-error = ["anyhow"]
 unstable = []
 
 [dependencies]
-jrsonnet-interner = { path = "../jrsonnet-interner" }
+jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.3.6" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.3.6" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.6" }
 jrsonnet-types = { path = "../jrsonnet-types", version = "0.3.6" }
