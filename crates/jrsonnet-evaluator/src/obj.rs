@@ -173,7 +173,7 @@ impl ObjValue {
 	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
 		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new.insert(key, value);
-		ObjValue::new(Some(self), Rc::new(new))
+		Self::new(Some(self), Rc::new(new))
 	}
 
 	pub(crate) fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {

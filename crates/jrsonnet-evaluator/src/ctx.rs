@@ -38,7 +38,7 @@ impl Debug for ContextInternals {
 #[derive(Debug, Clone)]
 pub struct Context(Rc<ContextInternals>);
 impl Context {
-	pub fn new_future() -> FutureWrapper<Context> {
+	pub fn new_future() -> FutureWrapper<Self> {
 		FutureWrapper::new()
 	}
 
@@ -71,7 +71,7 @@ impl Context {
 			.cloned()
 			.ok_or(VariableIsNotDefined(name))?)
 	}
-	pub fn into_future(self, ctx: FutureWrapper<Context>) -> Self {
+	pub fn into_future(self, ctx: FutureWrapper<Self>) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
 		}

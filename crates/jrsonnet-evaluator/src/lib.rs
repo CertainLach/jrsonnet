@@ -1,6 +1,6 @@
 #![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
-#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths)]
 #![warn(clippy::all, clippy::nursery)]
+#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths, clippy::ptr_arg)]
 
 mod builtin;
 mod ctx;
@@ -429,7 +429,7 @@ impl EvaluationState {
 	}
 
 	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		Ok(self.settings().import_resolver.resolve_file(from, path)?)
+		self.settings().import_resolver.resolve_file(from, path)
 	}
 	pub fn load_file_contents(&self, path: &PathBuf) -> Result<IStr> {
 		self.settings().import_resolver.load_file_contents(path)

@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure_call)]
+
 use peg::parser;
 use std::{path::PathBuf, rc::Rc};
 mod expr;

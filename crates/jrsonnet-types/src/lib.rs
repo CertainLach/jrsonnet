@@ -1,3 +1,5 @@
+#![allow(clippy::redundant_closure_call)]
+
 use std::fmt::Display;
 
 #[macro_export]
