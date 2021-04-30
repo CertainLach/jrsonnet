@@ -1,6 +1,6 @@
 [package]
 name = "jrsonnet-interner"
-version = "0.3.5"
+version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 edition = "2018"
 
