@@ -1,5 +1,6 @@
 [package]
 name = "jrsonnet-types"
+description = "Jrsonnet type system definition"
 version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 edition = "2018"
