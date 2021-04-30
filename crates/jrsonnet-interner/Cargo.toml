@@ -3,6 +3,7 @@ name = "jrsonnet-interner"
 description = "Jrsonnet string interning"
 version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
+license = "MIT"
 edition = "2018"
 
 [dependencies]

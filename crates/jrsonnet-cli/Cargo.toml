@@ -3,6 +3,7 @@ name = "jrsonnet-cli"
 description = "Utilities for building jrsonnet CLIs"
 version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
+license = "MIT"
 edition = "2018"
 
 [dependencies]
