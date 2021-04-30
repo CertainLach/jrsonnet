@@ -1,9 +1,11 @@
 [package]
 name = "jsonnet"
+description = "Rust implementation of libjsonnet.so"
 version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
+publish = false
 
 [dependencies]
 jrsonnet-interner = { path = "../../crates/jrsonnet-interner", version = "0.3.6" }
