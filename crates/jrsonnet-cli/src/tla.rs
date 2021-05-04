@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{error::Result, EvaluationState};
 
 #[derive(Clap)]
 #[clap(help_heading = "TOP LEVEL ARGUMENTS")]
-pub struct TLAOpts {
+pub struct TlaOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.
 	/// This is preferred to ExtVars method.
@@ -24,7 +24,7 @@ pub struct TLAOpts {
 	#[clap(long, name = "name=tla code path", number_of_values = 1)]
 	tla_code_file: Vec<ExtFile>,
 }
-impl ConfigureState for TLAOpts {
+impl ConfigureState for TlaOpts {
 	fn configure(&self, state: &EvaluationState) -> Result<()> {
 		for tla in self.tla_str.iter() {
 			state.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into());

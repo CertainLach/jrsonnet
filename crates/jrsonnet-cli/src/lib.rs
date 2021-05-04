@@ -77,7 +77,7 @@ pub struct GeneralOpts {
 	misc: MiscOpts,
 
 	#[clap(flatten)]
-	tla: TLAOpts,
+	tla: TlaOpts,
 	#[clap(flatten)]
 	ext: ExtVarOpts,
 

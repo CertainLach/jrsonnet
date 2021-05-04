@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
 #![warn(clippy::all, clippy::nursery)]
-#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths, clippy::ptr_arg)]
+#![allow(
+	macro_expanded_macro_exports_accessed_by_absolute_paths,
+	clippy::ptr_arg
+)]
 
 mod builtin;
 mod ctx;
@@ -33,7 +36,7 @@ use std::{
 	collections::HashMap,
 	fmt::Debug,
 	hash::BuildHasherDefault,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	rc::Rc,
 };
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
@@ -190,15 +193,17 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &PathBuf) -> Option<IStr> {
+	pub fn get_source(&self, name: &Path) -> Option<IStr> {
 		let ro_map = &self.data().files;
-		ro_map.get(name).map(|value| value.source_code.clone())
+		ro_map
+			.get(&name.to_path_buf())
+			.map(|value| value.source_code.clone())
 	}
-	pub fn map_source_locations(&self, file: &PathBuf, locs: &[usize]) -> Vec<CodeLocation> {
+	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
 		offset_to_location(&self.get_source(file).unwrap(), locs)
 	}
 
-	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
+	pub(crate) fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
 			let data = self.data();
@@ -212,7 +217,7 @@ impl EvaluationState {
 		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_loaded_file_raw(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<IStr> {
+	pub(crate) fn import_file_str(&self, from: &Path, path: &Path) -> Result<IStr> {
 		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
 			let file_str = self.load_file_contents(&path)?;
@@ -221,11 +226,11 @@ impl EvaluationState {
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
 	}
 
-	fn evaluate_loaded_file_raw(&self, name: &PathBuf) -> Result<Val> {
+	fn evaluate_loaded_file_raw(&self, name: &Path) -> Result<Val> {
 		let expr: LocExpr = {
 			let ro_map = &self.data().files;
 			let value = ro_map
-				.get(name)
+				.get(&name.to_path_buf())
 				.unwrap_or_else(|| panic!("file not added: {:?}", name));
 			if let Some(ref evaluated) = value.evaluated {
 				return Ok(evaluated.clone());
@@ -236,7 +241,7 @@ impl EvaluationState {
 		{
 			self.data_mut()
 				.files
-				.get_mut(name)
+				.get_mut(&name.to_path_buf())
 				.unwrap()
 				.evaluated
 				.replace(value.clone());
@@ -375,10 +380,10 @@ impl EvaluationState {
 
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl EvaluationState {
-	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
+	pub fn evaluate_file_raw(&self, name: &Path) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), name))
 	}
-	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
+	pub fn evaluate_file_raw_nocwd(&self, name: &Path) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
 	}
 	/// Parses and evaluates the given snippet
@@ -428,10 +433,10 @@ impl EvaluationState {
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+	pub fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<PathBuf>> {
 		self.settings().import_resolver.resolve_file(from, path)
 	}
-	pub fn load_file_contents(&self, path: &PathBuf) -> Result<IStr> {
+	pub fn load_file_contents(&self, path: &Path) -> Result<IStr> {
 		self.settings().import_resolver.load_file_contents(path)
 	}
 
@@ -481,7 +486,10 @@ pub mod tests {
 	use crate::{error::Error::*, primitive_equals, EvaluationState};
 	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
-	use std::{path::PathBuf, rc::Rc};
+	use std::{
+		path::{Path, PathBuf},
+		rc::Rc,
+	};
 
 	#[test]
 	#[should_panic]
@@ -969,11 +977,11 @@ pub mod tests {
 
 	struct TestImportResolver(IStr);
 	impl crate::import::ImportResolver for TestImportResolver {
-		fn resolve_file(&self, _: &PathBuf, _: &PathBuf) -> crate::error::Result<Rc<PathBuf>> {
+		fn resolve_file(&self, _: &Path, _: &Path) -> crate::error::Result<Rc<PathBuf>> {
 			Ok(Rc::new(PathBuf::from("/test")))
 		}
 
-		fn load_file_contents(&self, _: &PathBuf) -> crate::error::Result<IStr> {
+		fn load_file_contents(&self, _: &Path) -> crate::error::Result<IStr> {
 			Ok(self.0.clone())
 		}
 

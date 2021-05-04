@@ -13,7 +13,7 @@ use std::{
 	fs::File,
 	io::Read,
 	os::raw::{c_char, c_int},
-	path::PathBuf,
+	path::{Path, PathBuf},
 	ptr::null_mut,
 	rc::Rc,
 };
@@ -34,7 +34,7 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<PathBuf, IStr>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<PathBuf>> {
 		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
 		let rel = CString::new(path.to_str().unwrap()).unwrap().into_raw();
 		let found_here: *mut c_char = null_mut();
@@ -76,7 +76,7 @@ impl ImportResolver for CallbackImportResolver {
 
 		Ok(Rc::new(found_here_buf))
 	}
-	fn load_file_contents(&self, resolved: &PathBuf) -> Result<IStr> {
+	fn load_file_contents(&self, resolved: &Path) -> Result<IStr> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {
@@ -109,8 +109,8 @@ impl NativeImportResolver {
 	}
 }
 impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		let mut new_path = from.clone();
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<PathBuf>> {
+		let mut new_path = from.to_path_buf();
 		new_path.push(path);
 		if new_path.exists() {
 			Ok(Rc::new(new_path))
@@ -122,14 +122,14 @@ impl ImportResolver for NativeImportResolver {
 					return Ok(Rc::new(cloned));
 				}
 			}
-			throw!(ImportFileNotFound(from.clone(), path.clone()))
+			throw!(ImportFileNotFound(from.to_path_buf(), path.to_path_buf()))
 		}
 	}
-	fn load_file_contents(&self, id: &PathBuf) -> Result<IStr> {
-		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
+	fn load_file_contents(&self, id: &Path) -> Result<IStr> {
+		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.to_path_buf()))?;
 		let mut out = String::new();
 		file.read_to_string(&mut out)
-			.map_err(|_e| ImportBadFileUtf8(id.clone()))?;
+			.map_err(|_e| ImportBadFileUtf8(id.to_path_buf()))?;
 		Ok(out.into())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {

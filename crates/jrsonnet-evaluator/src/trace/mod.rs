@@ -2,7 +2,7 @@ mod location;
 
 use crate::{error::Error, EvaluationState, LocError};
 pub use location::*;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 
 /// The way paths should be displayed
 pub enum PathResolver {
@@ -15,7 +15,7 @@ pub enum PathResolver {
 }
 
 impl PathResolver {
-	pub fn resolve(&self, from: &PathBuf) -> String {
+	pub fn resolve(&self, from: &Path) -> String {
 		match self {
 			Self::FileName => from.file_name().unwrap().to_string_lossy().into_owned(),
 			Self::Absolute => from.to_string_lossy().into_owned(),
@@ -255,7 +255,7 @@ impl ExplainingFormat {
 		&self,
 		out: &mut dyn std::fmt::Write,
 		source: &str,
-		origin: &PathBuf,
+		origin: &Path,
 		start: &CodeLocation,
 		end: &CodeLocation,
 		desc: &str,
