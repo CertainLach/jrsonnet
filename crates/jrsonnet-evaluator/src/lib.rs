@@ -802,6 +802,21 @@ pub mod tests {
 	}
 
 	#[test]
+	fn parse_json() {
+		assert_json!(
+			r#"std.parseJson('{"a": -1,"b": 1,"c": 3.141,"d": []}')"#,
+			r#"{"a": -1,"b": 1,"c": 3.141,"d": []}"#
+		);
+		// TODO: this should in fact fail as is no proper JSON syntax
+		assert_json!(
+			r#"std.parseJson("{a:-1, b:1, c:3.141, d:[]}")"#,
+			r#"{"a": -1,"b": 1,"c": 3.141,"d": []}"#
+		);
+		// TODO: this is also no valid JSON
+		assert_json!(r#"std.parseJson('local x = 2; x * x')"#, r#"4"#);
+	}
+
+	#[test]
 	fn test() {
 		assert_json!(
 			r#"[[a, b] for a in [1,2,3] for b in [4,5,6]]"#,
