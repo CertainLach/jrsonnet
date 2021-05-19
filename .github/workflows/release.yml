@@ -53,38 +53,98 @@ jobs:
     needs: [test]
     strategy:
       matrix:
-        os: [ubuntu-latest, macOS-latest, windows-latest]
+        target:
+          # Tier 1
+          - aarch64-unknown-linux-gnu
+          - i686-pc-windows-gnu
+          - i686-pc-windows-msvc
+          - i686-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - x86_64-pc-windows-gnu
+          - x86_64-pc-windows-msvc
+          - x86_64-unknown-linux-gnu
+
+          # Other
+          - x86_64-unknown-linux-musl
         include:
-          - os: ubuntu-latest
-            rust: stable
-            target: x86_64-unknown-linux-musl
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
             bin: jrsonnet
-            name: jrsonnet-linux-amd64
-          - os: windows-latest
-            rust: stable
-            target: x86_64-pc-windows-msvc
+            name: jrsonnet-linux-gnu-aarch64
+          - target: i686-pc-windows-gnu
+            os: windows-latest
             bin: jrsonnet.exe
-            name: jrsonnet-windows-amd64.exe
-          - os: macOS-latest
-            rust: stable
-            target: x86_64-apple-darwin
+            name: jrsonnet-windows-gnu-i686.exe
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-msvc-i686.exe
+          - target: i686-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: jrsonnet
+            name: jrsonnet-linux-gnu-i686
+          - target: x86_64-apple-darwin
+            os: macOS-latest
             bin: jrsonnet
             name: jrsonnet-darwin-amd64
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-gnu-amd64.exe
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-msvc-amd64.exe
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: jrsonnet
+            name: jrsonnet-linux-gnu-amd64
+
+          - target: x86_64-unknown-linux-musl
+            os: ubuntu-latest
+            bin: jrsonnet
+            name: jrsonnet-linux-musl-amd64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
-          toolchain: ${{ matrix.rust }}
+          toolchain: stable
           override: true
           target: ${{ matrix.target }}
+
       - name: Checkout
         uses: actions/checkout@v2
+
+      - name: Linux x86 cross compiler
+        if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
+        run: sudo apt install gcc-multilib
+
+      - name: Windows x86 cross compiler
+        if: ${{ matrix.target == 'i686-pc-windows-gnu' }}
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x86
+
+      - name: ARM cross compiler
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cross
+
+      - name: Run ARM build
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: cross --bin=jrsonnet --release --target ${{ matrix.target }}
+
       - name: Run build
+        if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --bin=jrsonnet --release --target ${{ matrix.target }}
+
       - name: Package
         shell: bash
         run: |
@@ -93,8 +153,10 @@ jobs:
 
           cp ${{ matrix.bin }} ../../../${{ matrix.name }}
           cd -
+
       - name: Generate SHA-256
         run: shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
+
       - name: Publish
         uses: softprops/action-gh-release@v1
         with:
