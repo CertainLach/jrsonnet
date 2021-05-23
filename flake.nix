@@ -14,5 +14,8 @@
           src = self;
           cargoSha256 = "sha256-6VhaQi3L2LWzR0cq7oRG81MDbrKJbzSNPcvYSoQ5ISo=";
         };
-      in { defaultPackage = jrsonnet; });
+      in { 
+        defaultPackage = jrsonnet;
+        devShell = pkgs.mkShell {};
+      });
 }
