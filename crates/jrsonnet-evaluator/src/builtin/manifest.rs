@@ -80,6 +80,7 @@ fn manifest_json_ex_buf(
 			buf.push(']');
 		}
 		Val::Obj(obj) => {
+			obj.run_assertions()?;
 			buf.push('{');
 			let fields = obj.fields();
 			if !fields.is_empty() {
