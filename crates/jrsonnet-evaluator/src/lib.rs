@@ -988,4 +988,26 @@ pub mod tests {
 		state.set_import_resolver(Box::new(TestImportResolver(r#"import "/test""#.into())));
 		let _ = state.evaluate_file_raw(&PathBuf::from("/test"));
 	}
+
+	#[test]
+	fn issue_40() {
+		let state = EvaluationState::default();
+		state.with_stdlib();
+
+		let error = state.evaluate_snippet_raw(
+			Rc::new(PathBuf::from("issue40.jsonnet")),
+			r#"
+				local conf = {
+					n: ""
+				};
+				
+				local result = conf + {
+					assert std.isNumber(self.n): "is number"
+				};
+
+				std.manifestJsonEx(result, "")
+			"#.into(),
+		).unwrap_err();
+		assert_eq!(error.error().to_string(), "assert failed: is number");
+	}
 }
