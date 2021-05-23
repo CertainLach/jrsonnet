@@ -101,7 +101,14 @@ fn manifest_json_ex_buf(
 					buf.push_str(cur_padding);
 					buf.push_str(&escape_string_json(&field));
 					buf.push_str(": ");
-					manifest_json_ex_buf(&obj.get(field)?.unwrap(), buf, cur_padding, options)?;
+					crate::push(
+						None,
+						|| format!("field <{}> manifestification", field.clone()),
+						|| {
+							let value = obj.get(field.clone())?.unwrap();
+							manifest_json_ex_buf(&value, buf, cur_padding, options)
+						},
+					)?;
 				}
 				cur_padding.truncate(old_len);
 
