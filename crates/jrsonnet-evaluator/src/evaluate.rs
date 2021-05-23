@@ -1,6 +1,7 @@
 use crate::{
 	error::Error::*, lazy_val, push, throw, with_state, Context, ContextCreator, FuncDesc, FuncVal,
 	FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	equals,
 };
 use closure::closure;
 use jrsonnet_interner::IStr;
@@ -146,6 +147,9 @@ pub fn evaluate_binary_op_special(
 pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
+
+		(a, BinaryOpType::Eq, b) => Val::Bool(equals(&a, &b)?),
+		(a, BinaryOpType::Neq, b) => Val::Bool(!equals(&a, &b)?),
 
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize).into()),
 

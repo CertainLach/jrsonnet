@@ -113,6 +113,9 @@ pub enum BinaryOpType {
 	BitOr,
 	BitXor,
 
+	Eq,
+	Neq,
+
 	And,
 	Or,
 }
@@ -137,6 +140,8 @@ impl Display for BinaryOpType {
 				BitAnd => "&",
 				BitOr => "|",
 				BitXor => "^",
+				Eq => "==",
+				New => "!=",
 				And => "&&",
 				Or => "||",
 			}

@@ -227,16 +227,8 @@ parser! {
 				--
 				a:(@) _ binop(<"&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
 				--
-				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("equals".into())),
-					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
-					true
-				))}
-				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, el!(Expr::Apply(
-					el!(Expr::Intrinsic("equals".into())),
-					ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
-					true
-				))))}
+				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Eq, b))}
+				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Neq, b))}
 				--
 				a:(@) _ binop(<"<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
 				a:(@) _ binop(<">">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
