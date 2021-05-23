@@ -220,23 +220,29 @@ impl ObjValue {
 			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
 			.evaluate()
 	}
-	fn run_assertions(&self, real_this: &Self) -> Result<()> {
-		if self.0.assertions_ran.borrow().contains(&real_this) {
-			// Assertions already ran
-		} else {
-			self.0.assertions_ran.borrow_mut().insert(real_this.clone());
+
+	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
+		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
-				println!("{:#?}", assertion);
-				if let Err(e) = evaluate_assert(self.0.context.clone().with_this_super(real_this.clone(), self.0.super_obj.clone()), &assertion) {
-					self.0.assertions_ran.borrow_mut().remove(&real_this);
-					return Err(e)
+				if let Err(e) = evaluate_assert(
+					self.0
+						.context
+						.clone()
+						.with_this_super(real_this.clone(), self.0.super_obj.clone()),
+					assertion,
+				) {
+					self.0.assertions_ran.borrow_mut().remove(real_this);
+					return Err(e);
 				}
 			}
 			if let Some(super_obj) = &self.0.super_obj {
-				super_obj.run_assertions(&real_this)?;
+				super_obj.run_assertions_raw(real_this)?;
 			}
 		}
 		Ok(())
+	}
+	pub fn run_assertions(&self) -> Result<()> {
+		self.run_assertions_raw(self)
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
