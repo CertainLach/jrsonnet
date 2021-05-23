@@ -1,7 +1,6 @@
 use crate::{
-	error::Error::*, lazy_val, push, throw, with_state, Context, ContextCreator, FuncDesc, FuncVal,
-	FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
-	equals,
+	equals, error::Error::*, lazy_val, push, throw, with_state, ArrValue, Context, ContextCreator,
+	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
 };
 use closure::closure;
 use jrsonnet_interner::IStr;
@@ -209,35 +208,32 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	})
 }
 
-pub fn evaluate_comp<T>(
+pub fn evaluate_comp(
 	context: Context,
-	value: &impl Fn(Context) -> Result<T>,
 	specs: &[CompSpec],
-) -> Result<Option<Vec<T>>> {
-	Ok(match specs.get(0) {
-		None => Some(vec![value(context)?]),
+	callback: &mut impl FnMut(Context) -> Result<()>,
+) -> Result<()> {
+	match specs.get(0) {
+		None => callback(context)?,
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
 			if evaluate(context.clone(), cond)?.try_cast_bool("if spec")? {
-				evaluate_comp(context, value, &specs[1..])?
-			} else {
-				None
+				evaluate_comp(context, &specs[1..], callback)?
 			}
 		}
 		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => match evaluate(context.clone(), expr)? {
 			Val::Arr(list) => {
-				let mut out = Vec::new();
 				for item in list.iter() {
-					out.push(evaluate_comp(
+					evaluate_comp(
 						context.clone().with_var(var.clone(), item?.clone()),
-						value,
 						&specs[1..],
-					)?);
+						callback,
+					)?
 				}
-				Some(out.into_iter().flatten().flatten().collect())
 			}
 			_ => throw!(InComprehensionCanOnlyIterateOverArray),
 		},
-	})
+	}
+	Ok(())
 }
 
 pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Result<ObjValue> {
@@ -342,36 +338,27 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 		ObjBody::ObjComp(obj) => {
 			let future_this = FutureWrapper::new();
 			let mut new_members = FxHashMap::default();
-			for (k, v) in evaluate_comp(
-				context.clone(),
-				&|ctx| {
-					let new_bindings = FutureWrapper::new();
-					let context_creator = ContextCreator(context.clone(), new_bindings.clone());
-					let mut bindings: FxHashMap<IStr, LazyBinding> = FxHashMap::with_capacity_and_hasher(obj.pre_locals.len() + obj.post_locals.len(), BuildHasherDefault::default());
-					for (n, b) in obj
-						.pre_locals
-						.iter()
-						.chain(obj.post_locals.iter())
-						.map(|b| evaluate_binding(b, context_creator.clone()))
-					{
-						bindings.insert(n, b);
-					}
-					new_bindings.fill(bindings.clone());
-					let ctx = ctx.extend_unbound(bindings, None, None, None)?;
-					let key = evaluate(ctx.clone(), &obj.key)?;
-					let value = LazyBinding::Bindable(Rc::new(
-						closure!(clone ctx, clone obj.value, |this, _super_obj| {
-							Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(FxHashMap::default(), None, this, None), &value)?))
-						}),
-					));
+			evaluate_comp(context.clone(), &obj.compspecs, &mut |ctx| {
+				let new_bindings = FutureWrapper::new();
+				let context_creator = ContextCreator(context.clone(), new_bindings.clone());
+				let mut bindings: FxHashMap<IStr, LazyBinding> =
+					FxHashMap::with_capacity_and_hasher(
+						obj.pre_locals.len() + obj.post_locals.len(),
+						BuildHasherDefault::default(),
+					);
+				for (n, b) in obj
+					.pre_locals
+					.iter()
+					.chain(obj.post_locals.iter())
+					.map(|b| evaluate_binding(b, context_creator.clone()))
+				{
+					bindings.insert(n, b);
+				}
+				new_bindings.fill(bindings.clone());
+				let ctx = ctx.extend_unbound(bindings, None, None, None)?;
+				let key = evaluate(ctx.clone(), &obj.key)?;
 
-					Ok((key, value))
-				},
-				&obj.compspecs,
-			)?
-			.unwrap()
-			{
-				match k {
+				match key {
 					Val::Null => {}
 					Val::Str(n) => {
 						new_members.insert(
@@ -379,14 +366,20 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							ObjMember {
 								add: false,
 								visibility: Visibility::Normal,
-								invoke: v,
+								invoke: LazyBinding::Bindable(Rc::new(
+									closure!(clone ctx, clone obj.value, |this, _super_obj| {
+										Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(FxHashMap::default(), None, this, None), &value)?))
+									}),
+								)),
 								location: obj.value.1.clone(),
 							},
 						);
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}
-			}
+
+				Ok(())
+			})?;
 
 			let this = ObjValue::new(context, None, Rc::new(new_members), Rc::new(Vec::new()));
 			future_this.fill(this.clone());
@@ -416,10 +409,7 @@ pub fn evaluate_apply(
 	})
 }
 
-pub fn evaluate_assert(
-	context: Context,
-	assertion: &AssertStmt,
-) -> Result<()> {
+pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = push(
@@ -567,12 +557,14 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 			Val::Arr(out.into())
 		}
-		ArrComp(expr, comp_specs) => Val::Arr(
-			// First comp_spec should be for_spec, so no "None" possible here
-			evaluate_comp(context, &|ctx| evaluate(ctx, expr), comp_specs)?
-				.unwrap()
-				.into(),
-		),
+		ArrComp(expr, comp_specs) => {
+			let mut out = Vec::new();
+			evaluate_comp(context, comp_specs, &mut |ctx| {
+				out.push(evaluate(ctx, expr)?);
+				Ok(())
+			})?;
+			Val::Arr(ArrValue::Eager(Rc::new(out)))
+		}
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
 			&evaluate(context.clone(), s)?,
