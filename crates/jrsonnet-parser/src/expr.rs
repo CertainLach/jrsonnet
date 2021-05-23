@@ -141,7 +141,7 @@ impl Display for BinaryOpType {
 				BitOr => "|",
 				BitXor => "^",
 				Eq => "==",
-				New => "!=",
+				Neq => "!=",
 				And => "&&",
 				Or => "||",
 			}
