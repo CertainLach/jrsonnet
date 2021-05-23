@@ -329,7 +329,15 @@ impl Debug for ExprLocation {
 pub struct LocExpr(pub Rc<Expr>, pub Option<ExprLocation>);
 impl Debug for LocExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		write!(f, "{:?} from {:?}", self.0, self.1)
+		if f.alternate() {
+			write!(f, "{:#?}", self.0)?;
+		} else {
+			write!(f, "{:?}", self.0)?;
+		}
+		if let Some(loc) = &self.1 {
+			write!(f, " from {:?}", loc)?;
+		}
+		Ok(())
 	}
 }
 
