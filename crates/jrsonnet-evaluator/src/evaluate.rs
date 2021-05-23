@@ -261,6 +261,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 	}
 
 	let mut new_members = FxHashMap::default();
+	let mut assertions = Vec::new();
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -325,10 +326,12 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				);
 			}
 			Member::BindStmt(_) => {}
-			Member::AssertStmt(_) => {}
+			Member::AssertStmt(stmt) => {
+				assertions.push(stmt.clone());
+			}
 		}
 	}
-	let this = ObjValue::new(None, Rc::new(new_members));
+	let this = ObjValue::new(context, None, Rc::new(new_members), Rc::new(assertions));
 	future_this.fill(this.clone());
 	Ok(this)
 }
@@ -385,7 +388,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				}
 			}
 
-			let this = ObjValue::new(None, Rc::new(new_members));
+			let this = ObjValue::new(context, None, Rc::new(new_members), Rc::new(Vec::new()));
 			future_this.fill(this.clone());
 			this
 		}
@@ -411,6 +414,36 @@ pub fn evaluate_apply(
 		}
 		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type())),
 	})
+}
+
+pub fn evaluate_assert(
+	context: Context,
+	assertion: &AssertStmt,
+) -> Result<()> {
+	let value = &assertion.0;
+	let msg = &assertion.1;
+	let assertion_result = push(
+		value.1.as_ref(),
+		|| "assertion condition".to_owned(),
+		|| {
+			evaluate(context.clone(), value)?
+				.try_cast_bool("assertion condition should be of type `boolean`")
+		},
+	)?;
+	if !assertion_result {
+		push(
+			value.1.as_ref(),
+			|| "assertion failure".to_owned(),
+			|| {
+				if let Some(msg) = msg {
+					throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
+				} else {
+					throw!(AssertionFailed(Val::Null.to_string()?));
+				}
+			},
+		)?
+	}
+	Ok(())
 }
 
 pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: IStr) -> Result<Val> {
@@ -552,30 +585,9 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
 		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
-		AssertExpr(AssertStmt(value, msg), returned) => {
-			let assertion_result = push(
-				value.1.as_ref(),
-				|| "assertion condition".to_owned(),
-				|| {
-					evaluate(context.clone(), value)?
-						.try_cast_bool("assertion condition should be of type `boolean`")
-				},
-			)?;
-			if assertion_result {
-				evaluate(context, returned)?
-			} else {
-				push(
-					value.1.as_ref(),
-					|| "assertion failure".to_owned(),
-					|| {
-						if let Some(msg) = msg {
-							throw!(AssertionFailed(evaluate(context, msg)?.to_string()?));
-						} else {
-							throw!(AssertionFailed(Val::Null.to_string()?));
-						}
-					},
-				)?
-			}
+		AssertExpr(assert, returned) => {
+			evaluate_assert(context.clone(), &assert)?;
+			evaluate(context, returned)?
 		}
 		ErrorStmt(e) => push(
 			loc.as_ref(),

@@ -40,7 +40,7 @@ impl Visibility {
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]

@@ -1,7 +1,7 @@
-use crate::{evaluate_add_op, LazyBinding, Result, Val};
+use crate::{Context, evaluate_add_op, evaluate_assert, LazyBinding, Result, Val};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ExprLocation, Visibility};
-use rustc_hash::FxHashMap;
+use jrsonnet_parser::{ExprLocation, LocExpr, Visibility, AssertStmt};
+use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
 use std::{cell::RefCell, fmt::Debug, hash::BuildHasherDefault, rc::Rc};
 
@@ -17,7 +17,10 @@ pub struct ObjMember {
 type CacheKey = (IStr, ObjValue);
 #[derive(Debug)]
 pub struct ObjValueInternals {
+	context: Context,
 	super_obj: Option<ObjValue>,
+	assertions: Rc<Vec<AssertStmt>>,
+	assertions_ran: RefCell<FxHashSet<ObjValue>>,
 	this_obj: Option<ObjValue>,
 	this_entries: Rc<FxHashMap<IStr, ObjMember>>,
 	value_cache: RefCell<FxHashMap<CacheKey, Option<Val>>>,
@@ -51,26 +54,32 @@ impl Debug for ObjValue {
 }
 
 impl ObjValue {
-	pub fn new(super_obj: Option<Self>, this_entries: Rc<FxHashMap<IStr, ObjMember>>) -> Self {
+	pub fn new(context: Context, super_obj: Option<Self>, this_entries: Rc<FxHashMap<IStr, ObjMember>>, assertions: Rc<Vec<AssertStmt>>) -> Self {
 		Self(Rc::new(ObjValueInternals {
+			context,
 			super_obj,
+			assertions,
+			assertions_ran: RefCell::new(FxHashSet::default()),
 			this_obj: None,
 			this_entries,
 			value_cache: RefCell::new(FxHashMap::default()),
 		}))
 	}
 	pub fn new_empty() -> Self {
-		Self::new(None, Rc::new(FxHashMap::default()))
+		Self::new(Context::new(), None, Rc::new(FxHashMap::default()), Rc::new(Vec::new()))
 	}
 	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
-			None => Self::new(Some(super_obj), self.0.this_entries.clone()),
-			Some(v) => Self::new(Some(v.extend_from(super_obj)), self.0.this_entries.clone()),
+			None => Self::new(self.0.context.clone(), Some(super_obj), self.0.this_entries.clone(), self.0.assertions.clone()),
+			Some(v) => Self::new(self.0.context.clone(), Some(v.extend_from(super_obj)), self.0.this_entries.clone(), self.0.assertions.clone()),
 		}
 	}
 	pub fn with_this(&self, this_obj: Self) -> Self {
 		Self(Rc::new(ObjValueInternals {
+			context: self.0.context.clone(),
 			super_obj: self.0.super_obj.clone(),
+			assertions: self.0.assertions.clone(),
+			assertions_ran: RefCell::new(FxHashSet::default()),
 			this_obj: Some(this_obj),
 			this_entries: self.0.this_entries.clone(),
 			value_cache: RefCell::new(FxHashMap::default()),
@@ -167,16 +176,17 @@ impl ObjValue {
 	}
 
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
+		self.run_assertions(self.0.this_obj.as_ref().unwrap_or(self))?;
 		self.get_raw(key, self.0.this_obj.as_ref())
 	}
 
 	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
 		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new.insert(key, value);
-		Self::new(Some(self), Rc::new(new))
+		Self::new(Context::new(), Some(self), Rc::new(new), Rc::new(Vec::new()))
 	}
 
-	pub(crate) fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
+	pub fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), real_this.clone());
 
@@ -209,6 +219,24 @@ impl ObjValue {
 		v.invoke
 			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
 			.evaluate()
+	}
+	fn run_assertions(&self, real_this: &Self) -> Result<()> {
+		if self.0.assertions_ran.borrow().contains(&real_this) {
+			// Assertions already ran
+		} else {
+			self.0.assertions_ran.borrow_mut().insert(real_this.clone());
+			for assertion in self.0.assertions.iter() {
+				println!("{:#?}", assertion);
+				if let Err(e) = evaluate_assert(self.0.context.clone().with_this_super(real_this.clone(), self.0.super_obj.clone()), &assertion) {
+					self.0.assertions_ran.borrow_mut().remove(&real_this);
+					return Err(e)
+				}
+			}
+			if let Some(super_obj) = &self.0.super_obj {
+				super_obj.run_assertions(&real_this)?;
+			}
+		}
+		Ok(())
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {

@@ -85,6 +85,10 @@ impl Context {
 		self.extend(new_bindings, None, None, None)
 	}
 
+	pub fn with_this_super(self, new_this: ObjValue, new_super_obj: Option<ObjValue>) -> Self {
+		self.extend(FxHashMap::default(), None, Some(new_this), new_super_obj)
+	}
+
 	pub fn extend(
 		self,
 		new_bindings: FxHashMap<IStr, LazyVal>,

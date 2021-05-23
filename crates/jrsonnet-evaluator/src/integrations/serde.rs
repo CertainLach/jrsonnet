@@ -1,4 +1,5 @@
 use crate::{
+	Context,
 	error::{Error::*, LocError, Result},
 	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
@@ -76,7 +77,7 @@ impl From<&Value> for Val {
 						},
 					);
 				}
-				Self::Obj(ObjValue::new(None, Rc::new(entries)))
+				Self::Obj(ObjValue::new(Context::new(), None, Rc::new(entries), Rc::new(Vec::new())))
 			}
 		}
 	}

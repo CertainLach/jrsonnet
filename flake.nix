@@ -12,7 +12,7 @@
           pname = "jrsonnet";
           version = "0.1.0";
           src = self;
-          cargoSha256 = "sha256-5RzjO9McVqG8+1+p+wRvygYCnemPjUAVB9TpWOp2ipA=";
+          cargoSha256 = "sha256-6VhaQi3L2LWzR0cq7oRG81MDbrKJbzSNPcvYSoQ5ISo=";
         };
       in { defaultPackage = jrsonnet; });
 }
