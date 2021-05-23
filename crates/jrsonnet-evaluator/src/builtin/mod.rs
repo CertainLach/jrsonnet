@@ -1,8 +1,8 @@
 use crate::{
 	equals,
 	error::{Error::*, Result},
-	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, FuncVal, LazyVal,
-	Val,
+	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, EvaluationState,
+	FuncVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
 use jrsonnet_interner::IStr;
@@ -74,6 +74,7 @@ thread_local! {
 			("reverse".into(), builtin_reverse),
 			("id".into(), builtin_id),
 			("strReplace".into(), builtin_str_replace),
+			("parseJson".into(), builtin_parse_json),
 		].iter().cloned().collect()
 	};
 }
@@ -161,6 +162,20 @@ fn builtin_object_has_ex(
 		2, inc_hidden: ty!(boolean) => Val::Bool;
 	], {
 		Ok(Val::Bool(obj.has_field_ex(f, inc_hidden)))
+	})
+}
+
+fn builtin_parse_json(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "parseJson", args, 1, [
+		0, s: ty!(string) => Val::Str;
+	], {
+		let state = EvaluationState::default();
+		let path = Rc::new(PathBuf::from("std.parseJson"));
+		state.evaluate_snippet_raw(path ,s)
 	})
 }
 
