@@ -390,7 +390,11 @@ impl EvaluationState {
 				loc_data: true,
 			},
 		)
-		.unwrap();
+    	.map_err(|e| ImportSyntaxError {
+			path: source.clone(),
+			source_code: code.clone(),
+			error: Box::new(e),
+		})?;
 		self.add_parsed_file(source, code, parsed.clone())?;
 		self.evaluate_expr_raw(parsed)
 	}
