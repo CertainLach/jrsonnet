@@ -1,7 +1,6 @@
 use crate::{
-	Context,
 	error::{Error::*, LocError, Result},
-	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+	throw, Context, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
 use jrsonnet_parser::Visibility;
 use rustc_hash::FxHasher;
@@ -77,7 +76,12 @@ impl From<&Value> for Val {
 						},
 					);
 				}
-				Self::Obj(ObjValue::new(Context::new(), None, Rc::new(entries), Rc::new(Vec::new())))
+				Self::Obj(ObjValue::new(
+					Context::new(),
+					None,
+					Rc::new(entries),
+					Rc::new(Vec::new()),
+				))
 			}
 		}
 	}

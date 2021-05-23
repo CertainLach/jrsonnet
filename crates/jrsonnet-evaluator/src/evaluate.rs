@@ -147,8 +147,8 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	Ok(match (a, op, b) {
 		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
 
-		(a, BinaryOpType::Eq, b) => Val::Bool(equals(&a, &b)?),
-		(a, BinaryOpType::Neq, b) => Val::Bool(!equals(&a, &b)?),
+		(a, BinaryOpType::Eq, b) => Val::Bool(equals(a, b)?),
+		(a, BinaryOpType::Neq, b) => Val::Bool(!equals(a, b)?),
 
 		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize).into()),
 
@@ -578,7 +578,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(assert, returned) => {
-			evaluate_assert(context.clone(), &assert)?;
+			evaluate_assert(context.clone(), assert)?;
 			evaluate(context, returned)?
 		}
 		ErrorStmt(e) => push(

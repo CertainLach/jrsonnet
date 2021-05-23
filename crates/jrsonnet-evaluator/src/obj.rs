@@ -1,6 +1,6 @@
-use crate::{Context, evaluate_add_op, evaluate_assert, LazyBinding, Result, Val};
+use crate::{evaluate_add_op, evaluate_assert, Context, LazyBinding, Result, Val};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ExprLocation, LocExpr, Visibility, AssertStmt};
+use jrsonnet_parser::{AssertStmt, ExprLocation, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
 use std::{cell::RefCell, fmt::Debug, hash::BuildHasherDefault, rc::Rc};
@@ -54,7 +54,12 @@ impl Debug for ObjValue {
 }
 
 impl ObjValue {
-	pub fn new(context: Context, super_obj: Option<Self>, this_entries: Rc<FxHashMap<IStr, ObjMember>>, assertions: Rc<Vec<AssertStmt>>) -> Self {
+	pub fn new(
+		context: Context,
+		super_obj: Option<Self>,
+		this_entries: Rc<FxHashMap<IStr, ObjMember>>,
+		assertions: Rc<Vec<AssertStmt>>,
+	) -> Self {
 		Self(Rc::new(ObjValueInternals {
 			context,
 			super_obj,
@@ -66,12 +71,27 @@ impl ObjValue {
 		}))
 	}
 	pub fn new_empty() -> Self {
-		Self::new(Context::new(), None, Rc::new(FxHashMap::default()), Rc::new(Vec::new()))
+		Self::new(
+			Context::new(),
+			None,
+			Rc::new(FxHashMap::default()),
+			Rc::new(Vec::new()),
+		)
 	}
 	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
-			None => Self::new(self.0.context.clone(), Some(super_obj), self.0.this_entries.clone(), self.0.assertions.clone()),
-			Some(v) => Self::new(self.0.context.clone(), Some(v.extend_from(super_obj)), self.0.this_entries.clone(), self.0.assertions.clone()),
+			None => Self::new(
+				self.0.context.clone(),
+				Some(super_obj),
+				self.0.this_entries.clone(),
+				self.0.assertions.clone(),
+			),
+			Some(v) => Self::new(
+				self.0.context.clone(),
+				Some(v.extend_from(super_obj)),
+				self.0.this_entries.clone(),
+				self.0.assertions.clone(),
+			),
 		}
 	}
 	pub fn with_this(&self, this_obj: Self) -> Self {
@@ -176,17 +196,22 @@ impl ObjValue {
 	}
 
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
-		self.run_assertions(self.0.this_obj.as_ref().unwrap_or(self))?;
+		self.run_assertions()?;
 		self.get_raw(key, self.0.this_obj.as_ref())
 	}
 
 	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
 		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new.insert(key, value);
-		Self::new(Context::new(), Some(self), Rc::new(new), Rc::new(Vec::new()))
+		Self::new(
+			Context::new(),
+			Some(self),
+			Rc::new(new),
+			Rc::new(Vec::new()),
+		)
 	}
 
-	pub fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
+	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), real_this.clone());
 

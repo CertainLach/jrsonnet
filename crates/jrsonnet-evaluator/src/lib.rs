@@ -1,6 +1,9 @@
 #![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
 #![warn(clippy::all, clippy::nursery)]
-#![allow(macro_expanded_macro_exports_accessed_by_absolute_paths, clippy::ptr_arg)]
+#![allow(
+	macro_expanded_macro_exports_accessed_by_absolute_paths,
+	clippy::ptr_arg
+)]
 
 mod builtin;
 mod ctx;
@@ -390,7 +393,7 @@ impl EvaluationState {
 				loc_data: true,
 			},
 		)
-    	.map_err(|e| ImportSyntaxError {
+		.map_err(|e| ImportSyntaxError {
 			path: source.clone(),
 			source_code: code.clone(),
 			error: Box::new(e),
@@ -998,9 +1001,10 @@ pub mod tests {
 		let state = EvaluationState::default();
 		state.with_stdlib();
 
-		let error = state.evaluate_snippet_raw(
-			Rc::new(PathBuf::from("issue40.jsonnet")),
-			r#"
+		let error = state
+			.evaluate_snippet_raw(
+				Rc::new(PathBuf::from("issue40.jsonnet")),
+				r#"
 				local conf = {
 					n: ""
 				};
@@ -1010,8 +1014,10 @@ pub mod tests {
 				};
 
 				std.manifestJsonEx(result, "")
-			"#.into(),
-		).unwrap_err();
+			"#
+				.into(),
+			)
+			.unwrap_err();
 		assert_eq!(error.error().to_string(), "assert failed: is number");
 	}
 }
