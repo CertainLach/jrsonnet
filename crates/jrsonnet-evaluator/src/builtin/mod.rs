@@ -116,7 +116,7 @@ fn builtin_make_array(
 		let mut out = Vec::with_capacity(sz as usize);
 		for i in 0..sz as usize {
 			out.push(LazyVal::new_resolved(func.evaluate_values(
-				Context::new(),
+				context.clone(),
 				&[Val::Num(i as f64)]
 			)?))
 		}
