@@ -133,10 +133,19 @@ jobs:
           command: install
           args: cross
 
+      - name: ARM gcc
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        run: sudo apt install gcc-aarch64-linux-gnu
+
       - name: Run ARM build
         if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
         shell: bash
-        run: cross --bin=jrsonnet --release --target ${{ matrix.target }}
+        run: cross build --bin=jrsonnet --release --target ${{ matrix.target }}
+
+      - name: Run ARM strip
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.bin }}
 
       - name: Run build
         if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
@@ -145,10 +154,14 @@ jobs:
           command: build
           args: --bin=jrsonnet --release --target ${{ matrix.target }}
 
+      - name: Run strip
+        if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: strip target/${{ matrix.target }}/release/${{ matrix.bin }}
+
       - name: Package
         shell: bash
         run: |
-          strip target/${{ matrix.target }}/release/${{ matrix.bin }}
           cd target/${{ matrix.target }}/release
 
           cp ${{ matrix.bin }} ../../../${{ matrix.name }}
