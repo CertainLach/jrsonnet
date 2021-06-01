@@ -16,6 +16,10 @@ This implementation shows performance better than all existing implementations. 
 
 In the end, it's always fun to implement something in Rust.
 
+## How to install?
+
+We build x64 binaries for Apple, Windows MSVC, and Linux GNU during the release process. If your system is one of those, you can check out the [latest release](https://github.com/CertainLach/jrsonnet/releases/latest) to get your pre-built binary. Otherwise, you'll need to have a rust toolchain and install the package through cargo with `cargo install jrsonnet`.
+
 ## Compliance with the [specification](https://jsonnet.org/ref/spec.html)
 
 - Passes all the original `examples` tests

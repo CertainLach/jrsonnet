@@ -5,7 +5,6 @@ version = "0.3.6"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
-publish = false
 
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.6", features = ["explaining-traces"] }
