@@ -10,7 +10,4 @@ publish = false
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.6", features = ["explaining-traces"] }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.6" }
-
-[dependencies.clap]
-git = "https://github.com/clap-rs/clap"
-rev = "92f744cc49d12d32261010d355dc215a6d2487b9"
+clap = "3.0.0-beta.2"
