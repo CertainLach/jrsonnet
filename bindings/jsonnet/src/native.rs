@@ -21,35 +21,5 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	ctx: *const c_void,
 	mut raw_params: *const *const c_char,
 ) {
-	let name = CStr::from_ptr(name).to_str().expect("utf8 name").into();
-	let mut params = Vec::new();
-	loop {
-		if (*raw_params).is_null() {
-			break;
-		}
-		let param = CStr::from_ptr(*raw_params).to_str().expect("not utf8");
-		params.push(Param(param.into(), None));
-		raw_params = raw_params.offset(1);
-	}
-	let params = ParamsDesc(Rc::new(params));
-
-	vm.add_native(
-		name,
-		Rc::new(NativeCallback::new(params, move |_caller, args| {
-			let mut n_args = Vec::new();
-			for a in args {
-				n_args.push(Some(Box::new(a.clone())));
-			}
-			n_args.push(None);
-			let mut success = 1;
-			let v = cb(ctx, &n_args as *const _ as *const *const Val, &mut success);
-			let v = *Box::from_raw(v);
-			if success == 1 {
-				Ok(v)
-			} else {
-				let e = v.try_cast_str("native error").expect("error msg");
-				Err(Error::RuntimeError(e).into())
-			}
-		})),
-	)
+	todo!()
 }

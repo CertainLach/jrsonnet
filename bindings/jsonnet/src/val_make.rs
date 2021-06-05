@@ -38,7 +38,7 @@ pub extern "C" fn jsonnet_json_make_null(_vm: &EvaluationState) -> *mut Val {
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> *mut Val {
-	Box::into_raw(Box::new(Val::Arr(ArrValue::Eager(Rc::new(Vec::new())))))
+	todo!()
 }
 
 #[no_mangle]
