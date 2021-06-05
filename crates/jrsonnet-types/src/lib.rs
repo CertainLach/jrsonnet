@@ -1,5 +1,6 @@
 #![allow(clippy::redundant_closure_call)]
 
+use gc::{unsafe_empty_trace, Finalize, Trace};
 use std::fmt::Display;
 
 #[macro_export]
@@ -87,6 +88,10 @@ pub enum ValType {
 	Obj,
 	Func,
 }
+impl Finalize for ValType {}
+unsafe impl Trace for ValType {
+	unsafe_empty_trace!();
+}
 
 impl ValType {
 	pub const fn name(&self) -> &'static str {
@@ -123,6 +128,11 @@ pub enum ComplexValType {
 	Sum(Vec<ComplexValType>),
 	SumRef(&'static [ComplexValType]),
 }
+impl Finalize for ComplexValType {}
+unsafe impl Trace for ComplexValType {
+	unsafe_empty_trace!();
+}
+
 impl From<ValType> for ComplexValType {
 	fn from(s: ValType) -> Self {
 		Self::Simple(s)
