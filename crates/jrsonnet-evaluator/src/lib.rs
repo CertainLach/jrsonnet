@@ -488,7 +488,10 @@ impl EvaluationState {
 #[cfg(test)]
 pub mod tests {
 	use super::Val;
-	use crate::{error::Error::*, primitive_equals, EvaluationState};
+	use crate::{
+		error::Error::*, native::NativeCallbackHandler, primitive_equals, EvaluationState,
+	};
+	use gc::Gc;
 	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
 	use std::{path::PathBuf, rc::Rc};
@@ -922,23 +925,29 @@ pub mod tests {
 		let evaluator = EvaluationState::default();
 
 		evaluator.with_stdlib();
+
+		#[derive(gc::Trace, gc::Finalize)]
+		struct NativeAdd;
+		impl NativeCallbackHandler for NativeAdd {
+			fn call(&self, from: Option<Rc<PathBuf>>, args: &[Val]) -> crate::error::Result<Val> {
+				assert_eq!(
+					from.unwrap(),
+					Rc::new(PathBuf::from("native_caller.jsonnet"))
+				);
+				match (&args[0], &args[1]) {
+					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
+					(_, _) => unreachable!(),
+				}
+			}
+		}
 		evaluator.settings_mut().ext_natives.insert(
 			"native_add".into(),
-			Rc::new(NativeCallback::new(
+			Gc::new(NativeCallback::new(
 				ParamsDesc(Rc::new(vec![
 					Param("a".into(), None),
 					Param("b".into(), None),
 				])),
-				|caller, args| {
-					assert_eq!(
-						caller.unwrap(),
-						Rc::new(PathBuf::from("native_caller.jsonnet"))
-					);
-					match (&args[0], &args[1]) {
-						(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
-						(_, _) => unreachable!(),
-					}
-				},
+				Box::new(NativeAdd),
 			)),
 		);
 		evaluator.evaluate_snippet_raw(
