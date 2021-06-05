@@ -126,6 +126,7 @@ fn manifest_json_ex_buf(
 			buf.push('}');
 		}
 		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+		Val::DebugGcTraceValue(v) => manifest_json_ex_buf(&v.value, buf, cur_padding, options)?,
 	};
 	Ok(())
 }

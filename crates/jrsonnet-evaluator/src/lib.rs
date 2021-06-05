@@ -25,6 +25,7 @@ pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
+use gc::{Finalize, Gc, Trace};
 pub use import::*;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
@@ -42,10 +43,12 @@ use std::{
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
 
-type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
-#[derive(Clone)]
+pub trait Bindable: Trace {
+	fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal>;
+}
+#[derive(Trace, Finalize, Clone)]
 pub enum LazyBinding {
-	Bindable(Rc<BindableFn>),
+	Bindable(Gc<Box<dyn Bindable>>),
 	Bound(LazyVal),
 }
 
@@ -57,7 +60,7 @@ impl Debug for LazyBinding {
 impl LazyBinding {
 	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
 		match self {
-			Self::Bindable(v) => v(this, super_obj),
+			Self::Bindable(v) => v.bind(this, super_obj),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
@@ -71,7 +74,7 @@ pub struct EvaluationSettings {
 	/// Used for s`td.extVar`
 	pub ext_vars: HashMap<IStr, Val>,
 	/// Used for ext.native
-	pub ext_natives: HashMap<IStr, Rc<NativeCallback>>,
+	pub ext_natives: HashMap<IStr, Gc<NativeCallback>>,
 	/// TLA vars
 	pub tla_vars: HashMap<IStr, Val>,
 	/// Global variables are inserted in default context
@@ -270,7 +273,7 @@ impl EvaluationState {
 		let mut new_bindings: FxHashMap<IStr, LazyVal> =
 			FxHashMap::with_capacity_and_hasher(globals.len(), BuildHasherDefault::default());
 		for (name, value) in globals.iter() {
-			new_bindings.insert(name.clone(), resolved_lazy_val!(value.clone()));
+			new_bindings.insert(name.clone(), LazyVal::new_resolved(value.clone()));
 		}
 		Context::new().extend_bound(new_bindings)
 	}
@@ -449,7 +452,7 @@ impl EvaluationState {
 		self.settings_mut().import_resolver = resolver;
 	}
 
-	pub fn add_native(&self, name: IStr, cb: Rc<NativeCallback>) {
+	pub fn add_native(&self, name: IStr, cb: Gc<NativeCallback>) {
 		self.settings_mut().ext_natives.insert(name, cb);
 	}
 

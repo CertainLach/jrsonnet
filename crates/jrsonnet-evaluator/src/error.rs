@@ -2,13 +2,14 @@ use crate::{
 	builtin::{format::FormatError, sort::SortError},
 	typed::TypeLocError,
 };
+use gc::{Finalize, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use jrsonnet_types::ValType;
 use std::{path::PathBuf, rc::Rc};
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone)]
+#[derive(Error, Debug, Clone, Trace, Finalize)]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -88,6 +89,7 @@ pub enum Error {
 	ImportSyntaxError {
 		path: Rc<PathBuf>,
 		source_code: IStr,
+		#[unsafe_ignore_trace]
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 
@@ -95,6 +97,8 @@ pub enum Error {
 	RuntimeError(IStr),
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
+	#[error("infinite recursion detected")]
+	RecursiveLazyValueEvaluation,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
 	#[error("attempted to divide by zero")]
@@ -142,15 +146,15 @@ impl From<Error> for LocError {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace, Finalize)]
 pub struct StackTraceElement {
 	pub location: Option<ExprLocation>,
 	pub desc: String,
 }
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub struct LocError(Box<(Error, StackTrace)>);
 impl LocError {
 	pub fn new(e: Error) -> Self {

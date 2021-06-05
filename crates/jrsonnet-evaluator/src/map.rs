@@ -1,28 +1,29 @@
+use gc::{Finalize, Gc, Trace};
 use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
-use std::rc::Rc;
 
-#[derive(Default, Debug)]
-struct LayeredHashMapInternals<V> {
+pub struct LayeredHashMapInternals<V: Trace + Finalize + 'static> {
 	parent: Option<LayeredHashMap<V>>,
 	current: FxHashMap<IStr, V>,
 }
 
-#[derive(Debug)]
-pub struct LayeredHashMap<V>(Rc<LayeredHashMapInternals<V>>);
+unsafe impl<V: Trace + Finalize + 'static> Trace for LayeredHashMapInternals<V> {
+	gc::custom_trace!(this, {
+		mark(&this.parent);
+		mark(&this.current);
+	});
+}
+impl<V: Trace + Finalize + 'static> Finalize for LayeredHashMapInternals<V> {}
 
-impl<V> LayeredHashMap<V> {
+#[derive(Trace, Finalize)]
+pub struct LayeredHashMap<V: Trace + Finalize + 'static>(Gc<LayeredHashMapInternals<V>>);
+
+impl<V: Trace + 'static> LayeredHashMap<V> {
 	pub fn extend(self, new_layer: FxHashMap<IStr, V>) -> Self {
-		match Rc::try_unwrap(self.0) {
-			Ok(mut map) => {
-				map.current.extend(new_layer);
-				Self(Rc::new(map))
-			}
-			Err(this) => Self(Rc::new(LayeredHashMapInternals {
-				parent: Some(Self(this)),
-				current: new_layer,
-			})),
-		}
+		Self(Gc::new(LayeredHashMapInternals {
+			parent: Some(self),
+			current: new_layer,
+		}))
 	}
 
 	pub fn get(&self, key: &IStr) -> Option<&V> {
@@ -33,15 +34,15 @@ impl<V> LayeredHashMap<V> {
 	}
 }
 
-impl<V> Clone for LayeredHashMap<V> {
+impl<V: Trace + 'static> Clone for LayeredHashMap<V> {
 	fn clone(&self) -> Self {
 		Self(self.0.clone())
 	}
 }
 
-impl<V> Default for LayeredHashMap<V> {
+impl<V: Trace + 'static> Default for LayeredHashMap<V> {
 	fn default() -> Self {
-		Self(Rc::new(LayeredHashMapInternals {
+		Self(Gc::new(LayeredHashMapInternals {
 			parent: None,
 			current: FxHashMap::default(),
 		}))

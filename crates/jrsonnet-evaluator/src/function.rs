@@ -1,7 +1,7 @@
-use crate::{error::Error::*, evaluate, lazy_val, resolved_lazy_val, throw, Context, Result, Val};
-use closure::closure;
+use crate::{error::Error::*, evaluate, throw, Context, LazyVal, LazyValValue, Result, Val};
+use gc::{custom_trace, Finalize, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, ParamsDesc};
+use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
 use rustc_hash::FxHashMap;
 use std::{collections::HashMap, hash::BuildHasherDefault};
 
@@ -53,9 +53,29 @@ pub fn parse_function_call(
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
 		let val = if tailstrict {
-			resolved_lazy_val!(evaluate(ctx, expr)?)
+			LazyVal::new_resolved(evaluate(ctx, expr)?)
 		} else {
-			lazy_val!(closure!(clone ctx, clone expr, ||evaluate(ctx.clone(), &expr)))
+			struct EvaluateLazyVal {
+				context: Context,
+				expr: LocExpr,
+			}
+			impl Finalize for EvaluateLazyVal {}
+			unsafe impl Trace for EvaluateLazyVal {
+				custom_trace!(this, {
+					mark(&this.context);
+					mark(&this.expr);
+				});
+			}
+			impl LazyValValue for EvaluateLazyVal {
+				fn get(self: Box<Self>) -> Result<Val> {
+					evaluate(self.context, &self.expr)
+				}
+			}
+
+			LazyVal::new(Box::new(EvaluateLazyVal {
+				context: ctx.clone(),
+				expr: expr.clone(),
+			}))
 		};
 		out.insert(p.0.clone(), val);
 	}
@@ -89,19 +109,30 @@ pub fn parse_function_call_map(
 	// Fill defaults
 	for (id, p) in params.iter().enumerate() {
 		let val = if let Some(arg) = positioned_args[id].take() {
-			resolved_lazy_val!(arg)
+			LazyVal::new_resolved(arg)
 		} else if let Some(default) = &p.1 {
 			if tailstrict {
-				resolved_lazy_val!(evaluate(
+				LazyVal::new_resolved(evaluate(
 					body_ctx.clone().expect(NO_DEFAULT_CONTEXT),
-					default
+					default,
 				)?)
 			} else {
 				let body_ctx = body_ctx.clone();
 				let default = default.clone();
-				lazy_val!(move || {
-					evaluate(body_ctx.clone().expect(NO_DEFAULT_CONTEXT), &default)
-				})
+				#[derive(Trace, Finalize)]
+				struct EvaluateLazyVal {
+					body_ctx: Option<Context>,
+					default: LocExpr,
+				}
+				impl LazyValValue for EvaluateLazyVal {
+					fn get(self: Box<Self>) -> Result<Val> {
+						evaluate(
+							self.body_ctx.clone().expect(NO_DEFAULT_CONTEXT),
+							&self.default,
+						)
+					}
+				}
+				LazyVal::new(Box::new(EvaluateLazyVal { body_ctx, default }))
 			}
 		} else {
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
@@ -135,7 +166,7 @@ pub fn place_args(
 		} else {
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
-		out.insert(p.0.clone(), resolved_lazy_val!(val));
+		out.insert(p.0.clone(), LazyVal::new_resolved(val));
 	}
 
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
