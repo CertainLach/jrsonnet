@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-stdlib"
 description = "jsonnet standard library packaged as crate"
-version = "0.3.7"
+version = "0.3.8"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
