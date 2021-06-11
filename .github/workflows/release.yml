@@ -54,15 +54,43 @@ jobs:
     strategy:
       matrix:
         target:
+          # Tier 1
+          - aarch64-unknown-linux-gnu
+          - i686-pc-windows-gnu
+          - i686-pc-windows-msvc
+          - i686-unknown-linux-gnu
           - x86_64-apple-darwin
+          - x86_64-pc-windows-gnu
           - x86_64-pc-windows-msvc
           - x86_64-unknown-linux-gnu
+
+          # Other
           - x86_64-unknown-linux-musl
         include:
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: jrsonnet
+            name: jrsonnet-linux-gnu-aarch64
+          - target: i686-pc-windows-gnu
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-gnu-i686.exe
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-msvc-i686.exe
+          - target: i686-unknown-linux-gnu
+            os: ubuntu-latest
+            bin: jrsonnet
+            name: jrsonnet-linux-gnu-i686
           - target: x86_64-apple-darwin
             os: macOS-latest
             bin: jrsonnet
             name: jrsonnet-darwin-amd64
+          - target: x86_64-pc-windows-gnu
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-gnu-amd64.exe
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             bin: jrsonnet.exe
@@ -71,6 +99,7 @@ jobs:
             os: ubuntu-latest
             bin: jrsonnet
             name: jrsonnet-linux-gnu-amd64
+
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
@@ -87,16 +116,52 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Linux x86 cross compiler
+        if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
+        run: sudo apt install gcc-multilib
+
+      - name: Windows x86 cross compiler
+        if: ${{ matrix.target == 'i686-pc-windows-gnu' }}
+        uses: egor-tensin/setup-mingw@v2
+        with:
+          platform: x86
+
+      - name: ARM cross compiler
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        uses: actions-rs/cargo@v1
+        with:
+          command: install
+          args: cross
+
+      - name: ARM gcc
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        run: sudo apt install gcc-aarch64-linux-gnu
+
+      - name: Run ARM build
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: cross build --bin=jrsonnet --release --target ${{ matrix.target }}
+
+      - name: Run ARM strip
+        if: ${{ matrix.target == 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.bin }}
+
       - name: Run build
+        if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --bin=jrsonnet --release --target ${{ matrix.target }}
 
+      - name: Run strip
+        if: ${{ matrix.target != 'aarch64-unknown-linux-gnu' }}
+        shell: bash
+        run: strip target/${{ matrix.target }}/release/${{ matrix.bin }}
+
       - name: Package
         shell: bash
         run: |
-          strip target/${{ matrix.target }}/release/${{ matrix.bin }}
           cd target/${{ matrix.target }}/release
 
           cp ${{ matrix.bin }} ../../../${{ matrix.name }}

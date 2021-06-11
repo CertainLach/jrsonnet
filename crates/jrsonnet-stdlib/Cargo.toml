@@ -5,3 +5,7 @@ version = "0.3.7"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
+
+[features]
+
+[dependencies]
