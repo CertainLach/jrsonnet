@@ -8,9 +8,9 @@ edition = "2018"
 publish = false
 
 [features]
-default = []
+default = ["mimalloc"]
 # Use mimalloc as allocator
-mimalloc = []
+mimalloc = ["mimallocator"]
 
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.8" }
