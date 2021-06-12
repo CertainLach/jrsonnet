@@ -49,7 +49,7 @@ impl LazyVal {
 	pub fn evaluate(&self) -> Result<Val> {
 		match &*self.0.borrow() {
 			LazyValInternals::Computed(v) => return Ok(v.clone()),
-			LazyValInternals::Errored(e) => return Err(e.clone().into()),
+			LazyValInternals::Errored(e) => return Err(e.clone()),
 			LazyValInternals::Pending => return Err(RecursiveLazyValueEvaluation.into()),
 			_ => (),
 		};
@@ -400,7 +400,7 @@ unsafe impl Trace for DebugGcTraceValue {
 impl Clone for DebugGcTraceValue {
 	fn clone(&self) -> Self {
 		self.print("Cloned");
-		let value = DebugGcTraceValue {
+		let value = Self {
 			name: self.name.clone(),
 			value: self.value.clone(),
 		};
@@ -409,7 +409,7 @@ impl Clone for DebugGcTraceValue {
 	}
 }
 impl DebugGcTraceValue {
-	pub fn new(name: IStr, value: Val) -> Val {
+	pub fn create(name: IStr, value: Val) -> Val {
 		let value = Self {
 			name,
 			value: Box::new(value),

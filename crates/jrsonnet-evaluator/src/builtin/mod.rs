@@ -466,8 +466,7 @@ fn builtin_gc_trace(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDe
 		0, name: ty!(string) => Val::Str;
 		1, rest: ty!(any);
 	], {
-
-		Ok(DebugGcTraceValue::new(name, rest))
+		Ok(DebugGcTraceValue::create(name, rest))
 	})
 }
 

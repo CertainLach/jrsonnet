@@ -1,7 +1,7 @@
-use crate::{evaluate_add_op, evaluate_assert, Context, LazyBinding, Result, Val};
+use crate::{evaluate_add_op, LazyBinding, Result, Val};
 use gc::{Finalize, Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{AssertStmt, ExprLocation, Visibility};
+use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
 use std::{fmt::Debug, hash::BuildHasherDefault};

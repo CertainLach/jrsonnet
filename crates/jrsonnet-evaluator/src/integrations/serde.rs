@@ -1,6 +1,6 @@
 use crate::{
 	error::{Error::*, LocError, Result},
-	throw, Context, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
 use gc::Gc;
 use jrsonnet_parser::Visibility;
@@ -42,7 +42,7 @@ impl TryFrom<&Val> for Value {
 				Self::Object(out)
 			}
 			Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
-			Val::DebugGcTraceValue(v) => Value::try_from(&*v.value as &Val)?,
+			Val::DebugGcTraceValue(v) => Self::try_from(&*v.value as &Val)?,
 		})
 	}
 }

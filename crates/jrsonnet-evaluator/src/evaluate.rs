@@ -127,8 +127,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		impl Bindable for BindableMethod {
 			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
 				Ok(LazyVal::new(Box::new(BindableMethodLazyVal {
-					this: this.clone(),
-					super_obj: super_obj.clone(),
+					this,
+					super_obj,
 
 					context_creator: self.context_creator.clone(),
 					name: self.name.clone(),
@@ -586,7 +586,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 								add: false,
 								visibility: Visibility::Normal,
 								invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjCompBinding {
-									context: ctx.clone(),
+									context: ctx,
 									value: obj.value.clone(),
 								}))),
 								location: obj.value.1.clone(),
