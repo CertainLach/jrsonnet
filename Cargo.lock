@@ -242,7 +242,6 @@ version = "0.3.8"
 dependencies = [
  "gc",
  "jrsonnet-evaluator",
- "jrsonnet-interner",
  "jrsonnet-parser",
 ]
 

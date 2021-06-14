@@ -4,11 +4,11 @@ use crate::{error::Result, Val};
 use gc::{Finalize, Trace};
 use jrsonnet_parser::ParamsDesc;
 use std::fmt::Debug;
-use std::path::PathBuf;
+use std::path::Path;
 use std::rc::Rc;
 
 pub trait NativeCallbackHandler: Trace {
-	fn call(&self, from: Option<Rc<PathBuf>>, args: &[Val]) -> Result<Val>;
+	fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> Result<Val>;
 }
 
 #[derive(Trace, Finalize)]
@@ -20,7 +20,7 @@ impl NativeCallback {
 	pub fn new(params: ParamsDesc, handler: Box<dyn NativeCallbackHandler>) -> Self {
 		Self { params, handler }
 	}
-	pub fn call(&self, caller: Option<Rc<PathBuf>>, args: &[Val]) -> Result<Val> {
+	pub fn call(&self, caller: Option<Rc<Path>>, args: &[Val]) -> Result<Val> {
 		self.handler.call(caller, args)
 	}
 }

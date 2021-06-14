@@ -7,7 +7,7 @@ use serde::Serialize;
 use std::{
 	fmt::{Debug, Display},
 	ops::Deref,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	rc::Rc,
 };
 
@@ -405,7 +405,7 @@ unsafe impl Trace for Expr {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Clone, PartialEq)]
-pub struct ExprLocation(pub Rc<PathBuf>, pub usize, pub usize);
+pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
 impl Finalize for ExprLocation {}
 unsafe impl Trace for ExprLocation {
 	unsafe_empty_trace!();

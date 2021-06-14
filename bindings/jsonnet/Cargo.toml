@@ -8,7 +8,6 @@ edition = "2018"
 publish = false
 
 [dependencies]
-jrsonnet-interner = { path = "../../crates/jrsonnet-interner", version = "0.3.8" }
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.8" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.8" }
 gc = { version = "0.4.1", features = ["derive"] }

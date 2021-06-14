@@ -2,9 +2,8 @@
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, EvaluationState, ImportResolver,
+	throw, EvaluationState, IStr, ImportResolver,
 };
-use jrsonnet_interner::IStr;
 use std::{
 	any::Any,
 	cell::RefCell,
@@ -13,7 +12,7 @@ use std::{
 	fs::File,
 	io::Read,
 	os::raw::{c_char, c_int},
-	path::PathBuf,
+	path::{Path, PathBuf},
 	ptr::null_mut,
 	rc::Rc,
 };
@@ -34,7 +33,7 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<PathBuf, IStr>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
 		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
 		let rel = CString::new(path.to_str().unwrap()).unwrap().into_raw();
 		let found_here: *mut c_char = null_mut();
@@ -74,9 +73,9 @@ impl ImportResolver for CallbackImportResolver {
 			unsafe { CString::from_raw(result_ptr) };
 		}
 
-		Ok(Rc::new(found_here_buf))
+		Ok(found_here_buf.into())
 	}
-	fn load_file_contents(&self, resolved: &PathBuf) -> Result<IStr> {
+	fn load_file_contents(&self, resolved: &Path) -> Result<IStr> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {
@@ -109,27 +108,27 @@ impl NativeImportResolver {
 	}
 }
 impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
-		let mut new_path = from.clone();
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
+		let mut new_path = from.to_owned();
 		new_path.push(path);
 		if new_path.exists() {
-			Ok(Rc::new(new_path))
+			Ok(new_path.into())
 		} else {
 			for library_path in self.library_paths.borrow().iter() {
 				let mut cloned = library_path.clone();
 				cloned.push(path);
 				if cloned.exists() {
-					return Ok(Rc::new(cloned));
+					return Ok(cloned.into());
 				}
 			}
-			throw!(ImportFileNotFound(from.clone(), path.clone()))
+			throw!(ImportFileNotFound(from.to_owned(), path.to_owned()))
 		}
 	}
-	fn load_file_contents(&self, id: &PathBuf) -> Result<IStr> {
-		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
+	fn load_file_contents(&self, id: &Path) -> Result<IStr> {
+		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.to_owned()))?;
 		let mut out = String::new();
 		file.read_to_string(&mut out)
-			.map_err(|_e| ImportBadFileUtf8(id.clone()))?;
+			.map_err(|_e| ImportBadFileUtf8(id.to_owned()))?;
 		Ok(out.into())
 	}
 	unsafe fn as_any(&self) -> &dyn Any {

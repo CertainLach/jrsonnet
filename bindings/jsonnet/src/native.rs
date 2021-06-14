@@ -8,7 +8,7 @@ use jrsonnet_parser::{Param, ParamsDesc};
 use std::{
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
-	path::PathBuf,
+	path::Path,
 	rc::Rc,
 };
 
@@ -27,7 +27,7 @@ unsafe impl Trace for JsonnetNativeCallbackHandler {
 	unsafe_empty_trace!();
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, _from: Option<Rc<PathBuf>>, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, _from: Option<Rc<Path>>, args: &[Val]) -> Result<Val, LocError> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));
