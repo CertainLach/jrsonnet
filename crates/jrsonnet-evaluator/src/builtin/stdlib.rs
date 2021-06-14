@@ -1,5 +1,5 @@
 use jrsonnet_parser::{LocExpr, ParserSettings};
-use std::{path::PathBuf, rc::Rc};
+use std::path::PathBuf;
 
 thread_local! {
 	/// To avoid parsing again when issued from the same thread
@@ -25,7 +25,7 @@ thread_local! {
 			jrsonnet_stdlib::STDLIB_STR,
 			&ParserSettings {
 				loc_data: true,
-				file_name: Rc::new(PathBuf::from("std.jsonnet")),
+				file_name: PathBuf::from("std.jsonnet").into(),
 			},
 		)
 		.unwrap()

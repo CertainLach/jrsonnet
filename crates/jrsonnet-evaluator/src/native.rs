@@ -3,24 +3,24 @@
 use crate::{error::Result, Val};
 use jrsonnet_parser::ParamsDesc;
 use std::fmt::Debug;
-use std::path::PathBuf;
+use std::path::Path;
 use std::rc::Rc;
 
 pub struct NativeCallback {
 	pub params: ParamsDesc,
-	handler: Box<dyn Fn(Option<Rc<PathBuf>>, &[Val]) -> Result<Val>>,
+	handler: Box<dyn Fn(Option<Rc<Path>>, &[Val]) -> Result<Val>>,
 }
 impl NativeCallback {
 	pub fn new(
 		params: ParamsDesc,
-		handler: impl Fn(Option<Rc<PathBuf>>, &[Val]) -> Result<Val> + 'static,
+		handler: impl Fn(Option<Rc<Path>>, &[Val]) -> Result<Val> + 'static,
 	) -> Self {
 		Self {
 			params,
 			handler: Box::new(handler),
 		}
 	}
-	pub fn call(&self, caller: Option<Rc<PathBuf>>, args: &[Val]) -> Result<Val> {
+	pub fn call(&self, caller: Option<Rc<Path>>, args: &[Val]) -> Result<Val> {
 		(self.handler)(caller, args)
 	}
 }

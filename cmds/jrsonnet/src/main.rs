@@ -6,7 +6,6 @@ use std::{
 	io::Read,
 	io::Write,
 	path::PathBuf,
-	rc::Rc,
 	str::FromStr,
 };
 
@@ -134,14 +133,14 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 	let val = if opts.input.exec {
 		state.set_manifest_format(ManifestFormat::ToString);
 		state.evaluate_snippet_raw(
-			Rc::new(PathBuf::from("args")),
+			PathBuf::from("args").into(),
 			(&opts.input.input as &str).into(),
 		)?
 	} else if opts.input.input == "-" {
 		let mut input = Vec::new();
 		std::io::stdin().read_to_end(&mut input)?;
 		let input_str = std::str::from_utf8(&input)?.into();
-		state.evaluate_snippet_raw(Rc::new(PathBuf::from("<stdin>")), input_str)?
+		state.evaluate_snippet_raw(PathBuf::from("<stdin>").into(), input_str)?
 	} else {
 		state.evaluate_file_raw(&PathBuf::from(opts.input.input))?
 	};

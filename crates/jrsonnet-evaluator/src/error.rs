@@ -5,7 +5,10 @@ use crate::{
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use jrsonnet_types::ValType;
-use std::{path::PathBuf, rc::Rc};
+use std::{
+	path::{Path, PathBuf},
+	rc::Rc,
+};
 use thiserror::Error;
 
 #[derive(Error, Debug, Clone)]
@@ -86,7 +89,7 @@ pub enum Error {
 		.source_code.chars().nth(error.location.offset).map(|c| c.to_string()).unwrap_or_else(|| "EOF".into())
 	)]
 	ImportSyntaxError {
-		path: Rc<PathBuf>,
+		path: Rc<Path>,
 		source_code: IStr,
 		error: Box<jrsonnet_parser::ParseError>,
 	},

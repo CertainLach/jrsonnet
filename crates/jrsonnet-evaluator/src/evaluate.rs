@@ -609,26 +609,26 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		Import(path) => {
-			let mut tmp = loc
+			let tmp = loc
 				.clone()
 				.expect("imports cannot be used without loc_data")
 				.0;
-			let import_location = Rc::make_mut(&mut tmp);
+			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
 			push(
 				loc.as_ref(),
 				|| format!("import {:?}", path),
-				|| with_state(|s| s.import_file(import_location, path)),
+				|| with_state(|s| s.import_file(&import_location, path)),
 			)?
 		}
 		ImportStr(path) => {
-			let mut tmp = loc
+			let tmp = loc
 				.clone()
 				.expect("imports cannot be used without loc_data")
 				.0;
-			let import_location = Rc::make_mut(&mut tmp);
+			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
-			Val::Str(with_state(|s| s.import_file_str(import_location, path))?)
+			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
 	})
 }

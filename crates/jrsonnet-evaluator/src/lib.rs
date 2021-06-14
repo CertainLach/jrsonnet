@@ -35,7 +35,7 @@ use std::{
 	collections::HashMap,
 	fmt::Debug,
 	hash::BuildHasherDefault,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	rc::Rc,
 };
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
@@ -109,8 +109,8 @@ struct EvaluationData {
 	/// Used for stack overflow detection, stacktrace is populated on unwind
 	stack_depth: usize,
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: HashMap<Rc<PathBuf>, FileData>,
-	str_files: HashMap<Rc<PathBuf>, IStr>,
+	files: HashMap<Rc<Path>, FileData>,
+	str_files: HashMap<Rc<Path>, IStr>,
 }
 
 pub struct FileData {
@@ -156,7 +156,7 @@ pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
 	/// Parses and adds file as loaded
-	pub fn add_file(&self, path: Rc<PathBuf>, source_code: IStr) -> Result<()> {
+	pub fn add_file(&self, path: Rc<Path>, source_code: IStr) -> Result<()> {
 		self.add_parsed_file(
 			path.clone(),
 			source_code.clone(),
@@ -169,7 +169,7 @@ impl EvaluationState {
 			)
 			.map_err(|error| ImportSyntaxError {
 				error: Box::new(error),
-				path,
+				path: path.to_owned(),
 				source_code,
 			})?,
 		)?;
@@ -180,7 +180,7 @@ impl EvaluationState {
 	/// Adds file by source code and parsed expr
 	pub fn add_parsed_file(
 		&self,
-		name: Rc<PathBuf>,
+		name: Rc<Path>,
 		source_code: IStr,
 		parsed: LocExpr,
 	) -> Result<()> {
@@ -195,20 +195,20 @@ impl EvaluationState {
 
 		Ok(())
 	}
-	pub fn get_source(&self, name: &PathBuf) -> Option<IStr> {
+	pub fn get_source(&self, name: &Path) -> Option<IStr> {
 		let ro_map = &self.data().files;
 		ro_map.get(name).map(|value| value.source_code.clone())
 	}
-	pub fn map_source_locations(&self, file: &PathBuf, locs: &[usize]) -> Vec<CodeLocation> {
+	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
 		offset_to_location(&self.get_source(file).unwrap(), locs)
 	}
 
-	pub(crate) fn import_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Val> {
+	pub(crate) fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
 			let data = self.data();
 			let files = &data.files;
-			if files.contains_key(&file_path) {
+			if files.contains_key(&file_path as &Path) {
 				drop(data);
 				return self.evaluate_loaded_file_raw(&file_path);
 			}
@@ -217,7 +217,7 @@ impl EvaluationState {
 		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_loaded_file_raw(&file_path)
 	}
-	pub(crate) fn import_file_str(&self, from: &PathBuf, path: &PathBuf) -> Result<IStr> {
+	pub(crate) fn import_file_str(&self, from: &Path, path: &Path) -> Result<IStr> {
 		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
 			let file_str = self.load_file_contents(&path)?;
@@ -226,7 +226,7 @@ impl EvaluationState {
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
 	}
 
-	fn evaluate_loaded_file_raw(&self, name: &PathBuf) -> Result<Val> {
+	fn evaluate_loaded_file_raw(&self, name: &Path) -> Result<Val> {
 		let expr: LocExpr = {
 			let ro_map = &self.data().files;
 			let value = ro_map
@@ -252,7 +252,7 @@ impl EvaluationState {
 	/// Adds standard library global variable (std) to this evaluator
 	pub fn with_stdlib(&self) -> &Self {
 		use jrsonnet_stdlib::STDLIB_STR;
-		let std_path = Rc::new(PathBuf::from("std.jsonnet"));
+		let std_path: Rc<Path> = PathBuf::from("std.jsonnet").into();
 		self.run_in_state(|| {
 			self.add_parsed_file(
 				std_path.clone(),
@@ -380,14 +380,14 @@ impl EvaluationState {
 
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl EvaluationState {
-	pub fn evaluate_file_raw(&self, name: &PathBuf) -> Result<Val> {
+	pub fn evaluate_file_raw(&self, name: &Path) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), name))
 	}
-	pub fn evaluate_file_raw_nocwd(&self, name: &PathBuf) -> Result<Val> {
+	pub fn evaluate_file_raw_nocwd(&self, name: &Path) -> Result<Val> {
 		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
 	}
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet_raw(&self, source: Rc<PathBuf>, code: IStr) -> Result<Val> {
+	pub fn evaluate_snippet_raw(&self, source: Rc<Path>, code: IStr) -> Result<Val> {
 		let parsed = parse(
 			&code,
 			&ParserSettings {
@@ -419,7 +419,7 @@ impl EvaluationState {
 	}
 	pub fn add_ext_code(&self, name: IStr, code: IStr) -> Result<()> {
 		let value =
-			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("ext_code {}", name))), code)?;
+			self.evaluate_snippet_raw(PathBuf::from(format!("ext_code {}", name)).into(), code)?;
 		self.add_ext_var(name, value);
 		Ok(())
 	}
@@ -432,15 +432,15 @@ impl EvaluationState {
 	}
 	pub fn add_tla_code(&self, name: IStr, code: IStr) -> Result<()> {
 		let value =
-			self.evaluate_snippet_raw(Rc::new(PathBuf::from(format!("tla_code {}", name))), code)?;
+			self.evaluate_snippet_raw(PathBuf::from(format!("tla_code {}", name)).into(), code)?;
 		self.add_tla(name, value);
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &PathBuf, path: &PathBuf) -> Result<Rc<PathBuf>> {
+	pub fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
 		self.settings().import_resolver.resolve_file(from, path)
 	}
-	pub fn load_file_contents(&self, path: &PathBuf) -> Result<IStr> {
+	pub fn load_file_contents(&self, path: &Path) -> Result<IStr> {
 		self.settings().import_resolver.load_file_contents(path)
 	}
 
@@ -490,7 +490,10 @@ pub mod tests {
 	use crate::{error::Error::*, primitive_equals, EvaluationState};
 	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
-	use std::{path::PathBuf, rc::Rc};
+	use std::{
+		path::{Path, PathBuf},
+		rc::Rc,
+	};
 
 	#[test]
 	#[should_panic]
@@ -499,19 +502,11 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					Some(&ExprLocation(
-						Rc::new(PathBuf::from("test1.jsonnet")),
-						10,
-						20,
-					)),
+					Some(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							Some(&ExprLocation(
-								Rc::new(PathBuf::from("test2.jsonnet")),
-								30,
-								40,
-							)),
+							Some(&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40)),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
@@ -529,7 +524,7 @@ pub mod tests {
 		assert!(primitive_equals(
 			&state
 				.evaluate_snippet_raw(
-					Rc::new(PathBuf::from("raw.jsonnet")),
+					PathBuf::from("raw.jsonnet").into(),
 					r#"std.assertEqual(std.base64("test"), "dGVzdA==")"#.into()
 				)
 				.unwrap(),
@@ -542,7 +537,7 @@ pub mod tests {
 		($str: expr) => {
 			EvaluationState::default()
 				.with_stdlib()
-				.evaluate_snippet_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str.into())
+				.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
 				.unwrap()
 		};
 	}
@@ -552,7 +547,7 @@ pub mod tests {
 			evaluator.with_stdlib();
 			evaluator.run_in_state(|| {
 				evaluator
-					.evaluate_snippet_raw(Rc::new(PathBuf::from("raw.jsonnet")), $str.into())
+					.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
 					.unwrap()
 					.to_json(0)
 					.unwrap()
@@ -909,7 +904,10 @@ pub mod tests {
 			"{:?}",
 			jrsonnet_parser::parse(
 				"{ x: 1, y: 2 } == { x: 1, y: 2 }",
-				&ParserSettings::default()
+				&ParserSettings {
+					file_name: PathBuf::from("equality").into(),
+					loc_data: true,
+				}
 			)
 		);
 		assert_eval!("{ x: 1, y: 2 } == { x: 1, y: 2 }")
@@ -930,8 +928,8 @@ pub mod tests {
 				])),
 				|caller, args| {
 					assert_eq!(
-						caller.unwrap(),
-						Rc::new(PathBuf::from("native_caller.jsonnet"))
+						&caller.unwrap() as &Path,
+						&PathBuf::from("native_caller.jsonnet")
 					);
 					match (&args[0], &args[1]) {
 						(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
@@ -941,7 +939,7 @@ pub mod tests {
 			)),
 		);
 		evaluator.evaluate_snippet_raw(
-			Rc::new(PathBuf::from("native_caller.jsonnet")),
+			PathBuf::from("native_caller.jsonnet").into(),
 			"std.assertEqual(std.native(\"native_add\")(1, 2), 3)".into(),
 		)?;
 		Ok(())
@@ -993,11 +991,11 @@ pub mod tests {
 
 	struct TestImportResolver(IStr);
 	impl crate::import::ImportResolver for TestImportResolver {
-		fn resolve_file(&self, _: &PathBuf, _: &PathBuf) -> crate::error::Result<Rc<PathBuf>> {
-			Ok(Rc::new(PathBuf::from("/test")))
+		fn resolve_file(&self, _: &Path, _: &Path) -> crate::error::Result<Rc<Path>> {
+			Ok(PathBuf::from("/test").into())
 		}
 
-		fn load_file_contents(&self, _: &PathBuf) -> crate::error::Result<IStr> {
+		fn load_file_contents(&self, _: &Path) -> crate::error::Result<IStr> {
 			Ok(self.0.clone())
 		}
 
@@ -1020,7 +1018,7 @@ pub mod tests {
 
 		let error = state
 			.evaluate_snippet_raw(
-				Rc::new(PathBuf::from("issue40.jsonnet")),
+				PathBuf::from("issue40.jsonnet").into(),
 				r#"
 				local conf = {
 					n: ""

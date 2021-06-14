@@ -1,15 +1,17 @@
 #![allow(clippy::redundant_closure_call)]
 
 use peg::parser;
-use std::{path::PathBuf, rc::Rc};
+use std::{
+	path::{Path, PathBuf},
+	rc::Rc,
+};
 mod expr;
 pub use expr::*;
 pub use peg;
 
-#[derive(Default)]
 pub struct ParserSettings {
 	pub loc_data: bool,
-	pub file_name: Rc<PathBuf>,
+	pub file_name: Rc<Path>,
 }
 
 parser! {
@@ -304,7 +306,6 @@ pub mod tests {
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
 	use std::path::PathBuf;
-	use std::rc::Rc;
 
 	macro_rules! parse {
 		($s:expr) => {
@@ -312,7 +313,7 @@ pub mod tests {
 				$s,
 				&ParserSettings {
 					loc_data: false,
-					file_name: Rc::new(PathBuf::from("/test.jsonnet")),
+					file_name: PathBuf::from("/test.jsonnet").into(),
 				},
 			)
 			.unwrap()

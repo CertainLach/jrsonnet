@@ -174,7 +174,7 @@ fn builtin_parse_json(
 		0, s: ty!(string) => Val::Str;
 	], {
 		let state = EvaluationState::default();
-		let path = Rc::new(PathBuf::from("std.parseJson"));
+		let path = PathBuf::from("std.parseJson").into();
 		state.evaluate_snippet_raw(path ,s)
 	})
 }

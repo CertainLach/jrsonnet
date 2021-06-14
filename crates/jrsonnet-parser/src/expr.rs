@@ -6,7 +6,7 @@ use serde::Serialize;
 use std::{
 	fmt::{Debug, Display},
 	ops::Deref,
-	path::PathBuf,
+	path::{Path, PathBuf},
 	rc::Rc,
 };
 
@@ -320,7 +320,7 @@ pub enum Expr {
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Clone, PartialEq)]
-pub struct ExprLocation(pub Rc<PathBuf>, pub usize, pub usize);
+pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)

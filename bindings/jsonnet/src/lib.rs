@@ -15,7 +15,6 @@ use std::{
 	ffi::{CStr, CString},
 	os::raw::{c_char, c_double, c_int, c_uint},
 	path::PathBuf,
-	rc::Rc,
 };
 
 /// WASM stub
@@ -144,7 +143,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 		let snippet = CStr::from_ptr(snippet);
 		match vm
 			.evaluate_snippet_raw(
-				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				PathBuf::from(filename.to_str().unwrap()).into(),
 				snippet.to_str().unwrap().into(),
 			)
 			.and_then(|v| vm.with_tla(v))
@@ -220,7 +219,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 		let snippet = CStr::from_ptr(snippet);
 		match vm
 			.evaluate_snippet_raw(
-				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				PathBuf::from(filename.to_str().unwrap()).into(),
 				snippet.to_str().unwrap().into(),
 			)
 			.and_then(|v| vm.with_tla(v))
@@ -294,7 +293,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 		let snippet = CStr::from_ptr(snippet);
 		match vm
 			.evaluate_snippet_raw(
-				Rc::new(PathBuf::from(filename.to_str().unwrap())),
+				PathBuf::from(filename.to_str().unwrap()).into(),
 				snippet.to_str().unwrap().into(),
 			)
 			.and_then(|v| vm.with_tla(v))
