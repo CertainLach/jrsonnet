@@ -9,8 +9,7 @@ pub mod val_modify;
 pub mod vars_tlas;
 
 use import::NativeImportResolver;
-use jrsonnet_evaluator::{EvaluationState, ManifestFormat, Val};
-use jrsonnet_interner::IStr;
+use jrsonnet_evaluator::{EvaluationState, IStr, ManifestFormat, Val};
 use std::{
 	alloc::Layout,
 	ffi::{CStr, CString},

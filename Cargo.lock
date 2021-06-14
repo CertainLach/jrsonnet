@@ -223,7 +223,6 @@ name = "jsonnet"
 version = "0.3.8"
 dependencies = [
  "jrsonnet-evaluator",
- "jrsonnet-interner",
  "jrsonnet-parser",
 ]
 

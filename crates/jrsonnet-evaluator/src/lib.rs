@@ -26,7 +26,6 @@ use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
 pub use import::*;
-use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
 use native::NativeCallback;
 pub use obj::*;
@@ -41,6 +40,9 @@ use std::{
 };
 use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
+
+// Re-exports
+pub use jrsonnet_interner::IStr;
 
 type BindableFn = dyn Fn(Option<ObjValue>, Option<ObjValue>) -> Result<LazyVal>;
 #[derive(Clone)]
