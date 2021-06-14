@@ -2,9 +2,8 @@
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, EvaluationState, ImportResolver,
+	throw, EvaluationState, IStr, ImportResolver,
 };
-use jrsonnet_interner::IStr;
 use std::{
 	any::Any,
 	cell::RefCell,
