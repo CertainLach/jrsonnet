@@ -1,18 +1,20 @@
 use crate::{
-	equals, error::Error::*, push, throw, with_state, ArrValue, Bindable, Context, ContextCreator,
-	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjMember, ObjValue,
-	ObjectAssertion, Result, Val,
+	error::Error::*,
+	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	push, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
+	FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjMember, ObjValue, ObjectAssertion,
+	Result, Val,
 };
 use jrsonnet_gc::{Gc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
-	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, UnaryOpType,
-	Visibility,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, ExprLocation, FieldMember, ForSpecData,
+	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility,
 };
 use jrsonnet_types::ValType;
 use rustc_hash::{FxHashMap, FxHasher};
 use std::{collections::HashMap, hash::BuildHasherDefault};
+pub mod operator;
 
 pub fn evaluate_binding_in_future(
 	b: &BindSpec,
@@ -201,120 +203,6 @@ pub fn evaluate_field_name(
 				Some(value.try_cast_str("dynamic field name")?)
 			}
 		}
-	})
-}
-
-pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
-	Ok(match (op, b) {
-		(UnaryOpType::Not, Val::Bool(v)) => Val::Bool(!v),
-		(UnaryOpType::Minus, Val::Num(n)) => Val::Num(-*n),
-		(UnaryOpType::BitNot, Val::Num(n)) => Val::Num(!(*n as i32) as f64),
-		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
-	})
-}
-
-pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
-	Ok(match (a, b) {
-		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + v2).into()),
-
-		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
-		(Val::Num(n), Val::Str(o)) => Val::Str(format!("{}{}", n, o).into()),
-		(Val::Str(o), Val::Num(n)) => Val::Str(format!("{}{}", o, n).into()),
-
-		(Val::Str(s), o) => Val::Str(format!("{}{}", s, o.clone().to_string()?).into()),
-		(o, Val::Str(s)) => Val::Str(format!("{}{}", o.clone().to_string()?, s).into()),
-
-		(Val::Obj(v1), Val::Obj(v2)) => Val::Obj(v2.extend_from(v1.clone())),
-		(Val::Arr(a), Val::Arr(b)) => {
-			let mut out = Vec::with_capacity(a.len() + b.len());
-			out.extend(a.iter_lazy());
-			out.extend(b.iter_lazy());
-			Val::Arr(out.into())
-		}
-		(Val::Num(v1), Val::Num(v2)) => Val::new_checked_num(v1 + v2)?,
-		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
-			BinaryOpType::Add,
-			a.value_type(),
-			b.value_type(),
-		)),
-	})
-}
-
-pub fn evaluate_binary_op_special(
-	context: Context,
-	a: &LocExpr,
-	op: BinaryOpType,
-	b: &LocExpr,
-) -> Result<Val> {
-	Ok(match (evaluate(context.clone(), a)?, op, b) {
-		(Val::Bool(true), BinaryOpType::Or, _o) => Val::Bool(true),
-		(Val::Bool(false), BinaryOpType::And, _o) => Val::Bool(false),
-		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(context, eb)?)?,
-	})
-}
-
-pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
-	Ok(match (a, op, b) {
-		(a, BinaryOpType::Add, b) => evaluate_add_op(a, b)?,
-
-		(a, BinaryOpType::Eq, b) => Val::Bool(equals(a, b)?),
-		(a, BinaryOpType::Neq, b) => Val::Bool(!equals(a, b)?),
-
-		(Val::Str(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::Str(v1.repeat(*v2 as usize).into()),
-
-		// Bool X Bool
-		(Val::Bool(a), BinaryOpType::And, Val::Bool(b)) => Val::Bool(*a && *b),
-		(Val::Bool(a), BinaryOpType::Or, Val::Bool(b)) => Val::Bool(*a || *b),
-
-		// Str X Str
-		(Val::Str(v1), BinaryOpType::Lt, Val::Str(v2)) => Val::Bool(v1 < v2),
-		(Val::Str(v1), BinaryOpType::Gt, Val::Str(v2)) => Val::Bool(v1 > v2),
-		(Val::Str(v1), BinaryOpType::Lte, Val::Str(v2)) => Val::Bool(v1 <= v2),
-		(Val::Str(v1), BinaryOpType::Gte, Val::Str(v2)) => Val::Bool(v1 >= v2),
-
-		// Num X Num
-		(Val::Num(v1), BinaryOpType::Mul, Val::Num(v2)) => Val::new_checked_num(v1 * v2)?,
-		(Val::Num(v1), BinaryOpType::Div, Val::Num(v2)) => {
-			if *v2 <= f64::EPSILON {
-				throw!(DivisionByZero)
-			}
-			Val::new_checked_num(v1 / v2)?
-		}
-
-		(Val::Num(v1), BinaryOpType::Sub, Val::Num(v2)) => Val::new_checked_num(v1 - v2)?,
-
-		(Val::Num(v1), BinaryOpType::Lt, Val::Num(v2)) => Val::Bool(v1 < v2),
-		(Val::Num(v1), BinaryOpType::Gt, Val::Num(v2)) => Val::Bool(v1 > v2),
-		(Val::Num(v1), BinaryOpType::Lte, Val::Num(v2)) => Val::Bool(v1 <= v2),
-		(Val::Num(v1), BinaryOpType::Gte, Val::Num(v2)) => Val::Bool(v1 >= v2),
-
-		(Val::Num(v1), BinaryOpType::BitAnd, Val::Num(v2)) => {
-			Val::Num(((*v1 as i32) & (*v2 as i32)) as f64)
-		}
-		(Val::Num(v1), BinaryOpType::BitOr, Val::Num(v2)) => {
-			Val::Num(((*v1 as i32) | (*v2 as i32)) as f64)
-		}
-		(Val::Num(v1), BinaryOpType::BitXor, Val::Num(v2)) => {
-			Val::Num(((*v1 as i32) ^ (*v2 as i32)) as f64)
-		}
-		(Val::Num(v1), BinaryOpType::Lhs, Val::Num(v2)) => {
-			if *v2 < 0.0 {
-				throw!(RuntimeError("shift by negative exponent".into()))
-			}
-			Val::Num(((*v1 as i32) << (*v2 as i32)) as f64)
-		}
-		(Val::Num(v1), BinaryOpType::Rhs, Val::Num(v2)) => {
-			if *v2 < 0.0 {
-				throw!(RuntimeError("shift by negative exponent".into()))
-			}
-			Val::Num(((*v1 as i32) >> (*v2 as i32)) as f64)
-		}
-
-		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
-			op,
-			a.value_type(),
-			b.value_type(),
-		)),
 	})
 }
 

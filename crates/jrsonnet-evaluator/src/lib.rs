@@ -1033,7 +1033,7 @@ pub mod tests {
 				local conf = {
 					n: ""
 				};
-				
+
 				local result = conf + {
 					assert std.isNumber(self.n): "is number"
 				};

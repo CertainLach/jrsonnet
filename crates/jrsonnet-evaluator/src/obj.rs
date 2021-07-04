@@ -1,4 +1,5 @@
-use crate::{evaluate_add_op, LazyBinding, Result, Val};
+use crate::operator::evaluate_add_op;
+use crate::{LazyBinding, Result, Val};
 use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
