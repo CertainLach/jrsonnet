@@ -2,14 +2,14 @@ use crate::{
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	push, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
-	FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjMember, ObjValue, ObjectAssertion,
+	FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder, ObjectAssertion,
 	Result, Val,
 };
 use jrsonnet_gc::{Gc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, ExprLocation, FieldMember, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc, Visibility,
+	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 use rustc_hash::{FxHashMap, FxHasher};
@@ -254,8 +254,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 		new_bindings.fill(bindings);
 	}
 
-	let mut new_members = FxHashMap::default();
-	let mut assertions: Vec<Box<dyn ObjectAssertion>> = Vec::new();
+	let mut builder = ObjValueBuilder::new();
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -291,19 +290,16 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						)?))
 					}
 				}
-				new_members.insert(
-					name.clone(),
-					ObjMember {
-						add: *plus,
-						visibility: *visibility,
-						invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
-							context_creator: context_creator.clone(),
-							value: value.clone(),
-							name,
-						}))),
-						location: value.1.clone(),
-					},
-				);
+				builder
+					.member(name.clone())
+					.with_add(*plus)
+					.with_visibility(*visibility)
+					.with_location(value.1.clone())
+					.bindable(Box::new(ObjMemberBinding {
+						context_creator: context_creator.clone(),
+						value: value.clone(),
+						name,
+					}));
 			}
 			Member::Field(FieldMember {
 				name,
@@ -338,20 +334,16 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						)))
 					}
 				}
-				new_members.insert(
-					name.clone(),
-					ObjMember {
-						add: false,
-						visibility: Visibility::Hidden,
-						invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
-							context_creator: context_creator.clone(),
-							value: value.clone(),
-							params: params.clone(),
-							name,
-						}))),
-						location: value.1.clone(),
-					},
-				);
+				builder
+					.member(name.clone())
+					.hide()
+					.with_location(value.1.clone())
+					.binding(LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
+						context_creator: context_creator.clone(),
+						value: value.clone(),
+						params: params.clone(),
+						name,
+					}))));
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
@@ -371,14 +363,14 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						evaluate_assert(ctx, &self.assert)
 					}
 				}
-				assertions.push(Box::new(ObjectAssert {
+				builder.assert(Box::new(ObjectAssert {
 					context_creator: context_creator.clone(),
 					assert: stmt.clone(),
 				}));
 			}
 		}
 	}
-	let this = ObjValue::new(None, Gc::new(new_members), Gc::new(assertions));
+	let this = builder.build();
 	future_this.fill(this.clone());
 	Ok(this)
 }
@@ -388,7 +380,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 		ObjBody::MemberList(members) => evaluate_member_list_object(context, members)?,
 		ObjBody::ObjComp(obj) => {
 			let future_this = FutureWrapper::new();
-			let mut new_members = FxHashMap::default();
+			let mut builder = ObjValueBuilder::new();
 			evaluate_comp(context.clone(), &obj.compspecs, &mut |ctx| {
 				let new_bindings = FutureWrapper::new();
 				let context_creator = ContextCreator(context.clone(), new_bindings.clone());
@@ -435,18 +427,13 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 								)?))
 							}
 						}
-						new_members.insert(
-							n,
-							ObjMember {
-								add: false,
-								visibility: Visibility::Normal,
-								invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjCompBinding {
-									context: ctx,
-									value: obj.value.clone(),
-								}))),
-								location: obj.value.1.clone(),
-							},
-						);
+						builder
+							.member(n)
+							.with_location(obj.value.1.clone())
+							.bindable(Box::new(ObjCompBinding {
+								context: ctx,
+								value: obj.value.clone(),
+							}));
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}
@@ -454,7 +441,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				Ok(())
 			})?;
 
-			let this = ObjValue::new(None, Gc::new(new_members), Gc::new(Vec::new()));
+			let this = builder.build();
 			future_this.fill(this.clone());
 			this
 		}

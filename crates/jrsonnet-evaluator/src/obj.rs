@@ -1,9 +1,10 @@
 use crate::operator::evaluate_add_op;
-use crate::{LazyBinding, Result, Val};
+use crate::{Bindable, LazyBinding, LazyVal, Result, Val};
 use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
-use rustc_hash::{FxHashMap, FxHashSet};
+use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
+use std::collections::HashMap;
 use std::hash::{Hash, Hasher};
 use std::{fmt::Debug, hash::BuildHasherDefault};
 
@@ -272,5 +273,100 @@ impl Eq for ObjValue {}
 impl Hash for ObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
 		hasher.write_usize(&*self.0 as *const _ as usize)
+	}
+}
+
+pub struct ObjValueBuilder {
+	super_obj: Option<ObjValue>,
+	map: FxHashMap<IStr, ObjMember>,
+	assertions: Vec<Box<dyn ObjectAssertion>>,
+}
+impl ObjValueBuilder {
+	pub fn new() -> Self {
+		Self::with_capacity(0)
+	}
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			super_obj: None,
+			map: HashMap::with_capacity_and_hasher(
+				capacity,
+				BuildHasherDefault::<FxHasher>::default(),
+			),
+			assertions: Vec::new(),
+		}
+	}
+	pub fn reserve_asserts(&mut self, capacity: usize) -> &mut Self {
+		self.assertions.reserve_exact(capacity);
+		self
+	}
+	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
+		self.super_obj = Some(super_obj);
+		self
+	}
+
+	pub fn assert(&mut self, assertion: Box<dyn ObjectAssertion>) -> &mut Self {
+		self.assertions.push(assertion);
+		self
+	}
+	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder {
+		ObjMemberBuilder {
+			value: self,
+			name,
+			add: false,
+			visibility: Visibility::Normal,
+			location: None,
+		}
+	}
+
+	pub fn build(self) -> ObjValue {
+		ObjValue::new(self.super_obj, Gc::new(self.map), Gc::new(self.assertions))
+	}
+}
+
+#[must_use = "value not added unless binding() was called"]
+pub struct ObjMemberBuilder<'v> {
+	value: &'v mut ObjValueBuilder,
+	name: IStr,
+	add: bool,
+	visibility: Visibility,
+	location: Option<ExprLocation>,
+}
+
+impl<'v> ObjMemberBuilder<'v> {
+	pub fn with_add(mut self, add: bool) -> Self {
+		self.add = add;
+		self
+	}
+	pub fn add(self) -> Self {
+		self.with_add(true)
+	}
+	pub fn with_visibility(mut self, visibility: Visibility) -> Self {
+		self.visibility = visibility;
+		self
+	}
+	pub fn hide(self) -> Self {
+		self.with_visibility(Visibility::Hidden)
+	}
+	pub fn with_location(mut self, location: Option<ExprLocation>) -> Self {
+		self.location = location;
+		self
+	}
+	pub fn value(self, value: Val) -> &'v mut ObjValueBuilder {
+		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
+	}
+	pub fn bindable(self, bindable: Box<dyn Bindable>) -> &'v mut ObjValueBuilder {
+		self.binding(LazyBinding::Bindable(Gc::new(bindable)))
+	}
+	pub fn binding(self, binding: LazyBinding) -> &'v mut ObjValueBuilder {
+		self.value.map.insert(
+			self.name,
+			ObjMember {
+				add: self.add,
+				visibility: self.visibility,
+				invoke: binding,
+				location: self.location,
+			},
+		);
+		self.value
 	}
 }

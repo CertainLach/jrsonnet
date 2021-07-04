@@ -1,16 +1,9 @@
 use crate::{
 	error::{Error::*, LocError, Result},
-	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+	throw, ObjValueBuilder, Val,
 };
-use jrsonnet_gc::Gc;
-use jrsonnet_parser::Visibility;
-use rustc_hash::FxHasher;
 use serde_json::{Map, Number, Value};
-use std::{
-	collections::HashMap,
-	convert::{TryFrom, TryInto},
-	hash::BuildHasherDefault,
-};
+use std::convert::{TryFrom, TryInto};
 
 impl TryFrom<&Val> for Value {
 	type Error = LocError;
@@ -54,29 +47,18 @@ impl From<&Value> for Val {
 			Value::Number(n) => Self::Num(n.as_f64().expect("as f64")),
 			Value::String(s) => Self::Str((s as &str).into()),
 			Value::Array(a) => {
-				let mut out = Vec::with_capacity(a.len());
+				let mut out: Vec<Val> = Vec::with_capacity(a.len());
 				for v in a {
-					out.push(LazyVal::new_resolved(v.into()));
+					out.push(v.into());
 				}
 				Self::Arr(out.into())
 			}
 			Value::Object(o) => {
-				let mut entries = HashMap::with_capacity_and_hasher(
-					o.len(),
-					BuildHasherDefault::<FxHasher>::default(),
-				);
+				let mut builder = ObjValueBuilder::with_capacity(o.len());
 				for (k, v) in o {
-					entries.insert(
-						(k as &str).into(),
-						ObjMember {
-							add: false,
-							visibility: Visibility::Normal,
-							invoke: LazyBinding::Bound(LazyVal::new_resolved(v.into())),
-							location: None,
-						},
-					);
+					builder.member((k as &str).into()).value(v.into());
 				}
-				Self::Obj(ObjValue::new(None, Gc::new(entries), Gc::new(Vec::new())))
+				Val::Obj(builder.build())
 			}
 		}
 	}
