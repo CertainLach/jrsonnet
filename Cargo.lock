@@ -158,6 +158,7 @@ version = "0.3.8"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
+ "jrsonnet-gc",
  "jrsonnet-parser",
 ]
 
