@@ -16,7 +16,6 @@ mimalloc = ["mimallocator"]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.3.8" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.3.8" }
 jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.3.8" }
-# TODO: Fix mimalloc compile errors, and use them
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
 
