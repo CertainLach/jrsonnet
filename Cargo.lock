@@ -65,7 +65,7 @@ checksum = "e3c69b077ad434294d3ce9f1f6143a2a4b89a8a2d54ef813d85003a4fd1137fd"
 [[package]]
 name = "clap"
 version = "3.0.0-beta.2"
-source = "git+https://github.com/clap-rs/clap?rev=92f744cc49d12d32261010d355dc215a6d2487b9#92f744cc49d12d32261010d355dc215a6d2487b9"
+source = "git+https://github.com/clap-rs/clap?rev=f0c5ea5e1503de5c8e74d8c047a799cf51498e83#f0c5ea5e1503de5c8e74d8c047a799cf51498e83"
 dependencies = [
  "atty",
  "bitflags",
@@ -82,7 +82,7 @@ dependencies = [
 [[package]]
 name = "clap_derive"
 version = "3.0.0-beta.2"
-source = "git+https://github.com/clap-rs/clap?rev=92f744cc49d12d32261010d355dc215a6d2487b9#92f744cc49d12d32261010d355dc215a6d2487b9"
+source = "git+https://github.com/clap-rs/clap?rev=f0c5ea5e1503de5c8e74d8c047a799cf51498e83#f0c5ea5e1503de5c8e74d8c047a799cf51498e83"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -94,7 +94,7 @@ dependencies = [
 [[package]]
 name = "clap_generate"
 version = "3.0.0-beta.2"
-source = "git+https://github.com/clap-rs/clap?rev=92f744cc49d12d32261010d355dc215a6d2487b9#92f744cc49d12d32261010d355dc215a6d2487b9"
+source = "git+https://github.com/clap-rs/clap?rev=f0c5ea5e1503de5c8e74d8c047a799cf51498e83#f0c5ea5e1503de5c8e74d8c047a799cf51498e83"
 dependencies = [
  "clap",
 ]
@@ -141,7 +141,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 
 [[package]]
 name = "jrsonnet"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "clap",
  "clap_generate",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-cli"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "annotate-snippets",
  "anyhow",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-interner"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "jrsonnet-gc",
  "rustc-hash",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "jrsonnet-gc",
  "jrsonnet-interner",
@@ -227,11 +227,11 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.3.8"
+version = "0.4.0"
 
 [[package]]
 name = "jrsonnet-types"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "jrsonnet-gc",
  "peg",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "jsonnet"
-version = "0.3.8"
+version = "0.4.0"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gc",
@@ -447,9 +447,9 @@ dependencies = [
 
 [[package]]
 name = "textwrap"
-version = "0.13.4"
+version = "0.14.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "cd05616119e612a8041ef58f2b578906cc2531a6069047ae092cfb86a325d835"
+checksum = "0066c8d12af8b5acd21e00547c3797fde4e8677254a7ee429176ccebbe93dd80"
 dependencies = [
  "unicode-width",
 ]
