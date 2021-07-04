@@ -29,7 +29,3 @@ test tests::bench_parse     ... bench:   7,206,164 ns/iter (+/- 1,067,418)
 ## Intrinsics
 
 Some functions from stdlib are implemented as intrinsics
-
-### Intrinsic handling
-
-If indexed jsonnet object has field '__intrinsic_namespace__' of type 'string', then any not found field/method is resolved as `Val::Intrinsic(__intrinsic_namespace__, name)`
