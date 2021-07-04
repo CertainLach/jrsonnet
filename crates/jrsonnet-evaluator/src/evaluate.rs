@@ -215,9 +215,6 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 
 pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
-		(Val::DebugGcTraceValue(v1), Val::DebugGcTraceValue(v2)) => {
-			evaluate_add_op(&v1.value, &v2.value)?
-		}
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)

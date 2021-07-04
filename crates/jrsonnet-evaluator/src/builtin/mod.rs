@@ -1,8 +1,8 @@
 use crate::{
 	equals,
 	error::{Error::*, Result},
-	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, DebugGcTraceValue,
-	EvaluationState, FuncVal, LazyVal, Val,
+	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, EvaluationState,
+	FuncVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
 use jrsonnet_gc::Gc;
@@ -69,8 +69,6 @@ thread_local! {
 			("md5".into(), builtin_md5),
 			("base64".into(), builtin_base64),
 			("trace".into(), builtin_trace),
-			("gc".into(), builtin_gc),
-			("gcTrace".into(), builtin_gc_trace),
 			("join".into(), builtin_join),
 			("escapeStringJson".into(), builtin_escape_string_json),
 			("manifestJsonEx".into(), builtin_manifest_json_ex),
@@ -446,27 +444,6 @@ fn builtin_trace(context: Context, loc: Option<&ExprLocation>, args: &ArgsDesc) 
 		}
 		eprintln!(" {}", str);
 		Ok(rest)
-	})
-}
-
-fn builtin_gc(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "gc", args, 1, [
-		0, rest: ty!(any);
-	], {
-		println!("GC start");
-		jrsonnet_gc::force_collect();
-		println!("GC done");
-
-		Ok(rest)
-	})
-}
-
-fn builtin_gc_trace(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "gcTrace", args, 2, [
-		0, name: ty!(string) => Val::Str;
-		1, rest: ty!(any);
-	], {
-		Ok(DebugGcTraceValue::create(name, rest))
 	})
 }
 

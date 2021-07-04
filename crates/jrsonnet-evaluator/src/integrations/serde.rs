@@ -42,7 +42,6 @@ impl TryFrom<&Val> for Value {
 				Self::Object(out)
 			}
 			Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
-			Val::DebugGcTraceValue(v) => Self::try_from(&*v.value as &Val)?,
 		})
 	}
 }

@@ -9,7 +9,7 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
-use jrsonnet_gc::{Finalize, Gc, GcCell, Trace};
+use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
@@ -345,65 +345,6 @@ impl From<Vec<Val>> for ArrValue {
 	}
 }
 
-#[derive(Debug)]
-pub struct DebugGcTraceValue {
-	name: IStr,
-	pub value: Box<Val>,
-}
-impl DebugGcTraceValue {
-	fn print(&self, action: &str) {
-		println!("{} {}#{:?}", action, self.name, &*self.value as *const _)
-	}
-}
-impl Finalize for DebugGcTraceValue {
-	fn finalize(&self) {
-		self.print("Garbage-collecting")
-	}
-}
-impl Drop for DebugGcTraceValue {
-	fn drop(&mut self) {
-		self.print("Garbage-collected")
-	}
-}
-unsafe impl Trace for DebugGcTraceValue {
-	unsafe fn trace(&self) {
-		self.print("Traced");
-		self.value.trace()
-	}
-	unsafe fn root(&self) {
-		self.print("Rooted");
-		self.value.root()
-	}
-	unsafe fn unroot(&self) {
-		self.print("Unrooted");
-		self.value.unroot()
-	}
-	fn finalize_glue(&self) {
-		Finalize::finalize(self)
-	}
-}
-impl Clone for DebugGcTraceValue {
-	fn clone(&self) -> Self {
-		self.print("Cloned");
-		let value = Self {
-			name: self.name.clone(),
-			value: self.value.clone(),
-		};
-		value.print("I'm clone");
-		value
-	}
-}
-impl DebugGcTraceValue {
-	pub fn create(name: IStr, value: Val) -> Val {
-		let value = Self {
-			name,
-			value: Box::new(value),
-		};
-		value.print("Constructed");
-		Val::DebugGcTraceValue(value)
-	}
-}
-
 #[derive(Debug, Clone, Trace)]
 #[trivially_drop]
 pub enum Val {
@@ -414,7 +355,6 @@ pub enum Val {
 	Arr(ArrValue),
 	Obj(ObjValue),
 	Func(Gc<FuncVal>),
-	DebugGcTraceValue(DebugGcTraceValue),
 }
 
 macro_rules! matches_unwrap {
@@ -471,7 +411,6 @@ impl Val {
 			Self::Bool(_) => ValType::Bool,
 			Self::Null => ValType::Null,
 			Self::Func(..) => ValType::Func,
-			Self::DebugGcTraceValue(v) => v.value.value_type(),
 		}
 	}
 
