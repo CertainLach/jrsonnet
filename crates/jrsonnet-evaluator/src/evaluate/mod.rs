@@ -1,4 +1,5 @@
 use crate::{
+	builtin::std_slice,
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	push, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
@@ -678,6 +679,28 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					None => Val::Null,
 				}
 			}
+		}
+		Slice(value, desc) => {
+			let indexable = evaluate(context.clone(), value)?;
+
+			fn parse_num(
+				context: &Context,
+				expr: Option<&LocExpr>,
+				desc: &'static str,
+			) -> Result<Option<usize>> {
+				Ok(match expr {
+					Some(s) => evaluate(context.clone(), &s)?
+						.try_cast_nullable_num(desc)?
+						.map(|v| v as usize),
+					None => None,
+				})
+			}
+
+			let start = parse_num(&context, desc.start.as_ref(), "start")?;
+			let end = parse_num(&context, desc.end.as_ref(), "end")?;
+			let step = parse_num(&context, desc.step.as_ref(), "step")?;
+
+			std_slice(indexable.to_indexable()?, start, end, step)?
 		}
 		Import(path) => {
 			let tmp = loc

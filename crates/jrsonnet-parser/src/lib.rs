@@ -14,6 +14,17 @@ pub struct ParserSettings {
 	pub file_name: Rc<Path>,
 }
 
+macro_rules! expr_bin {
+	($a:ident $op:ident $b:ident) => {
+		loc_expr_todo!(Expr::BinaryOp($a, $op, $b))
+	};
+}
+macro_rules! expr_un {
+	($op:ident $a:ident) => {
+		loc_expr_todo!(Expr::UnaryOp($op, $a))
+	};
+}
+
 parser! {
 	grammar jsonnet_parser() for str {
 		use peg::ParseLiteral;
@@ -219,54 +230,43 @@ parser! {
 
 
 		use BinaryOpType::*;
+		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= start:position!() a:precedence! {
-				a:(@) _ binop(<"||">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Or, b))}
+				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
-				a:(@) _ binop(<"&&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, And, b))}
+				a:(@) _ binop(<"&&">) _ b:@ {expr_bin!(a And b)}
 				--
-				a:(@) _ binop(<"|">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BitOr, b))}
+				a:(@) _ binop(<"|">) _ b:@ {expr_bin!(a BitOr b)}
 				--
-				a:@ _ binop(<"^">) _ b:(@) {loc_expr_todo!(Expr::BinaryOp(a, BitXor, b))}
+				a:@ _ binop(<"^">) _ b:(@) {expr_bin!(a BitXor b)}
 				--
-				a:(@) _ binop(<"&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BitAnd, b))}
+				a:(@) _ binop(<"&">) _ b:@ {expr_bin!(a BitAnd b)}
 				--
-				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Eq, b))}
-				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Neq, b))}
+				a:(@) _ binop(<"==">) _ b:@ {expr_bin!(a Eq b)}
+				a:(@) _ binop(<"!=">) _ b:@ {expr_bin!(a Neq b)}
 				--
-				a:(@) _ binop(<"<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lt, b))}
-				a:(@) _ binop(<">">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Gt, b))}
-				a:(@) _ binop(<"<=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lte, b))}
-				a:(@) _ binop(<">=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Gte, b))}
-				a:(@) _ binop(<keyword("in")>) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, In, b))}
+				a:(@) _ binop(<"<">) _ b:@ {expr_bin!(a Lt b)}
+				a:(@) _ binop(<">">) _ b:@ {expr_bin!(a Gt b)}
+				a:(@) _ binop(<"<=">) _ b:@ {expr_bin!(a Lte b)}
+				a:(@) _ binop(<">=">) _ b:@ {expr_bin!(a Gte b)}
+				a:(@) _ binop(<keyword("in")>) _ b:@ {expr_bin!(a In b)}
 				--
-				a:(@) _ binop(<"<<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lhs, b))}
-				a:(@) _ binop(<">>">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Rhs, b))}
+				a:(@) _ binop(<"<<">) _ b:@ {expr_bin!(a Lhs b)}
+				a:(@) _ binop(<">>">) _ b:@ {expr_bin!(a Rhs b)}
 				--
-				a:(@) _ binop(<"+">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Add, b))}
-				a:(@) _ binop(<"-">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Sub, b))}
+				a:(@) _ binop(<"+">) _ b:@ {expr_bin!(a Add b)}
+				a:(@) _ binop(<"-">) _ b:@ {expr_bin!(a Sub b)}
 				--
-				a:(@) _ binop(<"*">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Mul, b))}
-				a:(@) _ binop(<"/">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Div, b))}
-				a:(@) _ binop(<"%">) _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("mod".into())), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
-					false
-				))}
+				a:(@) _ binop(<"*">) _ b:@ {expr_bin!(a Mul b)}
+				a:(@) _ binop(<"/">) _ b:@ {expr_bin!(a Div b)}
+				a:(@) _ binop(<"%">) _ b:@ {expr_bin!(a Mod b)}
 				--
-						unaryop(<"-">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Minus, b))}
-						unaryop(<"!">) _ b:@ {loc_expr_todo!(Expr::UnaryOp(UnaryOpType::Not, b))}
-						unaryop(<"~">) _ b:@ { loc_expr_todo!(Expr::UnaryOp(UnaryOpType::BitNot, b)) }
+						unaryop(<"-">) _ b:@ {expr_un!(Minus b)}
+						unaryop(<"!">) _ b:@ {expr_un!(Not b)}
+						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
-				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("slice".into())),
-					ArgsDesc(vec![
-						Arg(None, a),
-						Arg(None, s.start.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
-						Arg(None, s.end.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
-						Arg(None, s.step.unwrap_or_else(||el!(Expr::Literal(LiteralType::Null)))),
-					]),
-					true,
-				))}
+				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Slice(a, s))}
 				a:(@) _ "." _ s:$(id()) {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s.into()))))}
 				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args, ts.is_some()))}

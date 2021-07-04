@@ -1,3 +1,4 @@
+use crate::builtin::std_format;
 use crate::{equals, evaluate, Context, Val};
 use crate::{error::Error::*, throw, Result};
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
@@ -41,6 +42,19 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	})
 }
 
+pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
+	use Val::*;
+	match (a, b) {
+		(Num(a), Num(b)) => Ok(Num(a % b)),
+		(Str(str), vals) => std_format(str.clone(), vals.clone()),
+		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
+			BinaryOpType::Mod,
+			a.value_type(),
+			b.value_type()
+		)),
+	}
+}
+
 pub fn evaluate_binary_op_special(
 	context: Context,
 	a: &LocExpr,
@@ -60,12 +74,13 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
-		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
-
 		(a, Add, b) => evaluate_add_op(a, b)?,
 
 		(a, Eq, b) => Bool(equals(a, b)?),
 		(a, Neq, b) => Bool(!equals(a, b)?),
+
+		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
+		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
 		(Str(v1), Mul, Num(v2)) => Str(v1.repeat(*v2 as usize).into()),
 

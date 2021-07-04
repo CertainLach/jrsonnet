@@ -274,6 +274,8 @@ pub enum LiteralType {
 	False,
 }
 
+#[cfg_attr(feature = "serialize", derive(Serialize))]
+#[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 #[trivially_drop]
 pub struct SliceDesc {
@@ -349,6 +351,7 @@ pub enum Expr {
 		cond_then: LocExpr,
 		cond_else: Option<LocExpr>,
 	},
+	Slice(LocExpr, SliceDesc),
 }
 
 /// file, begin offset, end offset

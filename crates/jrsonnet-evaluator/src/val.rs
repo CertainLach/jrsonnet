@@ -345,6 +345,11 @@ impl From<Vec<Val>> for ArrValue {
 	}
 }
 
+pub enum IndexableVal {
+	Str(IStr),
+	Arr(ArrValue),
+}
+
 #[derive(Debug, Clone, Trace)]
 #[trivially_drop]
 pub enum Val {
@@ -401,6 +406,17 @@ impl Val {
 	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
 		self.assert_type(context, ValType::Num)?;
 		self.unwrap_num()
+	}
+	pub fn try_cast_nullable_num(self, context: &'static str) -> Result<Option<f64>> {
+		Ok(match self {
+			Val::Null => None,
+			Val::Num(num) => Some(num),
+			_ => throw!(TypeMismatch(
+				context,
+				vec![ValType::Null, ValType::Num],
+				self.value_type()
+			)),
+		})
 	}
 	pub const fn value_type(&self) -> ValType {
 		match self {
@@ -578,6 +594,13 @@ impl Val {
 				)),
 			)?
 			.try_cast_str("to json")
+		})
+	}
+	pub fn to_indexable(self) -> Result<IndexableVal> {
+		Ok(match self {
+			Val::Str(s) => IndexableVal::Str(s),
+			Val::Arr(arr) => IndexableVal::Arr(arr),
+			_ => throw!(ValueIsNotIndexable(self.value_type())),
 		})
 	}
 }

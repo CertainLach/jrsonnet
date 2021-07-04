@@ -73,6 +73,8 @@ pub enum Error {
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
 	#[error("cant index into {0}")]
 	CantIndexInto(ValType),
+	#[error("{0} is not indexable")]
+	ValueIsNotIndexable(ValType),
 
 	#[error("super can't be used standalone")]
 	StandaloneSuper,

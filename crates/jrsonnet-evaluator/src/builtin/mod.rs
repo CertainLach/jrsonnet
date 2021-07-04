@@ -1,13 +1,14 @@
 use crate::{
 	equals,
 	error::{Error::*, Result},
+	operator::evaluate_mod_op,
 	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, EvaluationState,
-	FuncVal, LazyVal, Val,
+	FuncVal, IndexableVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
 use jrsonnet_gc::Gc;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, BinaryOpType, ExprLocation};
+use jrsonnet_parser::{ArgsDesc, ExprLocation};
 use jrsonnet_types::ty;
 use std::{collections::HashMap, path::PathBuf, rc::Rc};
 
@@ -20,7 +21,7 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
-fn std_format(str: IStr, vals: Val) -> Result<Val> {
+pub fn std_format(str: IStr, vals: Val) -> Result<Val> {
 	push(
 		Some(&ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
 		|| format!("std.format of {}", str),
@@ -32,6 +33,38 @@ fn std_format(str: IStr, vals: Val) -> Result<Val> {
 			})
 		},
 	)
+}
+
+pub fn std_slice(
+	indexable: IndexableVal,
+	index: Option<usize>,
+	end: Option<usize>,
+	step: Option<usize>,
+) -> Result<Val> {
+	let index = index.unwrap_or(0);
+	let end = end.unwrap_or_else(|| match &indexable {
+		IndexableVal::Str(_) => usize::MAX,
+		IndexableVal::Arr(v) => v.len(),
+	});
+	let step = step.unwrap_or(1);
+	match &indexable {
+		IndexableVal::Str(s) => Ok(Val::Str(
+			(s.chars()
+				.skip(index)
+				.take(end - index)
+				.step_by(step)
+				.collect::<String>())
+			.into(),
+		)),
+		IndexableVal::Arr(arr) => Ok(Val::Arr(
+			(arr.iter()
+				.skip(index)
+				.take(end - index)
+				.step_by(step)
+				.collect::<Result<Vec<Val>>>()?)
+			.into(),
+		)),
+	}
 }
 
 type Builtin = fn(context: Context, loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val>;
@@ -188,34 +221,12 @@ fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 		2, end: ty!((number | null));
 		3, step: ty!((number | null));
 	], {
-		let index = match index {
-			Val::Num(v) => v as usize,
-			Val::Null => 0,
-			_ => unreachable!(),
-		};
-		let end = match end {
-			Val::Num(v) => v as usize,
-			Val::Null => match &indexable {
-				Val::Str(s) => s.chars().count(),
-				Val::Arr(v) => v.len(),
-				_ => unreachable!()
-			},
-			_ => unreachable!()
-		};
-		let step = match step {
-			Val::Num(v) => v as usize,
-			Val::Null => 1,
-			_ => unreachable!()
-		};
-		match &indexable {
-			Val::Str(s) => {
-				Ok(Val::Str((s.chars().skip(index).take(end-index).step_by(step).collect::<String>()).into()))
-			}
-			Val::Arr(arr) => {
-				Ok(Val::Arr((arr.iter().skip(index).take(end-index).step_by(step).collect::<Result<Vec<Val>>>()?).into()))
-			}
-			_ => unreachable!()
-		}
+		std_slice(
+			indexable.to_indexable()?,
+			index.try_cast_nullable_num("index")?.map(|v| v as usize),
+			end.try_cast_nullable_num("end")?.map(|v| v as usize),
+			step.try_cast_nullable_num("step")?.map(|v| v as usize),
+		)
 	})
 }
 
@@ -257,11 +268,7 @@ fn builtin_mod(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -
 		0, a: ty!((number | string));
 		1, b: ty!(any);
 	], {
-		match (a, b) {
-			(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a % b)),
-			(Val::Str(str), vals) => std_format(str, vals),
-			(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(BinaryOpType::Mod, a.value_type(), b.value_type()))
-		}
+		evaluate_mod_op(&a, &b)
 	})
 }
 
