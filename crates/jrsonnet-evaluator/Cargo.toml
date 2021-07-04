@@ -7,14 +7,11 @@ license = "MIT"
 edition = "2018"
 
 [features]
-default = ["serialized-stdlib", "faster", "explaining-traces", "serde-json"]
+default = ["serialized-stdlib", "explaining-traces", "serde-json"]
 # Serializes standard library AST instead of parsing them every run
 serialized-stdlib = ["serde", "bincode", "jrsonnet-parser/deserialize"]
 # Allow to convert Val into serde_json::Value and backwards
 serde-json = ["serde", "serde_json"]
-# Replace some standard library functions with faster implementations (I.e manifestJsonEx)
-# Library works fine without this feature, but requires more memory and time for std function calls
-faster = []
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
@@ -24,10 +21,10 @@ anyhow-error = ["anyhow"]
 unstable = []
 
 [dependencies]
-jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.0" }
-jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.0" }
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.0" }
-jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.0" }
+jrsonnet-interner = { path="../jrsonnet-interner", version="0.4.0" }
+jrsonnet-parser = { path="../jrsonnet-parser", version="0.4.0" }
+jrsonnet-stdlib = { path="../jrsonnet-stdlib", version="0.4.0" }
+jrsonnet-types = { path="../jrsonnet-types", version="0.4.0" }
 pathdiff = "0.2.0"
 
 md5 = "0.7.0"
@@ -35,7 +32,7 @@ base64 = "0.13.0"
 rustc-hash = "1.1.0"
 
 thiserror = "1.0"
-jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
+jrsonnet-gc = { version="0.4.2", features=["derive"] }
 
 [dependencies.anyhow]
 version = "1.0"
@@ -61,7 +58,7 @@ features = ["color"]
 optional = true
 
 [build-dependencies]
-jrsonnet-parser = { path = "../jrsonnet-parser", features = ["serialize", "deserialize"], version = "0.4.0" }
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.0" }
+jrsonnet-parser = { path="../jrsonnet-parser", features=["serialize", "deserialize"], version="0.4.0" }
+jrsonnet-stdlib = { path="../jrsonnet-stdlib", version="0.4.0" }
 serde = "1.0"
 bincode = "1.3.1"

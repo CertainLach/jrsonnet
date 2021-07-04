@@ -192,6 +192,8 @@ parser! {
 		pub rule expr_basic(s: &ParserSettings) -> LocExpr
 			= literal(s)
 
+			/ quiet!{l(s,<"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}>)}
+
 			/ string_expr(s) / number_expr(s)
 			/ array_expr(s)
 			/ obj_expr(s)

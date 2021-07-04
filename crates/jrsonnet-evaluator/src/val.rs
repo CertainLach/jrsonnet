@@ -531,7 +531,6 @@ impl Val {
 	}
 
 	/// Calls `std.manifestJson`
-	#[cfg(feature = "faster")]
 	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
 		manifest_json_ex(
 			self,
@@ -543,30 +542,6 @@ impl Val {
 		.map(|s| s.into())
 	}
 
-	/// Calls `std.manifestJson`
-	#[cfg(not(feature = "faster"))]
-	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
-		with_state(|s| {
-			let ctx = s
-				.create_default_context()?
-				.with_var("__tmp__to_json__".into(), self.clone())?;
-			Ok(evaluate(
-				ctx,
-				&el!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("manifestJsonEx".into()))
-					)),
-					ArgsDesc(vec![
-						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
-						Arg(None, el!(Expr::Str(" ".repeat(padding).into())))
-					]),
-					false
-				)),
-			)?
-			.try_cast_str("to json")?)
-		})
-	}
 	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
 		with_state(|s| {
 			let ctx = s

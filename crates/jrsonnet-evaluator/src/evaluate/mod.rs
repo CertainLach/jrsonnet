@@ -546,8 +546,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						|| {
 							if let Some(v) = v.get(s.clone())? {
 								Ok(v)
-							} else if v.get("__intrinsic_namespace__".into())?.is_some() {
-								Ok(Val::Func(Gc::new(FuncVal::Intrinsic(s))))
 							} else {
 								throw!(NoSuchField(s))
 							}

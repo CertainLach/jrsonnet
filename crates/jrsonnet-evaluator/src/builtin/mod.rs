@@ -213,7 +213,6 @@ fn builtin_parse_json(
 	})
 }
 
-// faster
 fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "slice", args, 4, [
 		0, indexable: ty!((string | array));
@@ -230,7 +229,6 @@ fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 	})
 }
 
-// faster
 fn builtin_primitive_equals(
 	context: Context,
 	_loc: Option<&ExprLocation>,
@@ -244,7 +242,6 @@ fn builtin_primitive_equals(
 	})
 }
 
-// faster
 fn builtin_equals(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "equals", args, 2, [
 		0, a: ty!(any);
@@ -379,7 +376,6 @@ fn builtin_sort_impl(
 	})
 }
 
-// faster
 fn builtin_format(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "format", args, 2, [
 		0, str: ty!(string) => Val::Str;
@@ -529,7 +525,6 @@ fn builtin_join(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) 
 	})
 }
 
-// faster
 fn builtin_escape_string_json(
 	context: Context,
 	_loc: Option<&ExprLocation>,
@@ -542,7 +537,6 @@ fn builtin_escape_string_json(
 	})
 }
 
-// faster
 fn builtin_manifest_json_ex(
 	context: Context,
 	_loc: Option<&ExprLocation>,
@@ -559,7 +553,6 @@ fn builtin_manifest_json_ex(
 	})
 }
 
-// faster
 fn builtin_reverse(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "reverse", args, 1, [
 		0, value: ty!(array) => Val::Arr;
@@ -576,7 +569,6 @@ fn builtin_id(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) ->
 	})
 }
 
-// faster
 fn builtin_str_replace(
 	context: Context,
 	_loc: Option<&ExprLocation>,
