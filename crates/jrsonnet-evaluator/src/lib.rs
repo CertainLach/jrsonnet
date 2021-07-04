@@ -491,7 +491,7 @@ pub mod tests {
 	use crate::{
 		error::Error::*, native::NativeCallbackHandler, primitive_equals, EvaluationState,
 	};
-	use gc::Gc;
+	use jrsonnet_gc::{Finalize, Gc, Trace};
 	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
 	use std::{
@@ -924,7 +924,7 @@ pub mod tests {
 
 		evaluator.with_stdlib();
 
-		#[derive(gc::Trace, gc::Finalize)]
+		#[derive(Trace, Finalize)]
 		struct NativeAdd;
 		impl NativeCallbackHandler for NativeAdd {
 			fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> crate::error::Result<Val> {
