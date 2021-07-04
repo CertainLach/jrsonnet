@@ -127,6 +127,9 @@ pub enum BinaryOpType {
 
 	And,
 	Or,
+
+	// Equialent to std.objectHasEx(a, b, true)
+	In,
 }
 
 impl Display for BinaryOpType {
@@ -154,6 +157,7 @@ impl Display for BinaryOpType {
 				Neq => "!=",
 				And => "&&",
 				Or => "||",
+				In => "in",
 			}
 		)
 	}

@@ -60,6 +60,8 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
+		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
+
 		(a, Add, b) => evaluate_add_op(a, b)?,
 
 		(a, Eq, b) => Bool(equals(a, b)?),

@@ -217,38 +217,37 @@ parser! {
 		rule unaryop(x: rule<()>) -> ()
 			= quiet!{ x() } / expected!("<unary op>")
 
+
+		use BinaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= start:position!() a:precedence! {
-				a:(@) _ binop(<"||">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Or, b))}
+				a:(@) _ binop(<"||">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Or, b))}
 				--
-				a:(@) _ binop(<"&&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::And, b))}
+				a:(@) _ binop(<"&&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, And, b))}
 				--
-				a:(@) _ binop(<"|">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitOr, b))}
+				a:(@) _ binop(<"|">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BitOr, b))}
 				--
-				a:@ _ binop(<"^">) _ b:(@) {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitXor, b))}
+				a:@ _ binop(<"^">) _ b:(@) {loc_expr_todo!(Expr::BinaryOp(a, BitXor, b))}
 				--
-				a:(@) _ binop(<"&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::BitAnd, b))}
+				a:(@) _ binop(<"&">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BitAnd, b))}
 				--
-				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Eq, b))}
-				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Neq, b))}
+				a:(@) _ binop(<"==">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Eq, b))}
+				a:(@) _ binop(<"!=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Neq, b))}
 				--
-				a:(@) _ binop(<"<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lt, b))}
-				a:(@) _ binop(<">">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gt, b))}
-				a:(@) _ binop(<"<=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lte, b))}
-				a:(@) _ binop(<">=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Gte, b))}
-				a:(@) _ binop(<keyword("in")>) _ b:@ {loc_expr_todo!(Expr::Apply(
-					el!(Expr::Intrinsic("objectHasEx".into())), ArgsDesc(vec![Arg(None, b), Arg(None, a), Arg(None, el!(Expr::Literal(LiteralType::True)))]),
-					true
-				))}
+				a:(@) _ binop(<"<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lt, b))}
+				a:(@) _ binop(<">">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Gt, b))}
+				a:(@) _ binop(<"<=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lte, b))}
+				a:(@) _ binop(<">=">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Gte, b))}
+				a:(@) _ binop(<keyword("in")>) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, In, b))}
 				--
-				a:(@) _ binop(<"<<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Lhs, b))}
-				a:(@) _ binop(<">>">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Rhs, b))}
+				a:(@) _ binop(<"<<">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Lhs, b))}
+				a:(@) _ binop(<">>">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Rhs, b))}
 				--
-				a:(@) _ binop(<"+">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Add, b))}
-				a:(@) _ binop(<"-">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Sub, b))}
+				a:(@) _ binop(<"+">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Add, b))}
+				a:(@) _ binop(<"-">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Sub, b))}
 				--
-				a:(@) _ binop(<"*">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Mul, b))}
-				a:(@) _ binop(<"/">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, BinaryOpType::Div, b))}
+				a:(@) _ binop(<"*">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Mul, b))}
+				a:(@) _ binop(<"/">) _ b:@ {loc_expr_todo!(Expr::BinaryOp(a, Div, b))}
 				a:(@) _ binop(<"%">) _ b:@ {loc_expr_todo!(Expr::Apply(
 					el!(Expr::Intrinsic("mod".into())), ArgsDesc(vec![Arg(None, a), Arg(None, b)]),
 					false
@@ -306,6 +305,7 @@ pub mod tests {
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
 	use std::path::PathBuf;
+	use BinaryOpType::*;
 
 	macro_rules! parse {
 		($s:expr) => {
@@ -326,10 +326,10 @@ pub mod tests {
 		pub fn basic_math() -> LocExpr {
 			el!(Expr::BinaryOp(
 				el!(Expr::Num(2.0)),
-				BinaryOpType::Add,
+				Add,
 				el!(Expr::BinaryOp(
 					el!(Expr::Num(2.0)),
-					BinaryOpType::Mul,
+					Mul,
 					el!(Expr::Num(2.0)),
 				)),
 			))
@@ -417,10 +417,10 @@ pub mod tests {
 			parse!("2+2*2"),
 			el!(Expr::BinaryOp(
 				el!(Expr::Num(2.0)),
-				BinaryOpType::Add,
+				Add,
 				el!(Expr::BinaryOp(
 					el!(Expr::Num(2.0)),
-					BinaryOpType::Mul,
+					Mul,
 					el!(Expr::Num(2.0))
 				))
 			))
@@ -438,7 +438,7 @@ pub mod tests {
 			parse!("2+(2+2*2)"),
 			el!(Expr::BinaryOp(
 				el!(Expr::Num(2.0)),
-				BinaryOpType::Add,
+				Add,
 				el!(Expr::Parened(expressions::basic_math())),
 			))
 		);
@@ -451,10 +451,10 @@ pub mod tests {
 			parse!("2//comment\n+//comment\n3/*test*/*/*test*/4"),
 			el!(Expr::BinaryOp(
 				el!(Expr::Num(2.0)),
-				BinaryOpType::Add,
+				Add,
 				el!(Expr::BinaryOp(
 					el!(Expr::Num(3.0)),
-					BinaryOpType::Mul,
+					Mul,
 					el!(Expr::Num(4.0))
 				))
 			))
@@ -468,7 +468,7 @@ pub mod tests {
 			parse!("2/*\\*/+*/ - 22"),
 			el!(Expr::BinaryOp(
 				el!(Expr::Num(2.0)),
-				BinaryOpType::Sub,
+				Sub,
 				el!(Expr::Num(22.0))
 			))
 		);
@@ -520,7 +520,7 @@ pub mod tests {
 			parse!("!a && !b"),
 			el!(BinaryOp(
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
-				BinaryOpType::And,
+				And,
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
 			))
 		);
@@ -533,7 +533,7 @@ pub mod tests {
 			parse!("!a / !b"),
 			el!(BinaryOp(
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
-				BinaryOpType::Div,
+				Div,
 				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
 			))
 		);
