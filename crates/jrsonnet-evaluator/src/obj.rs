@@ -1,11 +1,13 @@
-use crate::{evaluate_add_op, evaluate_assert, Context, LazyBinding, Result, Val};
+use crate::{evaluate_add_op, LazyBinding, Result, Val};
+use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{AssertStmt, ExprLocation, Visibility};
+use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
-use std::{cell::RefCell, fmt::Debug, hash::BuildHasherDefault, rc::Rc};
+use std::{fmt::Debug, hash::BuildHasherDefault};
 
-#[derive(Debug)]
+#[derive(Debug, Trace)]
+#[trivially_drop]
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
@@ -13,21 +15,26 @@ pub struct ObjMember {
 	pub location: Option<ExprLocation>,
 }
 
-// Field => This
-type CacheKey = (IStr, ObjValue);
-#[derive(Debug)]
-pub struct ObjValueInternals {
-	context: Context,
-	super_obj: Option<ObjValue>,
-	assertions: Rc<Vec<AssertStmt>>,
-	assertions_ran: RefCell<FxHashSet<ObjValue>>,
-	this_obj: Option<ObjValue>,
-	this_entries: Rc<FxHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<FxHashMap<CacheKey, Option<Val>>>,
+pub trait ObjectAssertion: Trace {
+	fn run(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<()>;
 }
 
-#[derive(Clone)]
-pub struct ObjValue(pub(crate) Rc<ObjValueInternals>);
+// Field => This
+type CacheKey = (IStr, ObjValue);
+#[derive(Trace)]
+#[trivially_drop]
+pub struct ObjValueInternals {
+	super_obj: Option<ObjValue>,
+	assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
+	assertions_ran: GcCell<FxHashSet<ObjValue>>,
+	this_obj: Option<ObjValue>,
+	this_entries: Gc<FxHashMap<IStr, ObjMember>>,
+	value_cache: GcCell<FxHashMap<CacheKey, Option<Val>>>,
+}
+
+#[derive(Clone, Trace)]
+#[trivially_drop]
+pub struct ObjValue(pub(crate) Gc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(super_obj) = self.0.super_obj.as_ref() {
@@ -55,39 +62,30 @@ impl Debug for ObjValue {
 
 impl ObjValue {
 	pub fn new(
-		context: Context,
 		super_obj: Option<Self>,
-		this_entries: Rc<FxHashMap<IStr, ObjMember>>,
-		assertions: Rc<Vec<AssertStmt>>,
+		this_entries: Gc<FxHashMap<IStr, ObjMember>>,
+		assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
 	) -> Self {
-		Self(Rc::new(ObjValueInternals {
-			context,
+		Self(Gc::new(ObjValueInternals {
 			super_obj,
 			assertions,
-			assertions_ran: RefCell::new(FxHashSet::default()),
+			assertions_ran: GcCell::new(FxHashSet::default()),
 			this_obj: None,
 			this_entries,
-			value_cache: RefCell::new(FxHashMap::default()),
+			value_cache: GcCell::new(FxHashMap::default()),
 		}))
 	}
 	pub fn new_empty() -> Self {
-		Self::new(
-			Context::new(),
-			None,
-			Rc::new(FxHashMap::default()),
-			Rc::new(Vec::new()),
-		)
+		Self::new(None, Gc::new(FxHashMap::default()), Gc::new(Vec::new()))
 	}
 	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
 			None => Self::new(
-				self.0.context.clone(),
 				Some(super_obj),
 				self.0.this_entries.clone(),
 				self.0.assertions.clone(),
 			),
 			Some(v) => Self::new(
-				self.0.context.clone(),
 				Some(v.extend_from(super_obj)),
 				self.0.this_entries.clone(),
 				self.0.assertions.clone(),
@@ -95,14 +93,13 @@ impl ObjValue {
 		}
 	}
 	pub fn with_this(&self, this_obj: Self) -> Self {
-		Self(Rc::new(ObjValueInternals {
-			context: self.0.context.clone(),
+		Self(Gc::new(ObjValueInternals {
 			super_obj: self.0.super_obj.clone(),
 			assertions: self.0.assertions.clone(),
-			assertions_ran: RefCell::new(FxHashSet::default()),
+			assertions_ran: GcCell::new(FxHashSet::default()),
 			this_obj: Some(this_obj),
 			this_entries: self.0.this_entries.clone(),
-			value_cache: RefCell::new(FxHashMap::default()),
+			value_cache: GcCell::new(FxHashMap::default()),
 		}))
 	}
 
@@ -203,12 +200,7 @@ impl ObjValue {
 	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
 		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
 		new.insert(key, value);
-		Self::new(
-			Context::new(),
-			Some(self),
-			Rc::new(new),
-			Rc::new(Vec::new()),
-		)
+		Self::new(Some(self), Gc::new(new), Gc::new(Vec::new()))
 	}
 
 	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
@@ -249,13 +241,7 @@ impl ObjValue {
 	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
 		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
-				if let Err(e) = evaluate_assert(
-					self.0
-						.context
-						.clone()
-						.with_this_super(real_this.clone(), self.0.super_obj.clone()),
-					assertion,
-				) {
+				if let Err(e) = assertion.run(Some(real_this.clone()), self.0.super_obj.clone()) {
 					self.0.assertions_ran.borrow_mut().remove(real_this);
 					return Err(e);
 				}
@@ -271,19 +257,19 @@ impl ObjValue {
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		Rc::ptr_eq(&a.0, &b.0)
+		Gc::ptr_eq(&a.0, &b.0)
 	}
 }
 
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		Rc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }
 
 impl Eq for ObjValue {}
 impl Hash for ObjValue {
-	fn hash<H: Hasher>(&self, state: &mut H) {
-		state.write_usize(Rc::as_ptr(&self.0) as usize)
+	fn hash<H: Hasher>(&self, hasher: &mut H) {
+		hasher.write_usize(&*self.0 as *const _ as usize)
 	}
 }

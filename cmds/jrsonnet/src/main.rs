@@ -1,5 +1,5 @@
 use clap::{AppSettings, Clap, IntoApp};
-use jrsonnet_cli::{ConfigureState, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
+use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, EvaluationState, ManifestFormat};
 use std::{
 	fs::{create_dir_all, File},
@@ -61,6 +61,8 @@ struct Opts {
 	output: OutputOpts,
 	#[clap(flatten)]
 	debug: DebugOpts,
+	#[clap(flatten)]
+	gc: GcOpts,
 }
 
 fn main() {
@@ -114,6 +116,7 @@ impl From<LocError> for Error {
 }
 
 fn main_catch(opts: Opts) -> bool {
+	let _printer = opts.gc.stats_printer();
 	let state = EvaluationState::default();
 	if let Err(e) = main_real(&state, opts) {
 		if let Error::Evaluation(e) = e {
@@ -127,6 +130,7 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
+	opts.gc.configure_global();
 	opts.general.configure(&state)?;
 	opts.manifest.configure(&state)?;
 

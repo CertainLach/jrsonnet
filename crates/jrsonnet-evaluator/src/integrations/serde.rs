@@ -1,7 +1,8 @@
 use crate::{
 	error::{Error::*, LocError, Result},
-	throw, Context, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
+	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
+use jrsonnet_gc::Gc;
 use jrsonnet_parser::Visibility;
 use rustc_hash::FxHasher;
 use serde_json::{Map, Number, Value};
@@ -9,7 +10,6 @@ use std::{
 	collections::HashMap,
 	convert::{TryFrom, TryInto},
 	hash::BuildHasherDefault,
-	rc::Rc,
 };
 
 impl TryFrom<&Val> for Value {
@@ -42,6 +42,7 @@ impl TryFrom<&Val> for Value {
 				Self::Object(out)
 			}
 			Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+			Val::DebugGcTraceValue(v) => Self::try_from(&*v.value as &Val)?,
 		})
 	}
 }
@@ -76,12 +77,7 @@ impl From<&Value> for Val {
 						},
 					);
 				}
-				Self::Obj(ObjValue::new(
-					Context::new(),
-					None,
-					Rc::new(entries),
-					Rc::new(Vec::new()),
-				))
+				Self::Obj(ObjValue::new(None, Gc::new(entries), Gc::new(Vec::new())))
 			}
 		}
 	}

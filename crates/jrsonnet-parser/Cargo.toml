@@ -18,6 +18,7 @@ peg = "0.7.0"
 unescape = "0.1.0"
 
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
+jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
 
 [dev-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.3.8" }

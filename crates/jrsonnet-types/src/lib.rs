@@ -1,5 +1,6 @@
 #![allow(clippy::redundant_closure_call)]
 
+use jrsonnet_gc::Trace;
 use std::fmt::Display;
 
 #[macro_export]
@@ -77,7 +78,8 @@ fn test() {
 	);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[trivially_drop]
 pub enum ValType {
 	Bool,
 	Null,
@@ -109,7 +111,8 @@ impl Display for ValType {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Trace)]
+#[trivially_drop]
 pub enum ComplexValType {
 	Any,
 	Char,
@@ -123,6 +126,7 @@ pub enum ComplexValType {
 	Sum(Vec<ComplexValType>),
 	SumRef(&'static [ComplexValType]),
 }
+
 impl From<ValType> for ComplexValType {
 	fn from(s: ValType) -> Self {
 		Self::Simple(s)

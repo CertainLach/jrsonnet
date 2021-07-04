@@ -1,8 +1,9 @@
 use crate::{
-	equals, error::Error::*, lazy_val, push, throw, with_state, ArrValue, Context, ContextCreator,
-	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, ObjMember, ObjValue, Result, Val,
+	equals, error::Error::*, push, throw, with_state, ArrValue, Bindable, Context, ContextCreator,
+	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjMember, ObjValue,
+	ObjectAssertion, Result, Val,
 };
-use closure::closure;
+use jrsonnet_gc::{Gc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
@@ -11,7 +12,7 @@ use jrsonnet_parser::{
 };
 use jrsonnet_types::ValType;
 use rustc_hash::{FxHashMap, FxHasher};
-use std::{collections::HashMap, hash::BuildHasherDefault, rc::Rc};
+use std::{collections::HashMap, hash::BuildHasherDefault};
 
 pub fn evaluate_binding_in_future(
 	b: &BindSpec,
@@ -20,17 +21,49 @@ pub fn evaluate_binding_in_future(
 	let b = b.clone();
 	if let Some(params) = &b.params {
 		let params = params.clone();
-		LazyVal::new(Box::new(move || {
-			Ok(evaluate_method(
-				context_creator.unwrap(),
-				b.name.clone(),
-				params.clone(),
-				b.value.clone(),
-			))
+
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct LazyMethodBinding {
+			context_creator: FutureWrapper<Context>,
+			name: IStr,
+			params: ParamsDesc,
+			value: LocExpr,
+		}
+		impl LazyValValue for LazyMethodBinding {
+			fn get(self: Box<Self>) -> Result<Val> {
+				Ok(evaluate_method(
+					self.context_creator.unwrap(),
+					self.name,
+					self.params,
+					self.value,
+				))
+			}
+		}
+
+		LazyVal::new(Box::new(LazyMethodBinding {
+			context_creator,
+			name: b.name.clone(),
+			params,
+			value: b.value.clone(),
 		}))
 	} else {
-		LazyVal::new(Box::new(move || {
-			evaluate_named(context_creator.unwrap(), &b.value, b.name.clone())
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct LazyNamedBinding {
+			context_creator: FutureWrapper<Context>,
+			name: IStr,
+			value: LocExpr,
+		}
+		impl LazyValValue for LazyNamedBinding {
+			fn get(self: Box<Self>) -> Result<Val> {
+				evaluate_named(self.context_creator.unwrap(), &self.value, self.name)
+			}
+		}
+		LazyVal::new(Box::new(LazyNamedBinding {
+			context_creator,
+			name: b.name.clone(),
+			value: b.value,
 		}))
 	}
 }
@@ -39,37 +72,114 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 	let b = b.clone();
 	if let Some(params) = &b.params {
 		let params = params.clone();
+
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct BindableMethodLazyVal {
+			this: Option<ObjValue>,
+			super_obj: Option<ObjValue>,
+
+			context_creator: ContextCreator,
+			name: IStr,
+			params: ParamsDesc,
+			value: LocExpr,
+		}
+		impl LazyValValue for BindableMethodLazyVal {
+			fn get(self: Box<Self>) -> Result<Val> {
+				Ok(evaluate_method(
+					self.context_creator.create(self.this, self.super_obj)?,
+					self.name,
+					self.params,
+					self.value,
+				))
+			}
+		}
+
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct BindableMethod {
+			context_creator: ContextCreator,
+			name: IStr,
+			params: ParamsDesc,
+			value: LocExpr,
+		}
+		impl Bindable for BindableMethod {
+			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
+				Ok(LazyVal::new(Box::new(BindableMethodLazyVal {
+					this,
+					super_obj,
+
+					context_creator: self.context_creator.clone(),
+					name: self.name.clone(),
+					params: self.params.clone(),
+					value: self.value.clone(),
+				})))
+			}
+		}
+
 		(
 			b.name.clone(),
-			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
-				Ok(lazy_val!(
-					closure!(clone b, clone params, clone context_creator, || Ok(evaluate_method(
-						context_creator.create(this.clone(), super_obj.clone())?,
-						b.name.clone(),
-						params.clone(),
-						b.value.clone(),
-					)))
-				))
-			})),
+			LazyBinding::Bindable(Gc::new(Box::new(BindableMethod {
+				context_creator,
+				name: b.name.clone(),
+				params,
+				value: b.value.clone(),
+			}))),
 		)
 	} else {
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct BindableNamedLazyVal {
+			this: Option<ObjValue>,
+			super_obj: Option<ObjValue>,
+
+			context_creator: ContextCreator,
+			name: IStr,
+			value: LocExpr,
+		}
+		impl LazyValValue for BindableNamedLazyVal {
+			fn get(self: Box<Self>) -> Result<Val> {
+				evaluate_named(
+					self.context_creator.create(self.this, self.super_obj)?,
+					&self.value,
+					self.name,
+				)
+			}
+		}
+
+		#[derive(Trace)]
+		#[trivially_drop]
+		struct BindableNamed {
+			context_creator: ContextCreator,
+			name: IStr,
+			value: LocExpr,
+		}
+		impl Bindable for BindableNamed {
+			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
+				Ok(LazyVal::new(Box::new(BindableNamedLazyVal {
+					this,
+					super_obj,
+
+					context_creator: self.context_creator.clone(),
+					name: self.name.clone(),
+					value: self.value.clone(),
+				})))
+			}
+		}
+
 		(
 			b.name.clone(),
-			LazyBinding::Bindable(Rc::new(move |this, super_obj| {
-				Ok(lazy_val!(closure!(clone context_creator, clone b, ||
-					evaluate_named(
-						context_creator.create(this.clone(), super_obj.clone())?,
-						&b.value,
-						b.name.clone()
-					)
-				)))
-			})),
+			LazyBinding::Bindable(Gc::new(Box::new(BindableNamed {
+				context_creator,
+				name: b.name.clone(),
+				value: b.value.clone(),
+			}))),
 		)
 	}
 }
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(Rc::new(FuncVal::Normal(FuncDesc {
+	Val::Func(Gc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -105,6 +215,9 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 
 pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
+		(Val::DebugGcTraceValue(v1), Val::DebugGcTraceValue(v2)) => {
+			evaluate_add_op(&v1.value, &v2.value)?
+		}
 		(Val::Str(v1), Val::Str(v2)) => Val::Str(((**v1).to_owned() + v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
@@ -257,7 +370,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 	}
 
 	let mut new_members = FxHashMap::default();
-	let mut assertions = Vec::new();
+	let mut assertions: Vec<Box<dyn ObjectAssertion>> = Vec::new();
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -272,20 +385,37 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					continue;
 				}
 				let name = name.unwrap();
+
+				#[derive(Trace)]
+				#[trivially_drop]
+				struct ObjMemberBinding {
+					context_creator: ContextCreator,
+					value: LocExpr,
+					name: IStr,
+				}
+				impl Bindable for ObjMemberBinding {
+					fn bind(
+						&self,
+						this: Option<ObjValue>,
+						super_obj: Option<ObjValue>,
+					) -> Result<LazyVal> {
+						Ok(LazyVal::new_resolved(evaluate_named(
+							self.context_creator.create(this, super_obj)?,
+							&self.value,
+							self.name.clone(),
+						)?))
+					}
+				}
 				new_members.insert(
 					name.clone(),
 					ObjMember {
 						add: *plus,
 						visibility: *visibility,
-						invoke: LazyBinding::Bindable(Rc::new(
-							closure!(clone name, clone value, clone context_creator, |this, super_obj| {
-								Ok(LazyVal::new_resolved(evaluate_named(
-									context_creator.create(this, super_obj)?,
-									&value,
-									name.clone(),
-								)?))
-							}),
-						)),
+						invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
+							context_creator: context_creator.clone(),
+							value: value.clone(),
+							name,
+						}))),
 						location: value.1.clone(),
 					},
 				);
@@ -301,33 +431,69 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					continue;
 				}
 				let name = name.unwrap();
+				#[derive(Trace)]
+				#[trivially_drop]
+				struct ObjMemberBinding {
+					context_creator: ContextCreator,
+					value: LocExpr,
+					params: ParamsDesc,
+					name: IStr,
+				}
+				impl Bindable for ObjMemberBinding {
+					fn bind(
+						&self,
+						this: Option<ObjValue>,
+						super_obj: Option<ObjValue>,
+					) -> Result<LazyVal> {
+						Ok(LazyVal::new_resolved(evaluate_method(
+							self.context_creator.create(this, super_obj)?,
+							self.name.clone(),
+							self.params.clone(),
+							self.value.clone(),
+						)))
+					}
+				}
 				new_members.insert(
 					name.clone(),
 					ObjMember {
 						add: false,
 						visibility: Visibility::Hidden,
-						invoke: LazyBinding::Bindable(Rc::new(
-							closure!(clone value, clone context_creator, clone params, clone name, |this, super_obj| {
-								// TODO: Assert
-								Ok(LazyVal::new_resolved(evaluate_method(
-									context_creator.create(this, super_obj)?,
-									name.clone(),
-									params.clone(),
-									value.clone(),
-								)))
-							}),
-						)),
+						invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
+							context_creator: context_creator.clone(),
+							value: value.clone(),
+							params: params.clone(),
+							name,
+						}))),
 						location: value.1.clone(),
 					},
 				);
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
-				assertions.push(stmt.clone());
+				#[derive(Trace)]
+				#[trivially_drop]
+				struct ObjectAssert {
+					context_creator: ContextCreator,
+					assert: AssertStmt,
+				}
+				impl ObjectAssertion for ObjectAssert {
+					fn run(
+						&self,
+						this: Option<ObjValue>,
+						super_obj: Option<ObjValue>,
+					) -> Result<()> {
+						let ctx = self.context_creator.create(this, super_obj)?;
+						evaluate_assert(ctx, &self.assert)
+					}
+				}
+				assertions.push(Box::new(ObjectAssert {
+					context_creator: context_creator.clone(),
+					assert: stmt.clone(),
+				}));
 			}
 		}
 	}
-	let this = ObjValue::new(context, None, Rc::new(new_members), Rc::new(assertions));
+	let this = ObjValue::new(None, Gc::new(new_members), Gc::new(assertions));
 	future_this.fill(this.clone());
 	Ok(this)
 }
@@ -361,16 +527,38 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				match key {
 					Val::Null => {}
 					Val::Str(n) => {
+						#[derive(Trace)]
+						#[trivially_drop]
+						struct ObjCompBinding {
+							context: Context,
+							value: LocExpr,
+						}
+						impl Bindable for ObjCompBinding {
+							fn bind(
+								&self,
+								this: Option<ObjValue>,
+								_super_obj: Option<ObjValue>,
+							) -> Result<LazyVal> {
+								Ok(LazyVal::new_resolved(evaluate(
+									self.context.clone().extend(
+										FxHashMap::default(),
+										None,
+										this,
+										None,
+									),
+									&self.value,
+								)?))
+							}
+						}
 						new_members.insert(
 							n,
 							ObjMember {
 								add: false,
 								visibility: Visibility::Normal,
-								invoke: LazyBinding::Bindable(Rc::new(
-									closure!(clone ctx, clone obj.value, |this, _super_obj| {
-										Ok(LazyVal::new_resolved(evaluate(ctx.clone().extend(FxHashMap::default(), None, this, None), &value)?))
-									}),
-								)),
+								invoke: LazyBinding::Bindable(Gc::new(Box::new(ObjCompBinding {
+									context: ctx,
+									value: obj.value.clone(),
+								}))),
 								location: obj.value.1.clone(),
 							},
 						);
@@ -381,7 +569,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				Ok(())
 			})?;
 
-			let this = ObjValue::new(context, None, Rc::new(new_members), Rc::new(Vec::new()));
+			let this = ObjValue::new(None, Gc::new(new_members), Gc::new(Vec::new()));
 			future_this.fill(this.clone());
 			this
 		}
@@ -486,7 +674,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 							if let Some(v) = v.get(s.clone())? {
 								Ok(v)
 							} else if v.get("__intrinsic_namespace__".into())?.is_some() {
-								Ok(Val::Func(Rc::new(FuncVal::Intrinsic(s))))
+								Ok(Val::Func(Gc::new(FuncVal::Intrinsic(s))))
 							} else {
 								throw!(NoSuchField(s))
 							}
@@ -549,11 +737,22 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Arr(items) => {
 			let mut out = Vec::with_capacity(items.len());
 			for item in items {
-				out.push(LazyVal::new(Box::new(
-					closure!(clone context, clone item, || {
-						evaluate(context.clone(), &item)
-					}),
-				)));
+				// TODO: Implement ArrValue::Lazy with same context for every element?
+				#[derive(Trace)]
+				#[trivially_drop]
+				struct ArrayElement {
+					context: Context,
+					item: LocExpr,
+				}
+				impl LazyValValue for ArrayElement {
+					fn get(self: Box<Self>) -> Result<Val> {
+						evaluate(self.context, &self.item)
+					}
+				}
+				out.push(LazyVal::new(Box::new(ArrayElement {
+					context: context.clone(),
+					item: item.clone(),
+				})));
 			}
 			Val::Arr(out.into())
 		}
@@ -563,7 +762,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				out.push(evaluate(ctx, expr)?);
 				Ok(())
 			})?;
-			Val::Arr(ArrValue::Eager(Rc::new(out)))
+			Val::Arr(ArrValue::Eager(Gc::new(out)))
 		}
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
@@ -576,7 +775,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
-		Intrinsic(name) => Val::Func(Rc::new(FuncVal::Intrinsic(name.clone()))),
+		Intrinsic(name) => Val::Func(Gc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(context.clone(), assert)?;
 			evaluate(context, returned)?

@@ -4,6 +4,7 @@ use crate::{
 	error::{Error, LocError, Result},
 	push, Val,
 };
+use jrsonnet_gc::Trace;
 use jrsonnet_parser::ExprLocation;
 use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
@@ -20,7 +21,8 @@ macro_rules! unwrap_type {
 	}};
 }
 
-#[derive(Debug, Error, Clone)]
+#[derive(Debug, Error, Clone, Trace)]
+#[trivially_drop]
 pub enum TypeError {
 	#[error("expected {0}, got {1}")]
 	ExpectedGot(ComplexValType, ValType),
@@ -37,7 +39,8 @@ impl From<TypeError> for LocError {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub struct TypeLocError(Box<TypeError>, ValuePathStack);
 impl From<TypeError> for TypeLocError {
 	fn from(e: TypeError) -> Self {
@@ -59,7 +62,8 @@ impl Display for TypeLocError {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub struct TypeLocErrorList(Vec<TypeLocError>);
 impl Display for TypeLocErrorList {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -122,7 +126,8 @@ impl CheckType for ValType {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
+#[trivially_drop]
 enum ValuePathItem {
 	Field(Rc<str>),
 	Index(u64),
@@ -137,7 +142,8 @@ impl Display for ValuePathItem {
 	}
 }
 
-#[derive(Clone, Debug)]
+#[derive(Clone, Debug, Trace)]
+#[trivially_drop]
 struct ValuePathStack(Vec<ValuePathItem>);
 impl Display for ValuePathStack {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
