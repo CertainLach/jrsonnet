@@ -1,9 +1,9 @@
-use gc::{unsafe_empty_trace, Finalize, Gc, Trace};
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
 	native::{NativeCallback, NativeCallbackHandler},
 	EvaluationState, Val,
 };
+use jrsonnet_gc::{unsafe_empty_trace, Finalize, Gc, Trace};
 use jrsonnet_parser::{Param, ParamsDesc};
 use std::{
 	ffi::{c_void, CStr},

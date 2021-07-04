@@ -2,7 +2,7 @@ use crate::{
 	builtin::{format::FormatError, sort::SortError},
 	typed::TypeLocError,
 };
-use gc::{Finalize, Trace};
+use jrsonnet_gc::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
 use jrsonnet_types::ValType;
@@ -12,7 +12,8 @@ use std::{
 };
 use thiserror::Error;
 
-#[derive(Error, Debug, Clone, Trace, Finalize)]
+#[derive(Error, Debug, Clone, Trace)]
+#[trivially_drop]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -149,15 +150,18 @@ impl From<Error> for LocError {
 	}
 }
 
-#[derive(Clone, Debug, Trace, Finalize)]
+#[derive(Clone, Debug, Trace)]
+#[trivially_drop]
 pub struct StackTraceElement {
 	pub location: Option<ExprLocation>,
 	pub desc: String,
 }
-#[derive(Debug, Clone, Trace, Finalize)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
-#[derive(Debug, Clone, Trace, Finalize)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub struct LocError(Box<(Error, StackTrace)>);
 impl LocError {
 	pub fn new(e: Error) -> Self {

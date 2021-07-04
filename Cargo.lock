@@ -100,27 +100,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "gc"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "3edaac0f5832202ebc99520cb77c932248010c4645d20be1dc62d6579f5b3752"
-dependencies = [
- "gc_derive",
-]
-
-[[package]]
-name = "gc_derive"
-version = "0.4.1"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "60df8444f094ff7885631d80e78eb7d88c3c2361a98daaabb06256e4500db941"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn",
- "synstructure",
-]
-
-[[package]]
 name = "hashbrown"
 version = "0.9.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -190,7 +169,7 @@ dependencies = [
  "anyhow",
  "base64",
  "bincode",
- "gc",
+ "jrsonnet-gc",
  "jrsonnet-interner",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
@@ -204,10 +183,31 @@ dependencies = [
 ]
 
 [[package]]
+name = "jrsonnet-gc"
+version = "0.4.2"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68da8bc2f00117b1373bb8877af03b1d391e4c4800e6585d7279e5b99c919dde"
+dependencies = [
+ "jrsonnet-gc-derive",
+]
+
+[[package]]
+name = "jrsonnet-gc-derive"
+version = "0.4.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "adcba9c387b64b054f06cc4d724905296e21edeeb7506847f3299117a2d92d12"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn",
+ "synstructure",
+]
+
+[[package]]
 name = "jrsonnet-interner"
 version = "0.3.8"
 dependencies = [
- "gc",
+ "jrsonnet-gc",
  "rustc-hash",
  "serde",
 ]
@@ -216,7 +216,7 @@ dependencies = [
 name = "jrsonnet-parser"
 version = "0.3.8"
 dependencies = [
- "gc",
+ "jrsonnet-gc",
  "jrsonnet-interner",
  "jrsonnet-stdlib",
  "peg",
@@ -232,7 +232,7 @@ version = "0.3.8"
 name = "jrsonnet-types"
 version = "0.3.8"
 dependencies = [
- "gc",
+ "jrsonnet-gc",
  "peg",
 ]
 
@@ -240,8 +240,8 @@ dependencies = [
 name = "jsonnet"
 version = "0.3.8"
 dependencies = [
- "gc",
  "jrsonnet-evaluator",
+ "jrsonnet-gc",
  "jrsonnet-parser",
 ]
 

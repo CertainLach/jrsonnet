@@ -2,13 +2,14 @@ use crate::{
 	error::Error::*, map::LayeredHashMap, FutureWrapper, LazyBinding, LazyVal, ObjValue, Result,
 	Val,
 };
-use gc::{Finalize, Gc, Trace};
+use jrsonnet_gc::{Gc, Trace};
 use jrsonnet_interner::IStr;
 use rustc_hash::FxHashMap;
 use std::fmt::Debug;
 use std::hash::BuildHasherDefault;
 
-#[derive(Clone, Trace, Finalize)]
+#[derive(Clone, Trace)]
+#[trivially_drop]
 pub struct ContextCreator(pub Context, pub FutureWrapper<FxHashMap<IStr, LazyBinding>>);
 impl ContextCreator {
 	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
@@ -21,12 +22,13 @@ impl ContextCreator {
 	}
 }
 
-#[derive(Trace, Finalize)]
+#[derive(Trace)]
+#[trivially_drop]
 struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
 	super_obj: Option<ObjValue>,
-	bindings: LayeredHashMap<LazyVal>,
+	bindings: LayeredHashMap,
 }
 impl Debug for ContextInternals {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -34,7 +36,8 @@ impl Debug for ContextInternals {
 	}
 }
 
-#[derive(Debug, Clone, Trace, Finalize)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub struct Context(Gc<ContextInternals>);
 impl Context {
 	pub fn new_future() -> FutureWrapper<Self> {

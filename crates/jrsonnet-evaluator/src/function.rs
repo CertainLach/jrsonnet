@@ -1,5 +1,5 @@
 use crate::{error::Error::*, evaluate, throw, Context, LazyVal, LazyValValue, Result, Val};
-use gc::{custom_trace, Finalize, Trace};
+use jrsonnet_gc::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
 use rustc_hash::FxHashMap;
@@ -55,16 +55,11 @@ pub fn parse_function_call(
 		let val = if tailstrict {
 			LazyVal::new_resolved(evaluate(ctx, expr)?)
 		} else {
+			#[derive(Trace)]
+			#[trivially_drop]
 			struct EvaluateLazyVal {
 				context: Context,
 				expr: LocExpr,
-			}
-			impl Finalize for EvaluateLazyVal {}
-			unsafe impl Trace for EvaluateLazyVal {
-				custom_trace!(this, {
-					mark(&this.context);
-					mark(&this.expr);
-				});
 			}
 			impl LazyValValue for EvaluateLazyVal {
 				fn get(self: Box<Self>) -> Result<Val> {
@@ -119,7 +114,8 @@ pub fn parse_function_call_map(
 			} else {
 				let body_ctx = body_ctx.clone();
 				let default = default.clone();
-				#[derive(Trace, Finalize)]
+				#[derive(Trace)]
+				#[trivially_drop]
 				struct EvaluateLazyVal {
 					body_ctx: Option<Context>,
 					default: LocExpr,

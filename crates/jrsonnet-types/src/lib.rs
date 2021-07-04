@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_closure_call)]
 
-use gc::{unsafe_empty_trace, Finalize, Trace};
+use jrsonnet_gc::Trace;
 use std::fmt::Display;
 
 #[macro_export]
@@ -78,7 +78,8 @@ fn test() {
 	);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[trivially_drop]
 pub enum ValType {
 	Bool,
 	Null,
@@ -87,10 +88,6 @@ pub enum ValType {
 	Arr,
 	Obj,
 	Func,
-}
-impl Finalize for ValType {}
-unsafe impl Trace for ValType {
-	unsafe_empty_trace!();
 }
 
 impl ValType {
@@ -114,7 +111,8 @@ impl Display for ValType {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Trace)]
+#[trivially_drop]
 pub enum ComplexValType {
 	Any,
 	Char,
@@ -127,10 +125,6 @@ pub enum ComplexValType {
 	UnionRef(&'static [ComplexValType]),
 	Sum(Vec<ComplexValType>),
 	SumRef(&'static [ComplexValType]),
-}
-impl Finalize for ComplexValType {}
-unsafe impl Trace for ComplexValType {
-	unsafe_empty_trace!();
 }
 
 impl From<ValType> for ComplexValType {

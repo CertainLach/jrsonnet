@@ -1,4 +1,4 @@
-use gc::{unsafe_empty_trace, Finalize, Trace};
+use jrsonnet_gc::{unsafe_empty_trace, Finalize, Trace};
 use jrsonnet_interner::IStr;
 #[cfg(feature = "deserialize")]
 use serde::Deserialize;
@@ -13,21 +13,19 @@ use std::{
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
 	/// {["dyn"+"amic"]: 3}
 	Dyn(LocExpr),
 }
-impl Finalize for FieldName {}
-unsafe impl Trace for FieldName {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[trivially_drop]
 pub enum Visibility {
 	/// :
 	Normal,
@@ -35,10 +33,6 @@ pub enum Visibility {
 	Hidden,
 	/// :::
 	Unhide,
-}
-impl Finalize for Visibility {}
-unsafe impl Trace for Visibility {
-	unsafe_empty_trace!();
 }
 
 impl Visibility {
@@ -49,16 +43,14 @@ impl Visibility {
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Clone, Debug, PartialEq)]
+#[derive(Clone, Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
-impl Finalize for AssertStmt {}
-unsafe impl Trace for AssertStmt {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
@@ -66,36 +58,26 @@ pub struct FieldMember {
 	pub visibility: Visibility,
 	pub value: LocExpr,
 }
-impl Finalize for FieldMember {}
-unsafe impl Trace for FieldMember {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
 	AssertStmt(AssertStmt),
 }
-impl Finalize for Member {}
-unsafe impl Trace for Member {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[trivially_drop]
 pub enum UnaryOpType {
 	Plus,
 	Minus,
 	BitNot,
 	Not,
-}
-impl Finalize for UnaryOpType {}
-unsafe impl Trace for UnaryOpType {
-	unsafe_empty_trace!();
 }
 
 impl Display for UnaryOpType {
@@ -116,7 +98,8 @@ impl Display for UnaryOpType {
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq)]
+#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[trivially_drop]
 pub enum BinaryOpType {
 	Mul,
 	Div,
@@ -144,10 +127,6 @@ pub enum BinaryOpType {
 
 	And,
 	Or,
-}
-impl Finalize for BinaryOpType {}
-unsafe impl Trace for BinaryOpType {
-	unsafe_empty_trace!();
 }
 
 impl Display for BinaryOpType {
@@ -183,22 +162,22 @@ impl Display for BinaryOpType {
 /// name, default value
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct Param(pub IStr, pub Option<LocExpr>);
-impl Finalize for Param {}
-unsafe impl Trace for Param {
-	unsafe_empty_trace!();
-}
 
 /// Defined function parameters
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, Clone, PartialEq)]
 pub struct ParamsDesc(pub Rc<Vec<Param>>);
-impl Finalize for ParamsDesc {}
+
+/// Safety:
+/// AST is acyclic, and there should be no gc pointers
 unsafe impl Trace for ParamsDesc {
 	unsafe_empty_trace!();
 }
+impl Finalize for ParamsDesc {}
 
 impl Deref for ParamsDesc {
 	type Target = Vec<Param>;
@@ -209,21 +188,15 @@ impl Deref for ParamsDesc {
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct Arg(pub Option<String>, pub LocExpr);
-impl Finalize for Arg {}
-unsafe impl Trace for Arg {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct ArgsDesc(pub Vec<Arg>);
-impl Finalize for ArgsDesc {}
-unsafe impl Trace for ArgsDesc {
-	unsafe_empty_trace!();
-}
 
 impl Deref for ArgsDesc {
 	type Target = Vec<Arg>;
@@ -234,50 +207,39 @@ impl Deref for ArgsDesc {
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, Clone, PartialEq)]
+#[derive(Debug, Clone, PartialEq, Trace)]
+#[trivially_drop]
 pub struct BindSpec {
 	pub name: IStr,
 	pub params: Option<ParamsDesc>,
 	pub value: LocExpr,
 }
-impl Finalize for BindSpec {}
-unsafe impl Trace for BindSpec {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct IfSpecData(pub LocExpr);
-impl Finalize for IfSpecData {}
-unsafe impl Trace for IfSpecData {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct ForSpecData(pub IStr, pub LocExpr);
-impl Finalize for ForSpecData {}
-unsafe impl Trace for ForSpecData {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
 }
-impl Finalize for CompSpec {}
-unsafe impl Trace for CompSpec {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
 	pub key: LocExpr,
@@ -285,26 +247,20 @@ pub struct ObjComp {
 	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,
 }
-impl Finalize for ObjComp {}
-unsafe impl Trace for ObjComp {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp(ObjComp),
 }
-impl Finalize for ObjBody {}
-unsafe impl Trace for ObjBody {
-	unsafe_empty_trace!();
-}
 
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq, Clone, Copy)]
+#[derive(Debug, PartialEq, Clone, Copy, Trace)]
+#[trivially_drop]
 pub enum LiteralType {
 	This,
 	Super,
@@ -313,26 +269,20 @@ pub enum LiteralType {
 	True,
 	False,
 }
-impl Finalize for LiteralType {}
-unsafe impl Trace for LiteralType {
-	unsafe_empty_trace!();
-}
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
 	pub end: Option<LocExpr>,
 	pub step: Option<LocExpr>,
 }
-impl Finalize for SliceDesc {}
-unsafe impl Trace for SliceDesc {
-	unsafe_empty_trace!();
-}
 
 /// Syntax base
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub enum Expr {
 	Literal(LiteralType),
 
@@ -396,20 +346,13 @@ pub enum Expr {
 		cond_else: Option<LocExpr>,
 	},
 }
-impl Finalize for Expr {}
-unsafe impl Trace for Expr {
-	unsafe_empty_trace!();
-}
 
 /// file, begin offset, end offset
 #[cfg_attr(feature = "serialize", derive(Serialize))]
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Trace)]
+#[trivially_drop]
 pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
-impl Finalize for ExprLocation {}
-unsafe impl Trace for ExprLocation {
-	unsafe_empty_trace!();
-}
 
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -422,10 +365,12 @@ impl Debug for ExprLocation {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Clone, PartialEq)]
 pub struct LocExpr(pub Rc<Expr>, pub Option<ExprLocation>);
-impl Finalize for LocExpr {}
+/// Safety:
+/// AST is acyclic, and there should be no gc pointers
 unsafe impl Trace for LocExpr {
 	unsafe_empty_trace!();
 }
+impl Finalize for LocExpr {}
 
 impl Debug for LocExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

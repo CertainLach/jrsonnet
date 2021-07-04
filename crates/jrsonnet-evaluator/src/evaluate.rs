@@ -3,7 +3,7 @@ use crate::{
 	FuncDesc, FuncVal, FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjMember, ObjValue,
 	ObjectAssertion, Result, Val,
 };
-use gc::{custom_trace, Finalize, Gc, Trace};
+use jrsonnet_gc::{Gc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprLocation, FieldMember,
@@ -22,20 +22,13 @@ pub fn evaluate_binding_in_future(
 	if let Some(params) = &b.params {
 		let params = params.clone();
 
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct LazyMethodBinding {
 			context_creator: FutureWrapper<Context>,
 			name: IStr,
 			params: ParamsDesc,
 			value: LocExpr,
-		}
-		impl Finalize for LazyMethodBinding {}
-		unsafe impl Trace for LazyMethodBinding {
-			custom_trace!(this, {
-				mark(&this.context_creator);
-				mark(&this.name);
-				mark(&this.params);
-				mark(&this.value);
-			});
 		}
 		impl LazyValValue for LazyMethodBinding {
 			fn get(self: Box<Self>) -> Result<Val> {
@@ -55,18 +48,12 @@ pub fn evaluate_binding_in_future(
 			value: b.value.clone(),
 		}))
 	} else {
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct LazyNamedBinding {
 			context_creator: FutureWrapper<Context>,
 			name: IStr,
 			value: LocExpr,
-		}
-		impl Finalize for LazyNamedBinding {}
-		unsafe impl Trace for LazyNamedBinding {
-			custom_trace!(this, {
-				mark(&this.context_creator);
-				mark(&this.name);
-				mark(&this.value);
-			});
 		}
 		impl LazyValValue for LazyNamedBinding {
 			fn get(self: Box<Self>) -> Result<Val> {
@@ -86,6 +73,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 	if let Some(params) = &b.params {
 		let params = params.clone();
 
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct BindableMethodLazyVal {
 			this: Option<ObjValue>,
 			super_obj: Option<ObjValue>,
@@ -94,17 +83,6 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			name: IStr,
 			params: ParamsDesc,
 			value: LocExpr,
-		}
-		impl Finalize for BindableMethodLazyVal {}
-		unsafe impl Trace for BindableMethodLazyVal {
-			custom_trace!(this, {
-				mark(&this.this);
-				mark(&this.super_obj);
-				mark(&this.context_creator);
-				mark(&this.name);
-				mark(&this.params);
-				mark(&this.value);
-			});
 		}
 		impl LazyValValue for BindableMethodLazyVal {
 			fn get(self: Box<Self>) -> Result<Val> {
@@ -117,7 +95,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			}
 		}
 
-		#[derive(Trace, Finalize)]
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct BindableMethod {
 			context_creator: ContextCreator,
 			name: IStr,
@@ -148,6 +127,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			}))),
 		)
 	} else {
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct BindableNamedLazyVal {
 			this: Option<ObjValue>,
 			super_obj: Option<ObjValue>,
@@ -155,16 +136,6 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			context_creator: ContextCreator,
 			name: IStr,
 			value: LocExpr,
-		}
-		impl Finalize for BindableNamedLazyVal {}
-		unsafe impl Trace for BindableNamedLazyVal {
-			custom_trace!(this, {
-				mark(&this.this);
-				mark(&this.super_obj);
-				mark(&this.context_creator);
-				mark(&this.name);
-				mark(&this.value);
-			});
 		}
 		impl LazyValValue for BindableNamedLazyVal {
 			fn get(self: Box<Self>) -> Result<Val> {
@@ -176,7 +147,8 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 			}
 		}
 
-		#[derive(Trace, Finalize)]
+		#[derive(Trace)]
+		#[trivially_drop]
 		struct BindableNamed {
 			context_creator: ContextCreator,
 			name: IStr,
@@ -414,7 +386,8 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				}
 				let name = name.unwrap();
 
-				#[derive(Trace, Finalize)]
+				#[derive(Trace)]
+				#[trivially_drop]
 				struct ObjMemberBinding {
 					context_creator: ContextCreator,
 					value: LocExpr,
@@ -458,7 +431,8 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					continue;
 				}
 				let name = name.unwrap();
-				#[derive(Trace, Finalize)]
+				#[derive(Trace)]
+				#[trivially_drop]
 				struct ObjMemberBinding {
 					context_creator: ContextCreator,
 					value: LocExpr,
@@ -496,16 +470,11 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
+				#[derive(Trace)]
+				#[trivially_drop]
 				struct ObjectAssert {
 					context_creator: ContextCreator,
 					assert: AssertStmt,
-				}
-				impl Finalize for ObjectAssert {}
-				unsafe impl Trace for ObjectAssert {
-					custom_trace!(this, {
-						mark(&this.context_creator);
-						mark(&this.assert);
-					});
 				}
 				impl ObjectAssertion for ObjectAssert {
 					fn run(
@@ -558,7 +527,8 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 				match key {
 					Val::Null => {}
 					Val::Str(n) => {
-						#[derive(Trace, Finalize)]
+						#[derive(Trace)]
+						#[trivially_drop]
 						struct ObjCompBinding {
 							context: Context,
 							value: LocExpr,
@@ -768,16 +738,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let mut out = Vec::with_capacity(items.len());
 			for item in items {
 				// TODO: Implement ArrValue::Lazy with same context for every element?
+				#[derive(Trace)]
+				#[trivially_drop]
 				struct ArrayElement {
 					context: Context,
 					item: LocExpr,
-				}
-				impl Finalize for ArrayElement {}
-				unsafe impl Trace for ArrayElement {
-					custom_trace!(this, {
-						mark(&this.context);
-						mark(&this.item);
-					});
 				}
 				impl LazyValValue for ArrayElement {
 					fn get(self: Box<Self>) -> Result<Val> {

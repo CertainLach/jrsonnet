@@ -9,7 +9,7 @@ use crate::{
 	native::NativeCallback,
 	throw, with_state, Context, ObjValue, Result,
 };
-use gc::{custom_trace, Finalize, Gc, GcCell, Trace};
+use jrsonnet_gc::{Finalize, Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
@@ -19,25 +19,17 @@ pub trait LazyValValue: Trace {
 	fn get(self: Box<Self>) -> Result<Val>;
 }
 
+#[derive(Trace)]
+#[trivially_drop]
 enum LazyValInternals {
 	Computed(Val),
 	Errored(LocError),
 	Waiting(Box<dyn LazyValValue>),
 	Pending,
 }
-impl Finalize for LazyValInternals {}
-unsafe impl Trace for LazyValInternals {
-	custom_trace!(this, {
-		match &this {
-			LazyValInternals::Computed(v) => mark(v),
-			LazyValInternals::Errored(e) => mark(e),
-			LazyValInternals::Waiting(w) => mark(w),
-			LazyValInternals::Pending => {}
-		}
-	});
-}
 
-#[derive(Clone, Trace, Finalize)]
+#[derive(Clone, Trace)]
+#[trivially_drop]
 pub struct LazyVal(Gc<GcCell<LazyValInternals>>);
 impl LazyVal {
 	pub fn new(f: Box<dyn LazyValValue>) -> Self {
@@ -83,7 +75,8 @@ impl PartialEq for LazyVal {
 	}
 }
 
-#[derive(Debug, PartialEq, Trace, Finalize)]
+#[derive(Debug, PartialEq, Trace)]
+#[trivially_drop]
 pub struct FuncDesc {
 	pub name: IStr,
 	pub ctx: Context,
@@ -91,7 +84,8 @@ pub struct FuncDesc {
 	pub body: LocExpr,
 }
 
-#[derive(Debug, Trace, Finalize)]
+#[derive(Debug, Trace)]
+#[trivially_drop]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
@@ -195,21 +189,12 @@ pub enum ManifestFormat {
 	String,
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub enum ArrValue {
 	Lazy(Gc<Vec<LazyVal>>),
 	Eager(Gc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
-}
-impl Finalize for ArrValue {}
-unsafe impl Trace for ArrValue {
-	custom_trace!(this, {
-		match &this {
-			ArrValue::Lazy(l) => mark(l),
-			ArrValue::Eager(e) => mark(e),
-			ArrValue::Extended(x) => mark(x),
-		}
-	});
 }
 impl ArrValue {
 	pub fn new_eager() -> Self {
@@ -419,7 +404,8 @@ impl DebugGcTraceValue {
 	}
 }
 
-#[derive(Debug, Clone)]
+#[derive(Debug, Clone, Trace)]
+#[trivially_drop]
 pub enum Val {
 	Bool(bool),
 	Null,
@@ -429,21 +415,6 @@ pub enum Val {
 	Obj(ObjValue),
 	Func(Gc<FuncVal>),
 	DebugGcTraceValue(DebugGcTraceValue),
-}
-impl Finalize for Val {}
-unsafe impl Trace for Val {
-	custom_trace!(this, {
-		match &this {
-			Val::Bool(_) => {}
-			Val::Null => {}
-			Val::Str(_) => {}
-			Val::Num(_) => {}
-			Val::Arr(a) => mark(a),
-			Val::Obj(o) => mark(o),
-			Val::Func(f) => mark(f),
-			Val::DebugGcTraceValue(v) => mark(v),
-		}
-	});
 }
 
 macro_rules! matches_unwrap {

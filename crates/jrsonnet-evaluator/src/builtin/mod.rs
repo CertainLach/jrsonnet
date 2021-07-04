@@ -5,7 +5,7 @@ use crate::{
 	EvaluationState, FuncVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
-use gc::Gc;
+use jrsonnet_gc::Gc;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, BinaryOpType, ExprLocation};
 use jrsonnet_types::ty;
@@ -454,7 +454,7 @@ fn builtin_gc(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) ->
 		0, rest: ty!(any);
 	], {
 		println!("GC start");
-		gc::force_collect();
+		jrsonnet_gc::force_collect();
 		println!("GC done");
 
 		Ok(rest)

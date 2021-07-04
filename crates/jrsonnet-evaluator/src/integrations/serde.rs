@@ -2,7 +2,7 @@ use crate::{
 	error::{Error::*, LocError, Result},
 	throw, LazyBinding, LazyVal, ObjMember, ObjValue, Val,
 };
-use gc::Gc;
+use jrsonnet_gc::Gc;
 use jrsonnet_parser::Visibility;
 use rustc_hash::FxHasher;
 use serde_json::{Map, Number, Value};

@@ -1,6 +1,7 @@
-use gc::{Finalize, Gc, GcCell, Trace};
+use jrsonnet_gc::{Gc, GcCell, Trace};
 
-#[derive(Clone, Trace, Finalize)]
+#[derive(Clone, Trace)]
+#[trivially_drop]
 pub struct FutureWrapper<V: Trace + 'static>(pub Gc<GcCell<Option<V>>>);
 impl<T: Trace + 'static> FutureWrapper<T> {
 	pub fn new() -> Self {

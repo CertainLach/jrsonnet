@@ -1,4 +1,4 @@
-use gc::{unsafe_empty_trace, Finalize, Trace};
+use jrsonnet_gc::{unsafe_empty_trace, Finalize, Trace};
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{

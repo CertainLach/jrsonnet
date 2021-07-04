@@ -2,12 +2,13 @@
 #![allow(clippy::too_many_arguments)]
 
 use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
-use gc::{Finalize, Trace};
+use jrsonnet_gc::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-#[derive(Debug, Clone, Error, Trace, Finalize)]
+#[derive(Debug, Clone, Error, Trace)]
+#[trivially_drop]
 pub enum FormatError {
 	#[error("truncated format code")]
 	TruncatedFormatCode,

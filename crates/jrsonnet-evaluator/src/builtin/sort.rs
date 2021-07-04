@@ -2,7 +2,7 @@ use crate::{
 	error::{Error, LocError, Result},
 	throw, Context, FuncVal, Val,
 };
-use gc::{Finalize, Gc, Trace};
+use jrsonnet_gc::{Finalize, Gc, Trace};
 
 #[derive(Debug, Clone, thiserror::Error, Trace, Finalize)]
 pub enum SortError {

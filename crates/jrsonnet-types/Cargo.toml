@@ -8,4 +8,4 @@ edition = "2018"
 
 [dependencies]
 peg = "0.7.0"
-gc = { version = "0.4.1", features = ["derive"] }
+jrsonnet-gc = { version = "0.4.2", features = ["derive"] }

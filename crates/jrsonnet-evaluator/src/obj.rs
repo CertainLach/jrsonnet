@@ -1,12 +1,13 @@
 use crate::{evaluate_add_op, LazyBinding, Result, Val};
-use gc::{Finalize, Gc, GcCell, Trace};
+use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
 use std::hash::{Hash, Hasher};
 use std::{fmt::Debug, hash::BuildHasherDefault};
 
-#[derive(Debug, Trace, Finalize)]
+#[derive(Debug, Trace)]
+#[trivially_drop]
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
@@ -20,7 +21,8 @@ pub trait ObjectAssertion: Trace {
 
 // Field => This
 type CacheKey = (IStr, ObjValue);
-#[derive(Trace, Finalize)]
+#[derive(Trace)]
+#[trivially_drop]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
 	assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
@@ -30,7 +32,8 @@ pub struct ObjValueInternals {
 	value_cache: GcCell<FxHashMap<CacheKey, Option<Val>>>,
 }
 
-#[derive(Clone, Trace, Finalize)]
+#[derive(Clone, Trace)]
+#[trivially_drop]
 pub struct ObjValue(pub(crate) Gc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
