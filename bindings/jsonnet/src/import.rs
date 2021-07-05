@@ -23,7 +23,7 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 	rel: *const c_char,
 	found_here: *mut *const c_char,
 	success: &mut c_int,
-) -> *const c_char;
+) -> *mut c_char;
 
 /// Resolves imports using callback
 pub struct CallbackImportResolver {
@@ -46,7 +46,7 @@ impl ImportResolver for CallbackImportResolver {
 				&mut (found_here as *const _),
 				&mut success,
 			)
-		} as *mut i8;
+		};
 		// Release memory occipied by arguments passed
 		unsafe {
 			CString::from_raw(base);
