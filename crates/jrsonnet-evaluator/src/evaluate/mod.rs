@@ -339,12 +339,12 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					.member(name.clone())
 					.hide()
 					.with_location(value.1.clone())
-					.binding(LazyBinding::Bindable(Gc::new(Box::new(ObjMemberBinding {
+					.bindable(Box::new(ObjMemberBinding {
 						context_creator: context_creator.clone(),
 						value: value.clone(),
 						params: params.clone(),
 						name,
-					}))));
+					}));
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
