@@ -1,6 +1,6 @@
 use clap::{AppSettings, Clap, IntoApp};
 use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
-use jrsonnet_evaluator::{error::LocError, EvaluationState, ManifestFormat};
+use jrsonnet_evaluator::{error::LocError, EvaluationState};
 use std::{
 	fs::{create_dir_all, File},
 	io::Read,
@@ -135,7 +135,6 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 	opts.manifest.configure(&state)?;
 
 	let val = if opts.input.exec {
-		state.set_manifest_format(ManifestFormat::ToString);
 		state.evaluate_snippet_raw(
 			PathBuf::from("args").into(),
 			(&opts.input.input as &str).into(),
