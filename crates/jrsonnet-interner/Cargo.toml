@@ -1,12 +1,12 @@
 [package]
 name = "jrsonnet-interner"
 description = "Jrsonnet string interning"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
 
 [dependencies]
-serde = { version = "1.0" }
+serde = { version="1.0" }
 rustc-hash = "1.1.0"
-jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
+jrsonnet-gc = { version="0.4.2", features=["derive"] }

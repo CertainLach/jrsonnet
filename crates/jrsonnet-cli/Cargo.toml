@@ -1,16 +1,16 @@
 [package]
 name = "jrsonnet-cli"
 description = "Utilities for building jrsonnet CLIs"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
 publish = false
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.0", features = ["explaining-traces"] }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.0" }
-jrsonnet-gc = { version = "0.4.2", features = ["derive", "unstable-config", "unstable-stats"] }
+jrsonnet-evaluator = { path="../../crates/jrsonnet-evaluator", version="0.4.1", features=["explaining-traces"] }
+jrsonnet-parser = { path="../../crates/jrsonnet-parser", version="0.4.1" }
+jrsonnet-gc = { version="0.4.2", features=["derive", "unstable-config", "unstable-stats"] }
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"

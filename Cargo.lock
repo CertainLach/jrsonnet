@@ -141,7 +141,7 @@ checksum = "dd25036021b0de88a0aff6b850051563c6516d0bf53f8638938edbb9de732736"
 
 [[package]]
 name = "jrsonnet"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap",
  "clap_generate",
@@ -154,7 +154,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-cli"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
@@ -164,7 +164,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "annotate-snippets",
  "anyhow",
@@ -206,7 +206,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-interner"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "jrsonnet-gc",
  "rustc-hash",
@@ -215,7 +215,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "jrsonnet-gc",
  "jrsonnet-interner",
@@ -227,11 +227,11 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.4.0"
+version = "0.4.1"
 
 [[package]]
 name = "jrsonnet-types"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "jrsonnet-gc",
  "peg",
@@ -239,7 +239,7 @@ dependencies = [
 
 [[package]]
 name = "jsonnet"
-version = "0.4.0"
+version = "0.4.1"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gc",

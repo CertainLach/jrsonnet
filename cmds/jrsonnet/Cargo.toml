@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet"
 description = "Rust jsonnet implementation"
-version = "0.4.0"
+version = "0.4.1"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
@@ -12,10 +12,10 @@ publish = false
 mimalloc = ["mimallocator"]
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.0" }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.0" }
-jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.4.0" }
-mimallocator = { version = "0.1.3", optional = true }
+jrsonnet-evaluator = { path="../../crates/jrsonnet-evaluator", version="0.4.1" }
+jrsonnet-parser = { path="../../crates/jrsonnet-parser", version="0.4.1" }
+jrsonnet-cli = { path="../../crates/jrsonnet-cli", version="0.4.1" }
+mimallocator = { version="0.1.3", optional=true }
 thiserror = "1.0"
 
 [dependencies.clap]
