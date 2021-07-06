@@ -56,13 +56,11 @@ jobs:
         target:
           # Tier 1
           - aarch64-unknown-linux-gnu
-          - i686-pc-windows-gnu
-          - i686-pc-windows-msvc
           - i686-unknown-linux-gnu
-          - x86_64-apple-darwin
-          - x86_64-pc-windows-gnu
-          - x86_64-pc-windows-msvc
           - x86_64-unknown-linux-gnu
+          - x86_64-apple-darwin
+          - i686-pc-windows-msvc
+          - x86_64-pc-windows-msvc
 
           # Other
           - x86_64-unknown-linux-musl
@@ -71,10 +69,6 @@ jobs:
             os: ubuntu-latest
             bin: jrsonnet
             name: jrsonnet-linux-gnu-aarch64
-          - target: i686-pc-windows-gnu
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-gnu-i686.exe
           - target: i686-pc-windows-msvc
             os: windows-latest
             bin: jrsonnet.exe
@@ -87,10 +81,6 @@ jobs:
             os: macOS-latest
             bin: jrsonnet
             name: jrsonnet-darwin-amd64
-          - target: x86_64-pc-windows-gnu
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-gnu-amd64.exe
           - target: x86_64-pc-windows-msvc
             os: windows-latest
             bin: jrsonnet.exe
@@ -119,12 +109,6 @@ jobs:
       - name: Linux x86 cross compiler
         if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
         run: sudo apt install gcc-multilib
-
-      - name: Windows x86 cross compiler
-        if: ${{ matrix.target == 'i686-pc-windows-gnu' }}
-        uses: egor-tensin/setup-mingw@v2
-        with:
-          platform: x86
 
       - name: Musl gcc
         if: ${{ endsWith(matrix.target, '-musl') }}
