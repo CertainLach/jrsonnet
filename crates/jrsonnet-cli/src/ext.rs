@@ -61,19 +61,40 @@ pub struct ExtVarOpts {
 	/// to use top level arguments whenever it's possible.
 	/// If [=data] is not set then it will be read from `name` env variable.
 	/// Can be accessed from code via `std.extVar("name")`.
-	#[clap(long, short = 'V', name = "name[=var data]", number_of_values = 1)]
+	#[clap(
+		long,
+		short = 'V',
+		name = "name[=var data]",
+		number_of_values = 1,
+		multiple_occurrences = true
+	)]
 	ext_str: Vec<ExtStr>,
 	/// Read string external variable from file.
 	/// See also `--ext-str`
-	#[clap(long, name = "name=var path", number_of_values = 1)]
+	#[clap(
+		long,
+		name = "name=var path",
+		number_of_values = 1,
+		multiple_occurrences = true
+	)]
 	ext_str_file: Vec<ExtFile>,
 	/// Add external variable from code.
 	/// See also `--ext-str`
-	#[clap(long, name = "name[=var source]", number_of_values = 1)]
+	#[clap(
+		long,
+		name = "name[=var source]",
+		number_of_values = 1,
+		multiple_occurrences = true
+	)]
 	ext_code: Vec<ExtStr>,
 	/// Read string external variable from file.
 	/// See also `--ext-str`
-	#[clap(long, name = "name=var code path", number_of_values = 1)]
+	#[clap(
+		long,
+		name = "name=var code path",
+		number_of_values = 1,
+		multiple_occurrences = true
+	)]
 	ext_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for ExtVarOpts {
