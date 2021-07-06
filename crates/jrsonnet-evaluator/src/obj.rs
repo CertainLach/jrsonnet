@@ -322,6 +322,11 @@ impl ObjValueBuilder {
 		ObjValue::new(self.super_obj, Gc::new(self.map), Gc::new(self.assertions))
 	}
 }
+impl Default for ObjValueBuilder {
+	fn default() -> Self {
+		Self::with_capacity(0)
+	}
+}
 
 #[must_use = "value not added unless binding() was called"]
 pub struct ObjMemberBuilder<'v> {
@@ -332,8 +337,9 @@ pub struct ObjMemberBuilder<'v> {
 	location: Option<ExprLocation>,
 }
 
+#[allow(clippy::missing_const_for_fn)]
 impl<'v> ObjMemberBuilder<'v> {
-	pub fn with_add(mut self, add: bool) -> Self {
+	pub const fn with_add(mut self, add: bool) -> Self {
 		self.add = add;
 		self
 	}

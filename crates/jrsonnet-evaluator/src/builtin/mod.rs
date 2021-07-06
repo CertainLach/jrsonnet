@@ -221,7 +221,7 @@ fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 		3, step: ty!((number | null));
 	], {
 		std_slice(
-			indexable.to_indexable()?,
+			indexable.into_indexable()?,
 			index.try_cast_nullable_num("index")?.map(|v| v as usize),
 			end.try_cast_nullable_num("end")?.map(|v| v as usize),
 			step.try_cast_nullable_num("step")?.map(|v| v as usize),

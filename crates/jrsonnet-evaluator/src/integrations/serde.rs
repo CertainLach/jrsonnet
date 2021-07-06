@@ -47,7 +47,7 @@ impl From<&Value> for Val {
 			Value::Number(n) => Self::Num(n.as_f64().expect("as f64")),
 			Value::String(s) => Self::Str((s as &str).into()),
 			Value::Array(a) => {
-				let mut out: Vec<Val> = Vec::with_capacity(a.len());
+				let mut out: Vec<Self> = Vec::with_capacity(a.len());
 				for v in a {
 					out.push(v.into());
 				}
@@ -58,7 +58,7 @@ impl From<&Value> for Val {
 				for (k, v) in o {
 					builder.member((k as &str).into()).value(v.into());
 				}
-				Val::Obj(builder.build())
+				Self::Obj(builder.build())
 			}
 		}
 	}

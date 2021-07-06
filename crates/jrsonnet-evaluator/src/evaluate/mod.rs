@@ -687,7 +687,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				desc: &'static str,
 			) -> Result<Option<usize>> {
 				Ok(match expr {
-					Some(s) => evaluate(context.clone(), &s)?
+					Some(s) => evaluate(context.clone(), s)?
 						.try_cast_nullable_num(desc)?
 						.map(|v| v as usize),
 					None => None,
@@ -698,7 +698,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let end = parse_num(&context, desc.end.as_ref(), "end")?;
 			let step = parse_num(&context, desc.step.as_ref(), "step")?;
 
-			std_slice(indexable.to_indexable()?, start, end, step)?
+			std_slice(indexable.into_indexable()?, start, end, step)?
 		}
 		Import(path) => {
 			let tmp = loc

@@ -571,7 +571,7 @@ impl Val {
 			.try_cast_str("to json")
 		})
 	}
-	pub fn to_indexable(self) -> Result<IndexableVal> {
+	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {
 			Val::Str(s) => IndexableVal::Str(s),
 			Val::Arr(arr) => IndexableVal::Arr(arr),
