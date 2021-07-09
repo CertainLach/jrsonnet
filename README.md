@@ -1,12 +1,46 @@
 # jrsonnet
 
-![Crates.io](https://img.shields.io/crates/v/jrsonnet-evaluator)
+[![release](https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge)](https://github.com/CertainLach/jrsonnet/releases)
+[![license](https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge)](/LICENSE)
+[![opencollective](https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge)](https://opencollective.com/jrsonnet)
 
 ## What is it
 
 [Jsonnet](https://jsonnet.org/) is a data templating language
 
 This Rust crate implements both jsonnet library and an alternative `jsonnet` executable based on it. For more information see [bindings](#Bindings).
+
+## Install
+
+### NixOS
+
+jrsonnet is packaged in nixpkgs and maintained by @CertainLach
+
+```sh
+nix-env -iA nixpkgs.jrsonnet
+```
+
+### MacOS
+
+jrsonnet is packaged to brew and maintained by @messense
+
+```sh
+brew install jrsonnet
+```
+
+### Windows/other linux distributions
+
+You can get latest build of jrsonnet in [releases](https://github.com/CertainLach/jrsonnet/releases)
+
+### Build from sources
+
+jrsonnet should build on latest stable Rust version (probally on olders, but there is no MSRV policy provided)
+
+Debug build will work too, but it is much slower than release
+
+```
+cargo build --release
+```
 
 ## Why?
 
@@ -16,73 +50,26 @@ This implementation shows performance better than all existing implementations. 
 
 In the end, it's always fun to implement something in Rust.
 
-## Compliance with the [specification](https://jsonnet.org/ref/spec.html)
-
-- Passes all the original `examples` tests
-
-- Passes all the original `test_suite` tests except for those which require stacktraces identical to the default implementation (while also being available, vanilla-like stacktraces are not 100% identical):
-
-  ```jsonnet
-  ## Explaining format
-  ​```
-  RuntimeError("3")
-   --> /home/lach/jsonnet-rs/a.jsonnet:1:25
-    |
-  1 | local a = "%0 10.20d" % error "3";
-    |                         ^^^^^^^^^ error statement
-    |
-   --> /home/lach/jsonnet-rs/a.jsonnet:1:11
-    |
-  1 | local a = "%0 10.20d" % error "3";
-    |           ^^^^^^^^^^^^^^^^^^^^^^^ function <mod> call
-    |
-   --> /home/lach/jsonnet-rs/a.jsonnet:6:6
-    |
-  6 |   a: a,
-    |      ^ variable <a>
-    |
-   --> /home/lach/jsonnet-rs/a.jsonnet:3:6
-    |
-  3 |   b: self.a,
-    |      ^^^^^^ field access
-    |
-   --> /home/lach/jsonnet-rs/a.jsonnet:9:1
-    |
-  9 | e.b
-    | ^^^ field access
-    |
-  ​```
-
-  ## Compact format (default)
-  ​```
-  RuntimeError("3")
-      /home/lach/jsonnet-rs/a.jsonnet:1:25-35: error statement
-      /home/lach/jsonnet-rs/a.jsonnet:6:6-8  : variable <a>
-      /home/lach/jsonnet-rs/a.jsonnet:3:6-13 : field access
-      /home/lach/jsonnet-rs/a.jsonnet:9:1-5  : field access
-  ​```
-
-  ## Vanilla format
-  ​```
-  RUNTIME ERROR: 3
-          a.jsonnet:1:25-34       thunk <a> from <$>
-          <std>:237:21-22 thunk from <function <anonymous>>
-          <std>:754:20-24 thunk from <function <anonymous>>
-          <std>:32:25-26  thunk from <function <anonymous>>
-          <std>:32:16-27  function <anonymous>
-          <std>:754:8-25  function <anonymous>
-          <std>:237:7-23  function <anonymous>
-
-          a.jsonnet:6:6-7 object <d>
-          a.jsonnet:3:6-12        object <c>
-          a.jsonnet:9:1-4 $
-          During evaluation
-  ​```
-  ```
-
 ## Bindings
 
+### Rust
+
+[![crates.io](https://img.shields.io/crates/v/jrsonnet-evaluator)](https://crates.io/crates/jrsonnet-evaluator)
+[![docs.rs](https://docs.rs/jrsonnet-evaluator/badge.svg)](https://docs.rs/jrsonnet-evaluator)
+
+Jrsonnet is written in rust itself, so just add it as dependency
+
+### Python
+
+[![crates.io](https://img.shields.io/pypi/v/rjsonnet)](https://pypi.org/project/rjsonnet/)
+
+Bindings are created and maintained by @messense
+
+### C/C++
+
 Jrsonnet provides a standard `libjsonnet.so` shared library and should work as drop-in replacement for it
+
+### Other
 
 WASM bingings are also available, Java bindings (Both JNI and WASM compiled to .class) are in progress
 
@@ -95,8 +82,3 @@ This is the fastest implementation of jsonnet both according to official benchma
 Official benchmark results are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b) which may get updated sometimes. It shows tests against Golang, C++ and Scala implementations showing the best performance in all cases.
 
 You can generate this report via provided nix flake
-
-## TO-DO list
-
-- [ ] Create docker container for easier benchmarking and/or benchmark in CI
-- [ ] Implement and utilize mutable strings, arrays and objects instead of COWing when possible
