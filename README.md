@@ -1,6 +1,7 @@
 # jrsonnet
 
 ![Crates.io](https://img.shields.io/crates/v/jrsonnet-evaluator)
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCertainLach%2Fjrsonnet.svg?type=shield)](https://app.fossa.com/projects/git%2Bgithub.com%2FCertainLach%2Fjrsonnet?ref=badge_shield)
 
 ## What is it
 
@@ -100,3 +101,7 @@ You can generate this report via provided nix flake
 
 - [ ] Create docker container for easier benchmarking and/or benchmark in CI
 - [ ] Implement and utilize mutable strings, arrays and objects instead of COWing when possible
+
+
+## License
+[![FOSSA Status](https://app.fossa.com/api/projects/git%2Bgithub.com%2FCertainLach%2Fjrsonnet.svg?type=large)](https://app.fossa.com/projects/git%2Bgithub.com%2FCertainLach%2Fjrsonnet?ref=badge_large)
