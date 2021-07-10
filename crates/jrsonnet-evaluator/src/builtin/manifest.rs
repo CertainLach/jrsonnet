@@ -42,7 +42,7 @@ fn manifest_json_ex_buf(
 			}
 		}
 		Val::Null => buf.push_str("null"),
-		Val::Str(s) => buf.push_str(&escape_string_json(s)),
+		Val::Str(s) => escape_string_json_buf(s, buf),
 		Val::Num(n) => write!(buf, "{}", n).unwrap(),
 		Val::Arr(items) => {
 			buf.push('[');
@@ -100,7 +100,7 @@ fn manifest_json_ex_buf(
 						}
 					}
 					buf.push_str(cur_padding);
-					buf.push_str(&escape_string_json(&field));
+					escape_string_json_buf(&field, &mut buf);
 					buf.push_str(": ");
 					crate::push(
 						None,
@@ -129,30 +129,30 @@ fn manifest_json_ex_buf(
 	};
 	Ok(())
 }
-pub fn escape_string_json(s: &str) -> String {
-	use std::fmt::Write;
-	let mut out = String::new();
-	out.push('"');
-	for c in s.chars() {
-		match c {
-			'"' => out.push_str("\\\""),
-			'\\' => out.push_str("\\\\"),
-			'\u{0008}' => out.push_str("\\b"),
-			'\u{000c}' => out.push_str("\\f"),
-			'\n' => out.push_str("\\n"),
-			'\r' => out.push_str("\\r"),
-			'\t' => out.push_str("\\t"),
-			c if c < 32 as char || (c >= 127 as char && c <= 159 as char) => {
-				write!(out, "\\u{:04x}", c as u32).unwrap()
-			}
-			c => out.push(c),
-		}
-	}
-	out.push('"');
-	out
+
+pub fn manifest_string_json(s: &str) -> String {
+	let mut buf = String::new();
+	escape_string_json_buf(s, &mut buf);
+	buf
 }
 
-#[test]
-fn json_test() {
-	assert_eq!(escape_string_json("\u{001f}"), "\"\\u001f\"")
+fn escape_string_json_buf(s: &str, buf: &mut String) {
+	use std::fmt::Write;
+	buf.push('"');
+	for c in s.chars() {
+		match c {
+			'"' => buf.push_str("\\\""),
+			'\\' => buf.push_str("\\\\"),
+			'\u{0008}' => buf.push_str("\\b"),
+			'\u{000c}' => buf.push_str("\\f"),
+			'\n' => buf.push_str("\\n"),
+			'\r' => buf.push_str("\\r"),
+			'\t' => buf.push_str("\\t"),
+			c if c < 32 as char || (c >= 127 as char && c <= 159 as char) => {
+				write!(buf, "\\u{:04x}", c as u32).unwrap()
+			}
+			c => buf.push(c),
+		}
+	}
+	buf.push('"');
 }
