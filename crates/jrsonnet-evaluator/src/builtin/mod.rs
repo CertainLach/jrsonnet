@@ -92,6 +92,7 @@ thread_local! {
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
 			("map".into(), builtin_map),
+			("flatMap".into(), builtin_flatmap),
 			("foldl".into(), builtin_foldl),
 			("foldr".into(), builtin_foldr),
 			("sortImpl".into(), builtin_sort_impl),
@@ -328,6 +329,40 @@ fn builtin_map(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -
 	], {
 		Ok(Val::Arr(arr.map(|val| func
 			.evaluate_values(context.clone(), &[val]))?))
+	})
+}
+
+fn builtin_flatmap(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "flatMap", args, 2, [
+		0, func: ty!(function) => Val::Func;
+		1, arr: ty!((array | string));
+	], {
+		match arr {
+			Val::Str(s) => {
+				let mut out = String::new();
+				for c in s.chars() {
+					match func.evaluate_values(context.clone(), &[Val::Str(c.to_string().into())])? {
+						Val::Str(o) => out.push_str(&o),
+						_ => throw!(RuntimeError("in std.join all items should be strings".into())),
+					};
+				}
+				Ok(Val::Str(out.into()))
+			},
+			Val::Arr(a) => {
+				let mut out = Vec::new();
+				for el in a.iter() {
+					let el = el?;
+					match func.evaluate_values(context.clone(), &[el])? {
+						Val::Arr(o) => for oe in o.iter() {
+							out.push(oe?)
+						},
+						_ => throw!(RuntimeError("in std.join all items should be arrays".into())),
+					};
+				}
+				Ok(Val::Arr(out.into()))
+			},
+			_ => unreachable!(),
+		}
 	})
 }
 
