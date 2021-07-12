@@ -531,30 +531,9 @@
 
   base64:: $intrinsic(base64),
 
-  base64DecodeBytes(str)::
-    if std.length(str) % 4 != 0 then
-      error 'Not a base64 encoded string "%s"' % str
-    else
-      local aux(str, i, r) =
-        if i >= std.length(str) then
-          r
-        else
-          // all 6 bits of i, 2 MSB of i+1
-          local n1 = [base64_inv[str[i]] << 2 | (base64_inv[str[i + 1]] >> 4)];
-          // 4 LSB of i+1, 4MSB of i+2
-          local n2 =
-            if str[i + 2] == '=' then []
-            else [(base64_inv[str[i + 1]] & 15) << 4 | (base64_inv[str[i + 2]] >> 2)];
-          // 2 LSB of i+2, all 6 bits of i+3
-          local n3 =
-            if str[i + 3] == '=' then []
-            else [(base64_inv[str[i + 2]] & 3) << 6 | base64_inv[str[i + 3]]];
-          aux(str, i + 4, r + n1 + n2 + n3) tailstrict;
-      aux(str, 0, []),
+  base64DecodeBytes:: $intrinsic(base64DecodeBytes),
 
-  base64Decode(str)::
-    local bytes = std.base64DecodeBytes(str);
-    std.join('', std.map(function(b) std.char(b), bytes)),
+  base64Decode:: $intrinsic(base64Decode),
 
   reverse:: $intrinsic(reverse),
 

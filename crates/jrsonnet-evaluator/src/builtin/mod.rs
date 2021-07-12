@@ -114,6 +114,8 @@ thread_local! {
 			("encodeUTF8".into(), builtin_encode_utf8),
 			("md5".into(), builtin_md5),
 			("base64".into(), builtin_base64),
+			("base64DecodeBytes".into(), builtin_base64_decode_bytes),
+			("base64Decode".into(), builtin_base64_decode),
 			("trace".into(), builtin_trace),
 			("join".into(), builtin_join),
 			("escapeStringJson".into(), builtin_escape_string_json),
@@ -623,6 +625,39 @@ fn builtin_base64(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc
 			},
 			_ => unreachable!()
 		}))
+	})
+}
+
+fn builtin_base64_decode_bytes(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "base64DecodeBytes", args, 1, [
+		0, input: ty!(string) => Val::Str;
+	], {
+		Ok(Val::Arr(
+			base64::decode(&input.as_bytes())
+				.map_err(|_| RuntimeError("bad base64".into()))?
+				.iter()
+				.map(|v| Val::Num(*v as f64)).collect::<Vec<_>>().into()
+		))
+	})
+}
+
+fn builtin_base64_decode(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "base64Decode", args, 1, [
+		0, input: ty!(string) => Val::Str;
+	], {
+		Ok(Val::Str(
+			String::from_utf8(base64::decode(&input.as_bytes())
+				.map_err(|_| RuntimeError("bad base64".into()))?)
+				.map_err(|_| RuntimeError("bad utf8".into()))?.into()
+		))
 	})
 }
 
