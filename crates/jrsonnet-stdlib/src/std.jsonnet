@@ -13,8 +13,6 @@
   modulo:: $intrinsic(modulo),
   floor:: $intrinsic(floor),
   ceil:: $intrinsic(ceil),
-  log:: $intrinsic(log),
-  pow:: $intrinsic(pow),
   extVar:: $intrinsic(extVar),
   native:: $intrinsic(native),
   filter:: $intrinsic(filter),
@@ -24,6 +22,10 @@
   trace:: $intrinsic(trace),
   id:: $intrinsic(id),
   parseJson:: $intrinsic(parseJson),
+
+  log:: $intrinsic(log),
+  pow:: $intrinsic(pow),
+  sqrt:: $intrinsic(sqrt),
 
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',

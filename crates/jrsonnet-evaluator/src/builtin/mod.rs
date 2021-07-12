@@ -89,6 +89,7 @@ thread_local! {
 			("ceil".into(), builtin_ceil),
 			("log".into(), builtin_log),
 			("pow".into(), builtin_pow),
+			("sqrt".into(), builtin_sqrt),
 			("extVar".into(), builtin_ext_var),
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
@@ -301,6 +302,14 @@ fn builtin_pow(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -
 		1, n: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.powf(n)))
+	})
+}
+
+fn builtin_sqrt(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "sqrt", args, 1, [
+		0, x: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
+	], {
+		Ok(Val::Num(x.sqrt()))
 	})
 }
 
