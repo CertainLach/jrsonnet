@@ -30,7 +30,11 @@ pub enum TypeError {
 	MissingProperty(Rc<str>, ComplexValType),
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),
-	#[error("number out of bounds: {0} not in {1:?}..{2:?}")]
+	#[error(
+		"number out of bounds: {0} not in {}..{}",
+		.1.map(|v|v.to_string()).unwrap_or("".to_owned()),
+		.2.map(|v|v.to_string()).unwrap_or("".to_owned()),
+	)]
 	BoundsFailed(f64, Option<f64>, Option<f64>),
 }
 impl From<TypeError> for LocError {
@@ -56,7 +60,7 @@ impl Display for TypeLocError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "{}", self.0)?;
 		if !(self.1).0.is_empty() {
-			write!(f, "at {}", self.1)?;
+			write!(f, " at {}", self.1)?;
 		}
 		Ok(())
 	}
