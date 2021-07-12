@@ -396,7 +396,7 @@ fn builtin_exp(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -
 
 fn frexp(s: f64) -> (f64, i16) {
 	if 0.0 == s {
-		return (s, 0);
+		(s, 0)
 	} else {
 		let lg = s.abs().log2();
 		let x = (lg - lg.floor() - 1.0).exp2();

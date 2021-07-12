@@ -32,8 +32,8 @@ pub enum TypeError {
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
 		"number out of bounds: {0} not in {}..{}",
-		.1.map(|v|v.to_string()).unwrap_or("".to_owned()),
-		.2.map(|v|v.to_string()).unwrap_or("".to_owned()),
+		.1.map(|v|v.to_string()).unwrap_or_else(|| "".to_owned()),
+		.2.map(|v|v.to_string()).unwrap_or_else(|| "".to_owned()),
 	)]
 	BoundsFailed(f64, Option<f64>, Option<f64>),
 }
