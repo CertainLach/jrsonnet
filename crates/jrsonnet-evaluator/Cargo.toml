@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-evaluator"
 description = "jsonnet interpreter"
-version = "0.4.1"
+version = "0.4.2"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2018"
@@ -21,10 +21,10 @@ anyhow-error = ["anyhow"]
 unstable = []
 
 [dependencies]
-jrsonnet-interner = { path="../jrsonnet-interner", version="0.4.1" }
-jrsonnet-parser = { path="../jrsonnet-parser", version="0.4.1" }
-jrsonnet-stdlib = { path="../jrsonnet-stdlib", version="0.4.1" }
-jrsonnet-types = { path="../jrsonnet-types", version="0.4.1" }
+jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
+jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
+jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.2" }
 pathdiff = "0.2.0"
 
 md5 = "0.7.0"
@@ -32,7 +32,7 @@ base64 = "0.13.0"
 rustc-hash = "1.1.0"
 
 thiserror = "1.0"
-jrsonnet-gc = { version="0.4.2", features=["derive"] }
+jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
 
 [dependencies.anyhow]
 version = "1.0"
@@ -58,7 +58,10 @@ features = ["color"]
 optional = true
 
 [build-dependencies]
-jrsonnet-parser = { path="../jrsonnet-parser", features=["serialize", "deserialize"], version="0.4.1" }
-jrsonnet-stdlib = { path="../jrsonnet-stdlib", version="0.4.1" }
+jrsonnet-parser = { path = "../jrsonnet-parser", features = [
+    "serialize",
+    "deserialize",
+], version = "0.4.2" }
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
 serde = "1.0"
 bincode = "1.3.1"
