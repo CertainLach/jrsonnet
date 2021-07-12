@@ -8,6 +8,9 @@ macro_rules! ty {
 	((Array<number>)) => {{
 		$crate::ComplexValType::ArrayRef(&$crate::ComplexValType::Simple($crate::ValType::Num))
 	}};
+	((Array<ubyte>)) => {{
+		$crate::ComplexValType::ArrayRef(&$crate::ComplexValType::BoundedNumber(Some(0.0), Some(255.0)))
+	}};
 	(array) => {
 		$crate::ComplexValType::Simple($crate::ValType::Arr)
 	};

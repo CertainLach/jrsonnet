@@ -18,6 +18,7 @@
   filter:: $intrinsic(filter),
   char:: $intrinsic(char),
   encodeUTF8:: $intrinsic(encodeUTF8),
+  decodeUTF8:: $intrinsic(decodeUTF8),
   md5:: $intrinsic(md5),
   trace:: $intrinsic(trace),
   id:: $intrinsic(id),

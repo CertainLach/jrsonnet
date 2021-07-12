@@ -112,6 +112,7 @@ thread_local! {
 			("range".into(), builtin_range),
 			("char".into(), builtin_char),
 			("encodeUTF8".into(), builtin_encode_utf8),
+			("decodeUTF8".into(), builtin_decode_utf8),
 			("md5".into(), builtin_md5),
 			("base64".into(), builtin_base64),
 			("base64DecodeBytes".into(), builtin_base64_decode_bytes),
@@ -582,6 +583,23 @@ fn builtin_encode_utf8(
 		0, str: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Arr((str.bytes().map(|b| Val::Num(b as f64)).collect::<Vec<Val>>()).into()))
+	})
+}
+
+fn builtin_decode_utf8(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "decodeUTF8", args, 1, [
+		0, arr: ty!((Array<ubyte>)) => Val::Arr;
+	], {
+		let data: Result<Vec<u8>> = arr.iter().map(|v| v.map(|v| match v{
+			Val::Num(n) => n as u8,
+			_ => unreachable!(),
+		})).collect();
+		let data = data?;
+		Ok(Val::Str(String::from_utf8(data).map_err(|_| RuntimeError("bad utf8".into()))?.into()))
 	})
 }
 
