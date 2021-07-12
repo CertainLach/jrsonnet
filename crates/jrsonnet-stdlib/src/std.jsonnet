@@ -34,6 +34,8 @@
   acos:: $intrinsic(acos),
   atan:: $intrinsic(atan),
 
+  exp:: $intrinsic(exp),
+
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',
   isBoolean(v):: std.type(v) == 'boolean',

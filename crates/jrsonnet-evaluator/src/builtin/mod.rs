@@ -96,6 +96,7 @@ thread_local! {
 			("asin".into(), builtin_asin),
 			("acos".into(), builtin_acos),
 			("atan".into(), builtin_atan),
+			("exp".into(), builtin_exp),
 			("extVar".into(), builtin_ext_var),
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
@@ -364,6 +365,14 @@ fn builtin_atan(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) 
 		0, x: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.atan()))
+	})
+}
+
+fn builtin_exp(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "exp", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.exp()))
 	})
 }
 
