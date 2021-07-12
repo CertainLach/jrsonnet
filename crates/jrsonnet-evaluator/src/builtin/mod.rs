@@ -90,6 +90,12 @@ thread_local! {
 			("log".into(), builtin_log),
 			("pow".into(), builtin_pow),
 			("sqrt".into(), builtin_sqrt),
+			("sin".into(), builtin_sin),
+			("cos".into(), builtin_cos),
+			("tan".into(), builtin_tan),
+			("asin".into(), builtin_asin),
+			("acos".into(), builtin_acos),
+			("atan".into(), builtin_atan),
 			("extVar".into(), builtin_ext_var),
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
@@ -310,6 +316,54 @@ fn builtin_sqrt(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) 
 		0, x: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
 	], {
 		Ok(Val::Num(x.sqrt()))
+	})
+}
+
+fn builtin_sin(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "sin", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.sin()))
+	})
+}
+
+fn builtin_cos(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "cos", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.cos()))
+	})
+}
+
+fn builtin_tan(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "tan", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.tan()))
+	})
+}
+
+fn builtin_asin(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "asin", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.asin()))
+	})
+}
+
+fn builtin_acos(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "acos", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.acos()))
+	})
+}
+
+fn builtin_atan(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "atan", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.atan()))
 	})
 }
 

@@ -27,6 +27,13 @@
   pow:: $intrinsic(pow),
   sqrt:: $intrinsic(sqrt),
 
+  sin:: $intrinsic(sin),
+  cos:: $intrinsic(cos),
+  tan:: $intrinsic(tan),
+  asin:: $intrinsic(asin),
+  acos:: $intrinsic(acos),
+  atan:: $intrinsic(atan),
+
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',
   isBoolean(v):: std.type(v) == 'boolean',
