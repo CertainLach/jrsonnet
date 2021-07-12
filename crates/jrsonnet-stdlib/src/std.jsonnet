@@ -35,6 +35,8 @@
   atan:: $intrinsic(atan),
 
   exp:: $intrinsic(exp),
+  mantissa:: $intrinsic(mantissa),
+  exponent:: $intrinsic(exponent),
 
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',

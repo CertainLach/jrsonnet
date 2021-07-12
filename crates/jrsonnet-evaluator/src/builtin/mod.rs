@@ -97,6 +97,8 @@ thread_local! {
 			("acos".into(), builtin_acos),
 			("atan".into(), builtin_atan),
 			("exp".into(), builtin_exp),
+			("mantissa".into(), builtin_mantissa),
+			("exponent".into(), builtin_exponent),
 			("extVar".into(), builtin_ext_var),
 			("native".into(), builtin_native),
 			("filter".into(), builtin_filter),
@@ -373,6 +375,33 @@ fn builtin_exp(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -
 		0, x: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.exp()))
+	})
+}
+
+fn frexp(s: f64) -> (f64, i16) {
+	if 0.0 == s {
+		return (s, 0);
+	} else {
+		let lg = s.abs().log2();
+		let x = (lg - lg.floor() - 1.0).exp2();
+		let exp = lg.floor() + 1.0;
+		(s.signum() * x, exp as i16)
+	}
+}
+
+fn builtin_mantissa(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "mantissa", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(frexp(x).0))
+	})
+}
+
+fn builtin_exponent(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "exponent", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(frexp(x).1.into()))
 	})
 }
 
