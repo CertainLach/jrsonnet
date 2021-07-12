@@ -100,7 +100,7 @@ fn manifest_json_ex_buf(
 						}
 					}
 					buf.push_str(cur_padding);
-					escape_string_json_buf(&field, &mut buf);
+					escape_string_json_buf(&field, buf);
 					buf.push_str(": ");
 					crate::push(
 						None,
@@ -130,7 +130,7 @@ fn manifest_json_ex_buf(
 	Ok(())
 }
 
-pub fn manifest_string_json(s: &str) -> String {
+pub fn escape_string_json(s: &str) -> String {
 	let mut buf = String::new();
 	escape_string_json_buf(s, &mut buf);
 	buf
