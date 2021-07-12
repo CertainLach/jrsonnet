@@ -123,21 +123,7 @@
     assert std.length(c) == 1 : 'std.split second parameter should have length 1, got ' + std.length(c);
     std.splitLimit(str, c, -1),
 
-  splitLimit(str, c, maxsplits)::
-    assert std.isString(str) : 'std.splitLimit first parameter should be a string, got ' + std.type(str);
-    assert std.isString(c) : 'std.splitLimit second parameter should be a string, got ' + std.type(c);
-    assert std.length(c) == 1 : 'std.splitLimit second parameter should have length 1, got ' + std.length(c);
-    assert std.isNumber(maxsplits) : 'std.splitLimit third parameter should be a number, got ' + std.type(maxsplits);
-    local aux(str, delim, i, arr, v) =
-      local c = str[i];
-      local i2 = i + 1;
-      if i >= std.length(str) then
-        arr + [v]
-      else if c == delim && (maxsplits == -1 || std.length(arr) < maxsplits) then
-        aux(str, delim, i2, arr + [v], '') tailstrict
-      else
-        aux(str, delim, i2, arr, v + c) tailstrict;
-    aux(str, c, 0, [], ''),
+  splitLimit:: $intrinsic(splitLimit),
 
   strReplace:: $intrinsic(strReplace),
 

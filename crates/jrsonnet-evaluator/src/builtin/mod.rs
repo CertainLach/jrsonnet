@@ -121,6 +121,7 @@ thread_local! {
 			("reverse".into(), builtin_reverse),
 			("id".into(), builtin_id),
 			("strReplace".into(), builtin_str_replace),
+			("splitLimit".into(), builtin_splitlimit),
 			("parseJson".into(), builtin_parse_json),
 		].iter().cloned().collect()
 	};
@@ -748,6 +749,29 @@ fn builtin_str_replace(
 		}
 		out.push_str(&str[last_idx..]);
 		Ok(Val::Str(out.into()))
+	})
+}
+
+fn builtin_splitlimit(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "splitLimit", args, 3, [
+		0, str: ty!(string) => Val::Str;
+		1, c: ty!(char) => Val::Str;
+		2, maxsplits: ty!(number) => Val::Num;
+	], {
+		let maxsplits = maxsplits as isize;
+		let c = c.chars().next().unwrap();
+
+		let out: Vec<Val> = if maxsplits == -1 {
+			str.split(c).map(|s| Val::Str(s.into())).collect()
+		} else {
+			str.splitn(maxsplits as usize + 1, c).map(|s| Val::Str(s.into())).collect()
+		};
+
+		Ok(Val::Arr(out.into()))
 	})
 }
 
