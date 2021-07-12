@@ -86,6 +86,7 @@ thread_local! {
 			("modulo".into(), builtin_modulo),
 			("mod".into(), builtin_mod),
 			("floor".into(), builtin_floor),
+			("ceil".into(), builtin_ceil),
 			("log".into(), builtin_log),
 			("pow".into(), builtin_pow),
 			("extVar".into(), builtin_ext_var),
@@ -275,6 +276,14 @@ fn builtin_floor(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 		0, x: ty!(number) => Val::Num;
 	], {
 		Ok(Val::Num(x.floor()))
+	})
+}
+
+fn builtin_ceil(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "ceil", args, 1, [
+		0, x: ty!(number) => Val::Num;
+	], {
+		Ok(Val::Num(x.ceil()))
 	})
 }
 

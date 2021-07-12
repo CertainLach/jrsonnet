@@ -12,6 +12,7 @@
   primitiveEquals:: $intrinsic(primitiveEquals),
   modulo:: $intrinsic(modulo),
   floor:: $intrinsic(floor),
+  ceil:: $intrinsic(ceil),
   log:: $intrinsic(log),
   pow:: $intrinsic(pow),
   extVar:: $intrinsic(extVar),
