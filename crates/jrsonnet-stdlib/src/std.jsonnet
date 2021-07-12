@@ -48,12 +48,7 @@
   toString(a)::
     if std.type(a) == 'string' then a else '' + a,
 
-  substr(str, from, len)::
-    assert std.isString(str) : 'substr first parameter should be a string, got ' + std.type(str);
-    assert std.isNumber(from) : 'substr second parameter should be a string, got ' + std.type(from);
-    assert std.isNumber(len) : 'substr third parameter should be a string, got ' + std.type(len);
-    assert len >= 0 : 'substr third parameter should be greater than zero, got ' + len;
-    std.join('', std.makeArray(std.max(0, std.min(len, std.length(str) - from)), function(i) str[i + from])),
+  substr:: $intrinsic(substr),
 
   startsWith(a, b)::
     if std.length(a) < std.length(b) then

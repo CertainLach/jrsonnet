@@ -81,6 +81,7 @@ thread_local! {
 			("objectFieldsEx".into(), builtin_object_fields_ex),
 			("objectHasEx".into(), builtin_object_has_ex),
 			("slice".into(), builtin_slice),
+			("substr".into(), builtin_substr),
 			("primitiveEquals".into(), builtin_primitive_equals),
 			("equals".into(), builtin_equals),
 			("modulo".into(), builtin_modulo),
@@ -238,6 +239,17 @@ fn builtin_slice(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 			end.try_cast_nullable_num("end")?.map(|v| v as usize),
 			step.try_cast_nullable_num("step")?.map(|v| v as usize),
 		)
+	})
+}
+
+fn builtin_substr(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "substr", args, 3, [
+		0, str: ty!(string) => Val::Str;
+		1, from: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
+		2, len: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
+	], {
+		let out: String = str.chars().skip(from as usize).take(len as usize).collect();
+		Ok(Val::Str(out.into()))
 	})
 }
 
