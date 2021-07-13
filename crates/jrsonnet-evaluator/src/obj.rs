@@ -140,14 +140,11 @@ impl ObjValue {
 		out
 	}
 	pub fn fields_ex(&self, include_hidden: bool) -> Vec<IStr> {
-		let mut fields: Vec<_> = self
-			.fields_visibility()
+		self.fields_visibility()
 			.into_iter()
 			.filter(|(_k, v)| include_hidden || *v)
 			.map(|(k, _)| k)
-			.collect();
-		fields.sort_unstable();
-		fields
+			.collect()
 	}
 	pub fn fields(&self) -> Vec<IStr> {
 		self.fields_ex(false)
