@@ -143,14 +143,9 @@
 
   slice:: $intrinsic(slice),
 
-  member(arr, x)::
-    if std.isArray(arr) then
-      std.count(arr, x) > 0
-    else if std.isString(arr) then
-      std.length(std.findSubstr(x, arr)) > 0
-    else error 'std.member first argument must be an array or a string',
+  member:: $intrinsic(member),
 
-  count(arr, x):: std.length(std.filter(function(v) v == x, arr)),
+  count:: $intrinsic(count),
 
   mod:: $intrinsic(mod),
 
