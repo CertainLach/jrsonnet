@@ -128,21 +128,9 @@
 
   strReplace:: $intrinsic(strReplace),
 
-  asciiUpper(str)::
-    local cp = std.codepoint;
-    local up_letter(c) = if cp(c) >= 97 && cp(c) < 123 then
-      std.char(cp(c) - 32)
-    else
-      c;
-    std.join('', std.map(up_letter, std.stringChars(str))),
+  asciiUpper:: $intrinsic(asciiUpper),
 
-  asciiLower(str)::
-    local cp = std.codepoint;
-    local down_letter(c) = if cp(c) >= 65 && cp(c) < 91 then
-      std.char(cp(c) + 32)
-    else
-      c;
-    std.join('', std.map(down_letter, std.stringChars(str))),
+  asciiLower:: $intrinsic(asciiLower),
 
   range:: $intrinsic(range),
 

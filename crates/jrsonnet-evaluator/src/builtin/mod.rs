@@ -126,6 +126,8 @@ thread_local! {
 			("strReplace".into(), builtin_str_replace),
 			("splitLimit".into(), builtin_splitlimit),
 			("parseJson".into(), builtin_parse_json),
+			("asciiUpper".into(), builtin_ascii_upper),
+			("asciiLower".into(), builtin_ascii_lower),
 		].iter().cloned().collect()
 	};
 }
@@ -825,6 +827,30 @@ fn builtin_splitlimit(
 		};
 
 		Ok(Val::Arr(out.into()))
+	})
+}
+
+fn builtin_ascii_upper(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "asciiUpper", args, 1, [
+		0, str: ty!(string) => Val::Str;
+	], {
+		Ok(Val::Str(str.to_ascii_uppercase().into()))
+	})
+}
+
+fn builtin_ascii_lower(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "asciiLower", args, 1, [
+		0, str: ty!(string) => Val::Str;
+	], {
+		Ok(Val::Str(str.to_ascii_lowercase().into()))
 	})
 }
 
