@@ -128,6 +128,8 @@ thread_local! {
 			("parseJson".into(), builtin_parse_json),
 			("asciiUpper".into(), builtin_ascii_upper),
 			("asciiLower".into(), builtin_ascii_lower),
+			("member".into(), builtin_member),
+			("count".into(), builtin_count),
 		].iter().cloned().collect()
 	};
 }
@@ -851,6 +853,46 @@ fn builtin_ascii_lower(
 		0, str: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Str(str.to_ascii_lowercase().into()))
+	})
+}
+
+fn builtin_member(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "member", args, 2, [
+		0, arr: ty!((array | string));
+		1, x: ty!(any);
+	], {
+		match arr {
+			Val::Str(s) => {
+				let x = x.try_cast_str("x should be string")?;
+				Ok(Val::Bool(!x.is_empty() && s.contains(&*x)))
+			}
+			Val::Arr(a) => {
+				for item in a.iter() {
+					let item = item?;
+					if equals(&item, &x)? {
+						return Ok(Val::Bool(true));
+					}
+				}
+				Ok(Val::Bool(false))
+			}
+			_ => unreachable!(),
+		}
+	})
+}
+
+fn builtin_count(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "count", args, 2, [
+		0, arr: ty!(array) => Val::Arr;
+		1, x: ty!(any);
+	], {
+		let mut count = 0;
+		for item in arr.iter() {
+			let item = item?;
+			if equals(&item, &x)? {
+				count += 1;
+			}
+		}
+		Ok(Val::Num(count as f64))
 	})
 }
 
