@@ -131,8 +131,8 @@ fn main_catch(opts: Opts) -> bool {
 
 fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 	opts.gc.configure_global();
-	opts.general.configure(&state)?;
-	opts.manifest.configure(&state)?;
+	opts.general.configure(state)?;
+	opts.manifest.configure(state)?;
 
 	let val = if opts.input.exec {
 		state.evaluate_snippet_raw(
@@ -158,7 +158,7 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 		}
 		for (file, data) in state.manifest_multi(val)?.iter() {
 			let mut path = multi.clone();
-			path.push(&file as &str);
+			path.push(file as &str);
 			if opts.output.create_output_dirs {
 				let mut dir = path.clone();
 				dir.pop();
