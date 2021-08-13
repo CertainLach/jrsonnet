@@ -1045,4 +1045,27 @@ pub mod tests {
 			.unwrap_err();
 		assert_eq!(error.error().to_string(), "assert failed: is number");
 	}
+
+	#[test]
+	fn test_ascii_upper_lower() {
+		assert_eval!(r#"std.assertEqual(std.asciiUpper("aBc😀"), "ABC😀")"#);
+		assert_eval!(r#"std.assertEqual(std.asciiLower("aBc😀"), "abc😀")"#);
+	}
+
+	#[test]
+	fn test_member() {
+		assert_eval!(r#"!std.member("", "")"#);
+		assert_eval!(r#"std.member("abc", "a")"#);
+		assert_eval!(r#"!std.member("abc", "d")"#);
+		assert_eval!(r#"!std.member([], "")"#);
+		assert_eval!(r#"std.member(["a", "b", "c"], "a")"#);
+		assert_eval!(r#"!std.member(["a", "b", "c"], "d")"#);
+	}
+
+	#[test]
+	fn test_count() {
+		assert_eval!(r#"std.assertEqual(std.count([], ""), 0)"#);
+		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "d"), 0)"#);
+		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "a"), 2)"#);
+	}
 }

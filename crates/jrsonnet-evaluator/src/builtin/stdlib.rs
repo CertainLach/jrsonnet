@@ -5,15 +5,6 @@ thread_local! {
 	/// To avoid parsing again when issued from the same thread
 	#[allow(unreachable_code)]
 	static PARSED_STDLIB: LocExpr = {
-		#[cfg(feature = "codegenerated-stdlib")]
-		{
-			#[allow(clippy::all)]
-			return {
-				use jrsonnet_parser::*;
-				include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
-			};
-		}
-
 		#[cfg(feature = "serialized-stdlib")]
 		{
 			// Should not panic, stdlib.bincode is generated in build.rs

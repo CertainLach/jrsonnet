@@ -8,12 +8,10 @@ jsonnet stdlib is embedded into evaluator, but there is different modes for this
 
 - `serialized-stdlib`
   - serializes standard library AST using serde
-  - slower than `codegenerated-stdlib` at runtime, but have no compilation speed penality
+  - used by default
 - none
   - leaves only stdlib source code in binary, processing them same way as user supplied data
   - slowest (as it involves parsing of standard library source code)
-
-Because of `codegenerated-stdlib` compilation slowdown, `serialized-stdlib` is used by default
 
 ### Benchmark
 
