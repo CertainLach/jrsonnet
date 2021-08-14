@@ -189,6 +189,6 @@ pub type Result<V> = std::result::Result<V, LocError>;
 #[macro_export]
 macro_rules! throw {
 	($e: expr) => {
-		return Err($e.into());
+		return Err($e.into())
 	};
 }
