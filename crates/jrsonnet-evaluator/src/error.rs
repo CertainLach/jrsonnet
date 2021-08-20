@@ -56,7 +56,7 @@ pub enum Error {
 	BindingParameterASecondTime(IStr),
 	#[error("too many args, function has {0}")]
 	TooManyArgsFunctionHas(usize),
-	#[error("founction argument is not passed: {0}")]
+	#[error("function argument is not passed: {0}")]
 	FunctionParameterNotBoundInCall(IStr),
 
 	#[error("external variable is not defined: {0}")]

@@ -7,6 +7,7 @@ use std::{
 };
 mod expr;
 pub use expr::*;
+pub use jrsonnet_interner::IStr;
 pub use peg;
 
 pub struct ParserSettings {
@@ -70,19 +71,29 @@ parser! {
 			}
 			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
 
-		pub rule arg(s: &ParserSettings) -> expr::Arg
-			= name:$(id()) _ "=" _ expr:expr(s) {expr::Arg(Some(name.into()), expr)}
-			/ expr:expr(s) {expr::Arg(None, expr)}
+		pub rule arg(s: &ParserSettings) -> (Option<IStr>, LocExpr)
+			= quiet! { name:(s:$(id()) _ "=" _ {s})? expr:expr(s) {(name.map(Into::into), expr)} }
+			/ expected!("<argument>")
+
 		pub rule args(s: &ParserSettings) -> expr::ArgsDesc
-			= args:arg(s) ** comma() comma()? {
+			= args:arg(s)**comma() comma()? {?
+				let unnamed_count = args.iter().take_while(|(n, _)| n.is_none()).count();
+				let mut unnamed = Vec::with_capacity(unnamed_count);
+				let mut named = Vec::with_capacity(args.len() - unnamed_count);
 				let mut named_started = false;
-				for arg in &args {
-					named_started = named_started || arg.0.is_some();
-					assert_eq!(named_started, arg.0.is_some(), "named args should be used after all positionals");
+				for (name, value) in args {
+					if let Some(name) = name {
+						named_started = true;
+						named.push((name, value));
+					} else {
+						if named_started {
+							return Err("<named argument>")
+						}
+						unnamed.push(value);
+					}
 				}
-				expr::ArgsDesc(args)
+				Ok(expr::ArgsDesc::new(unnamed, named))
 			}
-			/ { expr::ArgsDesc(Vec::new()) }
 
 		pub rule bind(s: &ParserSettings) -> expr::BindSpec
 			= name:$(id()) _ "=" _ expr:expr(s) {expr::BindSpec{name:name.into(), params: None, value: expr}}
@@ -493,7 +504,7 @@ pub mod tests {
 			el!(ArrComp(
 				el!(Apply(
 					el!(Index(el!(Var("std".into())), el!(Str("deepJoin".into())))),
-					ArgsDesc(vec![Arg(None, el!(Var("x".into())))]),
+					ArgsDesc::new(vec![el!(Var("x".into()))], vec![]),
 					false,
 				)),
 				vec![CompSpec::ForSpec(ForSpecData(

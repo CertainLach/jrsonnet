@@ -73,6 +73,9 @@ impl Context {
 			.cloned()
 			.ok_or(VariableIsNotDefined(name))?)
 	}
+	pub fn contains_binding(&self, name: IStr) -> bool {
+		self.0.bindings.contains_key(&name)
+	}
 	pub fn into_future(self, ctx: FutureWrapper<Self>) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
