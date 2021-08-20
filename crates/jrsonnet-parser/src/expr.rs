@@ -247,6 +247,7 @@ pub enum CompSpec {
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
 	pub key: LocExpr,
+	pub plus: bool,
 	pub value: LocExpr,
 	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,

@@ -431,6 +431,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 						builder
 							.member(n)
 							.with_location(obj.value.1.clone())
+							.with_add(obj.plus)
 							.bindable(Box::new(ObjCompBinding {
 								context: ctx,
 								value: obj.value.clone(),
