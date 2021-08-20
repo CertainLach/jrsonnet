@@ -29,6 +29,16 @@ impl LayeredHashMap {
 			.get(key)
 			.or_else(|| self.0.parent.as_ref().and_then(|p| p.get(key)))
 	}
+
+	pub fn contains_key(&self, key: &IStr) -> bool {
+		(self.0).current.contains_key(key)
+			|| self
+				.0
+				.parent
+				.as_ref()
+				.map(|p| p.contains_key(key))
+				.unwrap_or(false)
+	}
 }
 
 impl Clone for LayeredHashMap {

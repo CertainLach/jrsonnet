@@ -1,4 +1,7 @@
-use crate::{error::Error::*, evaluate, throw, Context, LazyVal, LazyValValue, Result, Val};
+use crate::{
+	error::Error::*, evaluate, evaluate_named, throw, Context, FutureWrapper, LazyVal,
+	LazyValValue, Result, Val,
+};
 use jrsonnet_gc::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
@@ -7,6 +10,18 @@ use std::{collections::HashMap, hash::BuildHasherDefault};
 
 const NO_DEFAULT_CONTEXT: &str =
 	"no default context set for call with defined default parameter value";
+
+#[derive(Trace)]
+#[trivially_drop]
+struct EvaluateLazyVal {
+	context: Context,
+	expr: LocExpr,
+}
+impl LazyValValue for EvaluateLazyVal {
+	fn get(self: Box<Self>) -> Result<Val> {
+		evaluate(self.context, &self.expr)
+	}
+}
 
 /// Creates correct [context](Context) for function body evaluation returning error on invalid call.
 ///
@@ -18,64 +33,119 @@ const NO_DEFAULT_CONTEXT: &str =
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_function_call(
 	ctx: Context,
-	body_ctx: Option<Context>,
+	body_ctx: Context,
 	params: &ParamsDesc,
 	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = HashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
-	let mut positioned_args = vec![None; params.0.len()];
-	for (id, arg) in args.iter().enumerate() {
-		let idx = if let Some(name) = &arg.0 {
-			params
-				.iter()
-				.position(|p| *p.0 == *name)
-				.ok_or_else(|| UnknownFunctionParameter(name.clone()))?
-		} else {
-			id
-		};
-
-		if idx >= params.len() {
-			throw!(TooManyArgsFunctionHas(params.len()));
-		}
-		if positioned_args[idx].is_some() {
-			throw!(BindingParameterASecondTime(params[idx].0.clone()));
-		}
-		positioned_args[idx] = Some(arg.1.clone());
+	let mut passed_args =
+		HashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
+	if args.unnamed.len() > params.len() {
+		throw!(TooManyArgsFunctionHas(params.len()))
 	}
-	// Fill defaults
-	for (id, p) in params.iter().enumerate() {
-		let (ctx, expr) = if let Some(arg) = &positioned_args[id] {
-			(ctx.clone(), arg)
-		} else if let Some(default) = &p.1 {
-			(body_ctx.clone().expect(NO_DEFAULT_CONTEXT), default)
-		} else {
-			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
-		};
-		let val = if tailstrict {
-			LazyVal::new_resolved(evaluate(ctx, expr)?)
-		} else {
+
+	let mut filled_args = 0;
+
+	for (id, arg) in args.unnamed.iter().enumerate() {
+		let name = params[id].0.clone();
+		passed_args.insert(
+			name,
+			if tailstrict {
+				LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+			} else {
+				LazyVal::new(Box::new(EvaluateLazyVal {
+					context: ctx.clone(),
+					expr: arg.clone(),
+				}))
+			},
+		);
+		filled_args += 1;
+	}
+
+	for (name, value) in args.named.iter() {
+		// FIXME: O(n) for arg existence check
+		if !params.iter().any(|p| &p.0 == name) {
+			throw!(UnknownFunctionParameter((name as &str).to_owned()));
+		}
+		if passed_args
+			.insert(
+				name.clone(),
+				if tailstrict {
+					LazyVal::new_resolved(evaluate(ctx.clone(), value)?)
+				} else {
+					LazyVal::new(Box::new(EvaluateLazyVal {
+						context: ctx.clone(),
+						expr: value.clone(),
+					}))
+				},
+			)
+			.is_some()
+		{
+			throw!(BindingParameterASecondTime(name.clone()));
+		}
+		filled_args += 1;
+	}
+
+	if filled_args < params.len() {
+		// Some args are unset, but maybe we have defaults for them
+		// Default values should be created in newly created context
+		let future_context = FutureWrapper::<Context>::new();
+		let mut defaults = HashMap::with_capacity_and_hasher(
+			params.len() - filled_args,
+			BuildHasherDefault::default(),
+		);
+
+		for param in params.iter().filter(|p| p.1.is_some()) {
+			if passed_args.contains_key(&param.0.clone()) {
+				continue;
+			}
 			#[derive(Trace)]
 			#[trivially_drop]
-			struct EvaluateLazyVal {
-				context: Context,
-				expr: LocExpr,
+			struct LazyNamedBinding {
+				future_context: FutureWrapper<Context>,
+				name: IStr,
+				value: LocExpr,
 			}
-			impl LazyValValue for EvaluateLazyVal {
+			impl LazyValValue for LazyNamedBinding {
 				fn get(self: Box<Self>) -> Result<Val> {
-					evaluate(self.context, &self.expr)
+					evaluate_named(self.future_context.unwrap(), &self.value, self.name)
 				}
 			}
+			LazyVal::new(Box::new(LazyNamedBinding {
+				future_context: future_context.clone(),
+				name: param.0.clone(),
+				value: param.1.clone().unwrap(),
+			}));
 
-			LazyVal::new(Box::new(EvaluateLazyVal {
-				context: ctx.clone(),
-				expr: expr.clone(),
-			}))
-		};
-		out.insert(p.0.clone(), val);
+			defaults.insert(
+				param.0.clone(),
+				LazyVal::new(Box::new(LazyNamedBinding {
+					future_context: future_context.clone(),
+					name: param.0.clone(),
+					value: param.1.clone().unwrap(),
+				})),
+			);
+			filled_args += 1;
+		}
+
+		// Some args still wasn't filled
+		if filled_args != params.len() {
+			for param in params.iter().skip(args.unnamed.len()) {
+				if !args.named.iter().any(|a| a.0 == param.0) {
+					throw!(FunctionParameterNotBoundInCall(param.0.clone()));
+				}
+			}
+			unreachable!();
+		}
+
+		Ok(body_ctx
+			.extend(passed_args, None, None, None)
+			.extend_bound(defaults)
+			.into_future(future_context))
+	} else {
+		let body_ctx = body_ctx.extend(passed_args, None, None, None);
+		Ok(body_ctx)
 	}
-
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
 pub fn parse_function_call_map(
@@ -176,21 +246,25 @@ macro_rules! parse_args {
 		use $crate::{error::Error::*, throw, evaluate, push_stack_frame, typed::CheckType};
 
 		let args = $args;
-		if args.len() > $total_args {
+		if args.unnamed.len() + args.named.len() > $total_args {
 			throw!(TooManyArgsFunctionHas($total_args));
 		}
 		$(
-			if args.len() <= $id {
+			if args.unnamed.len() + args.named.len() <= $id {
 				throw!(FunctionParameterNotBoundInCall(stringify!($name).into()));
 			}
-			let $name = &args[$id];
-			if $name.0.is_some() {
-				if $name.0.as_ref().unwrap() != stringify!($name) {
+			// Is named
+			let $name = if $id >= $args.unnamed.len() {
+				let named = &args.named[$id - $args.unnamed.len()];
+				if &named.0 != stringify!($name) {
 					throw!(IntrinsicArgumentReorderingIsNotSupportedYet);
 				}
-			}
+				&named.1
+			} else {
+				&$args.unnamed[$id]
+			};
 			let $name = push_stack_frame(None, || format!("evaluating argument"), || {
-				let value = evaluate($ctx.clone(), &$name.1)?;
+				let value = evaluate($ctx.clone(), &$name)?;
 				$ty.check(&value)?;
 				Ok(value)
 			})?;

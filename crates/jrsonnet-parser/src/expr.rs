@@ -194,18 +194,13 @@ impl Deref for ParamsDesc {
 #[cfg_attr(feature = "deserialize", derive(Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 #[trivially_drop]
-pub struct Arg(pub Option<String>, pub LocExpr);
-
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
-#[trivially_drop]
-pub struct ArgsDesc(pub Vec<Arg>);
-
-impl Deref for ArgsDesc {
-	type Target = Vec<Arg>;
-	fn deref(&self) -> &Self::Target {
-		&self.0
+pub struct ArgsDesc {
+	pub unnamed: Vec<LocExpr>,
+	pub named: Vec<(IStr, LocExpr)>,
+}
+impl ArgsDesc {
+	pub fn new(unnamed: Vec<LocExpr>, named: Vec<(IStr, LocExpr)>) -> Self {
+		Self { unnamed, named }
 	}
 }
 
@@ -247,6 +242,7 @@ pub enum CompSpec {
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
 	pub key: LocExpr,
+	pub plus: bool,
 	pub value: LocExpr,
 	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,

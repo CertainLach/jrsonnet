@@ -518,7 +518,7 @@ fn builtin_foldr(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc)
 	], {
 		let mut acc = init;
 		for i in arr.iter().rev() {
-			acc = func.evaluate_values(context.clone(), &[acc, i?])?;
+			acc = func.evaluate_values(context.clone(), &[i?, acc])?;
 		}
 		Ok(acc)
 	})

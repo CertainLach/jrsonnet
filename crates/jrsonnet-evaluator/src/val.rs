@@ -11,7 +11,7 @@ use crate::{
 };
 use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{el, Arg, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
+use jrsonnet_parser::{el, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
 use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -127,7 +127,7 @@ impl FuncVal {
 			Self::Normal(func) => {
 				let ctx = parse_function_call(
 					call_ctx,
-					Some(func.ctx.clone()),
+					func.ctx.clone(),
 					&func.params,
 					args,
 					tailstrict,
@@ -136,7 +136,8 @@ impl FuncVal {
 			}
 			Self::Intrinsic(name) => call_builtin(call_ctx, loc, name, args),
 			Self::NativeExt(_name, handler) => {
-				let args = parse_function_call(call_ctx, None, &handler.params, args, true)?;
+				let args =
+					parse_function_call(call_ctx, Context::new(), &handler.params, args, true)?;
 				let mut out_args = Vec::with_capacity(handler.params.len());
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
@@ -554,17 +555,17 @@ impl Val {
 						el!(Expr::Var("std".into())),
 						el!(Expr::Str("manifestYamlDoc".into()))
 					)),
-					ArgsDesc(vec![
-						Arg(None, el!(Expr::Var("__tmp__to_json__".into()))),
-						Arg(
-							None,
+					ArgsDesc::new(
+						vec![
+							el!(Expr::Var("__tmp__to_json__".into())),
 							el!(Expr::Literal(if padding != 0 {
 								LiteralType::True
 							} else {
 								LiteralType::False
-							}))
-						)
-					]),
+							})),
+						],
+						vec![]
+					),
 					false
 				)),
 			)?
