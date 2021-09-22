@@ -403,11 +403,3 @@ macro_rules! loc_expr {
 		)
 	};
 }
-
-/// Creates LocExpr without location info
-#[macro_export]
-macro_rules! loc_expr_todo {
-	($expr:expr) => {
-		LocExpr(Rc::new($expr), None)
-	};
-}
