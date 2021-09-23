@@ -17,12 +17,12 @@ pub struct ParserSettings {
 
 macro_rules! expr_bin {
 	($a:ident $op:ident $b:ident) => {
-		loc_expr_todo!(Expr::BinaryOp($a, $op, $b))
+		Expr::BinaryOp($a, $op, $b)
 	};
 }
 macro_rules! expr_un {
 	($op:ident $a:ident) => {
-		loc_expr_todo!(Expr::UnaryOp($op, $a))
+		Expr::UnaryOp($op, $a)
 	};
 }
 
@@ -55,9 +55,6 @@ parser! {
 
 		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
-		// Adds location data information to existing expression
-		rule l(s: &ParserSettings, x: rule<Expr>) -> LocExpr
-			= start:position!() v:x() end:position!() {loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end))}
 
 		pub rule param(s: &ParserSettings) -> expr::Param = name:$(id()) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name.into(), expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
@@ -166,45 +163,45 @@ parser! {
 			= keyword("for") _ id:$(id()) _ keyword("in") _ cond:expr(s) {ForSpecData(id.into(), cond)}
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
 			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
-		pub rule local_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }>)
-		pub rule string_expr(s: &ParserSettings) -> LocExpr
-			= l(s, <s:string() {Expr::Str(s.into())}>)
-		pub rule obj_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<"{" _ body:objinside(s) _ "}" {Expr::Obj(body)}>)
-		pub rule array_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<"[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}>)
-		pub rule array_comp_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<"[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {
+		pub rule local_expr(s: &ParserSettings) -> Expr
+			= keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }
+		pub rule string_expr(s: &ParserSettings) -> Expr
+			= s:string() {Expr::Str(s.into())}
+		pub rule obj_expr(s: &ParserSettings) -> Expr
+			= "{" _ body:objinside(s) _ "}" {Expr::Obj(body)}
+		pub rule array_expr(s: &ParserSettings) -> Expr
+			= "[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}
+		pub rule array_comp_expr(s: &ParserSettings) -> Expr
+			= "[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {
 				let mut specs = vec![CompSpec::ForSpec(forspec)];
 				specs.extend(others.unwrap_or_default());
 				Expr::ArrComp(expr, specs)
-			}>)
-		pub rule number_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<n:number() { expr::Expr::Num(n) }>)
-		pub rule var_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<n:$(id()) { expr::Expr::Var(n.into()) }>)
-		pub rule if_then_else_expr(s: &ParserSettings) -> LocExpr
-			= l(s,<cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
+			}
+		pub rule number_expr(s: &ParserSettings) -> Expr
+			= n:number() { expr::Expr::Num(n) }
+		pub rule var_expr(s: &ParserSettings) -> Expr
+			= n:$(id()) { expr::Expr::Var(n.into()) }
+		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
+			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
 				cond_then,
 				cond_else,
-			}}>)
+			}}
 
-		pub rule literal(s: &ParserSettings) -> LocExpr
-			= l(s,<v:(
+		pub rule literal(s: &ParserSettings) -> Expr
+			= v:(
 				keyword("null") {LiteralType::Null}
 				/ keyword("true") {LiteralType::True}
 				/ keyword("false") {LiteralType::False}
 				/ keyword("self") {LiteralType::This}
 				/ keyword("$") {LiteralType::Dollar}
 				/ keyword("super") {LiteralType::Super}
-			) {Expr::Literal(v)}>)
+			) {Expr::Literal(v)}
 
-		pub rule expr_basic(s: &ParserSettings) -> LocExpr
+		pub rule expr_basic(s: &ParserSettings) -> Expr
 			= literal(s)
 
-			/ quiet!{l(s,<"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}>)}
+			/ quiet!{"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}}
 
 			/ string_expr(s) / number_expr(s)
 			/ array_expr(s)
@@ -212,17 +209,17 @@ parser! {
 			/ array_expr(s)
 			/ array_comp_expr(s)
 
-			/ l(s,<keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}>)
-			/ l(s,<keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}>)
+			/ keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}
+			/ keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}
 
 			/ var_expr(s)
 			/ local_expr(s)
 			/ if_then_else_expr(s)
 
-			/ l(s,<keyword("function") _ "(" _ params:params(s) _ ")" _ expr:expr(s) {Expr::Function(params, expr)}>)
-			/ l(s,<assertion:assertion(s) _ ";" _ expr:expr(s) { Expr::AssertExpr(assertion, expr) }>)
+			/ keyword("function") _ "(" _ params:params(s) _ ")" _ expr:expr(s) {Expr::Function(params, expr)}
+			/ assertion:assertion(s) _ ";" _ expr:expr(s) { Expr::AssertExpr(assertion, expr) }
 
-			/ l(s,<keyword("error") _ expr:expr(s) { Expr::ErrorStmt(expr) }>)
+			/ keyword("error") _ expr:expr(s) { Expr::ErrorStmt(expr) }
 
 		rule slice_part(s: &ParserSettings) -> Option<LocExpr>
 			= e:(_ e:expr(s) _{e})? {e}
@@ -246,7 +243,9 @@ parser! {
 		use BinaryOpType::*;
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
-			= start:position!() a:precedence! {
+			= precedence! {
+				start:position!() v:@ end:position!() { loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end)) }
+				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
 				a:(@) _ binop(<"&&">) _ b:@ {expr_bin!(a And b)}
@@ -280,23 +279,15 @@ parser! {
 						unaryop(<"!">) _ b:@ {expr_un!(Not b)}
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
-				a:(@) _ "[" _ s:slice_desc(s) _ "]" {loc_expr_todo!(Expr::Slice(a, s))}
-				a:(@) _ "." _ s:$(id()) {loc_expr_todo!(Expr::Index(a, el!(Expr::Str(s.into()))))}
-				a:(@) _ "[" _ s:expr(s) _ "]" {loc_expr_todo!(Expr::Index(a, s))}
-				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {loc_expr_todo!(Expr::Apply(a, args, ts.is_some()))}
-				a:(@) _ "{" _ body:objinside(s) _ "}" {loc_expr_todo!(Expr::ObjExtend(a, body))}
+				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
+				a:(@) _ "." _ e:$(id()) {Expr::Index(a, el!(Expr::Str(e.into())))}
+				a:(@) _ "[" _ e:expr(s) _ "]" {Expr::Index(a, e)}
+				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
+				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
 				--
 				e:expr_basic(s) {e}
-				"(" _ e:expr(s) _ ")" {loc_expr_todo!(Expr::Parened(e))}
-			} end:position!() {
-				let LocExpr(e, _) = a;
-				LocExpr(e, if s.loc_data {
-					Some(ExprLocation(s.file_name.clone(), start, end))
-				} else {
-					None
-				})
+				"(" _ e:expr(s) _ ")" {Expr::Parened(e)}
 			}
-			/ e:expr_basic(s) {e}
 
 		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
 	}
@@ -331,6 +322,12 @@ pub mod tests {
 				},
 			)
 			.unwrap()
+		};
+	}
+
+	macro_rules! el_loc {
+		($expr:expr, $loc:expr$(,)?) => {
+			LocExpr(std::rc::Rc::new($expr), Some($loc))
 		};
 	}
 
@@ -576,6 +573,62 @@ pub mod tests {
 		parse!(jrsonnet_stdlib::STDLIB_STR);
 	}
 
+	#[test]
+	fn add_location_info_to_all_sub_expressions() {
+		use Expr::*;
+
+		let file_name: std::rc::Rc<std::path::Path> = PathBuf::from("/test.jsonnet").into();
+		let expr = parse(
+			"{} { local x = 1, x: x } + {}",
+			&ParserSettings {
+				loc_data: true,
+				file_name: file_name.clone(),
+			},
+		)
+		.unwrap();
+		assert_eq!(
+			expr,
+			el_loc!(
+				BinaryOp(
+					el_loc!(
+						ObjExtend(
+							el_loc!(
+								Obj(ObjBody::MemberList(vec![])),
+								ExprLocation(file_name.clone(), 0, 2)
+							),
+							ObjBody::MemberList(vec![
+								Member::BindStmt(BindSpec {
+									name: "x".into(),
+									params: None,
+									value: el_loc!(
+										Num(1.0),
+										ExprLocation(file_name.clone(), 15, 16)
+									)
+								}),
+								Member::Field(FieldMember {
+									name: FieldName::Fixed("x".into()),
+									plus: false,
+									params: None,
+									visibility: Visibility::Normal,
+									value: el_loc!(
+										Var("x".into()),
+										ExprLocation(file_name.clone(), 21, 22)
+									),
+								})
+							])
+						),
+						ExprLocation(file_name.clone(), 0, 24)
+					),
+					BinaryOpType::Add,
+					el_loc!(
+						Obj(ObjBody::MemberList(vec![])),
+						ExprLocation(file_name.clone(), 27, 29)
+					),
+				),
+				ExprLocation(file_name.clone(), 0, 29),
+			),
+		);
+	}
 	// From source code
 	/*
 	#[bench]
