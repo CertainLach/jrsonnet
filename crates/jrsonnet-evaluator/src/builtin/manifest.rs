@@ -217,23 +217,18 @@ fn manifest_yaml_ex_buf(
 					}
 					let item = item?;
 					buf.push('-');
-					if let Val::Arr(a) = &item {
-						if !a.is_empty() {
+					match &item {
+						Val::Arr(a) if !a.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
 							buf.push_str(options.padding);
-						} else {
-							buf.push(' ');
 						}
-					} else {
-						buf.push(' ');
+						_ => buf.push(' '),
 					}
-					let extra_padding = if let Val::Arr(a) = &item {
-						!a.is_empty()
-					} else if let Val::Obj(a) = &item {
-						!a.is_empty()
-					} else {
-						false
+					let extra_padding = match &item {
+						Val::Arr(a) => !a.is_empty(),
+						Val::Obj(o) => !o.is_empty(),
+						_ => false,
 					};
 					let prev_len = cur_padding.len();
 					if extra_padding {
@@ -255,36 +250,23 @@ fn manifest_yaml_ex_buf(
 					}
 					escape_string_json_buf(key, buf);
 					buf.push(':');
+					let prev_len = cur_padding.len();
 					let item = o.get(key.clone())?.expect("field exists");
-					if let Val::Arr(a) = &item {
-						if !a.is_empty() {
+					match &item {
+						Val::Arr(a) if !a.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
 							buf.push_str(options.arr_element_padding);
-						} else {
-							buf.push(' ');
+							cur_padding.push_str(options.arr_element_padding);
 						}
-					} else if let Val::Obj(o) = &item {
-						if !o.is_empty() {
+						Val::Obj(o) if !o.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
 							buf.push_str(options.padding);
-						} else {
-							buf.push(' ');
-						}
-					} else {
-						buf.push(' ');
-					}
-					let prev_len = cur_padding.len();
-					if let Val::Arr(a) = &item {
-						if !a.is_empty() {
-							cur_padding.push_str(options.arr_element_padding);
-						}
-					} else if let Val::Obj(a) = &item {
-						if !a.is_empty() {
 							cur_padding.push_str(options.padding);
 						}
-					};
+						_ => buf.push(' '),
+					}
 					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
 					cur_padding.truncate(prev_len);
 				}
