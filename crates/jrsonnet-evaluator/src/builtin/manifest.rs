@@ -159,14 +159,18 @@ fn escape_string_json_buf(s: &str, buf: &mut String) {
 
 pub struct ManifestYamlOptions<'s> {
 	/// Padding before fields, i.e
+	/// ```yaml
 	/// a:
 	///   b:
-	/// ^^ this
+	/// ## <- this
+	/// ```
 	pub padding: &'s str,
 	/// Padding before array elements in objects
+	/// ```yaml
 	/// a:
 	///   - 1
-	/// ^^ this
+	/// ## <- this
+	/// ```
 	pub arr_element_padding: &'s str,
 }
 
