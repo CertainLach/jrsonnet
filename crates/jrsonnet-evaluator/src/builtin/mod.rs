@@ -1,4 +1,5 @@
 use crate::{
+	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
@@ -121,6 +122,7 @@ thread_local! {
 			("join".into(), builtin_join),
 			("escapeStringJson".into(), builtin_escape_string_json),
 			("manifestJsonEx".into(), builtin_manifest_json_ex),
+			("manifestYamlDocImpl".into(), builtin_manifest_yaml_doc),
 			("reverse".into(), builtin_reverse),
 			("id".into(), builtin_id),
 			("strReplace".into(), builtin_str_replace),
@@ -768,6 +770,22 @@ fn builtin_manifest_json_ex(
 	})
 }
 
+fn builtin_manifest_yaml_doc(
+	context: Context,
+	_loc: Option<&ExprLocation>,
+	args: &ArgsDesc,
+) -> Result<Val> {
+	parse_args!(context, "manifestYamlDoc", args, 2, [
+		0, value: ty!(any);
+		1, indent_array_in_object: ty!(boolean) => Val::Bool;
+	], {
+		Ok(Val::Str(manifest_yaml_ex(&value, &ManifestYamlOptions {
+			padding: "  ",
+			pad_arrays: indent_array_in_object,
+		})?.into()))
+	})
+}
+
 fn builtin_reverse(context: Context, _loc: Option<&ExprLocation>, args: &ArgsDesc) -> Result<Val> {
 	parse_args!(context, "reverse", args, 1, [
 		0, value: ty!(array) => Val::Arr;
@@ -794,18 +812,7 @@ fn builtin_str_replace(
 		1, from: ty!(string) => Val::Str;
 		2, to: ty!(string) => Val::Str;
 	], {
-		let mut out = String::new();
-		let mut last_idx = 0;
-		while let Some(idx) = (&str[last_idx..]).find(&from as &str) {
-			out.push_str(&str[last_idx..last_idx+idx]);
-			out.push_str(&to);
-			last_idx += idx + from.len();
-		}
-		if last_idx == 0 {
-			return Ok(Val::Str(str))
-		}
-		out.push_str(&str[last_idx..]);
-		Ok(Val::Str(out.into()))
+		Ok(Val::Str(str.replace(&from as &str, &to as &str).into()))
 	})
 }
 

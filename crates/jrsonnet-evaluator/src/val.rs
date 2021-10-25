@@ -1,17 +1,20 @@
 use crate::{
 	builtin::{
 		call_builtin,
-		manifest::{manifest_json_ex, ManifestJsonOptions, ManifestType},
+		manifest::{
+			manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType,
+			ManifestYamlOptions,
+		},
 	},
 	error::{Error::*, LocError},
 	evaluate,
 	function::{parse_function_call, parse_function_call_map, place_args},
 	native::NativeCallback,
-	throw, with_state, Context, ObjValue, Result,
+	throw, Context, ObjValue, Result,
 };
 use jrsonnet_gc::{Gc, GcCell, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{el, ArgsDesc, Expr, ExprLocation, LiteralType, LocExpr, ParamsDesc};
+use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
 use std::{collections::HashMap, fmt::Debug, rc::Rc};
 
@@ -393,6 +396,12 @@ impl Val {
 	pub fn unwrap_num(self) -> Result<f64> {
 		Ok(matches_unwrap!(self, Self::Num(v), v))
 	}
+	pub fn unwrap_str(self) -> Result<IStr> {
+		Ok(matches_unwrap!(self, Self::Str(v), v))
+	}
+	pub fn unwrap_arr(self) -> Result<ArrValue> {
+		Ok(matches_unwrap!(self, Self::Arr(v), v))
+	}
 	pub fn unwrap_func(self) -> Result<Gc<FuncVal>> {
 		Ok(matches_unwrap!(self, Self::Func(v), v))
 	}
@@ -544,33 +553,14 @@ impl Val {
 	}
 
 	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
-		with_state(|s| {
-			let ctx = s
-				.create_default_context()
-				.with_var("__tmp__to_json__".into(), self.clone());
-			evaluate(
-				ctx,
-				&el!(Expr::Apply(
-					el!(Expr::Index(
-						el!(Expr::Var("std".into())),
-						el!(Expr::Str("manifestYamlDoc".into()))
-					)),
-					ArgsDesc::new(
-						vec![
-							el!(Expr::Var("__tmp__to_json__".into())),
-							el!(Expr::Literal(if padding != 0 {
-								LiteralType::True
-							} else {
-								LiteralType::False
-							})),
-						],
-						vec![]
-					),
-					false
-				)),
-			)?
-			.try_cast_str("to json")
-		})
+		manifest_yaml_ex(
+			self,
+			&ManifestYamlOptions {
+				padding: &" ".repeat(padding),
+				pad_arrays: true,
+			},
+		)
+		.map(|s| s.into())
 	}
 	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {

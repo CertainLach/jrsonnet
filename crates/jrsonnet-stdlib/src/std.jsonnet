@@ -374,88 +374,9 @@
 
   manifestJsonEx:: $intrinsic(manifestJsonEx),
 
-  manifestYamlDoc(value, indent_array_in_object=false)::
-    local aux(v, path, cindent) =
-      if v == true then
-        'true'
-      else if v == false then
-        'false'
-      else if v == null then
-        'null'
-      else if std.isNumber(v) then
-        '' + v
-      else if std.isString(v) then
-        local len = std.length(v);
-        if len == 0 then
-          '""'
-        else if v[len - 1] == '\n' then
-          local split = std.split(v, '\n');
-          std.join('\n' + cindent + '  ', ['|'] + split[0:std.length(split) - 1])
-        else
-          std.escapeStringJson(v)
-      else if std.isFunction(v) then
-        error 'Tried to manifest function at ' + path
-      else if std.isArray(v) then
-        if std.length(v) == 0 then
-          '[]'
-        else
-          local params(value) =
-            if std.isArray(value) && std.length(value) > 0 then {
-              // While we could avoid the new line, it yields YAML that is
-              // hard to read, e.g.:
-              // - - - 1
-              //     - 2
-              //   - - 3
-              //     - 4
-              new_indent: cindent + '  ',
-              space: '\n' + self.new_indent,
-            } else if std.isObject(value) && std.length(value) > 0 then {
-              new_indent: cindent + '  ',
-              // In this case we can start on the same line as the - because the indentation
-              // matches up then.  The converse is not true, because fields are not always
-              // 1 character long.
-              space: ' ',
-            } else {
-              // In this case, new_indent is only used in the case of multi-line strings.
-              new_indent: cindent,
-              space: ' ',
-            };
-          local range = std.range(0, std.length(v) - 1);
-          local parts = [
-            '-' + param.space + aux(v[i], path + [i], param.new_indent)
-            for i in range
-            for param in [params(v[i])]
-          ];
-          std.join('\n' + cindent, parts)
-      else if std.isObject(v) then
-        if std.length(v) == 0 then
-          '{}'
-        else
-          local params(value) =
-            if std.isArray(value) && std.length(value) > 0 then {
-              // Not indenting allows e.g.
-              // ports:
-              // - 80
-              // instead of
-              // ports:
-              //   - 80
-              new_indent: if indent_array_in_object then cindent + '  ' else cindent,
-              space: '\n' + self.new_indent,
-            } else if std.isObject(value) && std.length(value) > 0 then {
-              new_indent: cindent + '  ',
-              space: '\n' + self.new_indent,
-            } else {
-              // In this case, new_indent is only used in the case of multi-line strings.
-              new_indent: cindent,
-              space: ' ',
-            };
-          local lines = [
-            std.escapeStringJson(k) + ':' + param.space + aux(v[k], path + [k], param.new_indent)
-            for k in std.objectFields(v)
-            for param in [params(v[k])]
-          ];
-          std.join('\n' + cindent, lines);
-    aux(value, [], ''),
+  manifestYamlDocImpl:: $intrinsic(manifestYamlDocImpl),
+
+  manifestYamlDoc(value, indent_array_in_object=false):: std.manifestYamlDocImpl(value, indent_array_in_object),
 
   manifestYamlStream(value, indent_array_in_object=false, c_document_end=true)::
     if !std.isArray(value) then

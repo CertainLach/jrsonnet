@@ -105,6 +105,17 @@ impl ObjValue {
 		}))
 	}
 
+	pub fn is_empty(&self) -> bool {
+		if !self.0.this_entries.is_empty() {
+			return false;
+		}
+		self.0
+			.super_obj
+			.as_ref()
+			.map(|s| s.is_empty())
+			.unwrap_or(true)
+	}
+
 	/// Run callback for every field found in object
 	pub(crate) fn enum_fields(&self, handler: &mut impl FnMut(&IStr, &Visibility) -> bool) -> bool {
 		if let Some(s) = &self.0.super_obj {
