@@ -158,8 +158,16 @@ fn escape_string_json_buf(s: &str, buf: &mut String) {
 }
 
 pub struct ManifestYamlOptions<'s> {
+	/// Padding before fields, i.e
+	/// a:
+	///   b:
+	/// ^^ this
 	pub padding: &'s str,
-	pub pad_arrays: bool,
+	/// Padding before array elements in objects
+	/// a:
+	///   - 1
+	/// ^^ this
+	pub arr_element_padding: &'s str,
 }
 
 pub fn manifest_yaml_ex(val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
@@ -252,9 +260,7 @@ fn manifest_yaml_ex_buf(
 						if !a.is_empty() {
 							buf.push('\n');
 							buf.push_str(cur_padding);
-							if options.pad_arrays {
-								buf.push_str(options.padding);
-							}
+							buf.push_str(options.arr_element_padding);
 						} else {
 							buf.push(' ');
 						}
@@ -271,8 +277,8 @@ fn manifest_yaml_ex_buf(
 					}
 					let prev_len = cur_padding.len();
 					if let Val::Arr(a) = &item {
-						if !a.is_empty() && options.pad_arrays {
-							cur_padding.push_str(options.padding);
+						if !a.is_empty() {
+							cur_padding.push_str(options.arr_element_padding);
 						}
 					} else if let Val::Obj(a) = &item {
 						if !a.is_empty() {

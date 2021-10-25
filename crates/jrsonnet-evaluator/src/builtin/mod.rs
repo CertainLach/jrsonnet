@@ -781,7 +781,7 @@ fn builtin_manifest_yaml_doc(
 	], {
 		Ok(Val::Str(manifest_yaml_ex(&value, &ManifestYamlOptions {
 			padding: "  ",
-			pad_arrays: indent_array_in_object,
+			arr_element_padding: if indent_array_in_object { "  " } else { "" },
 		})?.into()))
 	})
 }

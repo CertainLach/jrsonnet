@@ -553,11 +553,12 @@ impl Val {
 	}
 
 	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
+		let padding = &" ".repeat(padding);
 		manifest_yaml_ex(
 			self,
 			&ManifestYamlOptions {
-				padding: &" ".repeat(padding),
-				pad_arrays: true,
+				padding,
+				arr_element_padding: padding,
 			},
 		)
 		.map(|s| s.into())
