@@ -38,9 +38,9 @@ pub struct ManifestOpts {
 	#[clap(long, short = 'y')]
 	yaml_stream: bool,
 	/// Number of spaces to pad output manifest with.
-	/// `0` for hard tabs, `-1` for single line output
-	#[clap(long, default_value = "3")]
-	line_padding: usize,
+	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml]
+	#[clap(long)]
+	line_padding: Option<usize>,
 }
 impl ConfigureState for ManifestOpts {
 	fn configure(&self, state: &EvaluationState) -> Result<()> {
@@ -50,10 +50,10 @@ impl ConfigureState for ManifestOpts {
 			match self.format {
 				ManifestFormatName::String => state.set_manifest_format(ManifestFormat::String),
 				ManifestFormatName::Json => {
-					state.set_manifest_format(ManifestFormat::Json(self.line_padding))
+					state.set_manifest_format(ManifestFormat::Json(self.line_padding.unwrap_or(3)))
 				}
 				ManifestFormatName::Yaml => {
-					state.set_manifest_format(ManifestFormat::Yaml(self.line_padding))
+					state.set_manifest_format(ManifestFormat::Yaml(self.line_padding.unwrap_or(2)))
 				}
 			}
 		}

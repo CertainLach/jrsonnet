@@ -156,3 +156,127 @@ fn escape_string_json_buf(s: &str, buf: &mut String) {
 	}
 	buf.push('"');
 }
+
+pub struct ManifestYamlOptions<'s> {
+	/// Padding before fields, i.e
+	/// ```yaml
+	/// a:
+	///   b:
+	/// ## <- this
+	/// ```
+	pub padding: &'s str,
+	/// Padding before array elements in objects
+	/// ```yaml
+	/// a:
+	///   - 1
+	/// ## <- this
+	/// ```
+	pub arr_element_padding: &'s str,
+}
+
+pub fn manifest_yaml_ex(val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
+	let mut out = String::new();
+	manifest_yaml_ex_buf(val, &mut out, &mut String::new(), options)?;
+	Ok(out)
+}
+fn manifest_yaml_ex_buf(
+	val: &Val,
+	buf: &mut String,
+	cur_padding: &mut String,
+	options: &ManifestYamlOptions<'_>,
+) -> Result<()> {
+	use std::fmt::Write;
+	match val {
+		Val::Bool(v) => {
+			if *v {
+				buf.push_str("true")
+			} else {
+				buf.push_str("false")
+			}
+		}
+		Val::Null => buf.push_str("null"),
+		Val::Str(s) => {
+			if s.is_empty() {
+				buf.push_str("\"\"");
+			} else if let Some(s) = s.strip_suffix('\n') {
+				buf.push('|');
+				for line in s.split('\n') {
+					buf.push('\n');
+					buf.push_str(options.padding);
+					buf.push_str(line);
+				}
+			} else {
+				escape_string_json_buf(s, buf)
+			}
+		}
+		Val::Num(n) => write!(buf, "{}", *n).unwrap(),
+		Val::Arr(a) => {
+			if a.is_empty() {
+				buf.push_str("[]");
+			} else {
+				for (i, item) in a.iter().enumerate() {
+					if i != 0 {
+						buf.push('\n');
+						buf.push_str(cur_padding);
+					}
+					let item = item?;
+					buf.push('-');
+					match &item {
+						Val::Arr(a) if !a.is_empty() => {
+							buf.push('\n');
+							buf.push_str(cur_padding);
+							buf.push_str(options.padding);
+						}
+						_ => buf.push(' '),
+					}
+					let extra_padding = match &item {
+						Val::Arr(a) => !a.is_empty(),
+						Val::Obj(o) => !o.is_empty(),
+						_ => false,
+					};
+					let prev_len = cur_padding.len();
+					if extra_padding {
+						cur_padding.push_str(options.padding);
+					}
+					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
+					cur_padding.truncate(prev_len);
+				}
+			}
+		}
+		Val::Obj(o) => {
+			if o.is_empty() {
+				buf.push_str("{}");
+			} else {
+				for (i, key) in o.fields().iter().enumerate() {
+					if i != 0 {
+						buf.push('\n');
+						buf.push_str(cur_padding);
+					}
+					escape_string_json_buf(key, buf);
+					buf.push(':');
+					let prev_len = cur_padding.len();
+					let item = o.get(key.clone())?.expect("field exists");
+					match &item {
+						Val::Arr(a) if !a.is_empty() => {
+							buf.push('\n');
+							buf.push_str(cur_padding);
+							buf.push_str(options.arr_element_padding);
+							cur_padding.push_str(options.arr_element_padding);
+						}
+						Val::Obj(o) if !o.is_empty() => {
+							buf.push('\n');
+							buf.push_str(cur_padding);
+							buf.push_str(options.padding);
+							cur_padding.push_str(options.padding);
+						}
+						_ => buf.push(' '),
+					}
+					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
+					cur_padding.truncate(prev_len);
+				}
+			}
+		}
+		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+	}
+	Ok(())
+}
