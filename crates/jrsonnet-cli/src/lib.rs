@@ -51,7 +51,7 @@ pub struct MiscOpts {
 	/// Any not found `imported` file will be searched in these.
 	/// This can also be specified via `JSONNET_PATH` variable,
 	/// which should contain a colon-separated (semicolon-separated on Windows) list of directories.
-	#[clap(long, short = 'J')]
+	#[clap(long, short = 'J', multiple_occurrences = true)]
 	jpath: Vec<PathBuf>,
 }
 impl ConfigureState for MiscOpts {
