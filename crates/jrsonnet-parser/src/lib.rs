@@ -30,11 +30,14 @@ parser! {
 	grammar jsonnet_parser() for str {
 		use peg::ParseLiteral;
 
+		rule eof() = quiet!{![_]} / expected!("<eof>")
+		rule eol() = "\n" / eof()
+
 		/// Standard C-like comments
 		rule comment()
-			= "//" (!['\n'][_])* "\n"
+			= "//" (!eol()[_])* eol()
 			/ "/*" ("\\*/" / "\\\\" / (!("*/")[_]))* "*/"
-			/ "#" (!['\n'][_])* "\n"
+			/ "#" (!eol()[_])* eol()
 
 		rule single_whitespace() = quiet!{([' ' | '\r' | '\n' | '\t'] / comment())} / expected!("<whitespace>")
 		rule _() = single_whitespace()*
@@ -559,6 +562,15 @@ pub mod tests {
 	fn array_test_error() {
 		parse!("[a for a in b if c for e in f]");
 		//                    ^^^^ failed code
+	}
+
+	#[test]
+	fn missing_newline_between_comment_and_eof() {
+		parse!(
+			"{a:1}
+
+			//+213"
+		);
 	}
 
 	#[test]
