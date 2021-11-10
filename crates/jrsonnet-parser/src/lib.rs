@@ -62,7 +62,7 @@ parser! {
 				let mut defaults_started = false;
 				for param in &params {
 					defaults_started = defaults_started || param.1.is_some();
-					assert_eq!(defaults_started, param.1.is_some(), "defauld parameters should be used after all positionals");
+					assert_eq!(defaults_started, param.1.is_some(), "defauld parameters should be used after all positionals. Misplaced default parameter: {:?}", param.0);
 				}
 				expr::ParamsDesc(Rc::new(params))
 			}
