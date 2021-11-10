@@ -10,7 +10,7 @@ pub use trace::*;
 
 use clap::Clap;
 use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
-use std::path::PathBuf;
+use std::{env, path::PathBuf};
 
 pub trait ConfigureState {
 	fn configure(&self, state: &EvaluationState) -> Result<()>;
@@ -47,7 +47,7 @@ pub struct MiscOpts {
 	#[clap(long, short = 's', default_value = "200")]
 	max_stack: usize,
 
-	/// Library search dirs.
+	/// Library search dirs. (right-most wins)
 	/// Any not found `imported` file will be searched in these.
 	/// This can also be specified via `JSONNET_PATH` variable,
 	/// which should contain a colon-separated (semicolon-separated on Windows) list of directories.
@@ -60,9 +60,13 @@ impl ConfigureState for MiscOpts {
 			state.with_stdlib();
 		}
 
-		state.set_import_resolver(Box::new(FileImportResolver {
-			library_paths: self.jpath.clone(),
-		}));
+		let mut library_paths = self.jpath.clone();
+		library_paths.reverse();
+		if let Some(path) = env::var_os("JSONNET_PATH") {
+			library_paths.extend(env::split_paths(path.as_os_str()));
+		}
+
+		state.set_import_resolver(Box::new(FileImportResolver { library_paths }));
 
 		state.set_max_stack(self.max_stack);
 		Ok(())
