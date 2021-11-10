@@ -58,14 +58,7 @@ parser! {
 
 		pub rule param(s: &ParserSettings) -> expr::Param = name:$(id()) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name.into(), expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
-			= params:param(s) ** comma() comma()? {
-				let mut defaults_started = false;
-				for param in &params {
-					defaults_started = defaults_started || param.1.is_some();
-					assert_eq!(defaults_started, param.1.is_some(), "defauld parameters should be used after all positionals. Misplaced default parameter: {:?}", param.0);
-				}
-				expr::ParamsDesc(Rc::new(params))
-			}
+			= params:param(s) ** comma() comma()? { expr::ParamsDesc(Rc::new(params)) }
 			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
 
 		pub rule arg(s: &ParserSettings) -> (Option<IStr>, LocExpr)
@@ -566,6 +559,11 @@ pub mod tests {
 	fn array_test_error() {
 		parse!("[a for a in b if c for e in f]");
 		//                    ^^^^ failed code
+	}
+
+	#[test]
+	fn default_param_before_nondefault() {
+		parse!("local x(foo = 'foo', bar) = null; null");
 	}
 
 	#[test]
