@@ -3,8 +3,8 @@ use crate::{
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
-	parse_args, primitive_equals, push, throw, with_state, ArrValue, Context, EvaluationState,
-	FuncVal, IndexableVal, LazyVal, Val,
+	parse_args, primitive_equals, push_frame, throw, with_state, ArrValue, Context,
+	EvaluationState, FuncVal, IndexableVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
 use jrsonnet_gc::Gc;
@@ -23,7 +23,7 @@ pub mod manifest;
 pub mod sort;
 
 pub fn std_format(str: IStr, vals: Val) -> Result<Val> {
-	push(
+	push_frame(
 		Some(&ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0)),
 		|| format!("std.format of {}", str),
 		|| {

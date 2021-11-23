@@ -40,7 +40,7 @@ use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 };
-use trace::{offset_to_location, CodeLocation, CompactFormat, TraceFormat};
+use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
 
 pub trait Bindable: Trace {
@@ -109,6 +109,10 @@ impl Default for EvaluationSettings {
 struct EvaluationData {
 	/// Used for stack overflow detection, stacktrace is populated on unwind
 	stack_depth: usize,
+	/// Updated every time stack entry is popt
+	stack_generation: usize,
+
+	breakpoints: Breakpoints,
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
 	files: HashMap<Rc<Path>, FileData>,
 	str_files: HashMap<Rc<Path>, IStr>,
@@ -119,6 +123,38 @@ pub struct FileData {
 	parsed: LocExpr,
 	evaluated: Option<Val>,
 }
+
+pub struct Breakpoint {
+	loc: ExprLocation,
+	collected: RefCell<HashMap<usize, (usize, Vec<Result<Val>>)>>,
+}
+#[derive(Default)]
+struct Breakpoints(Vec<Rc<Breakpoint>>);
+impl Breakpoints {
+	fn insert(
+		&self,
+		stack_depth: usize,
+		stack_generation: usize,
+		loc: &ExprLocation,
+		result: Result<Val>,
+	) -> Result<Val> {
+		if self.0.is_empty() {
+			return result;
+		}
+		for item in self.0.iter() {
+			if item.loc.belongs_to(loc) {
+				let mut collected = item.collected.borrow_mut();
+				let (depth, vals) = collected.entry(stack_generation).or_default();
+				if stack_depth > *depth {
+					vals.clear();
+				}
+				vals.push(result.clone());
+			}
+		}
+		result
+	}
+}
+
 #[derive(Default)]
 pub struct EvaluationStateInternals {
 	/// Internal state
@@ -135,7 +171,7 @@ thread_local! {
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
-pub(crate) fn push<T>(
+pub(crate) fn push_frame<T>(
 	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
@@ -143,12 +179,12 @@ pub(crate) fn push<T>(
 	with_state(|s| s.push(e, frame_desc, f))
 }
 
-pub fn push_stack_frame<T>(
+pub(crate) fn push_val_frame(
 	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
-	f: impl FnOnce() -> Result<T>,
-) -> Result<T> {
-	push(e, frame_desc, f)
+	f: impl FnOnce() -> Result<Val>,
+) -> Result<Val> {
+	with_state(|s| s.push(e, frame_desc, f))
 }
 
 /// Maintains stack trace and import resolution
@@ -178,6 +214,15 @@ impl EvaluationState {
 		Ok(())
 	}
 
+	pub fn reset_evaluation_state(&self, name: &Path) {
+		self.data_mut()
+			.files
+			.get_mut(name)
+			.unwrap()
+			.evaluated
+			.take();
+	}
+
 	/// Adds file by source code and parsed expr
 	pub fn add_parsed_file(
 		&self,
@@ -203,8 +248,15 @@ impl EvaluationState {
 	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
 		offset_to_location(&self.get_source(file).unwrap(), locs)
 	}
-
-	pub(crate) fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
+	pub fn map_from_source_location(
+		&self,
+		file: &Path,
+		line: usize,
+		column: usize,
+	) -> Option<usize> {
+		location_to_offset(&self.get_source(file).unwrap(), line, column)
+	}
+	pub fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
 		{
 			let data = self.data();
@@ -297,7 +349,54 @@ impl EvaluationState {
 			}
 		}
 		let result = f();
-		self.data_mut().stack_depth -= 1;
+		{
+			let mut data = self.data_mut();
+			data.stack_depth -= 1;
+			data.stack_generation += 1;
+			// if let Some(e) = e {
+			// 	result =
+			// 		data.breakpoints
+			// 			.insert(data.stack_depth, data.stack_generation, &e, result)
+			// }
+		}
+		if let Err(mut err) = result {
+			err.trace_mut().0.push(StackTraceElement {
+				location: e.cloned(),
+				desc: frame_desc(),
+			});
+			return Err(err);
+		}
+		result
+	}
+	/// Executes code creating a new stack frame
+	pub fn push_val(
+		&self,
+		e: Option<&ExprLocation>,
+		frame_desc: impl FnOnce() -> String,
+		f: impl FnOnce() -> Result<Val>,
+	) -> Result<Val> {
+		{
+			let mut data = self.data_mut();
+			let stack_depth = &mut data.stack_depth;
+			if *stack_depth > self.max_stack() {
+				// Error creation uses data, so i drop guard here
+				drop(data);
+				throw!(StackOverflow);
+			} else {
+				*stack_depth += 1;
+			}
+		}
+		let mut result = f();
+		{
+			let mut data = self.data_mut();
+			data.stack_depth -= 1;
+			data.stack_generation += 1;
+			if let Some(e) = e {
+				result =
+					data.breakpoints
+						.insert(data.stack_depth, data.stack_generation, &e, result)
+			}
+		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
 				location: e.cloned(),
@@ -321,6 +420,25 @@ impl EvaluationState {
 			}
 			result
 		})
+	}
+	pub fn run_in_state_with_breakpoint(
+		&self,
+		bp: Rc<Breakpoint>,
+		f: impl FnOnce() -> Result<()>,
+	) -> Result<()> {
+		{
+			let mut data = self.data_mut();
+			data.breakpoints.0.push(bp);
+		}
+
+		let result = self.run_in_state(f);
+
+		{
+			let mut data = self.data_mut();
+			data.breakpoints.0.pop();
+		}
+
+		result
 	}
 
 	pub fn stringify_err(&self, e: &LocError) -> String {
@@ -346,7 +464,7 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => push(
+				Val::Func(func) => push_frame(
 					None,
 					|| "during TLA call".to_owned(),
 					|| {
@@ -514,7 +632,7 @@ pub mod tests {
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
-						Ok(())
+						Ok(Val::Null)
 					},
 				)
 				.unwrap();

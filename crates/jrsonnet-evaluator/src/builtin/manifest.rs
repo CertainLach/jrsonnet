@@ -1,5 +1,6 @@
 use crate::error::Error::*;
 use crate::error::Result;
+use crate::push_frame;
 use crate::{throw, Val};
 
 #[derive(PartialEq, Clone, Copy)]
@@ -102,12 +103,13 @@ fn manifest_json_ex_buf(
 					buf.push_str(cur_padding);
 					escape_string_json_buf(&field, buf);
 					buf.push_str(": ");
-					crate::push(
+					push_frame(
 						None,
 						|| format!("field <{}> manifestification", field.clone()),
 						|| {
 							let value = obj.get(field.clone())?.unwrap();
-							manifest_json_ex_buf(&value, buf, cur_padding, options)
+							manifest_json_ex_buf(&value, buf, cur_padding, options)?;
+							Ok(Val::Null)
 						},
 					)?;
 				}

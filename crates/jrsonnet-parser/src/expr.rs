@@ -356,6 +356,11 @@ pub enum Expr {
 #[derive(Clone, PartialEq, Trace)]
 #[trivially_drop]
 pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
+impl ExprLocation {
+	pub fn belongs_to(&self, other: &ExprLocation) -> bool {
+		other.0 == self.0 && other.1 <= self.1 && other.2 >= self.2
+	}
+}
 
 impl Debug for ExprLocation {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

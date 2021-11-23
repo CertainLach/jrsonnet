@@ -243,7 +243,7 @@ macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
 		$($id: expr, $name: ident: $ty: expr $(=>$match: path)?);+ $(;)?
 	], $handler:block) => {{
-		use $crate::{error::Error::*, throw, evaluate, push_stack_frame, typed::CheckType};
+		use $crate::{error::Error::*, throw, evaluate, push_frame, typed::CheckType};
 
 		let args = $args;
 		if args.unnamed.len() + args.named.len() > $total_args {
@@ -263,7 +263,7 @@ macro_rules! parse_args {
 			} else {
 				&$args.unnamed[$id]
 			};
-			let $name = push_stack_frame(None, || format!("evaluating argument"), || {
+			let $name = push_frame(None, || format!("evaluating argument"), || {
 				let value = evaluate($ctx.clone(), &$name)?;
 				$ty.check(&value)?;
 				Ok(value)

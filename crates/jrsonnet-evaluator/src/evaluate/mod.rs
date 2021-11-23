@@ -2,7 +2,7 @@ use crate::{
 	builtin::std_slice,
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
-	push, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
+	push_frame, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
 	FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder, ObjectAssertion,
 	Result, Val,
 };
@@ -464,7 +464,7 @@ pub fn evaluate_apply(
 			if tailstrict {
 				body()?
 			} else {
-				push(loc, || format!("function <{}> call", f.name()), body)?
+				push_frame(loc, || format!("function <{}> call", f.name()), body)?
 			}
 		}
 		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type())),
@@ -474,7 +474,7 @@ pub fn evaluate_apply(
 pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
-	let assertion_result = push(
+	let assertion_result = push_frame(
 		value.1.as_ref(),
 		|| "assertion condition".to_owned(),
 		|| {
@@ -483,7 +483,7 @@ pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 		},
 	)?;
 	if !assertion_result {
-		push(
+		push_frame(
 			value.1.as_ref(),
 			|| "assertion failure".to_owned(),
 			|| {
@@ -510,6 +510,7 @@ pub fn evaluate_named(context: Context, lexpr: &LocExpr, name: IStr) -> Result<V
 pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
+	// let bp = with_state(|s| s.0.stop_at.borrow().clone());
 	Ok(match &**expr {
 		Literal(LiteralType::This) => {
 			Val::Obj(context.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
@@ -532,7 +533,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
-		Var(name) => push(
+		Var(name) => push_frame(
 			loc.as_ref(),
 			|| format!("variable <{}>", name),
 			|| context.binding(name.clone())?.evaluate(),
@@ -541,7 +542,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			match (evaluate(context.clone(), value)?, evaluate(context, index)?) {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
-					push(
+					push_frame(
 						loc.as_ref(),
 						|| format!("field <{}> access", sn),
 						|| {
@@ -652,7 +653,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate_assert(context.clone(), assert)?;
 			evaluate(context, returned)?
 		}
-		ErrorStmt(e) => push(
+		ErrorStmt(e) => push_frame(
 			loc.as_ref(),
 			|| "error statement".to_owned(),
 			|| {
@@ -666,7 +667,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if push(
+			if push_frame(
 				loc.as_ref(),
 				|| "if condition".to_owned(),
 				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
@@ -708,7 +709,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				.0;
 			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
-			push(
+			push_frame(
 				loc.as_ref(),
 				|| format!("import {:?}", path),
 				|| with_state(|s| s.import_file(&import_location, path)),

@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 use crate::{
 	error::{Error, LocError, Result},
-	push, Val,
+	push_frame, Val,
 };
 use jrsonnet_gc::Trace;
 use jrsonnet_parser::ExprLocation;
@@ -103,7 +103,7 @@ fn push_type(
 	path: impl Fn() -> ValuePathItem,
 	item: impl Fn() -> Result<()>,
 ) -> Result<()> {
-	push(location, error_reason, || match item() {
+	push_frame(location, error_reason, || match item() {
 		Ok(_) => Ok(()),
 		Err(mut e) => {
 			if let Error::TypeError(e) = &mut e.error_mut() {

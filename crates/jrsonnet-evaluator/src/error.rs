@@ -1,7 +1,4 @@
-use crate::{
-	builtin::{format::FormatError, sort::SortError},
-	typed::TypeLocError,
-};
+use crate::{Val, builtin::{format::FormatError, sort::SortError}, typed::TypeLocError};
 use jrsonnet_gc::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};

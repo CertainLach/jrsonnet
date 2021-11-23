@@ -9,6 +9,18 @@ pub struct CodeLocation {
 	pub line_end_offset: usize,
 }
 
+pub fn location_to_offset(mut file: &str, mut line: usize, column: usize) -> Option<usize> {
+	let mut offset = 0;
+	while line > 1 {
+		let pos = file.find('\n')?;
+		offset += pos + 1;
+		file = &file[pos + 1..];
+		line -= 1;
+	}
+	offset += column - 1;
+	Some(offset)
+}
+
 pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 	if offsets.is_empty() {
 		return vec![];
