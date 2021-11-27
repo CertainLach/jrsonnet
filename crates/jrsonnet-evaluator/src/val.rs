@@ -556,6 +556,7 @@ impl Val {
 			&ManifestYamlOptions {
 				padding,
 				arr_element_padding: padding,
+				quote_keys: false,
 			},
 		)
 		.map(|s| s.into())

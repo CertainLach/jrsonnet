@@ -173,6 +173,62 @@ pub struct ManifestYamlOptions<'s> {
 	/// ## <- this
 	/// ```
 	pub arr_element_padding: &'s str,
+	/// Should yaml keys appear unescaped, when possible
+	/// ```yaml
+	/// "safe_key": 1
+	/// # vs
+	/// safe_key: 1
+	/// ```
+	pub quote_keys: bool,
+}
+
+/// From https://github.com/chyh1990/yaml-rust/blob/da52a68615f2ecdd6b7e4567019f280c433c1521/src/emitter.rs#L289
+/// With added date check
+fn yaml_needs_quotes(string: &str) -> bool {
+	fn need_quotes_spaces(string: &str) -> bool {
+		string.starts_with(' ') || string.ends_with(' ')
+	}
+
+	string == ""
+		|| need_quotes_spaces(string)
+		|| string.starts_with(|character: char| match character {
+			'&' | '*' | '?' | '|' | '-' | '<' | '>' | '=' | '!' | '%' | '@' => true,
+			_ => false,
+		}) || string.contains(|character: char| match character {
+		':'
+		| '{'
+		| '}'
+		| '['
+		| ']'
+		| ','
+		| '#'
+		| '`'
+		| '\"'
+		| '\''
+		| '\\'
+		| '\0'..='\x06'
+		| '\t'
+		| '\n'
+		| '\r'
+		| '\x0e'..='\x1a'
+		| '\x1c'..='\x1f' => true,
+		_ => false,
+	}) || [
+		// http://yaml.org/type/bool.html
+		// Note: 'y', 'Y', 'n', 'N', is not quoted deliberately, as in libyaml. PyYAML also parse
+		// them as string, not booleans, although it is violating the YAML 1.1 specification.
+		// See https://github.com/dtolnay/serde-yaml/pull/83#discussion_r152628088.
+		"yes", "Yes", "YES", "no", "No", "NO", "True", "TRUE", "true", "False", "FALSE", "false",
+		"on", "On", "ON", "off", "Off", "OFF", // http://yaml.org/type/null.html
+		"null", "Null", "NULL", "~",
+	]
+	.contains(&string)
+		|| (string.chars().all(|c| matches!(c, '0'..='9' | '-'))
+			&& string.chars().filter(|c| *c == '-').count() == 2)
+		|| string.starts_with('.')
+		|| string.starts_with("0x")
+		|| string.parse::<i64>().is_ok()
+		|| string.parse::<f64>().is_ok()
 }
 
 pub fn manifest_yaml_ex(val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
@@ -206,8 +262,10 @@ fn manifest_yaml_ex_buf(
 					buf.push_str(options.padding);
 					buf.push_str(line);
 				}
+			} else if !options.quote_keys && !yaml_needs_quotes(&s) {
+				buf.push_str(&s);
 			} else {
-				escape_string_json_buf(s, buf)
+				escape_string_json_buf(s, buf);
 			}
 		}
 		Val::Num(n) => write!(buf, "{}", *n).unwrap(),
@@ -253,7 +311,11 @@ fn manifest_yaml_ex_buf(
 						buf.push('\n');
 						buf.push_str(cur_padding);
 					}
-					escape_string_json_buf(key, buf);
+					if !options.quote_keys && !yaml_needs_quotes(&key) {
+						buf.push_str(&key);
+					} else {
+						escape_string_json_buf(key, buf);
+					}
 					buf.push(':');
 					let prev_len = cur_padding.len();
 					let item = o.get(key.clone())?.expect("field exists");

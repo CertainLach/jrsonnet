@@ -753,13 +753,15 @@ fn builtin_manifest_yaml_doc(
 	_loc: &ExprLocation,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	parse_args!(context, "manifestYamlDoc", args, 2, [
+	parse_args!(context, "manifestYamlDoc", args, 3, [
 		0, value: ty!(any);
 		1, indent_array_in_object: ty!(boolean) => Val::Bool;
+		2, quote_keys: ty!(boolean) => Val::Bool;
 	], {
 		Ok(Val::Str(manifest_yaml_ex(&value, &ManifestYamlOptions {
 			padding: "  ",
 			arr_element_padding: if indent_array_in_object { "  " } else { "" },
+			quote_keys,
 		})?.into()))
 	})
 }

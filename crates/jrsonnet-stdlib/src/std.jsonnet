@@ -377,7 +377,7 @@
 
   manifestYamlDocImpl:: $intrinsic(manifestYamlDocImpl),
 
-  manifestYamlDoc(value, indent_array_in_object=false):: std.manifestYamlDocImpl(value, indent_array_in_object),
+  manifestYamlDoc(value, indent_array_in_object=false, quote_keys=true):: std.manifestYamlDocImpl(value, indent_array_in_object, quote_keys),
 
   manifestYamlStream(value, indent_array_in_object=false, c_document_end=true)::
     if !std.isArray(value) then
