@@ -125,6 +125,7 @@ pub struct FileData {
 	evaluated: Option<Val>,
 }
 
+#[allow(clippy::type_complexity)]
 pub struct Breakpoint {
 	loc: ExprLocation,
 	collected: RefCell<HashMap<usize, (usize, Vec<Result<Val>>)>>,
@@ -254,7 +255,7 @@ impl EvaluationState {
 		ro_map.get(name).map(|value| value.source_code.clone())
 	}
 	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
-		offset_to_location(&self.get_source(file).unwrap_or("".into()), locs)
+		offset_to_location(&self.get_source(file).unwrap_or_else(|| "".into()), locs)
 	}
 	pub fn map_from_source_location(
 		&self,
@@ -396,7 +397,7 @@ impl EvaluationState {
 			data.stack_generation += 1;
 			result = data
 				.breakpoints
-				.insert(data.stack_depth, data.stack_generation, &e, result);
+				.insert(data.stack_depth, data.stack_generation, e, result);
 		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
@@ -486,7 +487,7 @@ impl EvaluationState {
 	pub fn manifest(&self, val: Val) -> Result<IStr> {
 		self.run_in_state(|| {
 			push_description_frame(
-				|| format!("manifestification"),
+				|| "manifestification".to_string(),
 				|| val.manifest(&self.manifest_format()),
 			)
 		})
@@ -640,8 +641,8 @@ impl EvaluationState {
 }
 
 pub fn cc_ptr_eq<T>(a: &Cc<T>, b: &Cc<T>) -> bool {
-	let a = &a as &T;
-	let b = &b as &T;
+	let a = a as &T;
+	let b = b as &T;
 	std::ptr::eq(a, b)
 }
 

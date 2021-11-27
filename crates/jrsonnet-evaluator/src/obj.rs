@@ -123,7 +123,7 @@ impl ObjValue {
 			}
 		}
 		for (name, member) in self.0.this_entries.iter() {
-			if handler(name, &member) {
+			if handler(name, member) {
 				return true;
 			}
 		}

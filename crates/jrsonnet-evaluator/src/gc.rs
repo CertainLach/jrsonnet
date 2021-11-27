@@ -18,7 +18,7 @@ impl<T: ?Sized + Trace> Trace for TraceBox<T> {
 	}
 
 	fn is_type_tracked() -> bool {
-		return true;
+		true
 	}
 }
 
@@ -101,6 +101,11 @@ impl<V> DerefMut for GcHashSet<V> {
 		&mut self.0
 	}
 }
+impl<V> Default for GcHashSet<V> {
+	fn default() -> Self {
+		Self::new()
+	}
+}
 
 #[derive(Clone)]
 pub struct GcHashMap<K, V>(pub FxHashMap<K, V>);
@@ -137,5 +142,10 @@ impl<K, V> Deref for GcHashMap<K, V> {
 impl<K, V> DerefMut for GcHashMap<K, V> {
 	fn deref_mut(&mut self) -> &mut Self::Target {
 		&mut self.0
+	}
+}
+impl<K, V> Default for GcHashMap<K, V> {
+	fn default() -> Self {
+		Self::new()
 	}
 }
