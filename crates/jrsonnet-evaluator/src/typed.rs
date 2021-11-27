@@ -1,6 +1,9 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::{Val, error::{Error, LocError, Result}, push_description_frame};
+use crate::{
+	error::{Error, LocError, Result},
+	push_description_frame, Val,
+};
 use gcmodule::Trace;
 use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;

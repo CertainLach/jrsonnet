@@ -1,4 +1,7 @@
-use crate::{Context, FutureWrapper, GcHashMap, LazyVal, LazyValValue, Result, Val, error::Error::*, evaluate, evaluate_named, gc::TraceBox, throw};
+use crate::{
+	error::Error::*, evaluate, evaluate_named, gc::TraceBox, throw, Context, FutureWrapper,
+	GcHashMap, LazyVal, LazyValValue, Result, Val,
+};
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
@@ -187,10 +190,7 @@ pub fn parse_function_call_map(
 						)
 					}
 				}
-				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-					body_ctx,
-					default,
-				})))
+				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal { body_ctx, default })))
 			}
 		} else {
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));

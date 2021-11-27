@@ -4,8 +4,8 @@ use crate::{
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	gc::TraceBox,
 	push_frame, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
-	FutureWrapper, GcHashMap, LazyBinding, LazyVal, LazyValValue, ObjValue,
-	ObjValueBuilder, ObjectAssertion, Result, Val,
+	FutureWrapper, GcHashMap, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder,
+	ObjectAssertion, Result, Val,
 };
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
@@ -103,17 +103,15 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 		impl Bindable for BindableMethod {
 			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
-				Ok(LazyVal::new(TraceBox(Box::new(
-					BindableMethodLazyVal {
-						this,
-						super_obj,
+				Ok(LazyVal::new(TraceBox(Box::new(BindableMethodLazyVal {
+					this,
+					super_obj,
 
-						context_creator: self.context_creator.clone(),
-						name: self.name.clone(),
-						params: self.params.clone(),
-						value: self.value.clone(),
-					},
-				))))
+					context_creator: self.context_creator.clone(),
+					name: self.name.clone(),
+					params: self.params.clone(),
+					value: self.value.clone(),
+				}))))
 			}
 		}
 
@@ -154,16 +152,14 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 		impl Bindable for BindableNamed {
 			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
-				Ok(LazyVal::new(TraceBox(Box::new(
-					BindableNamedLazyVal {
-						this,
-						super_obj,
+				Ok(LazyVal::new(TraceBox(Box::new(BindableNamedLazyVal {
+					this,
+					super_obj,
 
-						context_creator: self.context_creator.clone(),
-						name: self.name.clone(),
-						value: self.value.clone(),
-					},
-				))))
+					context_creator: self.context_creator.clone(),
+					name: self.name.clone(),
+					value: self.value.clone(),
+				}))))
 			}
 		}
 
