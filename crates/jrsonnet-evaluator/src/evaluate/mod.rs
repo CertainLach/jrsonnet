@@ -2,19 +2,18 @@ use crate::{
 	builtin::std_slice,
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	gc::TraceBox,
 	push_frame, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
-	FutureWrapper, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder, ObjectAssertion,
-	Result, Val,
+	FutureWrapper, GcHashMap, LazyBinding, LazyVal, LazyValValue, ObjValue,
+	ObjValueBuilder, ObjectAssertion, Result, Val,
 };
-use jrsonnet_gc::{Gc, Trace};
+use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, ExprLocation, FieldMember, ForSpecData,
 	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
-use rustc_hash::{FxHashMap, FxHasher};
-use std::{collections::HashMap, hash::BuildHasherDefault};
 pub mod operator;
 
 pub fn evaluate_binding_in_future(
@@ -26,7 +25,6 @@ pub fn evaluate_binding_in_future(
 		let params = params.clone();
 
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct LazyMethodBinding {
 			context_creator: FutureWrapper<Context>,
 			name: IStr,
@@ -44,15 +42,14 @@ pub fn evaluate_binding_in_future(
 			}
 		}
 
-		LazyVal::new(Box::new(LazyMethodBinding {
+		LazyVal::new(TraceBox(Box::new(LazyMethodBinding {
 			context_creator,
 			name: b.name.clone(),
 			params,
 			value: b.value.clone(),
-		}))
+		})))
 	} else {
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct LazyNamedBinding {
 			context_creator: FutureWrapper<Context>,
 			name: IStr,
@@ -63,11 +60,11 @@ pub fn evaluate_binding_in_future(
 				evaluate_named(self.context_creator.unwrap(), &self.value, self.name)
 			}
 		}
-		LazyVal::new(Box::new(LazyNamedBinding {
+		LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
 			context_creator,
 			name: b.name.clone(),
 			value: b.value,
-		}))
+		})))
 	}
 }
 
@@ -77,7 +74,6 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		let params = params.clone();
 
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct BindableMethodLazyVal {
 			this: Option<ObjValue>,
 			super_obj: Option<ObjValue>,
@@ -99,7 +95,6 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct BindableMethod {
 			context_creator: ContextCreator,
 			name: IStr,
@@ -108,30 +103,31 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 		impl Bindable for BindableMethod {
 			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
-				Ok(LazyVal::new(Box::new(BindableMethodLazyVal {
-					this,
-					super_obj,
+				Ok(LazyVal::new(TraceBox(Box::new(
+					BindableMethodLazyVal {
+						this,
+						super_obj,
 
-					context_creator: self.context_creator.clone(),
-					name: self.name.clone(),
-					params: self.params.clone(),
-					value: self.value.clone(),
-				})))
+						context_creator: self.context_creator.clone(),
+						name: self.name.clone(),
+						params: self.params.clone(),
+						value: self.value.clone(),
+					},
+				))))
 			}
 		}
 
 		(
 			b.name.clone(),
-			LazyBinding::Bindable(Gc::new(Box::new(BindableMethod {
+			LazyBinding::Bindable(Cc::new(TraceBox(Box::new(BindableMethod {
 				context_creator,
 				name: b.name.clone(),
 				params,
 				value: b.value.clone(),
-			}))),
+			})))),
 		)
 	} else {
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct BindableNamedLazyVal {
 			this: Option<ObjValue>,
 			super_obj: Option<ObjValue>,
@@ -151,7 +147,6 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 
 		#[derive(Trace)]
-		#[trivially_drop]
 		struct BindableNamed {
 			context_creator: ContextCreator,
 			name: IStr,
@@ -159,30 +154,32 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 		}
 		impl Bindable for BindableNamed {
 			fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
-				Ok(LazyVal::new(Box::new(BindableNamedLazyVal {
-					this,
-					super_obj,
+				Ok(LazyVal::new(TraceBox(Box::new(
+					BindableNamedLazyVal {
+						this,
+						super_obj,
 
-					context_creator: self.context_creator.clone(),
-					name: self.name.clone(),
-					value: self.value.clone(),
-				})))
+						context_creator: self.context_creator.clone(),
+						name: self.name.clone(),
+						value: self.value.clone(),
+					},
+				))))
 			}
 		}
 
 		(
 			b.name.clone(),
-			LazyBinding::Bindable(Gc::new(Box::new(BindableNamed {
+			LazyBinding::Bindable(Cc::new(TraceBox(Box::new(BindableNamed {
 				context_creator,
 				name: b.name.clone(),
 				value: b.value.clone(),
-			}))),
+			})))),
 		)
 	}
 }
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(Gc::new(FuncVal::Normal(FuncDesc {
+	Val::Func(Cc::new(FuncVal::Normal(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -240,8 +237,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 	let future_this = FutureWrapper::new();
 	let context_creator = ContextCreator(context.clone(), new_bindings.clone());
 	{
-		let mut bindings: FxHashMap<IStr, LazyBinding> =
-			FxHashMap::with_capacity_and_hasher(members.len(), BuildHasherDefault::default());
+		let mut bindings: GcHashMap<IStr, LazyBinding> = GcHashMap::with_capacity(members.len());
 		for (n, b) in members
 			.iter()
 			.filter_map(|m| match m {
@@ -272,7 +268,6 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				let name = name.unwrap();
 
 				#[derive(Trace)]
-				#[trivially_drop]
 				struct ObjMemberBinding {
 					context_creator: ContextCreator,
 					value: LocExpr,
@@ -296,11 +291,11 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					.with_add(*plus)
 					.with_visibility(*visibility)
 					.with_location(value.1.clone())
-					.bindable(Box::new(ObjMemberBinding {
+					.bindable(TraceBox(Box::new(ObjMemberBinding {
 						context_creator: context_creator.clone(),
 						value: value.clone(),
 						name,
-					}));
+					})));
 			}
 			Member::Field(FieldMember {
 				name,
@@ -314,7 +309,6 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 				}
 				let name = name.unwrap();
 				#[derive(Trace)]
-				#[trivially_drop]
 				struct ObjMemberBinding {
 					context_creator: ContextCreator,
 					value: LocExpr,
@@ -339,17 +333,16 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 					.member(name.clone())
 					.hide()
 					.with_location(value.1.clone())
-					.bindable(Box::new(ObjMemberBinding {
+					.bindable(TraceBox(Box::new(ObjMemberBinding {
 						context_creator: context_creator.clone(),
 						value: value.clone(),
 						params: params.clone(),
 						name,
-					}));
+					})));
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]
-				#[trivially_drop]
 				struct ObjectAssert {
 					context_creator: ContextCreator,
 					assert: AssertStmt,
@@ -364,10 +357,10 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						evaluate_assert(ctx, &self.assert)
 					}
 				}
-				builder.assert(Box::new(ObjectAssert {
+				builder.assert(TraceBox(Box::new(ObjectAssert {
 					context_creator: context_creator.clone(),
 					assert: stmt.clone(),
-				}));
+				})));
 			}
 		}
 	}
@@ -385,11 +378,8 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 			evaluate_comp(context.clone(), &obj.compspecs, &mut |ctx| {
 				let new_bindings = FutureWrapper::new();
 				let context_creator = ContextCreator(context.clone(), new_bindings.clone());
-				let mut bindings: FxHashMap<IStr, LazyBinding> =
-					FxHashMap::with_capacity_and_hasher(
-						obj.pre_locals.len() + obj.post_locals.len(),
-						BuildHasherDefault::default(),
-					);
+				let mut bindings: GcHashMap<IStr, LazyBinding> =
+					GcHashMap::with_capacity(obj.pre_locals.len() + obj.post_locals.len());
 				for (n, b) in obj
 					.pre_locals
 					.iter()
@@ -406,7 +396,6 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 					Val::Null => {}
 					Val::Str(n) => {
 						#[derive(Trace)]
-						#[trivially_drop]
 						struct ObjCompBinding {
 							context: Context,
 							value: LocExpr,
@@ -418,12 +407,9 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 								_super_obj: Option<ObjValue>,
 							) -> Result<LazyVal> {
 								Ok(LazyVal::new_resolved(evaluate(
-									self.context.clone().extend(
-										FxHashMap::default(),
-										None,
-										this,
-										None,
-									),
+									self.context
+										.clone()
+										.extend(GcHashMap::new(), None, this, None),
 									&self.value,
 								)?))
 							}
@@ -432,10 +418,10 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							.member(n)
 							.with_location(obj.value.1.clone())
 							.with_add(obj.plus)
-							.bindable(Box::new(ObjCompBinding {
+							.bindable(TraceBox(Box::new(ObjCompBinding {
 								context: ctx,
 								value: obj.value.clone(),
-							}));
+							})));
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}
@@ -454,7 +440,7 @@ pub fn evaluate_apply(
 	context: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: Option<&ExprLocation>,
+	loc: &ExprLocation,
 	tailstrict: bool,
 ) -> Result<Val> {
 	let value = evaluate(context.clone(), value)?;
@@ -475,7 +461,7 @@ pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = push_frame(
-		value.1.as_ref(),
+		&value.1,
 		|| "assertion condition".to_owned(),
 		|| {
 			evaluate(context.clone(), value)?
@@ -484,7 +470,7 @@ pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	)?;
 	if !assertion_result {
 		push_frame(
-			value.1.as_ref(),
+			&value.1,
 			|| "assertion failure".to_owned(),
 			|| {
 				if let Some(msg) = msg {
@@ -534,8 +520,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push_frame(
-			loc.as_ref(),
-			|| format!("variable <{}>", name),
+			loc,
+			|| format!("variable <{}> access", name),
 			|| context.binding(name.clone())?.evaluate(),
 		)?,
 		Index(value, index) => {
@@ -543,7 +529,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
 					push_frame(
-						loc.as_ref(),
+						loc,
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
@@ -591,10 +577,8 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: FxHashMap<IStr, LazyVal> = HashMap::with_capacity_and_hasher(
-				bindings.len(),
-				BuildHasherDefault::<FxHasher>::default(),
-			);
+			let mut new_bindings: GcHashMap<IStr, LazyVal> =
+				GcHashMap::with_capacity(bindings.len());
 			let future_context = Context::new_future();
 			for b in bindings {
 				new_bindings.insert(
@@ -612,7 +596,6 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			for item in items {
 				// TODO: Implement ArrValue::Lazy with same context for every element?
 				#[derive(Trace)]
-				#[trivially_drop]
 				struct ArrayElement {
 					context: Context,
 					item: LocExpr,
@@ -622,10 +605,10 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 						evaluate(self.context, &self.item)
 					}
 				}
-				out.push(LazyVal::new(Box::new(ArrayElement {
+				out.push(LazyVal::new(TraceBox(Box::new(ArrayElement {
 					context: context.clone(),
 					item: item.clone(),
-				})));
+				}))));
 			}
 			Val::Arr(out.into())
 		}
@@ -635,26 +618,24 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				out.push(evaluate(ctx, expr)?);
 				Ok(())
 			})?;
-			Val::Arr(ArrValue::Eager(Gc::new(out)))
+			Val::Arr(ArrValue::Eager(Cc::new(out)))
 		}
 		Obj(body) => Val::Obj(evaluate_object(context, body)?),
 		ObjExtend(s, t) => evaluate_add_op(
 			&evaluate(context.clone(), s)?,
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
-		Apply(value, args, tailstrict) => {
-			evaluate_apply(context, value, args, loc.as_ref(), *tailstrict)?
-		}
+		Apply(value, args, tailstrict) => evaluate_apply(context, value, args, loc, *tailstrict)?,
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
-		Intrinsic(name) => Val::Func(Gc::new(FuncVal::Intrinsic(name.clone()))),
+		Intrinsic(name) => Val::Func(Cc::new(FuncVal::Intrinsic(name.clone()))),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(context.clone(), assert)?;
 			evaluate(context, returned)?
 		}
 		ErrorStmt(e) => push_frame(
-			loc.as_ref(),
+			loc,
 			|| "error statement".to_owned(),
 			|| {
 				throw!(RuntimeError(
@@ -668,7 +649,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_else,
 		} => {
 			if push_frame(
-				loc.as_ref(),
+				loc,
 				|| "if condition".to_owned(),
 				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
 			)? {
@@ -703,23 +684,17 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			std_slice(indexable.into_indexable()?, start, end, step)?
 		}
 		Import(path) => {
-			let tmp = loc
-				.clone()
-				.expect("imports cannot be used without loc_data")
-				.0;
+			let tmp = loc.clone().0;
 			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
 			push_frame(
-				loc.as_ref(),
+				loc,
 				|| format!("import {:?}", path),
 				|| with_state(|s| s.import_file(&import_location, path)),
 			)?
 		}
 		ImportStr(path) => {
-			let tmp = loc
-				.clone()
-				.expect("imports cannot be used without loc_data")
-				.0;
+			let tmp = loc.clone().0;
 			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)

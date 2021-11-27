@@ -103,12 +103,6 @@ impl ConfigureState for GeneralOpts {
 #[derive(Clap)]
 #[clap(help_heading = "GARBAGE COLLECTION")]
 pub struct GcOpts {
-	/// Min bytes allocated to start garbage collection
-	#[clap(long, default_value = "20000000")]
-	gc_initial_threshold: usize,
-	/// How much heap should grow after unsuccessful garbage collection
-	#[clap(long)]
-	gc_used_space_ratio: Option<f64>,
 	/// Do not skip gc on exit
 	#[clap(long)]
 	gc_collect_on_exit: bool,
@@ -122,32 +116,28 @@ pub struct GcOpts {
 	gc_collect_before_printing_stats: bool,
 }
 impl GcOpts {
-	pub fn stats_printer(&self) -> Option<GcStatsPrinter> {
-		self.gc_print_stats
-			.then(|| GcStatsPrinter(self.gc_collect_before_printing_stats))
-	}
 	pub fn configure_global(&self) {
-		jrsonnet_gc::configure(|config| {
-			config.leak_on_drop = !self.gc_collect_on_exit;
-			config.threshold = self.gc_initial_threshold;
-			if let Some(used_space_ratio) = self.gc_used_space_ratio {
-				config.used_space_ratio = used_space_ratio;
-			}
-		});
+		if !self.gc_collect_on_exit {
+			gcmodule::set_thread_collect_on_drop(false)
+		}
+	}
+	pub fn stats_printer(&self) -> Option<GcStatsPrinter> {
+		self.gc_print_stats.then(|| GcStatsPrinter {
+			collect_before_printing_stats: self.gc_collect_before_printing_stats,
+		})
 	}
 }
-pub struct GcStatsPrinter(bool);
+
+pub struct GcStatsPrinter {
+	collect_before_printing_stats: bool,
+}
 impl Drop for GcStatsPrinter {
 	fn drop(&mut self) {
-		if self.0 {
-			jrsonnet_gc::force_collect()
-		}
 		eprintln!("=== GC STATS ===");
-		jrsonnet_gc::configure(|c| {
-			eprintln!("Final threshold: {:?}", c.threshold);
-		});
-		let stats = jrsonnet_gc::stats();
-		eprintln!("Collections performed: {}", stats.collections_performed);
-		eprintln!("Bytes still allocated: {}", stats.bytes_allocated);
+		if self.collect_before_printing_stats {
+			let collected = gcmodule::collect_thread_cycles();
+			eprintln!("Collected: {}", collected);
+		}
+		eprintln!("Tracked: {}", gcmodule::count_thread_tracked())
 	}
 }

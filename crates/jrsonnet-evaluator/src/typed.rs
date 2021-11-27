@@ -1,11 +1,7 @@
 use std::{fmt::Display, rc::Rc};
 
-use crate::{
-	error::{Error, LocError, Result},
-	push_frame, Val,
-};
-use jrsonnet_gc::Trace;
-use jrsonnet_parser::ExprLocation;
+use crate::{Val, error::{Error, LocError, Result}, push_description_frame};
+use gcmodule::Trace;
 use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
 
@@ -22,12 +18,11 @@ macro_rules! unwrap_type {
 }
 
 #[derive(Debug, Error, Clone, Trace)]
-#[trivially_drop]
 pub enum TypeError {
 	#[error("expected {0}, got {1}")]
 	ExpectedGot(ComplexValType, ValType),
 	#[error("missing property {0} from {1:?}")]
-	MissingProperty(Rc<str>, ComplexValType),
+	MissingProperty(#[skip_trace] Rc<str>, ComplexValType),
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
@@ -44,7 +39,6 @@ impl From<TypeError> for LocError {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[trivially_drop]
 pub struct TypeLocError(Box<TypeError>, ValuePathStack);
 impl From<TypeError> for TypeLocError {
 	fn from(e: TypeError) -> Self {
@@ -67,7 +61,6 @@ impl Display for TypeLocError {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[trivially_drop]
 pub struct TypeLocErrorList(Vec<TypeLocError>);
 impl Display for TypeLocErrorList {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -97,13 +90,12 @@ impl Display for TypeLocErrorList {
 	}
 }
 
-fn push_type(
-	location: Option<&ExprLocation>,
+fn push_type_description(
 	error_reason: impl Fn() -> String,
 	path: impl Fn() -> ValuePathItem,
 	item: impl Fn() -> Result<()>,
 ) -> Result<()> {
-	push_frame(location, error_reason, || match item() {
+	push_description_frame(error_reason, || match item() {
 		Ok(_) => Ok(()),
 		Err(mut e) => {
 			if let Error::TypeError(e) = &mut e.error_mut() {
@@ -131,9 +123,8 @@ impl CheckType for ValType {
 }
 
 #[derive(Clone, Debug, Trace)]
-#[trivially_drop]
 enum ValuePathItem {
-	Field(Rc<str>),
+	Field(#[skip_trace] Rc<str>),
 	Index(u64),
 }
 impl Display for ValuePathItem {
@@ -147,7 +138,6 @@ impl Display for ValuePathItem {
 }
 
 #[derive(Clone, Debug, Trace)]
-#[trivially_drop]
 struct ValuePathStack(Vec<ValuePathItem>);
 impl Display for ValuePathStack {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -183,8 +173,7 @@ impl CheckType for ComplexValType {
 			Self::Array(elem_type) => match value {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
-						push_type(
-							None,
+						push_type_description(
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(&item.clone()?),
@@ -197,8 +186,7 @@ impl CheckType for ComplexValType {
 			Self::ArrayRef(elem_type) => match value {
 				Val::Arr(a) => {
 					for (i, item) in a.iter().enumerate() {
-						push_type(
-							None,
+						push_type_description(
 							|| format!("array index {}", i),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(&item.clone()?),
@@ -212,8 +200,7 @@ impl CheckType for ComplexValType {
 				Val::Obj(obj) => {
 					for (k, v) in elems.iter() {
 						if let Some(got_v) = obj.get((*k).into())? {
-							push_type(
-								None,
+							push_type_description(
 								|| format!("property {}", k),
 								|| ValuePathItem::Field((*k).into()),
 								|| v.check(&got_v),

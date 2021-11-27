@@ -15,10 +15,9 @@ deserialize = ["serde"]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
 
 peg = "0.7.0"
-unescape = "0.1.0"
 
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
-jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
+gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 
 [dev-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }

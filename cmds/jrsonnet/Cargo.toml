@@ -17,6 +17,7 @@ jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
 jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.4.2" }
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
+gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 
 [dependencies.clap]
 git = "https://github.com/clap-rs/clap"

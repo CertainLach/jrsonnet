@@ -9,4 +9,4 @@ edition = "2018"
 [dependencies]
 serde = { version = "1.0" }
 rustc-hash = "1.1.0"
-jrsonnet-gc = { version = "0.4.2", features = ["derive"] }
+gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }

@@ -13,7 +13,6 @@ fn main() {
 		STDLIB_STR,
 		&ParserSettings {
 			file_name: PathBuf::from("std.jsonnet").into(),
-			loc_data: true,
 		},
 	)
 	.expect("parse");

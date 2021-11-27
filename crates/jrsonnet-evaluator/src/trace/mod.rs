@@ -119,16 +119,21 @@ impl TraceFormat for CompactFormat {
 			.trace()
 			.0
 			.iter()
-			.map(|el| {
-				el.location.as_ref().map(|l| {
-					use std::fmt::Write;
-					let mut resolved_path = self.resolver.resolve(&l.0);
+			.map(|el| &el.location)
+			.map(|location| {
+				use std::fmt::Write;
+				if let Some(location) = location {
+					let mut resolved_path = self.resolver.resolve(&location.0);
 					// TODO: Process all trace elements first
-					let location = evaluation_state.map_source_locations(&l.0, &[l.1, l.2]);
+					let location = evaluation_state
+						.map_source_locations(&location.0, &[location.1, location.2]);
 					write!(resolved_path, ":").unwrap();
 					print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
-					resolved_path
-				})
+					write!(resolved_path, ":").unwrap();
+					Some(resolved_path)
+				} else {
+					None
+				}
 			})
 			.collect::<Vec<_>>();
 		let align = file_names
@@ -139,15 +144,19 @@ impl TraceFormat for CompactFormat {
 			.unwrap_or(0);
 		for (el, file) in error.trace().0.iter().zip(file_names) {
 			writeln!(out)?;
-			write!(
-				out,
-				"{:<p$}{:<w$}: {}",
-				"",
-				file.unwrap_or_else(|| "".to_owned()),
-				el.desc,
-				p = self.padding,
-				w = align
-			)?;
+			if let Some(file) = file {
+				write!(
+					out,
+					"{:<p$}{:<w$} {}",
+					"",
+					file,
+					el.desc,
+					p = self.padding,
+					w = align
+				)?;
+			} else {
+				write!(out, "{:<p$}{}", "", el.desc, p = self.padding,)?;
+			}
 		}
 		Ok(())
 	}
@@ -178,7 +187,7 @@ impl TraceFormat for JsFormat {
 					start_end[0].column,
 				)?;
 			} else {
-				write!(out, "    at {}", desc,)?;
+				write!(out, "    during {}", desc)?;
 			}
 		}
 		Ok(())
@@ -206,25 +215,21 @@ impl TraceFormat for ExplainingFormat {
 		} = error.error()
 		{
 			writeln!(out)?;
-			let mut offset = error.location.offset;
-			if offset >= source_code.len() {
-				offset = source_code.len() - 1;
-			}
-			let mut location = offset_to_location(source_code, &[offset])
+			let offset = error.location.offset;
+			let location = offset_to_location(source_code, &[offset])
 				.into_iter()
 				.next()
 				.unwrap();
-			if location.column >= 1 {
-				location.column -= 1;
-			}
+			let mut end_location = location.clone();
+			end_location.offset += 1;
 
 			self.print_snippet(
 				out,
 				source_code,
 				path,
 				&location,
-				&location,
-				"^ syntax error",
+				&end_location,
+				"syntax error",
 			)?;
 		}
 		let trace = &error.trace();
@@ -289,7 +294,7 @@ impl ExplainingFormat {
 					annotation_type: AnnotationType::Error,
 					range: (
 						start.offset - start.line_start_offset,
-						end.offset - start.line_start_offset,
+						(end.offset - start.line_start_offset).min(source_fragment.len()),
 					),
 				}],
 			}],

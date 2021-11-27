@@ -9,9 +9,9 @@ mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
 pub use peg;
+mod unescape;
 
 pub struct ParserSettings {
-	pub loc_data: bool,
 	pub file_name: Rc<Path>,
 }
 
@@ -103,10 +103,20 @@ parser! {
 			  lines:("\n" {"\n"} / [' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
 			  [' ' | '\t']*<, {prefix.len() - 1}> "|||"
 			  {let mut l = empty_lines.to_owned(); l.push_str(first_line); l.extend(lines); l}
+
+		rule hex_char()
+			= quiet! { ['0'..='9' | 'a'..='f' | 'A'..='F'] } / expected!("<hex char>")
+
+		rule string_char(c: rule<()>)
+			= (!['\\']!c()[_])+
+			/ "\\\\"
+			/ "\\u" hex_char() hex_char() hex_char() hex_char()
+			/ "\\x" hex_char() hex_char()
+			/ ['\\'] (quiet! { ['b' | 'f' | 'n' | 'r' | 't'] / c() } / expected!("<escape character>"))
 		pub rule string() -> String
-			= quiet!{ "\"" str:$(("\\\"" / "\\\\" / (!['"'][_]))*) "\"" {unescape::unescape(str).unwrap()}
-			/ "'" str:$(("\\'" / "\\\\" / (!['\''][_]))*) "'" {unescape::unescape(str).unwrap()}
-			/ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
+			= ['"'] str:$(string_char(<['"']>)*) ['"'] {? unescape::unescape(str).ok_or("<escaped string>")}
+			/ ['\''] str:$(string_char(<['\'']>)*) ['\''] {? unescape::unescape(str).ok_or("<escaped string>")}
+			/ quiet!{ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
 			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
 			/ string_block() } / expected!("<string>")
 
@@ -177,6 +187,8 @@ parser! {
 			= n:number() { expr::Expr::Num(n) }
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:$(id()) { expr::Expr::Var(n.into()) }
+		pub rule id_loc(s: &ParserSettings) -> LocExpr
+			= a:position!() n:$(id()) b:position!() { LocExpr(Rc::new(expr::Expr::Str(n.into())), ExprLocation(s.file_name.clone(), a,b)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
 			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -240,7 +252,7 @@ parser! {
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= precedence! {
-				start:position!() v:@ end:position!() { loc_expr!(v, s.loc_data, (s.file_name.clone(), start, end)) }
+				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.file_name.clone(), start, end)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
@@ -276,7 +288,7 @@ parser! {
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
 				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
-				a:(@) _ "." _ e:$(id()) {Expr::Index(a, el!(Expr::Str(e.into())))}
+				a:(@) _ "." _ a:position!() e:id_loc(s) b:position!() {Expr::Index(a, e)}
 				a:(@) _ "[" _ e:expr(s) _ "]" {Expr::Index(a, e)}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
@@ -294,13 +306,6 @@ pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError
 	jsonnet_parser::jsonnet(str, settings)
 }
 
-#[macro_export]
-macro_rules! el {
-	($expr:expr) => {
-		LocExpr(std::rc::Rc::new($expr), None)
-	};
-}
-
 #[cfg(test)]
 pub mod tests {
 	use super::{expr::*, parse};
@@ -313,53 +318,39 @@ pub mod tests {
 			parse(
 				$s,
 				&ParserSettings {
-					loc_data: false,
-					file_name: PathBuf::from("/test.jsonnet").into(),
+					file_name: PathBuf::from("test.jsonnet").into(),
 				},
 			)
 			.unwrap()
 		};
 	}
 
-	macro_rules! el_loc {
-		($expr:expr, $loc:expr$(,)?) => {
-			LocExpr(std::rc::Rc::new($expr), Some($loc))
+	macro_rules! el {
+		($expr:expr, $from:expr, $to:expr$(,)?) => {
+			LocExpr(
+				std::rc::Rc::new($expr),
+				ExprLocation(PathBuf::from("test.jsonnet").into(), $from, $to),
+			)
 		};
-	}
-
-	mod expressions {
-		use super::*;
-
-		pub fn basic_math() -> LocExpr {
-			el!(Expr::BinaryOp(
-				el!(Expr::Num(2.0)),
-				Add,
-				el!(Expr::BinaryOp(
-					el!(Expr::Num(2.0)),
-					Mul,
-					el!(Expr::Num(2.0)),
-				)),
-			))
-		}
 	}
 
 	#[test]
 	fn multiline_string() {
 		assert_eq!(
 			parse!("|||\n    Hello world!\n     a\n|||"),
-			el!(Expr::Str("Hello world!\n a\n".into())),
+			el!(Expr::Str("Hello world!\n a\n".into()), 0, 31),
 		);
 		assert_eq!(
 			parse!("|||\n  Hello world!\n   a\n|||"),
-			el!(Expr::Str("Hello world!\n a\n".into())),
+			el!(Expr::Str("Hello world!\n a\n".into()), 0, 27),
 		);
 		assert_eq!(
 			parse!("|||\n\t\tHello world!\n\t\t\ta\n|||"),
-			el!(Expr::Str("Hello world!\n\ta\n".into())),
+			el!(Expr::Str("Hello world!\n\ta\n".into()), 0, 27),
 		);
 		assert_eq!(
 			parse!("|||\n   Hello world!\n    a\n |||"),
-			el!(Expr::Str("Hello world!\n a\n".into())),
+			el!(Expr::Str("Hello world!\n a\n".into()), 0, 30),
 		);
 	}
 
@@ -376,20 +367,20 @@ pub mod tests {
 	fn string_escaping() {
 		assert_eq!(
 			parse!(r#""Hello, \"world\"!""#),
-			el!(Expr::Str(r#"Hello, "world"!"#.into())),
+			el!(Expr::Str(r#"Hello, "world"!"#.into()), 0, 19),
 		);
 		assert_eq!(
 			parse!(r#"'Hello \'world\'!'"#),
-			el!(Expr::Str("Hello 'world'!".into())),
+			el!(Expr::Str("Hello 'world'!".into()), 0, 18),
 		);
-		assert_eq!(parse!(r#"'\\\\'"#), el!(Expr::Str("\\\\".into())),);
+		assert_eq!(parse!(r#"'\\\\'"#), el!(Expr::Str("\\\\".into()), 0, 6));
 	}
 
 	#[test]
 	fn string_unescaping() {
 		assert_eq!(
 			parse!(r#""Hello\nWorld""#),
-			el!(Expr::Str("Hello\nWorld".into())),
+			el!(Expr::Str("Hello\nWorld".into()), 0, 14),
 		);
 	}
 
@@ -397,7 +388,7 @@ pub mod tests {
 	fn string_verbantim() {
 		assert_eq!(
 			parse!(r#"@"Hello\n""World""""#),
-			el!(Expr::Str("Hello\\n\"World\"".into())),
+			el!(Expr::Str("Hello\\n\"World\"".into()), 0, 19),
 		);
 	}
 
@@ -405,49 +396,95 @@ pub mod tests {
 	fn imports() {
 		assert_eq!(
 			parse!("import \"hello\""),
-			el!(Expr::Import(PathBuf::from("hello"))),
+			el!(Expr::Import(PathBuf::from("hello")), 0, 14),
 		);
 		assert_eq!(
 			parse!("importstr \"garnish.txt\""),
-			el!(Expr::ImportStr(PathBuf::from("garnish.txt")))
+			el!(Expr::ImportStr(PathBuf::from("garnish.txt")), 0, 23)
 		);
 	}
 
 	#[test]
 	fn empty_object() {
-		assert_eq!(parse!("{}"), el!(Expr::Obj(ObjBody::MemberList(vec![]))));
+		assert_eq!(
+			parse!("{}"),
+			el!(Expr::Obj(ObjBody::MemberList(vec![])), 0, 2)
+		);
 	}
 
 	#[test]
 	fn basic_math() {
 		assert_eq!(
 			parse!("2+2*2"),
-			el!(Expr::BinaryOp(
-				el!(Expr::Num(2.0)),
-				Add,
-				el!(Expr::BinaryOp(
-					el!(Expr::Num(2.0)),
-					Mul,
-					el!(Expr::Num(2.0))
-				))
-			))
+			el!(
+				Expr::BinaryOp(
+					el!(Expr::Num(2.0), 0, 1),
+					Add,
+					el!(
+						Expr::BinaryOp(el!(Expr::Num(2.0), 2, 3), Mul, el!(Expr::Num(2.0), 4, 5)),
+						2,
+						5
+					)
+				),
+				0,
+				5
+			)
 		);
 	}
 
 	#[test]
 	fn basic_math_with_indents() {
-		assert_eq!(parse!("2	+ 	  2	  *	2   	"), expressions::basic_math());
+		assert_eq!(
+			parse!("2	+ 	  2	  *	2   	"),
+			el!(
+				Expr::BinaryOp(
+					el!(Expr::Num(2.0), 0, 1),
+					Add,
+					el!(
+						Expr::BinaryOp(el!(Expr::Num(2.0), 7, 8), Mul, el!(Expr::Num(2.0), 13, 14),),
+						7,
+						14
+					),
+				),
+				0,
+				14
+			)
+		);
 	}
 
 	#[test]
 	fn basic_math_parened() {
 		assert_eq!(
 			parse!("2+(2+2*2)"),
-			el!(Expr::BinaryOp(
-				el!(Expr::Num(2.0)),
-				Add,
-				el!(Expr::Parened(expressions::basic_math())),
-			))
+			el!(
+				Expr::BinaryOp(
+					el!(Expr::Num(2.0), 0, 1),
+					Add,
+					el!(
+						Expr::Parened(el!(
+							Expr::BinaryOp(
+								el!(Expr::Num(2.0), 3, 4),
+								Add,
+								el!(
+									Expr::BinaryOp(
+										el!(Expr::Num(2.0), 5, 6),
+										Mul,
+										el!(Expr::Num(2.0), 7, 8),
+									),
+									5,
+									8
+								),
+							),
+							3,
+							8
+						)),
+						2,
+						9
+					),
+				),
+				0,
+				9
+			)
 		);
 	}
 
@@ -456,15 +493,23 @@ pub mod tests {
 	fn comments() {
 		assert_eq!(
 			parse!("2//comment\n+//comment\n3/*test*/*/*test*/4"),
-			el!(Expr::BinaryOp(
-				el!(Expr::Num(2.0)),
-				Add,
-				el!(Expr::BinaryOp(
-					el!(Expr::Num(3.0)),
-					Mul,
-					el!(Expr::Num(4.0))
-				))
-			))
+			el!(
+				Expr::BinaryOp(
+					el!(Expr::Num(2.0), 0, 1),
+					Add,
+					el!(
+						Expr::BinaryOp(
+							el!(Expr::Num(3.0), 22, 23),
+							Mul,
+							el!(Expr::Num(4.0), 40, 41)
+						),
+						22,
+						41
+					)
+				),
+				0,
+				41
+			)
 		);
 	}
 
@@ -473,11 +518,11 @@ pub mod tests {
 	fn comment_escaping() {
 		assert_eq!(
 			parse!("2/*\\*/+*/ - 22"),
-			el!(Expr::BinaryOp(
-				el!(Expr::Num(2.0)),
-				Sub,
-				el!(Expr::Num(22.0))
-			))
+			el!(
+				Expr::BinaryOp(el!(Expr::Num(2.0), 0, 1), Sub, el!(Expr::Num(22.0), 12, 14)),
+				0,
+				14
+			)
 		);
 	}
 
@@ -492,27 +537,46 @@ pub mod tests {
 	#[test]
 	fn array_comp() {
 		use Expr::*;
+		/*
+		`ArrComp(Apply(Index(Var("std") from "test.jsonnet":1-4, Var("deepJoin") from "test.jsonnet":5-13) from "test.jsonnet":1-13, ArgsDesc { unnamed: [Var("x") from "test.jsonnet":14-15], named: [] }, false) from "test.jsonnet":1-16, [ForSpec(ForSpecData("x", Var("arr") from "test.jsonnet":26-29))]) from "test.jsonnet":0-30`,
+		`ArrComp(Apply(Index(Var("std") from "test.jsonnet":1-4, Str("deepJoin") from "test.jsonnet":5-13) from "test.jsonnet":1-13, ArgsDesc { unnamed: [Var("x") from "test.jsonnet":14-15], named: [] }, false) from "test.jsonnet":1-16, [ForSpec(ForSpecData("x", Var("arr") from "test.jsonnet":26-29))]) from "test.jsonnet":0-30`
+				*/
 		assert_eq!(
 			parse!("[std.deepJoin(x) for x in arr]"),
-			el!(ArrComp(
-				el!(Apply(
-					el!(Index(el!(Var("std".into())), el!(Str("deepJoin".into())))),
-					ArgsDesc::new(vec![el!(Var("x".into()))], vec![]),
-					false,
-				)),
-				vec![CompSpec::ForSpec(ForSpecData(
-					"x".into(),
-					el!(Var("arr".into()))
-				))]
-			)),
+			el!(
+				ArrComp(
+					el!(
+						Apply(
+							el!(
+								Index(
+									el!(Var("std".into()), 1, 4),
+									el!(Str("deepJoin".into()), 5, 13)
+								),
+								1,
+								13
+							),
+							ArgsDesc::new(vec![el!(Var("x".into()), 14, 15)], vec![]),
+							false,
+						),
+						1,
+						16
+					),
+					vec![CompSpec::ForSpec(ForSpecData(
+						"x".into(),
+						el!(Var("arr".into()), 26, 29)
+					))]
+				),
+				0,
+				30
+			),
 		)
 	}
 
 	#[test]
 	fn reserved() {
 		use Expr::*;
-		assert_eq!(parse!("null"), el!(Literal(LiteralType::Null)));
-		assert_eq!(parse!("nulla"), el!(Var("nulla".into())));
+		assert_eq!(parse!("null"), el!(Literal(LiteralType::Null), 0, 4));
+		assert_eq!(parse!("nulla"), el!(Var("nulla".into()), 0, 5));
 	}
 
 	#[test]
@@ -525,11 +589,15 @@ pub mod tests {
 		use Expr::*;
 		assert_eq!(
 			parse!("!a && !b"),
-			el!(BinaryOp(
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
-				And,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
-			))
+			el!(
+				BinaryOp(
+					el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into()), 1, 2)), 0, 2),
+					And,
+					el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()), 7, 8)), 6, 8)
+				),
+				0,
+				8
+			)
 		);
 	}
 
@@ -538,11 +606,15 @@ pub mod tests {
 		use Expr::*;
 		assert_eq!(
 			parse!("!a / !b"),
-			el!(BinaryOp(
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into())))),
-				Div,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()))))
-			))
+			el!(
+				BinaryOp(
+					el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into()), 1, 2)), 0, 2),
+					Div,
+					el!(UnaryOp(UnaryOpType::Not, el!(Var("b".into()), 6, 7)), 5, 7)
+				),
+				0,
+				7
+			)
 		);
 	}
 
@@ -551,10 +623,14 @@ pub mod tests {
 		use Expr::*;
 		assert_eq!(
 			parse!("!!a"),
-			el!(UnaryOp(
-				UnaryOpType::Not,
-				el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into()))))
-			))
+			el!(
+				UnaryOp(
+					UnaryOpType::Not,
+					el!(UnaryOp(UnaryOpType::Not, el!(Var("a".into()), 2, 3)), 1, 3)
+				),
+				0,
+				3
+			)
 		)
 	}
 
@@ -587,55 +663,44 @@ pub mod tests {
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
-		let file_name: std::rc::Rc<std::path::Path> = PathBuf::from("/test.jsonnet").into();
+		let file_name: std::rc::Rc<std::path::Path> = PathBuf::from("test.jsonnet").into();
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
 			&ParserSettings {
-				loc_data: true,
 				file_name: file_name.clone(),
 			},
 		)
 		.unwrap();
 		assert_eq!(
 			expr,
-			el_loc!(
+			el!(
 				BinaryOp(
-					el_loc!(
+					el!(
 						ObjExtend(
-							el_loc!(
-								Obj(ObjBody::MemberList(vec![])),
-								ExprLocation(file_name.clone(), 0, 2)
-							),
+							el!(Obj(ObjBody::MemberList(vec![])), 0, 2),
 							ObjBody::MemberList(vec![
 								Member::BindStmt(BindSpec {
 									name: "x".into(),
 									params: None,
-									value: el_loc!(
-										Num(1.0),
-										ExprLocation(file_name.clone(), 15, 16)
-									)
+									value: el!(Num(1.0), 15, 16)
 								}),
 								Member::Field(FieldMember {
 									name: FieldName::Fixed("x".into()),
 									plus: false,
 									params: None,
 									visibility: Visibility::Normal,
-									value: el_loc!(
-										Var("x".into()),
-										ExprLocation(file_name.clone(), 21, 22)
-									),
+									value: el!(Var("x".into()), 21, 22),
 								})
 							])
 						),
-						ExprLocation(file_name.clone(), 0, 24)
+						0,
+						24
 					),
 					BinaryOpType::Add,
-					el_loc!(
-						Obj(ObjBody::MemberList(vec![])),
-						ExprLocation(file_name.clone(), 27, 29)
-					),
+					el!(Obj(ObjBody::MemberList(vec![])), 27, 29),
 				),
-				ExprLocation(file_name.clone(), 0, 29),
+				0,
+				29
 			),
 		);
 	}

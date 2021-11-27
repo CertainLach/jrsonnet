@@ -1,16 +1,15 @@
+use crate::cc_ptr_eq;
+use crate::gc::GcHashMap;
 use crate::{
 	error::Error::*, map::LayeredHashMap, FutureWrapper, LazyBinding, LazyVal, ObjValue, Result,
 	Val,
 };
-use jrsonnet_gc::{Gc, Trace};
+use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use rustc_hash::FxHashMap;
 use std::fmt::Debug;
-use std::hash::BuildHasherDefault;
 
 #[derive(Clone, Trace)]
-#[trivially_drop]
-pub struct ContextCreator(pub Context, pub FutureWrapper<FxHashMap<IStr, LazyBinding>>);
+pub struct ContextCreator(pub Context, pub FutureWrapper<GcHashMap<IStr, LazyBinding>>);
 impl ContextCreator {
 	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
 		self.0.clone().extend_unbound(
@@ -23,7 +22,6 @@ impl ContextCreator {
 }
 
 #[derive(Trace)]
-#[trivially_drop]
 struct ContextInternals {
 	dollar: Option<ObjValue>,
 	this: Option<ObjValue>,
@@ -37,8 +35,7 @@ impl Debug for ContextInternals {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[trivially_drop]
-pub struct Context(Gc<ContextInternals>);
+pub struct Context(Cc<ContextInternals>);
 impl Context {
 	pub fn new_future() -> FutureWrapper<Self> {
 		FutureWrapper::new()
@@ -57,7 +54,7 @@ impl Context {
 	}
 
 	pub fn new() -> Self {
-		Self(Gc::new(ContextInternals {
+		Self(Cc::new(ContextInternals {
 			dollar: None,
 			this: None,
 			super_obj: None,
@@ -84,19 +81,18 @@ impl Context {
 	}
 
 	pub fn with_var(self, name: IStr, value: Val) -> Self {
-		let mut new_bindings =
-			FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
+		let mut new_bindings = GcHashMap::with_capacity(1);
 		new_bindings.insert(name, LazyVal::new_resolved(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
 	pub fn with_this_super(self, new_this: ObjValue, new_super_obj: Option<ObjValue>) -> Self {
-		self.extend(FxHashMap::default(), None, Some(new_this), new_super_obj)
+		self.extend(GcHashMap::new(), None, Some(new_this), new_super_obj)
 	}
 
 	pub fn extend(
 		self,
-		new_bindings: FxHashMap<IStr, LazyVal>,
+		new_bindings: GcHashMap<IStr, LazyVal>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -110,30 +106,29 @@ impl Context {
 		} else {
 			ctx.bindings.clone().extend(new_bindings)
 		};
-		Self(Gc::new(ContextInternals {
+		Self(Cc::new(ContextInternals {
 			dollar,
 			this,
 			super_obj,
 			bindings,
 		}))
 	}
-	pub fn extend_bound(self, new_bindings: FxHashMap<IStr, LazyVal>) -> Self {
+	pub fn extend_bound(self, new_bindings: GcHashMap<IStr, LazyVal>) -> Self {
 		let new_this = self.0.this.clone();
 		let new_super_obj = self.0.super_obj.clone();
 		self.extend(new_bindings, None, new_this, new_super_obj)
 	}
 	pub fn extend_unbound(
 		self,
-		new_bindings: FxHashMap<IStr, LazyBinding>,
+		new_bindings: GcHashMap<IStr, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
 	) -> Result<Self> {
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
-		let mut new =
-			FxHashMap::with_capacity_and_hasher(new_bindings.len(), BuildHasherDefault::default());
-		for (k, v) in new_bindings.into_iter() {
+		let mut new = GcHashMap::with_capacity(new_bindings.len());
+		for (k, v) in new_bindings.0.into_iter() {
 			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
 		}
 		Ok(self.extend(new, new_dollar, this, super_obj))
@@ -152,6 +147,6 @@ impl Default for Context {
 
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
-		Gc::ptr_eq(&self.0, &other.0)
+		cc_ptr_eq(&self.0, &other.0)
 	}
 }

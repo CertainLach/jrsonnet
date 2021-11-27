@@ -1,18 +1,13 @@
-use crate::{
-	error::Error::*, evaluate, evaluate_named, throw, Context, FutureWrapper, LazyVal,
-	LazyValValue, Result, Val,
-};
-use jrsonnet_gc::Trace;
+use crate::{Context, FutureWrapper, GcHashMap, LazyVal, LazyValValue, Result, Val, error::Error::*, evaluate, evaluate_named, gc::TraceBox, throw};
+use gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
-use rustc_hash::FxHashMap;
-use std::{collections::HashMap, hash::BuildHasherDefault};
+use std::collections::HashMap;
 
 const NO_DEFAULT_CONTEXT: &str =
 	"no default context set for call with defined default parameter value";
 
 #[derive(Trace)]
-#[trivially_drop]
 struct EvaluateLazyVal {
 	context: Context,
 	expr: LocExpr,
@@ -38,8 +33,7 @@ pub fn parse_function_call(
 	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut passed_args =
-		HashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
+	let mut passed_args = GcHashMap::with_capacity(params.len());
 	if args.unnamed.len() > params.len() {
 		throw!(TooManyArgsFunctionHas(params.len()))
 	}
@@ -53,10 +47,10 @@ pub fn parse_function_call(
 			if tailstrict {
 				LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
 			} else {
-				LazyVal::new(Box::new(EvaluateLazyVal {
+				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
 					context: ctx.clone(),
 					expr: arg.clone(),
-				}))
+				})))
 			},
 		);
 		filled_args += 1;
@@ -73,10 +67,10 @@ pub fn parse_function_call(
 				if tailstrict {
 					LazyVal::new_resolved(evaluate(ctx.clone(), value)?)
 				} else {
-					LazyVal::new(Box::new(EvaluateLazyVal {
+					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
 						context: ctx.clone(),
 						expr: value.clone(),
-					}))
+					})))
 				},
 			)
 			.is_some()
@@ -90,17 +84,13 @@ pub fn parse_function_call(
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let future_context = FutureWrapper::<Context>::new();
-		let mut defaults = HashMap::with_capacity_and_hasher(
-			params.len() - filled_args,
-			BuildHasherDefault::default(),
-		);
+		let mut defaults = GcHashMap::with_capacity(params.len() - filled_args);
 
 		for param in params.iter().filter(|p| p.1.is_some()) {
 			if passed_args.contains_key(&param.0.clone()) {
 				continue;
 			}
 			#[derive(Trace)]
-			#[trivially_drop]
 			struct LazyNamedBinding {
 				future_context: FutureWrapper<Context>,
 				name: IStr,
@@ -111,19 +101,19 @@ pub fn parse_function_call(
 					evaluate_named(self.future_context.unwrap(), &self.value, self.name)
 				}
 			}
-			LazyVal::new(Box::new(LazyNamedBinding {
+			LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
 				future_context: future_context.clone(),
 				name: param.0.clone(),
 				value: param.1.clone().unwrap(),
-			}));
+			})));
 
 			defaults.insert(
 				param.0.clone(),
-				LazyVal::new(Box::new(LazyNamedBinding {
+				LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
 					future_context: future_context.clone(),
 					name: param.0.clone(),
 					value: param.1.clone().unwrap(),
-				})),
+				}))),
 			);
 			filled_args += 1;
 		}
@@ -155,7 +145,7 @@ pub fn parse_function_call_map(
 	args: &HashMap<IStr, Val>,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
+	let mut out = GcHashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (name, val) in args.iter() {
 		let idx = params
@@ -185,7 +175,6 @@ pub fn parse_function_call_map(
 				let body_ctx = body_ctx.clone();
 				let default = default.clone();
 				#[derive(Trace)]
-				#[trivially_drop]
 				struct EvaluateLazyVal {
 					body_ctx: Option<Context>,
 					default: LocExpr,
@@ -198,7 +187,10 @@ pub fn parse_function_call_map(
 						)
 					}
 				}
-				LazyVal::new(Box::new(EvaluateLazyVal { body_ctx, default }))
+				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+					body_ctx,
+					default,
+				})))
 			}
 		} else {
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
@@ -215,7 +207,7 @@ pub fn place_args(
 	params: &ParamsDesc,
 	args: &[Val],
 ) -> Result<Context> {
-	let mut out = FxHashMap::with_capacity_and_hasher(params.len(), BuildHasherDefault::default());
+	let mut out = GcHashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
 		if id >= params.len() {
@@ -243,7 +235,7 @@ macro_rules! parse_args {
 	($ctx: expr, $fn_name: expr, $args: expr, $total_args: expr, [
 		$($id: expr, $name: ident: $ty: expr $(=>$match: path)?);+ $(;)?
 	], $handler:block) => {{
-		use $crate::{error::Error::*, throw, evaluate, push_frame, typed::CheckType};
+		use $crate::{error::Error::*, throw, evaluate, push_description_frame, typed::CheckType};
 
 		let args = $args;
 		if args.unnamed.len() + args.named.len() > $total_args {
@@ -263,7 +255,7 @@ macro_rules! parse_args {
 			} else {
 				&$args.unnamed[$id]
 			};
-			let $name = push_frame(None, || format!("evaluating argument"), || {
+			let $name = push_description_frame(|| format!("evaluating builtin argument {}", stringify!($name)), || {
 				let value = evaluate($ctx.clone(), &$name)?;
 				$ty.check(&value)?;
 				Ok(value)

@@ -1,6 +1,6 @@
 #![allow(clippy::redundant_closure_call)]
 
-use jrsonnet_gc::Trace;
+use gcmodule::Trace;
 use std::fmt::Display;
 
 #[macro_export]
@@ -82,7 +82,6 @@ fn test() {
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
-#[trivially_drop]
 pub enum ValType {
 	Bool,
 	Null,
@@ -115,7 +114,7 @@ impl Display for ValType {
 }
 
 #[derive(Debug, Clone, PartialEq, Trace)]
-#[trivially_drop]
+#[skip_trace]
 pub enum ComplexValType {
 	Any,
 	Char,

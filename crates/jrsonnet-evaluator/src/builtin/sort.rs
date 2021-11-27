@@ -2,9 +2,9 @@ use crate::{
 	error::{Error, LocError, Result},
 	throw, Context, FuncVal, Val,
 };
-use jrsonnet_gc::{Finalize, Gc, Trace};
+use gcmodule::{Cc, Trace};
 
-#[derive(Debug, Clone, thiserror::Error, Trace, Finalize)]
+#[derive(Debug, Clone, thiserror::Error, Trace)]
 pub enum SortError {
 	#[error("sort key should be string or number")]
 	SortKeyShouldBeStringOrNumber,
@@ -59,7 +59,7 @@ fn get_sort_type<T>(
 	Ok(sort_type)
 }
 
-pub fn sort(ctx: Context, values: Gc<Vec<Val>>, key_getter: &FuncVal) -> Result<Gc<Vec<Val>>> {
+pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: &FuncVal) -> Result<Cc<Vec<Val>>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
@@ -77,7 +77,7 @@ pub fn sort(ctx: Context, values: Gc<Vec<Val>>, key_getter: &FuncVal) -> Result<
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Gc::new(mvalues))
+		Ok(Cc::new(mvalues))
 	} else {
 		let mut vk = Vec::with_capacity(values.len());
 		for value in values.iter() {
@@ -98,6 +98,6 @@ pub fn sort(ctx: Context, values: Gc<Vec<Val>>, key_getter: &FuncVal) -> Result<
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Gc::new(vk.into_iter().map(|v| v.0).collect()))
+		Ok(Cc::new(vk.into_iter().map(|v| v.0).collect()))
 	}
 }

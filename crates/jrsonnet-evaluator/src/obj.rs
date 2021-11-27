@@ -1,15 +1,15 @@
+use crate::gc::{GcHashMap, GcHashSet, TraceBox};
 use crate::operator::evaluate_add_op;
-use crate::{Bindable, LazyBinding, LazyVal, Result, Val};
-use jrsonnet_gc::{Gc, GcCell, Trace};
+use crate::{cc_ptr_eq, Bindable, LazyBinding, LazyVal, Result, Val};
+use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
-use rustc_hash::{FxHashMap, FxHashSet, FxHasher};
-use std::collections::HashMap;
+use rustc_hash::FxHashMap;
+use std::cell::RefCell;
+use std::fmt::Debug;
 use std::hash::{Hash, Hasher};
-use std::{fmt::Debug, hash::BuildHasherDefault};
 
 #[derive(Debug, Trace)]
-#[trivially_drop]
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
@@ -24,19 +24,18 @@ pub trait ObjectAssertion: Trace {
 // Field => This
 type CacheKey = (IStr, ObjValue);
 #[derive(Trace)]
-#[trivially_drop]
+#[force_tracking]
 pub struct ObjValueInternals {
 	super_obj: Option<ObjValue>,
-	assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
-	assertions_ran: GcCell<FxHashSet<ObjValue>>,
+	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
+	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_obj: Option<ObjValue>,
-	this_entries: Gc<FxHashMap<IStr, ObjMember>>,
-	value_cache: GcCell<FxHashMap<CacheKey, Option<Val>>>,
+	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
+	value_cache: RefCell<GcHashMap<CacheKey, Option<Val>>>,
 }
 
 #[derive(Clone, Trace)]
-#[trivially_drop]
-pub struct ObjValue(pub(crate) Gc<ObjValueInternals>);
+pub struct ObjValue(pub(crate) Cc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(super_obj) = self.0.super_obj.as_ref() {
@@ -65,20 +64,20 @@ impl Debug for ObjValue {
 impl ObjValue {
 	pub fn new(
 		super_obj: Option<Self>,
-		this_entries: Gc<FxHashMap<IStr, ObjMember>>,
-		assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
+		this_entries: Cc<GcHashMap<IStr, ObjMember>>,
+		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	) -> Self {
-		Self(Gc::new(ObjValueInternals {
+		Self(Cc::new(ObjValueInternals {
 			super_obj,
 			assertions,
-			assertions_ran: GcCell::new(FxHashSet::default()),
+			assertions_ran: RefCell::new(GcHashSet::new()),
 			this_obj: None,
 			this_entries,
-			value_cache: GcCell::new(FxHashMap::default()),
+			value_cache: RefCell::new(GcHashMap::new()),
 		}))
 	}
 	pub fn new_empty() -> Self {
-		Self::new(None, Gc::new(FxHashMap::default()), Gc::new(Vec::new()))
+		Self::new(None, Cc::new(GcHashMap::new()), Cc::new(Vec::new()))
 	}
 	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
@@ -95,13 +94,13 @@ impl ObjValue {
 		}
 	}
 	pub fn with_this(&self, this_obj: Self) -> Self {
-		Self(Gc::new(ObjValueInternals {
+		Self(Cc::new(ObjValueInternals {
 			super_obj: self.0.super_obj.clone(),
 			assertions: self.0.assertions.clone(),
-			assertions_ran: GcCell::new(FxHashSet::default()),
+			assertions_ran: RefCell::new(GcHashSet::new()),
 			this_obj: Some(this_obj),
 			this_entries: self.0.this_entries.clone(),
-			value_cache: GcCell::new(FxHashMap::default()),
+			value_cache: RefCell::new(GcHashMap::new()),
 		}))
 	}
 
@@ -117,14 +116,14 @@ impl ObjValue {
 	}
 
 	/// Run callback for every field found in object
-	pub(crate) fn enum_fields(&self, handler: &mut impl FnMut(&IStr, &Visibility) -> bool) -> bool {
+	pub(crate) fn enum_fields(&self, handler: &mut impl FnMut(&IStr, &ObjMember) -> bool) -> bool {
 		if let Some(s) = &self.0.super_obj {
 			if s.enum_fields(handler) {
 				return true;
 			}
 		}
 		for (name, member) in self.0.this_entries.iter() {
-			if handler(name, &member.visibility) {
+			if handler(name, &member) {
 				return true;
 			}
 		}
@@ -133,8 +132,8 @@ impl ObjValue {
 
 	pub fn fields_visibility(&self) -> FxHashMap<IStr, bool> {
 		let mut out = FxHashMap::default();
-		self.enum_fields(&mut |name, visibility| {
-			match visibility {
+		self.enum_fields(&mut |name, member| {
+			match member.visibility {
 				Visibility::Normal => {
 					let entry = out.entry(name.to_owned());
 					entry.or_insert(true);
@@ -211,9 +210,9 @@ impl ObjValue {
 	}
 
 	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
-		let mut new = FxHashMap::with_capacity_and_hasher(1, BuildHasherDefault::default());
+		let mut new = GcHashMap::with_capacity(1);
 		new.insert(key, value);
-		Self::new(Some(self), Gc::new(new), Gc::new(Vec::new()))
+		Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
 	}
 
 	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
@@ -270,13 +269,13 @@ impl ObjValue {
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		Gc::ptr_eq(&a.0, &b.0)
+		cc_ptr_eq(&a.0, &b.0)
 	}
 }
 
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		Gc::ptr_eq(&self.0, &other.0)
+		cc_ptr_eq(&self.0, &other.0)
 	}
 }
 
@@ -289,8 +288,8 @@ impl Hash for ObjValue {
 
 pub struct ObjValueBuilder {
 	super_obj: Option<ObjValue>,
-	map: FxHashMap<IStr, ObjMember>,
-	assertions: Vec<Box<dyn ObjectAssertion>>,
+	map: GcHashMap<IStr, ObjMember>,
+	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
 }
 impl ObjValueBuilder {
 	pub fn new() -> Self {
@@ -299,10 +298,7 @@ impl ObjValueBuilder {
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			super_obj: None,
-			map: HashMap::with_capacity_and_hasher(
-				capacity,
-				BuildHasherDefault::<FxHasher>::default(),
-			),
+			map: GcHashMap::with_capacity(capacity),
 			assertions: Vec::new(),
 		}
 	}
@@ -315,7 +311,7 @@ impl ObjValueBuilder {
 		self
 	}
 
-	pub fn assert(&mut self, assertion: Box<dyn ObjectAssertion>) -> &mut Self {
+	pub fn assert(&mut self, assertion: TraceBox<dyn ObjectAssertion>) -> &mut Self {
 		self.assertions.push(assertion);
 		self
 	}
@@ -330,7 +326,7 @@ impl ObjValueBuilder {
 	}
 
 	pub fn build(self) -> ObjValue {
-		ObjValue::new(self.super_obj, Gc::new(self.map), Gc::new(self.assertions))
+		ObjValue::new(self.super_obj, Cc::new(self.map), Cc::new(self.assertions))
 	}
 }
 impl Default for ObjValueBuilder {
@@ -364,15 +360,15 @@ impl<'v> ObjMemberBuilder<'v> {
 	pub fn hide(self) -> Self {
 		self.with_visibility(Visibility::Hidden)
 	}
-	pub fn with_location(mut self, location: Option<ExprLocation>) -> Self {
-		self.location = location;
+	pub fn with_location(mut self, location: ExprLocation) -> Self {
+		self.location = Some(location);
 		self
 	}
 	pub fn value(self, value: Val) -> &'v mut ObjValueBuilder {
 		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
 	}
-	pub fn bindable(self, bindable: Box<dyn Bindable>) -> &'v mut ObjValueBuilder {
-		self.binding(LazyBinding::Bindable(Gc::new(bindable)))
+	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) -> &'v mut ObjValueBuilder {
+		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
 	}
 	pub fn binding(self, binding: LazyBinding) -> &'v mut ObjValueBuilder {
 		self.value.map.insert(

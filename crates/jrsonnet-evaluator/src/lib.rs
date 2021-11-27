@@ -25,30 +25,31 @@ pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
+use gc::{GcHashMap, TraceBox};
+use gcmodule::{Cc, Trace};
 pub use import::*;
-use jrsonnet_gc::{Finalize, Gc, Trace};
 pub use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
 use native::NativeCallback;
 pub use obj::*;
-use rustc_hash::FxHashMap;
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::Debug,
-	hash::BuildHasherDefault,
 	path::{Path, PathBuf},
 	rc::Rc,
 };
 use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::*;
+pub mod gc;
 
-pub trait Bindable: Trace {
+pub trait Bindable: Trace + 'static {
 	fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal>;
 }
-#[derive(Trace, Finalize, Clone)]
+
+#[derive(Clone, Trace)]
 pub enum LazyBinding {
-	Bindable(Gc<Box<dyn Bindable>>),
+	Bindable(Cc<TraceBox<dyn Bindable>>),
 	Bound(LazyVal),
 }
 
@@ -74,7 +75,7 @@ pub struct EvaluationSettings {
 	/// Used for s`td.extVar`
 	pub ext_vars: HashMap<IStr, Val>,
 	/// Used for ext.native
-	pub ext_natives: HashMap<IStr, Gc<NativeCallback>>,
+	pub ext_natives: HashMap<IStr, Cc<NativeCallback>>,
 	/// TLA vars
 	pub tla_vars: HashMap<IStr, Val>,
 	/// Global variables are inserted in default context
@@ -172,19 +173,27 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
 pub(crate) fn push_frame<T>(
-	e: Option<&ExprLocation>,
+	e: &ExprLocation,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
 	with_state(|s| s.push(e, frame_desc, f))
 }
 
+#[allow(dead_code)]
 pub(crate) fn push_val_frame(
-	e: Option<&ExprLocation>,
+	e: &ExprLocation,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<Val>,
 ) -> Result<Val> {
-	with_state(|s| s.push(e, frame_desc, f))
+	with_state(|s| s.push_val(e, frame_desc, f))
+}
+#[allow(dead_code)]
+pub(crate) fn push_description_frame<T>(
+	frame_desc: impl FnOnce() -> String,
+	f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+	with_state(|s| s.push_description(frame_desc, f))
 }
 
 /// Maintains stack trace and import resolution
@@ -201,7 +210,6 @@ impl EvaluationState {
 				&source_code,
 				&ParserSettings {
 					file_name: path.clone(),
-					loc_data: true,
 				},
 			)
 			.map_err(|error| ImportSyntaxError {
@@ -246,7 +254,7 @@ impl EvaluationState {
 		ro_map.get(name).map(|value| value.source_code.clone())
 	}
 	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
-		offset_to_location(&self.get_source(file).unwrap(), locs)
+		offset_to_location(&self.get_source(file).unwrap_or("".into()), locs)
 	}
 	pub fn map_from_source_location(
 		&self,
@@ -322,8 +330,7 @@ impl EvaluationState {
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self) -> Context {
 		let globals = &self.settings().globals;
-		let mut new_bindings: FxHashMap<IStr, LazyVal> =
-			FxHashMap::with_capacity_and_hasher(globals.len(), BuildHasherDefault::default());
+		let mut new_bindings = GcHashMap::with_capacity(globals.len());
 		for (name, value) in globals.iter() {
 			new_bindings.insert(name.clone(), LazyVal::new_resolved(value.clone()));
 		}
@@ -333,7 +340,7 @@ impl EvaluationState {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: Option<&ExprLocation>,
+		e: &ExprLocation,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -353,25 +360,21 @@ impl EvaluationState {
 			let mut data = self.data_mut();
 			data.stack_depth -= 1;
 			data.stack_generation += 1;
-			// if let Some(e) = e {
-			// 	result =
-			// 		data.breakpoints
-			// 			.insert(data.stack_depth, data.stack_generation, &e, result)
-			// }
 		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: e.cloned(),
+				location: Some(e.clone()),
 				desc: frame_desc(),
 			});
 			return Err(err);
 		}
 		result
 	}
+
 	/// Executes code creating a new stack frame
 	pub fn push_val(
 		&self,
-		e: Option<&ExprLocation>,
+		e: &ExprLocation,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<Val>,
 	) -> Result<Val> {
@@ -391,15 +394,45 @@ impl EvaluationState {
 			let mut data = self.data_mut();
 			data.stack_depth -= 1;
 			data.stack_generation += 1;
-			if let Some(e) = e {
-				result =
-					data.breakpoints
-						.insert(data.stack_depth, data.stack_generation, &e, result)
-			}
+			result = data
+				.breakpoints
+				.insert(data.stack_depth, data.stack_generation, &e, result);
 		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: e.cloned(),
+				location: Some(e.clone()),
+				desc: frame_desc(),
+			});
+			return Err(err);
+		}
+		result
+	}
+	/// Executes code creating a new stack frame
+	pub fn push_description<T>(
+		&self,
+		frame_desc: impl FnOnce() -> String,
+		f: impl FnOnce() -> Result<T>,
+	) -> Result<T> {
+		{
+			let mut data = self.data_mut();
+			let stack_depth = &mut data.stack_depth;
+			if *stack_depth > self.max_stack() {
+				// Error creation uses data, so i drop guard here
+				drop(data);
+				throw!(StackOverflow);
+			} else {
+				*stack_depth += 1;
+			}
+		}
+		let result = f();
+		{
+			let mut data = self.data_mut();
+			data.stack_depth -= 1;
+			data.stack_generation += 1;
+		}
+		if let Err(mut err) = result {
+			err.trace_mut().0.push(StackTraceElement {
+				location: None,
 				desc: frame_desc(),
 			});
 			return Err(err);
@@ -451,7 +484,12 @@ impl EvaluationState {
 	}
 
 	pub fn manifest(&self, val: Val) -> Result<IStr> {
-		self.run_in_state(|| val.manifest(&self.manifest_format()))
+		self.run_in_state(|| {
+			push_description_frame(
+				|| format!("manifestification"),
+				|| val.manifest(&self.manifest_format()),
+			)
+		})
 	}
 	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(IStr, IStr)>> {
 		self.run_in_state(|| val.manifest_multi(&self.manifest_format()))
@@ -464,8 +502,7 @@ impl EvaluationState {
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		self.run_in_state(|| {
 			Ok(match val {
-				Val::Func(func) => push_frame(
-					None,
+				Val::Func(func) => push_description_frame(
 					|| "during TLA call".to_owned(),
 					|| {
 						func.evaluate_map(
@@ -511,7 +548,6 @@ impl EvaluationState {
 			&code,
 			&ParserSettings {
 				file_name: source.clone(),
-				loc_data: true,
 			},
 		)
 		.map_err(|e| ImportSyntaxError {
@@ -570,7 +606,7 @@ impl EvaluationState {
 		self.settings_mut().import_resolver = resolver;
 	}
 
-	pub fn add_native(&self, name: IStr, cb: Gc<NativeCallback>) {
+	pub fn add_native(&self, name: IStr, cb: Cc<NativeCallback>) {
 		self.settings_mut().ext_natives.insert(name, cb);
 	}
 
@@ -603,13 +639,20 @@ impl EvaluationState {
 	}
 }
 
+pub fn cc_ptr_eq<T>(a: &Cc<T>, b: &Cc<T>) -> bool {
+	let a = &a as &T;
+	let b = &b as &T;
+	std::ptr::eq(a, b)
+}
+
 #[cfg(test)]
 pub mod tests {
 	use super::Val;
 	use crate::{
-		error::Error::*, native::NativeCallbackHandler, primitive_equals, EvaluationState,
+		error::Error::*, gc::TraceBox, native::NativeCallbackHandler, primitive_equals,
+		EvaluationState,
 	};
-	use jrsonnet_gc::{Finalize, Gc, Trace};
+	use gcmodule::{Cc, Trace};
 	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
 	use std::{
@@ -624,11 +667,11 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					Some(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
+					&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							Some(&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40)),
+							&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
@@ -1028,7 +1071,6 @@ pub mod tests {
 				"{ x: 1, y: 2 } == { x: 1, y: 2 }",
 				&ParserSettings {
 					file_name: PathBuf::from("equality").into(),
-					loc_data: true,
 				}
 			)
 		);
@@ -1042,14 +1084,11 @@ pub mod tests {
 
 		evaluator.with_stdlib();
 
-		#[derive(Trace, Finalize)]
+		#[derive(Trace)]
 		struct NativeAdd;
 		impl NativeCallbackHandler for NativeAdd {
-			fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> crate::error::Result<Val> {
-				assert_eq!(
-					&from.unwrap() as &Path,
-					&PathBuf::from("native_caller.jsonnet")
-				);
+			fn call(&self, from: Rc<Path>, args: &[Val]) -> crate::error::Result<Val> {
+				assert_eq!(&from as &Path, &PathBuf::from("native_caller.jsonnet"));
 				match (&args[0], &args[1]) {
 					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
 					(_, _) => unreachable!(),
@@ -1058,12 +1097,12 @@ pub mod tests {
 		}
 		evaluator.settings_mut().ext_natives.insert(
 			"native_add".into(),
-			Gc::new(NativeCallback::new(
+			Cc::new(NativeCallback::new(
 				ParamsDesc(Rc::new(vec![
 					Param("a".into(), None),
 					Param("b".into(), None),
 				])),
-				Box::new(NativeAdd),
+				TraceBox(Box::new(NativeAdd)),
 			)),
 		);
 		evaluator.evaluate_snippet_raw(

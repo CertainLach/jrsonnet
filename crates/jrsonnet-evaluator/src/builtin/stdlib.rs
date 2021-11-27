@@ -15,7 +15,6 @@ thread_local! {
 		jrsonnet_parser::parse(
 			jrsonnet_stdlib::STDLIB_STR,
 			&ParserSettings {
-				loc_data: true,
 				file_name: PathBuf::from("std.jsonnet").into(),
 			},
 		)

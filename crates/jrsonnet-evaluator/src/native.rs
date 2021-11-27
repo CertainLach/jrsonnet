@@ -1,27 +1,27 @@
 #![allow(clippy::type_complexity)]
 
+use crate::gc::TraceBox;
 use crate::{error::Result, Val};
-use jrsonnet_gc::Trace;
+use gcmodule::Trace;
 use jrsonnet_parser::ParamsDesc;
 use std::fmt::Debug;
 use std::path::Path;
 use std::rc::Rc;
 
 pub trait NativeCallbackHandler: Trace {
-	fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> Result<Val>;
+	fn call(&self, from: Rc<Path>, args: &[Val]) -> Result<Val>;
 }
 
 #[derive(Trace)]
-#[trivially_drop]
 pub struct NativeCallback {
 	pub params: ParamsDesc,
-	handler: Box<dyn NativeCallbackHandler>,
+	handler: TraceBox<dyn NativeCallbackHandler>,
 }
 impl NativeCallback {
-	pub fn new(params: ParamsDesc, handler: Box<dyn NativeCallbackHandler>) -> Self {
+	pub fn new(params: ParamsDesc, handler: TraceBox<dyn NativeCallbackHandler>) -> Self {
 		Self { params, handler }
 	}
-	pub fn call(&self, caller: Option<Rc<Path>>, args: &[Val]) -> Result<Val> {
+	pub fn call(&self, caller: Rc<Path>, args: &[Val]) -> Result<Val> {
 		self.handler.call(caller, args)
 	}
 }

@@ -6,40 +6,40 @@ use crate::{
 			ManifestYamlOptions,
 		},
 	},
+	cc_ptr_eq,
 	error::{Error::*, LocError},
 	evaluate,
 	function::{parse_function_call, parse_function_call_map, place_args},
+	gc::TraceBox,
 	native::NativeCallback,
 	throw, Context, ObjValue, Result,
 };
-use jrsonnet_gc::{Gc, GcCell, Trace};
+use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
-use std::{collections::HashMap, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
 
 pub trait LazyValValue: Trace {
 	fn get(self: Box<Self>) -> Result<Val>;
 }
 
 #[derive(Trace)]
-#[trivially_drop]
 enum LazyValInternals {
 	Computed(Val),
 	Errored(LocError),
-	Waiting(Box<dyn LazyValValue>),
+	Waiting(TraceBox<dyn LazyValValue>),
 	Pending,
 }
 
 #[derive(Clone, Trace)]
-#[trivially_drop]
-pub struct LazyVal(Gc<GcCell<LazyValInternals>>);
+pub struct LazyVal(Cc<RefCell<LazyValInternals>>);
 impl LazyVal {
-	pub fn new(f: Box<dyn LazyValValue>) -> Self {
-		Self(Gc::new(GcCell::new(LazyValInternals::Waiting(f))))
+	pub fn new(f: TraceBox<dyn LazyValValue>) -> Self {
+		Self(Cc::new(RefCell::new(LazyValInternals::Waiting(f))))
 	}
 	pub fn new_resolved(val: Val) -> Self {
-		Self(Gc::new(GcCell::new(LazyValInternals::Computed(val))))
+		Self(Cc::new(RefCell::new(LazyValInternals::Computed(val))))
 	}
 	pub fn evaluate(&self) -> Result<Val> {
 		match &*self.0.borrow() {
@@ -55,7 +55,7 @@ impl LazyVal {
 		} else {
 			unreachable!()
 		};
-		let new_value = match value.get() {
+		let new_value = match value.0.get() {
 			Ok(v) => v,
 			Err(e) => {
 				*self.0.borrow_mut() = LazyValInternals::Errored(e.clone());
@@ -74,12 +74,11 @@ impl Debug for LazyVal {
 }
 impl PartialEq for LazyVal {
 	fn eq(&self, other: &Self) -> bool {
-		Gc::ptr_eq(&self.0, &other.0)
+		cc_ptr_eq(&self.0, &other.0)
 	}
 }
 
 #[derive(Debug, PartialEq, Trace)]
-#[trivially_drop]
 pub struct FuncDesc {
 	pub name: IStr,
 	pub ctx: Context,
@@ -88,14 +87,13 @@ pub struct FuncDesc {
 }
 
 #[derive(Debug, Trace)]
-#[trivially_drop]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
 	Intrinsic(IStr),
 	/// Library functions implemented in native
-	NativeExt(IStr, Gc<NativeCallback>),
+	NativeExt(IStr, Cc<NativeCallback>),
 }
 
 impl PartialEq for FuncVal {
@@ -122,7 +120,7 @@ impl FuncVal {
 	pub fn evaluate(
 		&self,
 		call_ctx: Context,
-		loc: Option<&ExprLocation>,
+		loc: &ExprLocation,
 		args: &ArgsDesc,
 		tailstrict: bool,
 	) -> Result<Val> {
@@ -145,7 +143,7 @@ impl FuncVal {
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
 				}
-				Ok(handler.call(loc.map(|l| l.0.clone()), &out_args)?)
+				Ok(handler.call(loc.0.clone(), &out_args)?)
 			}
 		}
 	}
@@ -194,15 +192,15 @@ pub enum ManifestFormat {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[trivially_drop]
+#[force_tracking]
 pub enum ArrValue {
-	Lazy(Gc<Vec<LazyVal>>),
-	Eager(Gc<Vec<Val>>),
+	Lazy(Cc<Vec<LazyVal>>),
+	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
 }
 impl ArrValue {
 	pub fn new_eager() -> Self {
-		Self::Eager(Gc::new(Vec::new()))
+		Self::Eager(Cc::new(Vec::new()))
 	}
 
 	pub fn len(&self) -> usize {
@@ -253,14 +251,14 @@ impl ArrValue {
 		}
 	}
 
-	pub fn evaluated(&self) -> Result<Gc<Vec<Val>>> {
+	pub fn evaluated(&self) -> Result<Cc<Vec<Val>>> {
 		Ok(match self {
 			Self::Lazy(vec) => {
 				let mut out = Vec::with_capacity(vec.len());
 				for item in vec.iter() {
 					out.push(item.evaluate()?);
 				}
-				Gc::new(out)
+				Cc::new(out)
 			}
 			Self::Eager(vec) => vec.clone(),
 			Self::Extended(_v) => {
@@ -268,7 +266,7 @@ impl ArrValue {
 				for item in self.iter() {
 					out.push(item?);
 				}
-				Gc::new(out)
+				Cc::new(out)
 			}
 		})
 	}
@@ -294,12 +292,12 @@ impl ArrValue {
 			Self::Lazy(vec) => {
 				let mut out = (&vec as &Vec<_>).clone();
 				out.reverse();
-				Self::Lazy(Gc::new(out))
+				Self::Lazy(Cc::new(out))
 			}
 			Self::Eager(vec) => {
 				let mut out = (&vec as &Vec<_>).clone();
 				out.reverse();
-				Self::Eager(Gc::new(out))
+				Self::Eager(Cc::new(out))
 			}
 			Self::Extended(b) => Self::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
 		}
@@ -312,7 +310,7 @@ impl ArrValue {
 			out.push(mapper(value?)?);
 		}
 
-		Ok(Self::Eager(Gc::new(out)))
+		Ok(Self::Eager(Cc::new(out)))
 	}
 
 	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
@@ -325,13 +323,13 @@ impl ArrValue {
 			}
 		}
 
-		Ok(Self::Eager(Gc::new(out)))
+		Ok(Self::Eager(Cc::new(out)))
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		match (a, b) {
-			(Self::Lazy(a), Self::Lazy(b)) => Gc::ptr_eq(a, b),
-			(Self::Eager(a), Self::Eager(b)) => Gc::ptr_eq(a, b),
+			(Self::Lazy(a), Self::Lazy(b)) => cc_ptr_eq(a, b),
+			(Self::Eager(a), Self::Eager(b)) => cc_ptr_eq(a, b),
 			_ => false,
 		}
 	}
@@ -339,13 +337,13 @@ impl ArrValue {
 
 impl From<Vec<LazyVal>> for ArrValue {
 	fn from(v: Vec<LazyVal>) -> Self {
-		Self::Lazy(Gc::new(v))
+		Self::Lazy(Cc::new(v))
 	}
 }
 
 impl From<Vec<Val>> for ArrValue {
 	fn from(v: Vec<Val>) -> Self {
-		Self::Eager(Gc::new(v))
+		Self::Eager(Cc::new(v))
 	}
 }
 
@@ -355,7 +353,6 @@ pub enum IndexableVal {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[trivially_drop]
 pub enum Val {
 	Bool(bool),
 	Null,
@@ -363,7 +360,7 @@ pub enum Val {
 	Num(f64),
 	Arr(ArrValue),
 	Obj(ObjValue),
-	Func(Gc<FuncVal>),
+	Func(Cc<FuncVal>),
 }
 
 macro_rules! matches_unwrap {
@@ -402,7 +399,7 @@ impl Val {
 	pub fn unwrap_arr(self) -> Result<ArrValue> {
 		Ok(matches_unwrap!(self, Self::Arr(v), v))
 	}
-	pub fn unwrap_func(self) -> Result<Gc<FuncVal>> {
+	pub fn unwrap_func(self) -> Result<Cc<FuncVal>> {
 		Ok(matches_unwrap!(self, Self::Func(v), v))
 	}
 	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {

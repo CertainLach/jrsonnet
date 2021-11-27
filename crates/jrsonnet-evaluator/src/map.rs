@@ -1,23 +1,21 @@
-use jrsonnet_gc::{Gc, Trace};
+use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use rustc_hash::FxHashMap;
 
-use crate::LazyVal;
+use crate::{GcHashMap, LazyVal};
 
 #[derive(Trace)]
-#[trivially_drop]
+#[force_tracking]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
-	current: FxHashMap<IStr, LazyVal>,
+	current: GcHashMap<IStr, LazyVal>,
 }
 
 #[derive(Trace)]
-#[trivially_drop]
-pub struct LayeredHashMap(Gc<LayeredHashMapInternals>);
+pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
-	pub fn extend(self, new_layer: FxHashMap<IStr, LazyVal>) -> Self {
-		Self(Gc::new(LayeredHashMapInternals {
+	pub fn extend(self, new_layer: GcHashMap<IStr, LazyVal>) -> Self {
+		Self(Cc::new(LayeredHashMapInternals {
 			parent: Some(self),
 			current: new_layer,
 		}))
@@ -49,9 +47,9 @@ impl Clone for LayeredHashMap {
 
 impl Default for LayeredHashMap {
 	fn default() -> Self {
-		Self(Gc::new(LayeredHashMapInternals {
+		Self(Cc::new(LayeredHashMapInternals {
 			parent: None,
-			current: FxHashMap::default(),
+			current: GcHashMap::new(),
 		}))
 	}
 }

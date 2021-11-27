@@ -136,7 +136,7 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 
 	let val = if opts.input.exec {
 		state.evaluate_snippet_raw(
-			PathBuf::from("args").into(),
+			PathBuf::from("<cmdline>").into(),
 			(&opts.input.input as &str).into(),
 		)?
 	} else if opts.input.input == "-" {

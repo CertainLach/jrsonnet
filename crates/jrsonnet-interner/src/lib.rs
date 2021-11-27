@@ -1,4 +1,4 @@
-use jrsonnet_gc::{unsafe_empty_trace, Finalize, Trace};
+use gcmodule::Trace;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
@@ -11,9 +11,10 @@ use std::{
 
 #[derive(Clone, PartialOrd, Ord, Eq)]
 pub struct IStr(Rc<str>);
-impl Finalize for IStr {}
-unsafe impl Trace for IStr {
-	unsafe_empty_trace!();
+impl Trace for IStr {
+	fn is_type_tracked() -> bool {
+		false
+	}
 }
 
 impl Deref for IStr {

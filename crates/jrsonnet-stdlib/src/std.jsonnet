@@ -370,7 +370,7 @@
         ch;
     std.foldl(function(a, b) a + trans(b), std.stringChars(str), ''),
 
-  manifestJson(value):: std.manifestJsonEx(value, '    '),
+  manifestJson(value):: std.manifestJsonEx(value, '    ') tailstrict,
 
   manifestJsonEx:: $intrinsic(manifestJsonEx),
 

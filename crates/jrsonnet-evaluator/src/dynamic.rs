@@ -1,11 +1,12 @@
-use jrsonnet_gc::{Gc, GcCell, Trace};
+use std::cell::RefCell;
+
+use gcmodule::{Cc, Trace};
 
 #[derive(Clone, Trace)]
-#[trivially_drop]
-pub struct FutureWrapper<V: Trace + 'static>(pub Gc<GcCell<Option<V>>>);
+pub struct FutureWrapper<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
 impl<T: Trace + 'static> FutureWrapper<T> {
 	pub fn new() -> Self {
-		Self(Gc::new(GcCell::new(None)))
+		Self(Cc::new(RefCell::new(None)))
 	}
 	pub fn fill(self, value: T) {
 		assert!(self.0.borrow().is_none(), "wrapper is filled already");

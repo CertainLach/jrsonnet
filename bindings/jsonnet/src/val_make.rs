@@ -1,7 +1,7 @@
 //! Create values in VM
 
+use gcmodule::Cc;
 use jrsonnet_evaluator::{ArrValue, EvaluationState, ObjValue, Val};
-use jrsonnet_gc::Gc;
 use std::{
 	ffi::CStr,
 	os::raw::{c_char, c_double, c_int},
@@ -38,7 +38,7 @@ pub extern "C" fn jsonnet_json_make_null(_vm: &EvaluationState) -> *mut Val {
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_array(_vm: &EvaluationState) -> *mut Val {
-	Box::into_raw(Box::new(Val::Arr(ArrValue::Eager(Gc::new(Vec::new())))))
+	Box::into_raw(Box::new(Val::Arr(ArrValue::Eager(Cc::new(Vec::new())))))
 }
 
 #[no_mangle]
