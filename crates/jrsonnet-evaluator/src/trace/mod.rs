@@ -98,7 +98,7 @@ impl TraceFormat for CompactFormat {
 			let mut n = self.resolver.resolve(path);
 			let mut offset = error.location.offset;
 			let is_eof = if offset >= source_code.len() {
-				offset = source_code.len() - 1;
+				offset = source_code.len().saturating_sub(1);
 				true
 			} else {
 				false

@@ -3,15 +3,17 @@ use crate::{
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
-	parse_args, primitive_equals, push_frame, throw, with_state, ArrValue, Context,
-	EvaluationState, FuncVal, IndexableVal, LazyVal, Val,
+	parse_args, primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal,
+	IndexableVal, LazyVal, Val,
 };
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, ExprLocation};
 use jrsonnet_types::ty;
-use std::{collections::HashMap, path::PathBuf, rc::Rc};
+use serde::Deserialize;
+use serde_yaml::DeserializingQuirks;
+use std::{collections::HashMap, convert::TryFrom, path::PathBuf, rc::Rc};
 
 pub mod stdlib;
 pub use stdlib::*;
@@ -128,6 +130,7 @@ thread_local! {
 			("strReplace".into(), builtin_str_replace),
 			("splitLimit".into(), builtin_splitlimit),
 			("parseJson".into(), builtin_parse_json),
+			("parseYaml".into(), builtin_parse_yaml),
 			("asciiUpper".into(), builtin_ascii_upper),
 			("asciiLower".into(), builtin_ascii_lower),
 			("member".into(), builtin_member),
@@ -210,9 +213,30 @@ fn builtin_parse_json(context: Context, _loc: &ExprLocation, args: &ArgsDesc) ->
 	parse_args!(context, "parseJson", args, 1, [
 		0, s: ty!(string) => Val::Str;
 	], {
-		let state = EvaluationState::default();
-		let path = PathBuf::from("std.parseJson").into();
-		state.evaluate_snippet_raw(path ,s)
+		let value: serde_json::Value = serde_json::from_str(&s).map_err(|e| RuntimeError(format!("failed to parse json: {}", e).into()))?;
+		Ok(Val::try_from(&value)?)
+	})
+}
+
+fn builtin_parse_yaml(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
+	parse_args!(context, "parseYaml", args, 1, [
+		0, s: ty!(string) => Val::Str;
+	], {
+		let value = serde_yaml::Deserializer::from_str_with_quirks(&s, DeserializingQuirks { old_octals: true });
+		let mut out = vec![];
+		for item in value {
+			let value = serde_json::Value::deserialize(item)
+				.map_err(|e| RuntimeError(format!("failed to parse yaml: {}", e).into()))?;
+			let val = Val::try_from(&value)?;
+			out.push(val);
+		}
+		if out.is_empty() {
+			Ok(Val::Null)
+		} else if out.len() == 1 {
+			Ok(out.into_iter().next().unwrap())
+		} else {
+			Ok(Val::Arr(out.into()))
+		}
 	})
 }
 

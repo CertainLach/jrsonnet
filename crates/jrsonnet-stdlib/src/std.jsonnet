@@ -23,6 +23,7 @@
   trace:: $intrinsic(trace),
   id:: $intrinsic(id),
   parseJson:: $intrinsic(parseJson),
+  parseYaml:: $intrinsic(parseYaml),
 
   log:: $intrinsic(log),
   pow:: $intrinsic(pow),

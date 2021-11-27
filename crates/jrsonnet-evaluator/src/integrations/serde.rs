@@ -15,7 +15,7 @@ impl TryFrom<&Val> for Value {
 			Val::Num(n) => Self::Number(if n.fract() <= f64::EPSILON {
 				(*n as i64).into()
 			} else {
-				Number::from_f64(*n).expect("to json number")
+				Number::from_f64(*n).expect("jsonnet numbers can't be infinite or NaN")
 			}),
 			Val::Arr(a) => {
 				let mut out = Vec::with_capacity(a.len());
@@ -29,7 +29,9 @@ impl TryFrom<&Val> for Value {
 				for key in o.fields() {
 					out.insert(
 						(&key as &str).into(),
-						(&o.get(key)?.expect("field exists")).try_into()?,
+						(&o.get(key)?
+							.expect("key is present in fields, so value should exist"))
+							.try_into()?,
 					);
 				}
 				Self::Object(out)
@@ -39,27 +41,30 @@ impl TryFrom<&Val> for Value {
 	}
 }
 
-impl From<&Value> for Val {
-	fn from(v: &Value) -> Self {
-		match v {
+impl TryFrom<&Value> for Val {
+	type Error = LocError;
+	fn try_from(v: &Value) -> Result<Self> {
+		Ok(match v {
 			Value::Null => Self::Null,
 			Value::Bool(v) => Self::Bool(*v),
-			Value::Number(n) => Self::Num(n.as_f64().expect("as f64")),
+			Value::Number(n) => Self::Num(n.as_f64().ok_or_else(|| {
+				RuntimeError(format!("json number can't be represented as jsonnet: {}", n).into())
+			})?),
 			Value::String(s) => Self::Str((s as &str).into()),
 			Value::Array(a) => {
 				let mut out: Vec<Self> = Vec::with_capacity(a.len());
 				for v in a {
-					out.push(v.into());
+					out.push(v.try_into()?);
 				}
 				Self::Arr(out.into())
 			}
 			Value::Object(o) => {
 				let mut builder = ObjValueBuilder::with_capacity(o.len());
 				for (k, v) in o {
-					builder.member((k as &str).into()).value(v.into());
+					builder.member((k as &str).into()).value(v.try_into()?);
 				}
 				Self::Obj(builder.build())
 			}
-		}
+		})
 	}
 }
