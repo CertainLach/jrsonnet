@@ -141,6 +141,93 @@ pub fn parse_function_call(
 	}
 }
 
+#[derive(Clone, Copy)]
+pub struct BuiltinParam {
+	pub name: &'static str,
+	pub has_default: bool,
+}
+
+/// You shouldn't probally use this function, use jrsonnet_macros::builtin instead
+///
+/// ## Parameters
+/// * `ctx`: used for passed argument expressions' execution and for body execution (if `body_ctx` is not set)
+/// * `params`: function parameters' definition
+/// * `args`: passed function arguments
+/// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
+pub fn parse_builtin_call<'k>(
+	ctx: Context,
+	params: &'static [BuiltinParam],
+	args: &'k ArgsDesc,
+	tailstrict: bool,
+) -> Result<GcHashMap<&'k str, LazyVal>> {
+	let mut passed_args = GcHashMap::with_capacity(params.len());
+	if args.unnamed.len() > params.len() {
+		throw!(TooManyArgsFunctionHas(params.len()))
+	}
+
+	let mut filled_args = 0;
+
+	for (id, arg) in args.unnamed.iter().enumerate() {
+		let name = params[id].name;
+		passed_args.insert(
+			name,
+			if tailstrict {
+				LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+			} else {
+				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+					context: ctx.clone(),
+					expr: arg.clone(),
+				})))
+			},
+		);
+		filled_args += 1;
+	}
+
+	for (name, value) in args.named.iter() {
+		// FIXME: O(n) for arg existence check
+		if !params.iter().any(|p| p.name == name as &str) {
+			throw!(UnknownFunctionParameter((name as &str).to_owned()));
+		}
+		if passed_args
+			.insert(
+				name,
+				if tailstrict {
+					LazyVal::new_resolved(evaluate(ctx.clone(), value)?)
+				} else {
+					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+						context: ctx.clone(),
+						expr: value.clone(),
+					})))
+				},
+			)
+			.is_some()
+		{
+			throw!(BindingParameterASecondTime(name.clone()));
+		}
+		filled_args += 1;
+	}
+
+	if filled_args < params.len() {
+		for param in params.iter().filter(|p| p.has_default) {
+			if passed_args.contains_key(&param.name) {
+				continue;
+			}
+			filled_args += 1;
+		}
+
+		// Some args still wasn't filled
+		if filled_args != params.len() {
+			for param in params.iter().skip(args.unnamed.len()) {
+				if !args.named.iter().any(|a| &a.0 as &str == param.name) {
+					throw!(FunctionParameterNotBoundInCall(param.name.into()));
+				}
+			}
+			unreachable!();
+		}
+	}
+	Ok(passed_args)
+}
+
 pub fn parse_function_call_map(
 	ctx: Context,
 	body_ctx: Option<Context>,
@@ -201,12 +288,7 @@ pub fn parse_function_call_map(
 	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
 }
 
-pub fn place_args(
-	ctx: Context,
-	body_ctx: Option<Context>,
-	params: &ParamsDesc,
-	args: &[Val],
-) -> Result<Context> {
+pub fn place_args(body_ctx: Context, params: &ParamsDesc, args: &[Val]) -> Result<Context> {
 	let mut out = GcHashMap::with_capacity(params.len());
 	let mut positioned_args = vec![None; params.0.len()];
 	for (id, arg) in args.iter().enumerate() {
@@ -220,14 +302,14 @@ pub fn place_args(
 		let val = if let Some(arg) = &positioned_args[id] {
 			(*arg).clone()
 		} else if let Some(default) = &p.1 {
-			evaluate(ctx.clone(), default)?
+			evaluate(body_ctx.clone(), default)?
 		} else {
 			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
 		};
 		out.insert(p.0.clone(), LazyVal::new_resolved(val));
 	}
 
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
+	Ok(body_ctx.extend(out, None, None, None))
 }
 
 #[macro_export]

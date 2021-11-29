@@ -1,5 +1,8 @@
 use std::{fmt::Display, rc::Rc};
 
+mod conversions;
+pub use conversions::*;
+
 use crate::{
 	error::{Error, LocError, Result},
 	push_description_frame, Val,
@@ -164,7 +167,7 @@ impl CheckType for ComplexValType {
 			Self::BoundedNumber(from, to) => {
 				if let Val::Num(n) = value {
 					if from.map(|from| from > *n).unwrap_or(false)
-						|| to.map(|to| to <= *n).unwrap_or(false)
+						|| to.map(|to| to < *n).unwrap_or(false)
 					{
 						return Err(TypeError::BoundsFailed(*n, *from, *to).into());
 					}

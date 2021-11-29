@@ -49,8 +49,8 @@ impl ImportResolver for CallbackImportResolver {
 		};
 		// Release memory occipied by arguments passed
 		unsafe {
-			CString::from_raw(base);
-			CString::from_raw(rel);
+			let _ = CString::from_raw(base);
+			let _ = CString::from_raw(rel);
 		}
 		let result_raw = unsafe { CStr::from_ptr(result_ptr) };
 		let result_str = result_raw.to_str().unwrap();
@@ -64,7 +64,7 @@ impl ImportResolver for CallbackImportResolver {
 		let found_here_raw = unsafe { CStr::from_ptr(found_here) };
 		let found_here_buf = PathBuf::from(found_here_raw.to_str().unwrap());
 		unsafe {
-			CString::from_raw(found_here);
+			let _ = CString::from_raw(found_here);
 		}
 
 		let mut out = self.out.borrow_mut();

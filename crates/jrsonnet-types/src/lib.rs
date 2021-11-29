@@ -42,14 +42,14 @@ macro_rules! ty {
 		$crate::ComplexValType::Simple($crate::ValType::Func)
 	};
 	(($($a:tt) |+)) => {{
-		static CONTENTS: &'static [$crate::ComplexValType] = &[
-			$(ty!($a)),+
+		static CONTENTS: &'static [&'static $crate::ComplexValType] = &[
+			$(&ty!($a)),+
 		];
 		$crate::ComplexValType::UnionRef(CONTENTS)
 	}};
 	(($($a:tt) &+)) => {{
-		static CONTENTS: &'static [$crate::ComplexValType] = &[
-			$(ty!($a)),+
+		static CONTENTS: &'static [&'static $crate::ComplexValType] = &[
+			$(&ty!($a)),+
 		];
 		$crate::ComplexValType::SumRef(CONTENTS)
 	}};
@@ -66,8 +66,8 @@ fn test() {
 	assert_eq!(
 		ty!((string | number)),
 		ComplexValType::UnionRef(&[
-			ComplexValType::Simple(ValType::Str),
-			ComplexValType::Simple(ValType::Num)
+			&ComplexValType::Simple(ValType::Str),
+			&ComplexValType::Simple(ValType::Num)
 		])
 	);
 	assert_eq!(
@@ -124,9 +124,9 @@ pub enum ComplexValType {
 	ArrayRef(&'static ComplexValType),
 	ObjectRef(&'static [(&'static str, ComplexValType)]),
 	Union(Vec<ComplexValType>),
-	UnionRef(&'static [ComplexValType]),
+	UnionRef(&'static [&'static ComplexValType]),
 	Sum(Vec<ComplexValType>),
-	SumRef(&'static [ComplexValType]),
+	SumRef(&'static [&'static ComplexValType]),
 }
 
 impl From<ValType> for ComplexValType {
@@ -135,12 +135,12 @@ impl From<ValType> for ComplexValType {
 	}
 }
 
-fn write_union(
+fn write_union<'i>(
 	f: &mut std::fmt::Formatter<'_>,
 	is_union: bool,
-	union: &[ComplexValType],
+	union: impl Iterator<Item = &'i ComplexValType>,
 ) -> std::fmt::Result {
-	for (i, v) in union.iter().enumerate() {
+	for (i, v) in union.enumerate() {
 		let should_add_braces =
 			matches!(v, ComplexValType::UnionRef(_) | ComplexValType::Union(_) if !is_union);
 		if i != 0 {
@@ -190,10 +190,10 @@ impl Display for ComplexValType {
 				}
 				write!(f, "}}")?;
 			}
-			ComplexValType::Union(v) => write_union(f, true, v)?,
-			ComplexValType::UnionRef(v) => write_union(f, true, v)?,
-			ComplexValType::Sum(v) => write_union(f, false, v)?,
-			ComplexValType::SumRef(v) => write_union(f, false, v)?,
+			ComplexValType::Union(v) => write_union(f, true, v.iter())?,
+			ComplexValType::UnionRef(v) => write_union(f, true, v.iter().map(|v| *v))?,
+			ComplexValType::Sum(v) => write_union(f, false, v.iter())?,
+			ComplexValType::SumRef(v) => write_union(f, false, v.iter().map(|v| *v))?,
 		};
 		Ok(())
 	}

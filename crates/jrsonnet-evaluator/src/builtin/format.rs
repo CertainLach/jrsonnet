@@ -5,6 +5,7 @@ use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
+use std::convert::TryFrom;
 use thiserror::Error;
 
 #[derive(Debug, Clone, Error, Trace)]
@@ -484,7 +485,7 @@ pub fn format_code(
 	match code.convtype {
 		ConvTypeV::String => tmp_out.push_str(&value.clone().to_string()?),
 		ConvTypeV::Decimal => {
-			let value = value.clone().try_cast_num("%d/%u/%i requires number")?;
+			let value = f64::try_from(value.clone())?;
 			render_decimal(
 				&mut tmp_out,
 				value as i64,
@@ -495,7 +496,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Octal => {
-			let value = value.clone().try_cast_num("%o requires number")?;
+			let value = f64::try_from(value.clone())?;
 			render_octal(
 				&mut tmp_out,
 				value as i64,
@@ -507,7 +508,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Hexadecimal => {
-			let value = value.clone().try_cast_num("%x/%X requires number")?;
+			let value = f64::try_from(value.clone())?;
 			render_hexadecimal(
 				&mut tmp_out,
 				value as i64,
@@ -520,7 +521,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Scientific => {
-			let value = value.clone().try_cast_num("%e/%E requires number")?;
+			let value = f64::try_from(value.clone())?;
 			render_float_sci(
 				&mut tmp_out,
 				value,
@@ -534,7 +535,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Float => {
-			let value = value.clone().try_cast_num("%e/%E requires number")?;
+			let value = f64::try_from(value.clone())?;
 			render_float(
 				&mut tmp_out,
 				value,
@@ -547,7 +548,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Shorter => {
-			let value = value.clone().try_cast_num("%g/%G requires number")?;
+			let value = f64::try_from(value.clone())?;
 			let exponent = value.log10().floor();
 			if exponent < -4.0 || exponent >= fpprec as f64 {
 				render_float_sci(
@@ -633,7 +634,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						value.clone().try_cast_num("field width")? as usize
+						usize::try_from(value.clone())?
 					}
 					Width::Fixed(n) => n,
 				};
@@ -644,7 +645,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						Some(value.clone().try_cast_num("field precision")? as usize)
+						Some(usize::try_from(value.clone())?)
 					}
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,

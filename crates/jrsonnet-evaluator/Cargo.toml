@@ -23,6 +23,7 @@ jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.2" }
+jrsonnet-macros = { path = "../jrsonnet-macros", version = "0.4.2" }
 pathdiff = "0.2.0"
 
 md5 = "0.7.0"

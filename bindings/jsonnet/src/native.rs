@@ -3,10 +3,11 @@ use jrsonnet_evaluator::{
 	error::{Error, LocError},
 	gc::TraceBox,
 	native::{NativeCallback, NativeCallbackHandler},
-	EvaluationState, Val,
+	EvaluationState, IStr, Val,
 };
 use jrsonnet_parser::{Param, ParamsDesc};
 use std::{
+	convert::TryFrom,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 	path::Path,
@@ -45,7 +46,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		if success == 1 {
 			Ok(v)
 		} else {
-			let e = v.try_cast_str("native error").expect("error msg");
+			let e = IStr::try_from(v).expect("error msg");
 			Err(Error::RuntimeError(e).into())
 		}
 	}

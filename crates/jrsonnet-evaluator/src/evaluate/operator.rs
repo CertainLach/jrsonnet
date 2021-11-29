@@ -1,3 +1,5 @@
+use std::convert::TryInto;
+
 use crate::builtin::std_format;
 use crate::{equals, evaluate, Context, Val};
 use crate::{error::Error::*, throw, Result};
@@ -46,7 +48,7 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	match (a, b) {
 		(Num(a), Num(b)) => Ok(Num(a % b)),
-		(Str(str), vals) => std_format(str.clone(), vals.clone()),
+		(Str(str), vals) => std_format(str.clone(), vals.clone())?.try_into(),
 		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mod,
 			a.value_type(),

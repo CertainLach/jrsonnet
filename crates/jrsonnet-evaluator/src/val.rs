@@ -170,10 +170,10 @@ impl FuncVal {
 		}
 	}
 
-	pub fn evaluate_values(&self, call_ctx: Context, args: &[Val]) -> Result<Val> {
+	pub fn evaluate_values(&self, args: &[Val]) -> Result<Val> {
 		match self {
 			Self::Normal(func) => {
-				let ctx = place_args(call_ctx, Some(func.ctx.clone()), &func.params, args)?;
+				let ctx = place_args(func.ctx.clone(), &func.params, args)?;
 				evaluate(ctx, &func.body)
 			}
 			Self::Intrinsic(_) => todo!(),
@@ -363,14 +363,6 @@ pub enum Val {
 	Func(Cc<FuncVal>),
 }
 
-macro_rules! matches_unwrap {
-	($e: expr, $p: pat, $r: expr) => {
-		match $e {
-			$p => $r,
-			_ => panic!("no match"),
-		}
-	};
-}
 impl Val {
 	/// Creates `Val::Num` after checking for numeric overflow.
 	/// As numbers are `f64`, we can just check for their finity.
@@ -382,38 +374,6 @@ impl Val {
 		}
 	}
 
-	pub fn assert_type(&self, context: &'static str, val_type: ValType) -> Result<()> {
-		let this_type = self.value_type();
-		if this_type != val_type {
-			throw!(TypeMismatch(context, vec![val_type], this_type))
-		} else {
-			Ok(())
-		}
-	}
-	pub fn unwrap_num(self) -> Result<f64> {
-		Ok(matches_unwrap!(self, Self::Num(v), v))
-	}
-	pub fn unwrap_str(self) -> Result<IStr> {
-		Ok(matches_unwrap!(self, Self::Str(v), v))
-	}
-	pub fn unwrap_arr(self) -> Result<ArrValue> {
-		Ok(matches_unwrap!(self, Self::Arr(v), v))
-	}
-	pub fn unwrap_func(self) -> Result<Cc<FuncVal>> {
-		Ok(matches_unwrap!(self, Self::Func(v), v))
-	}
-	pub fn try_cast_bool(self, context: &'static str) -> Result<bool> {
-		self.assert_type(context, ValType::Bool)?;
-		Ok(matches_unwrap!(self, Self::Bool(v), v))
-	}
-	pub fn try_cast_str(self, context: &'static str) -> Result<IStr> {
-		self.assert_type(context, ValType::Str)?;
-		Ok(matches_unwrap!(self, Self::Str(v), v))
-	}
-	pub fn try_cast_num(self, context: &'static str) -> Result<f64> {
-		self.assert_type(context, ValType::Num)?;
-		self.unwrap_num()
-	}
 	pub fn try_cast_nullable_num(self, context: &'static str) -> Result<Option<f64>> {
 		Ok(match self {
 			Val::Null => None,

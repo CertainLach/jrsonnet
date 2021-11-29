@@ -1,6 +1,6 @@
 use crate::{
 	error::{Error, LocError, Result},
-	throw, Context, FuncVal, Val,
+	throw, FuncVal, Val,
 };
 use gcmodule::{Cc, Trace};
 
@@ -59,7 +59,7 @@ fn get_sort_type<T>(
 	Ok(sort_type)
 }
 
-pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: &FuncVal) -> Result<Cc<Vec<Val>>> {
+pub fn sort(values: Cc<Vec<Val>>, key_getter: &FuncVal) -> Result<Cc<Vec<Val>>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
@@ -81,10 +81,7 @@ pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: &FuncVal) -> Result<
 	} else {
 		let mut vk = Vec::with_capacity(values.len());
 		for value in values.iter() {
-			vk.push((
-				value.clone(),
-				key_getter.evaluate_values(ctx.clone(), &[value.clone()])?,
-			));
+			vk.push((value.clone(), key_getter.evaluate_values(&[value.clone()])?));
 		}
 		let sort_type = get_sort_type(&mut vk, |v| &mut v.1)?;
 		match sort_type {

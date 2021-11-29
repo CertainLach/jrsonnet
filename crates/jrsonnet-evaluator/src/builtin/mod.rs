@@ -1,10 +1,12 @@
+use crate::typed::{Any, Either, Null, PositiveF64, VecVal, M1};
+use crate::{self as jrsonnet_evaluator, ObjValue};
 use crate::{
 	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
 	parse_args, primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal,
-	IndexableVal, LazyVal, Val,
+	IndexableVal, Val,
 };
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
@@ -13,7 +15,12 @@ use jrsonnet_parser::{ArgsDesc, ExprLocation};
 use jrsonnet_types::ty;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
-use std::{collections::HashMap, convert::TryFrom, path::PathBuf, rc::Rc};
+use std::{
+	collections::HashMap,
+	convert::{TryFrom, TryInto},
+	path::PathBuf,
+	rc::Rc,
+};
 
 pub mod stdlib;
 pub use stdlib::*;
@@ -24,15 +31,15 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
-pub fn std_format(str: IStr, vals: Val) -> Result<Val> {
+pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 	push_frame(
 		&ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0),
 		|| format!("std.format of {}", str),
 		|| {
 			Ok(match vals {
-				Val::Arr(vals) => Val::Str(format_arr(&str, &vals.evaluated()?)?.into()),
-				Val::Obj(obj) => Val::Str(format_obj(&str, &obj)?.into()),
-				o => Val::Str(format_arr(&str, &[o])?.into()),
+				Val::Arr(vals) => format_arr(&str, &vals.evaluated()?)?,
+				Val::Obj(obj) => format_obj(&str, &obj)?,
+				o => format_arr(&str, &[o])?,
 			})
 		},
 	)
@@ -139,265 +146,177 @@ thread_local! {
 	};
 }
 
-fn builtin_length(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "length", args, 1, [
-		0, x: ty!((string | object | array));
-	], {
-		Ok(match x {
-			Val::Str(n) => Val::Num(n.chars().count() as f64),
-			Val::Arr(a) => Val::Num(a.len() as f64),
-			Val::Obj(o) => Val::Num(
-				o.fields_visibility()
-					.into_iter()
-					.filter(|(_k, v)| *v)
-					.count() as f64,
-			),
-			_ => unreachable!(),
-		})
+#[jrsonnet_macros::builtin]
+fn builtin_length(x: Either<IStr, Either<VecVal, ObjValue>>) -> Result<usize> {
+	Ok(match x {
+		Either::Left(x) => x.len(),
+		Either::Right(Either::Left(x)) => x.0.len(),
+		Either::Right(Either::Right(x)) => x
+			.fields_visibility()
+			.into_iter()
+			.filter(|(_k, v)| *v)
+			.count(),
 	})
 }
 
-fn builtin_type(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "type", args, 1, [
-		0, x: ty!(any);
-	], {
-		Ok(Val::Str(x.value_type().name().into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_type(x: Any) -> Result<IStr> {
+	Ok(x.0.value_type().name().into())
 }
 
-fn builtin_make_array(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "makeArray", args, 2, [
-		0, sz: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
-		1, func: ty!(function) => Val::Func;
-	], {
-		let mut out = Vec::with_capacity(sz as usize);
-		for i in 0..sz as usize {
-			out.push(LazyVal::new_resolved(func.evaluate_values(
-				context.clone(),
-				&[Val::Num(i as f64)]
-			)?))
-		}
-		Ok(Val::Arr(out.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_make_array(sz: usize, func: Cc<FuncVal>) -> Result<VecVal> {
+	let mut out = Vec::with_capacity(sz);
+	for i in 0..sz {
+		out.push(func.evaluate_values(&[Val::Num(i as f64)])?)
+	}
+	Ok(VecVal(out))
 }
 
-fn builtin_codepoint(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "codepoint", args, 1, [
-		0, str: ty!(char) => Val::Str;
-	], {
-		Ok(Val::Num(str.chars().next().unwrap() as u32 as f64))
-	})
+#[jrsonnet_macros::builtin]
+const fn builtin_codepoint(str: char) -> Result<u32> {
+	Ok(str as u32)
 }
 
-fn builtin_object_fields_ex(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "objectFieldsEx", args, 2, [
-		0, obj: ty!(object) => Val::Obj;
-		1, inc_hidden: ty!(boolean) => Val::Bool;
-	], {
-		let out = obj.fields_ex(inc_hidden);
-		Ok(Val::Arr(out.into_iter().map(Val::Str).collect::<Vec<_>>().into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_object_fields_ex(obj: ObjValue, inc_hidden: bool) -> Result<VecVal> {
+	let out = obj.fields_ex(inc_hidden);
+	Ok(VecVal(out.into_iter().map(Val::Str).collect::<Vec<_>>()))
 }
 
-fn builtin_object_has_ex(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "objectHasEx", args, 3, [
-		0, obj: ty!(object) => Val::Obj;
-		1, f: ty!(string) => Val::Str;
-		2, inc_hidden: ty!(boolean) => Val::Bool;
-	], {
-		Ok(Val::Bool(obj.has_field_ex(f, inc_hidden)))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_object_has_ex(obj: ObjValue, f: IStr, inc_hidden: bool) -> Result<bool> {
+	Ok(obj.has_field_ex(f, inc_hidden))
 }
 
-fn builtin_parse_json(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "parseJson", args, 1, [
-		0, s: ty!(string) => Val::Str;
-	], {
-		let value: serde_json::Value = serde_json::from_str(&s).map_err(|e| RuntimeError(format!("failed to parse json: {}", e).into()))?;
-		Ok(Val::try_from(&value)?)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_parse_json(s: IStr) -> Result<Any> {
+	let value: serde_json::Value = serde_json::from_str(&s)
+		.map_err(|e| RuntimeError(format!("failed to parse json: {}", e).into()))?;
+	Ok(Any(Val::try_from(&value)?))
 }
 
-fn builtin_parse_yaml(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "parseYaml", args, 1, [
-		0, s: ty!(string) => Val::Str;
-	], {
-		let value = serde_yaml::Deserializer::from_str_with_quirks(&s, DeserializingQuirks { old_octals: true });
-		let mut out = vec![];
-		for item in value {
-			let value = serde_json::Value::deserialize(item)
-				.map_err(|e| RuntimeError(format!("failed to parse yaml: {}", e).into()))?;
-			let val = Val::try_from(&value)?;
-			out.push(val);
-		}
-		if out.is_empty() {
-			Ok(Val::Null)
-		} else if out.len() == 1 {
-			Ok(out.into_iter().next().unwrap())
-		} else {
-			Ok(Val::Arr(out.into()))
-		}
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_parse_yaml(s: IStr) -> Result<Any> {
+	let value = serde_yaml::Deserializer::from_str_with_quirks(
+		&s,
+		DeserializingQuirks { old_octals: true },
+	);
+	let mut out = vec![];
+	for item in value {
+		let value = serde_json::Value::deserialize(item)
+			.map_err(|e| RuntimeError(format!("failed to parse yaml: {}", e).into()))?;
+		let val = Val::try_from(&value)?;
+		out.push(val);
+	}
+	Ok(Any(if out.is_empty() {
+		Val::Null
+	} else if out.len() == 1 {
+		out.into_iter().next().unwrap()
+	} else {
+		Val::Arr(out.into())
+	}))
 }
 
-fn builtin_slice(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "slice", args, 4, [
-		0, indexable: ty!((string | array));
-		1, index: ty!((number | null));
-		2, end: ty!((number | null));
-		3, step: ty!((number | null));
-	], {
-		std_slice(
-			indexable.into_indexable()?,
-			index.try_cast_nullable_num("index")?.map(|v| v as usize),
-			end.try_cast_nullable_num("end")?.map(|v| v as usize),
-			step.try_cast_nullable_num("step")?.map(|v| v as usize),
-		)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_slice(
+	indexable: IndexableVal,
+	index: Either<usize, Null>,
+	end: Either<usize, Null>,
+	step: Either<usize, Null>,
+) -> Result<Any> {
+	std_slice(indexable, index.left(), end.left(), step.left()).map(Any)
 }
 
-fn builtin_substr(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "substr", args, 3, [
-		0, str: ty!(string) => Val::Str;
-		1, from: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
-		2, len: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
-	], {
-		let out: String = str.chars().skip(from as usize).take(len as usize).collect();
-		Ok(Val::Str(out.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_substr(str: IStr, from: usize, len: usize) -> Result<String> {
+	Ok(str.chars().skip(from as usize).take(len as usize).collect())
 }
 
-fn builtin_primitive_equals(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "primitiveEquals", args, 2, [
-		0, a: ty!(any);
-		1, b: ty!(any);
-	], {
-		Ok(Val::Bool(primitive_equals(&a, &b)?))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_primitive_equals(a: Any, b: Any) -> Result<bool> {
+	primitive_equals(&a.0, &b.0)
 }
 
-fn builtin_equals(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "equals", args, 2, [
-		0, a: ty!(any);
-		1, b: ty!(any);
-	], {
-		Ok(Val::Bool(equals(&a, &b)?))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_equals(a: Any, b: Any) -> Result<bool> {
+	equals(&a.0, &b.0)
 }
 
-fn builtin_modulo(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "modulo", args, 2, [
-		0, a: ty!(number) => Val::Num;
-		1, b: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(a % b))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_modulo(a: f64, b: f64) -> Result<f64> {
+	Ok(a % b)
 }
 
-fn builtin_mod(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "mod", args, 2, [
-		0, a: ty!((number | string));
-		1, b: ty!(any);
-	], {
-		evaluate_mod_op(&a, &b)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_mod(a: Either<f64, IStr>, b: Any) -> Result<Any> {
+	Ok(Any(evaluate_mod_op(
+		&match a {
+			Either::Left(v) => Val::Num(v),
+			Either::Right(s) => Val::Str(s),
+		},
+		&b.0,
+	)?))
 }
 
-fn builtin_floor(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "floor", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.floor()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_floor(x: f64) -> Result<f64> {
+	Ok(x.floor())
 }
 
-fn builtin_ceil(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "ceil", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.ceil()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_ceil(x: f64) -> Result<f64> {
+	Ok(x.ceil())
 }
 
-fn builtin_log(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "log", args, 1, [
-		0, n: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(n.ln()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_log(n: f64) -> Result<f64> {
+	Ok(n.ln())
 }
 
-fn builtin_pow(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "pow", args, 2, [
-		0, x: ty!(number) => Val::Num;
-		1, n: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.powf(n)))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_pow(x: f64, n: f64) -> Result<f64> {
+	Ok(x.powf(n))
 }
 
-fn builtin_sqrt(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "sqrt", args, 1, [
-		0, x: ty!(BoundedNumber<(Some(0.0)), (None)>) => Val::Num;
-	], {
-		Ok(Val::Num(x.sqrt()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_sqrt(x: PositiveF64) -> Result<f64> {
+	Ok(x.0.sqrt())
 }
 
-fn builtin_sin(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "sin", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.sin()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_sin(x: f64) -> Result<f64> {
+	Ok(x.sin())
 }
 
-fn builtin_cos(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "cos", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.cos()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_cos(x: f64) -> Result<f64> {
+	Ok(x.cos())
 }
 
-fn builtin_tan(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "tan", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.tan()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_tan(x: f64) -> Result<f64> {
+	Ok(x.tan())
 }
 
-fn builtin_asin(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "asin", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.asin()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_asin(x: f64) -> Result<f64> {
+	Ok(x.asin())
 }
 
-fn builtin_acos(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "acos", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.acos()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_acos(x: f64) -> Result<f64> {
+	Ok(x.acos())
 }
 
-fn builtin_atan(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "atan", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.atan()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_atan(x: f64) -> Result<f64> {
+	Ok(x.atan())
 }
 
-fn builtin_exp(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "exp", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(x.exp()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_exp(x: f64) -> Result<f64> {
+	Ok(x.exp())
 }
 
 fn frexp(s: f64) -> (f64, i16) {
@@ -411,198 +330,140 @@ fn frexp(s: f64) -> (f64, i16) {
 	}
 }
 
-fn builtin_mantissa(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "mantissa", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(frexp(x).0))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_mantissa(x: f64) -> Result<f64> {
+	Ok(frexp(x).0)
 }
 
-fn builtin_exponent(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "exponent", args, 1, [
-		0, x: ty!(number) => Val::Num;
-	], {
-		Ok(Val::Num(frexp(x).1.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_exponent(x: f64) -> Result<i16> {
+	Ok(frexp(x).1)
 }
 
-fn builtin_ext_var(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "extVar", args, 1, [
-		0, x: ty!(string) => Val::Str;
-	], {
-		Ok(with_state(|s| s.settings().ext_vars.get(&x).cloned()).ok_or(UndefinedExternalVariable(x))?)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_ext_var(x: IStr) -> Result<Any> {
+	Ok(Any(with_state(|s| s.settings().ext_vars.get(&x).cloned())
+		.ok_or(UndefinedExternalVariable(x))?))
 }
 
-fn builtin_native(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "native", args, 1, [
-		0, x: ty!(string) => Val::Str;
-	], {
-		Ok(with_state(|s| s.settings().ext_natives.get(&x).cloned()).map(|v| Val::Func(Cc::new(FuncVal::NativeExt(x.clone(), v)))).ok_or(UndefinedExternalFunction(x))?)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_native(name: IStr) -> Result<Cc<FuncVal>> {
+	Ok(with_state(|s| s.settings().ext_natives.get(&name).cloned())
+		.map(|v| Cc::new(FuncVal::NativeExt(name.clone(), v)))
+		.ok_or(UndefinedExternalFunction(name))?)
 }
 
-fn builtin_filter(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "filter", args, 2, [
-		0, func: ty!(function) => Val::Func;
-		1, arr: ty!(array) => Val::Arr;
-	], {
-		Ok(Val::Arr(arr.filter(|val| func
-			.evaluate_values(context.clone(), &[val.clone()])?
-			.try_cast_bool("filter predicate"))?))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_filter(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
+	arr.filter(|val| bool::try_from(func.evaluate_values(&[val.clone()])?))
 }
 
-fn builtin_map(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "map", args, 2, [
-		0, func: ty!(function) => Val::Func;
-		1, arr: ty!(array) => Val::Arr;
-	], {
-		Ok(Val::Arr(arr.map(|val| func
-			.evaluate_values(context.clone(), &[val]))?))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_map(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
+	arr.map(|val| func.evaluate_values(&[val]))
 }
 
-fn builtin_flatmap(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "flatMap", args, 2, [
-		0, func: ty!(function) => Val::Func;
-		1, arr: ty!((array | string));
-	], {
-		match arr {
-			Val::Str(s) => {
-				let mut out = String::new();
-				for c in s.chars() {
-					match func.evaluate_values(context.clone(), &[Val::Str(c.to_string().into())])? {
-						Val::Str(o) => out.push_str(&o),
-						_ => throw!(RuntimeError("in std.join all items should be strings".into())),
-					};
-				}
-				Ok(Val::Str(out.into()))
-			},
-			Val::Arr(a) => {
-				let mut out = Vec::new();
-				for el in a.iter() {
-					let el = el?;
-					match func.evaluate_values(context.clone(), &[el])? {
-						Val::Arr(o) => for oe in o.iter() {
+#[jrsonnet_macros::builtin]
+fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal> {
+	match arr {
+		IndexableVal::Str(s) => {
+			let mut out = String::new();
+			for c in s.chars() {
+				match func.evaluate_values(&[Val::Str(c.to_string().into())])? {
+					Val::Str(o) => out.push_str(&o),
+					_ => throw!(RuntimeError(
+						"in std.join all items should be strings".into()
+					)),
+				};
+			}
+			Ok(IndexableVal::Str(out.into()))
+		}
+		IndexableVal::Arr(a) => {
+			let mut out = Vec::new();
+			for el in a.iter() {
+				let el = el?;
+				match func.evaluate_values(&[el])? {
+					Val::Arr(o) => {
+						for oe in o.iter() {
 							out.push(oe?)
-						},
-						_ => throw!(RuntimeError("in std.join all items should be arrays".into())),
-					};
-				}
-				Ok(Val::Arr(out.into()))
-			},
-			_ => unreachable!(),
+						}
+					}
+					_ => throw!(RuntimeError(
+						"in std.join all items should be arrays".into()
+					)),
+				};
+			}
+			Ok(IndexableVal::Arr(out.into()))
 		}
-	})
+	}
 }
 
-fn builtin_foldl(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "foldl", args, 3, [
-		0, func: ty!(function) => Val::Func;
-		1, arr: ty!(array) => Val::Arr;
-		2, init: ty!(any);
-	], {
-		let mut acc = init;
-		for i in arr.iter() {
-			acc = func.evaluate_values(context.clone(), &[acc, i?])?;
-		}
-		Ok(acc)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_foldl(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
+	let mut acc = init.0;
+	for i in arr.iter() {
+		acc = func.evaluate_values(&[acc, i?])?;
+	}
+	Ok(Any(acc))
 }
 
-fn builtin_foldr(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "foldr", args, 3, [
-		0, func: ty!(function) => Val::Func;
-		1, arr: ty!(array) => Val::Arr;
-		2, init: ty!(any);
-	], {
-		let mut acc = init;
-		for i in arr.iter().rev() {
-			acc = func.evaluate_values(context.clone(), &[i?, acc])?;
-		}
-		Ok(acc)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_foldr(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
+	let mut acc = init.0;
+	for i in arr.iter().rev() {
+		acc = func.evaluate_values(&[i?, acc])?;
+	}
+	Ok(Any(acc))
 }
 
+#[jrsonnet_macros::builtin]
 #[allow(non_snake_case)]
-fn builtin_sort_impl(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "sort", args, 2, [
-		0, arr: ty!(array) => Val::Arr;
-		1, keyF: ty!(function) => Val::Func;
-	], {
-		if arr.len() <= 1 {
-			return Ok(Val::Arr(arr))
-		}
-		Ok(Val::Arr(ArrValue::Eager(sort::sort(context, arr.evaluated()?, &keyF)?)))
-	})
+fn builtin_sort_impl(arr: ArrValue, keyF: Cc<FuncVal>) -> Result<ArrValue> {
+	if arr.len() <= 1 {
+		return Ok(arr);
+	}
+	Ok(ArrValue::Eager(sort::sort(arr.evaluated()?, &keyF)?))
 }
 
-fn builtin_format(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "format", args, 2, [
-		0, str: ty!(string) => Val::Str;
-		1, vals: ty!(any)
-	], {
-		std_format(str, vals)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_format(str: IStr, vals: Any) -> Result<String> {
+	std_format(str, vals.0)
 }
 
-fn builtin_range(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "range", args, 2, [
-		0, from: ty!(number) => Val::Num;
-		1, to: ty!(number) => Val::Num;
-	], {
-		if to < from {
-			return Ok(Val::Arr(ArrValue::new_eager()))
-		}
-		let mut out = Vec::with_capacity((1+to as usize-from as usize).max(0));
-		for i in from as usize..=to as usize {
-			out.push(Val::Num(i as f64));
-		}
-		Ok(Val::Arr(out.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_range(from: i32, to: i32) -> Result<VecVal> {
+	if to < from {
+		return Ok(VecVal(Vec::new()));
+	}
+	let mut out = Vec::with_capacity((1 + to as usize - from as usize).max(0));
+	for i in from as usize..=to as usize {
+		out.push(Val::Num(i as f64));
+	}
+	Ok(VecVal(out))
 }
 
-fn builtin_char(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "char", args, 1, [
-		0, n: ty!(number) => Val::Num;
-	], {
-		let mut out = String::new();
-		out.push(std::char::from_u32(n as u32).ok_or_else(||
-			InvalidUnicodeCodepointGot(n as u32)
-		)?);
-		Ok(Val::Str(out.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_char(n: u32) -> Result<char> {
+	Ok(std::char::from_u32(n as u32).ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?)
 }
 
-fn builtin_encode_utf8(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "encodeUTF8", args, 1, [
-		0, str: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Arr((str.bytes().map(|b| Val::Num(b as f64)).collect::<Vec<Val>>()).into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_encode_utf8(str: IStr) -> Result<VecVal> {
+	Ok(VecVal(
+		str.bytes()
+			.map(|b| Val::Num(b as f64))
+			.collect::<Vec<Val>>(),
+	))
 }
 
-fn builtin_decode_utf8(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "decodeUTF8", args, 1, [
-		0, arr: ty!((Array<ubyte>)) => Val::Arr;
-	], {
-		let data: Result<Vec<u8>> = arr.iter().map(|v| v.map(|v| match v{
-			Val::Num(n) => n as u8,
-			_ => unreachable!(),
-		})).collect();
-		let data = data?;
-		Ok(Val::Str(String::from_utf8(data).map_err(|_| RuntimeError("bad utf8".into()))?.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_decode_utf8(arr: Vec<u8>) -> Result<String> {
+	Ok(String::from_utf8(arr).map_err(|_| RuntimeError("bad utf8".into()))?)
 }
 
-fn builtin_md5(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "md5", args, 1, [
-		0, str: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(format!("{:x}", md5::compute(&str.as_bytes())).into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_md5(str: IStr) -> Result<String> {
+	Ok(format!("{:x}", md5::compute(&str.as_bytes())))
 }
 
 fn builtin_trace(context: Context, loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
@@ -620,251 +481,174 @@ fn builtin_trace(context: Context, loc: &ExprLocation, args: &ArgsDesc) -> Resul
 	})
 }
 
-fn builtin_base64(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "base64", args, 1, [
-		0, input: ty!((string | (Array<number>)));
-	], {
-		Ok(Val::Str(match input {
-			Val::Str(s) => {
-				base64::encode(s.bytes().collect::<Vec<_>>()).into()
-			},
-			Val::Arr(a) => {
-				base64::encode(a.iter().map(|v| {
-					Ok(v?.unwrap_num()? as u8)
-				}).collect::<Result<Vec<_>>>()?).into()
-			},
-			_ => unreachable!()
-		}))
+#[jrsonnet_macros::builtin]
+fn builtin_base64(input: Either<Vec<u8>, IStr>) -> Result<String> {
+	Ok(match input {
+		Either::Left(a) => base64::encode(a),
+		Either::Right(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
 	})
 }
 
-fn builtin_base64_decode_bytes(
-	context: Context,
-	_loc: &ExprLocation,
-	args: &ArgsDesc,
-) -> Result<Val> {
-	parse_args!(context, "base64DecodeBytes", args, 1, [
-		0, input: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Arr(
-			base64::decode(&input.as_bytes())
-				.map_err(|_| RuntimeError("bad base64".into()))?
-				.iter()
-				.map(|v| Val::Num(*v as f64)).collect::<Vec<_>>().into()
-		))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_base64_decode_bytes(input: IStr) -> Result<Vec<u8>> {
+	Ok(base64::decode(&input.as_bytes()).map_err(|_| RuntimeError("bad base64".into()))?)
 }
 
-fn builtin_base64_decode(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "base64Decode", args, 1, [
-		0, input: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(
-			String::from_utf8(base64::decode(&input.as_bytes())
-				.map_err(|_| RuntimeError("bad base64".into()))?)
-				.map_err(|_| RuntimeError("bad utf8".into()))?.into()
-		))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_base64_decode(input: IStr) -> Result<String> {
+	let bytes = base64::decode(&input.as_bytes()).map_err(|_| RuntimeError("bad base64".into()))?;
+	Ok(String::from_utf8(bytes).map_err(|_| RuntimeError("bad utf8".into()))?)
 }
 
-fn builtin_join(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "join", args, 2, [
-		0, sep: ty!((string | array));
-		1, arr: ty!(array) => Val::Arr;
-	], {
-		Ok(match sep {
-			Val::Arr(joiner_items) => {
-				let mut out = Vec::new();
+#[jrsonnet_macros::builtin]
+fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
+	Ok(match sep {
+		IndexableVal::Arr(joiner_items) => {
+			let mut out = Vec::new();
 
-				let mut first = true;
-				for item in arr.iter() {
-					let item = item?.clone();
-					if let Val::Arr(items) = item {
-						if !first {
-							out.reserve(joiner_items.len());
-							// TODO: extend
-							for item in joiner_items.iter() {
-								out.push(item?);
-							}
-						}
-						first = false;
-						out.reserve(items.len());
+			let mut first = true;
+			for item in arr.iter() {
+				let item = item?.clone();
+				if let Val::Arr(items) = item {
+					if !first {
+						out.reserve(joiner_items.len());
 						// TODO: extend
-						for item in items.iter() {
+						for item in joiner_items.iter() {
 							out.push(item?);
 						}
-					} else {
-						throw!(RuntimeError("in std.join all items should be arrays".into()));
 					}
-				}
-
-				Val::Arr(out.into())
-			},
-			Val::Str(sep) => {
-				let mut out = String::new();
-
-				let mut first = true;
-				for item in arr.iter() {
-					let item = item?.clone();
-					if let Val::Str(item) = item {
-						if !first {
-							out += &sep;
-						}
-						first = false;
-						out += &item;
-					} else {
-						throw!(RuntimeError("in std.join all items should be strings".into()));
+					first = false;
+					out.reserve(items.len());
+					// TODO: extend
+					for item in items.iter() {
+						out.push(item?);
 					}
+				} else {
+					throw!(RuntimeError(
+						"in std.join all items should be arrays".into()
+					));
 				}
+			}
 
-				Val::Str(out.into())
-			},
-			_ => unreachable!()
-		})
+			IndexableVal::Arr(out.into())
+		}
+		IndexableVal::Str(sep) => {
+			let mut out = String::new();
+
+			let mut first = true;
+			for item in arr.iter() {
+				let item = item?.clone();
+				if let Val::Str(item) = item {
+					if !first {
+						out += &sep;
+					}
+					first = false;
+					out += &item;
+				} else {
+					throw!(RuntimeError(
+						"in std.join all items should be strings".into()
+					));
+				}
+			}
+
+			IndexableVal::Str(out.into())
+		}
 	})
 }
 
-fn builtin_escape_string_json(
-	context: Context,
-	_loc: &ExprLocation,
-	args: &ArgsDesc,
-) -> Result<Val> {
-	parse_args!(context, "escapeStringJson", args, 1, [
-		0, str_: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(escape_string_json(&str_).into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_escape_string_json(str_: IStr) -> Result<String> {
+	Ok(escape_string_json(&str_))
 }
 
-fn builtin_manifest_json_ex(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "manifestJsonEx", args, 2, [
-		0, value: ty!(any);
-		1, indent: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(manifest_json_ex(&value, &ManifestJsonOptions {
+#[jrsonnet_macros::builtin]
+fn builtin_manifest_json_ex(value: Any, indent: IStr) -> Result<String> {
+	manifest_json_ex(
+		&value.0,
+		&ManifestJsonOptions {
 			padding: &indent,
 			mtype: ManifestType::Std,
-		})?.into()))
-	})
+		},
+	)
 }
 
+#[jrsonnet_macros::builtin]
 fn builtin_manifest_yaml_doc(
-	context: Context,
-	_loc: &ExprLocation,
-	args: &ArgsDesc,
-) -> Result<Val> {
-	parse_args!(context, "manifestYamlDoc", args, 3, [
-		0, value: ty!(any);
-		1, indent_array_in_object: ty!(boolean) => Val::Bool;
-		2, quote_keys: ty!(boolean) => Val::Bool;
-	], {
-		Ok(Val::Str(manifest_yaml_ex(&value, &ManifestYamlOptions {
+	value: Any,
+	indent_array_in_object: bool,
+	quote_keys: bool,
+) -> Result<String> {
+	manifest_yaml_ex(
+		&value.0,
+		&ManifestYamlOptions {
 			padding: "  ",
 			arr_element_padding: if indent_array_in_object { "  " } else { "" },
 			quote_keys,
-		})?.into()))
-	})
+		},
+	)
 }
 
-fn builtin_reverse(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "reverse", args, 1, [
-		0, value: ty!(array) => Val::Arr;
-	], {
-		Ok(Val::Arr(value.reversed()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_reverse(value: ArrValue) -> Result<ArrValue> {
+	Ok(value.reversed())
 }
 
-fn builtin_id(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "id", args, 1, [
-		0, v: ty!(any);
-	], {
-		Ok(v)
-	})
+#[jrsonnet_macros::builtin]
+const fn builtin_id(v: Any) -> Result<Any> {
+	Ok(v)
 }
 
-fn builtin_str_replace(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "strReplace", args, 3, [
-		0, str: ty!(string) => Val::Str;
-		1, from: ty!(string) => Val::Str;
-		2, to: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(str.replace(&from as &str, &to as &str).into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
+	Ok(str.replace(&from as &str, &to as &str))
 }
 
-fn builtin_splitlimit(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "splitLimit", args, 3, [
-		0, str: ty!(string) => Val::Str;
-		1, c: ty!(char) => Val::Str;
-		2, maxsplits: ty!(number) => Val::Num;
-	], {
-		let maxsplits = maxsplits as isize;
-		let c = c.chars().next().unwrap();
-
-		let out: Vec<Val> = if maxsplits == -1 {
-			str.split(c).map(|s| Val::Str(s.into())).collect()
-		} else {
-			str.splitn(maxsplits as usize + 1, c).map(|s| Val::Str(s.into())).collect()
-		};
-
-		Ok(Val::Arr(out.into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_splitlimit(str: IStr, c: char, maxsplits: Either<usize, M1>) -> Result<VecVal> {
+	Ok(VecVal(match maxsplits {
+		Either::Left(n) => str.splitn(n + 1, c).map(|s| Val::Str(s.into())).collect(),
+		Either::Right(_) => str.split(c).map(|s| Val::Str(s.into())).collect(),
+	}))
 }
 
-fn builtin_ascii_upper(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "asciiUpper", args, 1, [
-		0, str: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(str.to_ascii_uppercase().into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_ascii_upper(str: IStr) -> Result<String> {
+	Ok(str.to_ascii_uppercase())
 }
 
-fn builtin_ascii_lower(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "asciiLower", args, 1, [
-		0, str: ty!(string) => Val::Str;
-	], {
-		Ok(Val::Str(str.to_ascii_lowercase().into()))
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_ascii_lower(str: IStr) -> Result<String> {
+	Ok(str.to_ascii_lowercase())
 }
 
-fn builtin_member(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "member", args, 2, [
-		0, arr: ty!((array | string));
-		1, x: ty!(any);
-	], {
-		match arr {
-			Val::Str(s) => {
-				let x = x.try_cast_str("x should be string")?;
-				Ok(Val::Bool(!x.is_empty() && s.contains(&*x)))
-			}
-			Val::Arr(a) => {
-				for item in a.iter() {
-					let item = item?;
-					if equals(&item, &x)? {
-						return Ok(Val::Bool(true));
-					}
+#[jrsonnet_macros::builtin]
+fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
+	match arr {
+		IndexableVal::Str(s) => {
+			let x: IStr = IStr::try_from(x.0)?;
+			Ok(!x.is_empty() && s.contains(&*x))
+		}
+		IndexableVal::Arr(a) => {
+			for item in a.iter() {
+				let item = item?;
+				if equals(&item, &x.0)? {
+					return Ok(true);
 				}
-				Ok(Val::Bool(false))
 			}
-			_ => unreachable!(),
+			Ok(false)
 		}
-	})
+	}
 }
 
-fn builtin_count(context: Context, _loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "count", args, 2, [
-		0, arr: ty!(array) => Val::Arr;
-		1, x: ty!(any);
-	], {
-		let mut count = 0;
-		for item in arr.iter() {
-			let item = item?;
-			if equals(&item, &x)? {
-				count += 1;
-			}
+#[jrsonnet_macros::builtin]
+fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
+	let mut count = 0;
+	for item in arr.iter() {
+		if equals(&item.0, &v.0)? {
+			count += 1;
 		}
-		Ok(Val::Num(count as f64))
-	})
+	}
+	Ok(count)
 }
 
 pub fn call_builtin(

@@ -122,6 +122,7 @@ impl TraceFormat for CompactFormat {
 			.map(|el| &el.location)
 			.map(|location| {
 				use std::fmt::Write;
+				#[allow(clippy::option_if_let_else)]
 				if let Some(location) = location {
 					let mut resolved_path = self.resolver.resolve(&location.0);
 					// TODO: Process all trace elements first

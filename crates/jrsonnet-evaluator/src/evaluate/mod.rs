@@ -1,3 +1,5 @@
+use std::convert::TryFrom;
+
 use crate::{
 	builtin::std_slice,
 	error::Error::*,
@@ -189,14 +191,18 @@ pub fn evaluate_field_name(
 ) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
-		jrsonnet_parser::FieldName::Dyn(expr) => {
-			let value = evaluate(context, expr)?;
-			if matches!(value, Val::Null) {
-				None
-			} else {
-				Some(value.try_cast_str("dynamic field name")?)
-			}
-		}
+		jrsonnet_parser::FieldName::Dyn(expr) => push_frame(
+			&expr.1,
+			|| "evaluating field name".to_string(),
+			|| {
+				let value = evaluate(context, expr)?;
+				if matches!(value, Val::Null) {
+					Ok(None)
+				} else {
+					Ok(Some(IStr::try_from(value)?))
+				}
+			},
+		)?,
 	})
 }
 
@@ -208,7 +214,7 @@ pub fn evaluate_comp(
 	match specs.get(0) {
 		None => callback(context)?,
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
-			if evaluate(context.clone(), cond)?.try_cast_bool("if spec")? {
+			if bool::try_from(evaluate(context.clone(), cond)?)? {
 				evaluate_comp(context, &specs[1..], callback)?
 			}
 		}
@@ -459,10 +465,7 @@ pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	let assertion_result = push_frame(
 		&value.1,
 		|| "assertion condition".to_owned(),
-		|| {
-			evaluate(context.clone(), value)?
-				.try_cast_bool("assertion condition should be of type `boolean`")
-		},
+		|| bool::try_from(evaluate(context.clone(), value)?),
 	)?;
 	if !assertion_result {
 		push_frame(
@@ -633,11 +636,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		ErrorStmt(e) => push_frame(
 			loc,
 			|| "error statement".to_owned(),
-			|| {
-				throw!(RuntimeError(
-					evaluate(context, e)?.try_cast_str("error text should be of type `string`")?,
-				))
-			},
+			|| throw!(RuntimeError(IStr::try_from(evaluate(context, e)?)?,)),
 		)?,
 		IfElse {
 			cond,
@@ -647,7 +646,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			if push_frame(
 				loc,
 				|| "if condition".to_owned(),
-				|| evaluate(context.clone(), &cond.0)?.try_cast_bool("in if condition"),
+				|| bool::try_from(evaluate(context.clone(), &cond.0)?),
 			)? {
 				evaluate(context, cond_then)?
 			} else {
