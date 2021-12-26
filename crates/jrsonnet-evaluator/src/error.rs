@@ -16,8 +16,6 @@ use thiserror::Error;
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
-	#[error("argument reordering in intrisics not supported yet")]
-	IntrinsicArgumentReorderingIsNotSupportedYet,
 
 	#[error("operator {0} does not operate on type {1}")]
 	UnaryOperatorDoesNotOperateOnType(UnaryOpType, ValType),

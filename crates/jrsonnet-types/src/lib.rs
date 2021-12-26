@@ -191,9 +191,9 @@ impl Display for ComplexValType {
 				write!(f, "}}")?;
 			}
 			ComplexValType::Union(v) => write_union(f, true, v.iter())?,
-			ComplexValType::UnionRef(v) => write_union(f, true, v.iter().map(|v| *v))?,
+			ComplexValType::UnionRef(v) => write_union(f, true, v.iter().copied())?,
 			ComplexValType::Sum(v) => write_union(f, false, v.iter())?,
-			ComplexValType::SumRef(v) => write_union(f, false, v.iter().map(|v| *v))?,
+			ComplexValType::SumRef(v) => write_union(f, false, v.iter().copied())?,
 		};
 		Ok(())
 	}

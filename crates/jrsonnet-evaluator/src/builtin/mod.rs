@@ -5,14 +5,13 @@ use crate::{
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
-	parse_args, primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal,
+	primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal,
 	IndexableVal, Val,
 };
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, ExprLocation};
-use jrsonnet_types::ty;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
 use std::{
@@ -466,19 +465,19 @@ fn builtin_md5(str: IStr) -> Result<String> {
 	Ok(format!("{:x}", md5::compute(&str.as_bytes())))
 }
 
-fn builtin_trace(context: Context, loc: &ExprLocation, args: &ArgsDesc) -> Result<Val> {
-	parse_args!(context, "trace", args, 2, [
-		0, str: ty!(string) => Val::Str;
-		1, rest: ty!(any);
-	], {
-		eprint!("TRACE:");
-			with_state(|s|{
-				let locs = s.map_source_locations(&loc.0, &[loc.1]);
-				eprint!(" {}:{}", loc.0.file_name().unwrap().to_str().unwrap(), locs[0].line);
-			});
-		eprintln!(" {}", str);
-		Ok(rest)
-	})
+#[jrsonnet_macros::builtin]
+fn builtin_trace(#[location] loc: &ExprLocation, str: IStr, rest: Any) -> Result<Any> {
+	eprint!("TRACE:");
+	with_state(|s| {
+		let locs = s.map_source_locations(&loc.0, &[loc.1]);
+		eprint!(
+			" {}:{}",
+			loc.0.file_name().unwrap().to_str().unwrap(),
+			locs[0].line
+		);
+	});
+	eprintln!(" {}", str);
+	Ok(rest) as Result<Any>
 }
 
 #[jrsonnet_macros::builtin]
