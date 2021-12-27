@@ -1,12 +1,14 @@
 use crate::function::StaticBuiltin;
-use crate::typed::{Any, Either, Null, PositiveF64, VecVal, M1};
-use crate::{self as jrsonnet_evaluator, ObjValue};
+use crate::typed::{Any, Null, PositiveF64, VecVal, M1};
+use crate::{self as jrsonnet_evaluator, Either, ObjValue};
 use crate::{
 	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
-	primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal, IndexableVal, Val,
+	primitive_equals, push_frame, throw,
+	typed::{Either2, Either4},
+	with_state, ArrValue, Context, FuncVal, IndexableVal, Val,
 };
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
@@ -140,16 +142,17 @@ thread_local! {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_length(x: Either<IStr, Either<VecVal, Either<ObjValue, Cc<FuncVal>>>>) -> Result<usize> {
+fn builtin_length(x: Either![IStr, VecVal, ObjValue, Cc<FuncVal>]) -> Result<usize> {
+	use Either4::*;
 	Ok(match x {
-		Either::Left(x) => x.len(),
-		Either::Right(Either::Left(x)) => x.0.len(),
-		Either::Right(Either::Right(Either::Left(x))) => x
+		A(x) => x.len(),
+		B(x) => x.0.len(),
+		C(x) => x
 			.fields_visibility()
 			.into_iter()
 			.filter(|(_k, v)| *v)
 			.count(),
-		Either::Right(Either::Right(Either::Right(f))) => f.args_len(),
+		D(f) => f.args_len(),
 	})
 }
 
@@ -215,11 +218,11 @@ fn builtin_parse_yaml(s: IStr) -> Result<Any> {
 #[jrsonnet_macros::builtin]
 fn builtin_slice(
 	indexable: IndexableVal,
-	index: Either<usize, Null>,
-	end: Either<usize, Null>,
-	step: Either<usize, Null>,
+	index: Option<usize>,
+	end: Option<usize>,
+	step: Option<usize>,
 ) -> Result<Any> {
-	std_slice(indexable, index.left(), end.left(), step.left()).map(Any)
+	std_slice(indexable, index, end, step).map(Any)
 }
 
 #[jrsonnet_macros::builtin]
@@ -243,11 +246,12 @@ fn builtin_modulo(a: f64, b: f64) -> Result<f64> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_mod(a: Either<f64, IStr>, b: Any) -> Result<Any> {
+fn builtin_mod(a: Either![f64, IStr], b: Any) -> Result<Any> {
+	use Either2::*;
 	Ok(Any(evaluate_mod_op(
 		&match a {
-			Either::Left(v) => Val::Num(v),
-			Either::Right(s) => Val::Str(s),
+			A(v) => Val::Num(v),
+			B(s) => Val::Str(s),
 		},
 		&b.0,
 	)?))
@@ -481,10 +485,11 @@ fn builtin_trace(#[location] loc: Option<&ExprLocation>, str: IStr, rest: Any) -
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_base64(input: Either<Vec<u8>, IStr>) -> Result<String> {
+fn builtin_base64(input: Either![Vec<u8>, IStr]) -> Result<String> {
+	use Either2::*;
 	Ok(match input {
-		Either::Left(a) => base64::encode(a),
-		Either::Right(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
+		A(a) => base64::encode(a),
+		B(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
 	})
 }
 
@@ -607,10 +612,11 @@ fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_splitlimit(str: IStr, c: char, maxsplits: Either<usize, M1>) -> Result<VecVal> {
+fn builtin_splitlimit(str: IStr, c: char, maxsplits: Either![usize, M1]) -> Result<VecVal> {
+	use Either2::*;
 	Ok(VecVal(match maxsplits {
-		Either::Left(n) => str.splitn(n + 1, c).map(|s| Val::Str(s.into())).collect(),
-		Either::Right(_) => str.split(c).map(|s| Val::Str(s.into())).collect(),
+		A(n) => str.splitn(n + 1, c).map(|s| Val::Str(s.into())).collect(),
+		B(_) => str.split(c).map(|s| Val::Str(s.into())).collect(),
 	}))
 }
 

@@ -315,66 +315,68 @@ impl TryFrom<M1> for Val {
 	}
 }
 
-pub enum Either<A, B> {
-	Left(A),
-	Right(B),
+macro_rules! decl_either {
+	($($name: ident, $($id: ident)*);*) => {$(
+		pub enum $name<$($id),*> {
+			$($id($id)),*
+		}
+		impl<$($id),*> Typed for $name<$($id),*>
+		where
+			$($id: Typed,)*
+		{
+			const TYPE: &'static ComplexValType = &ComplexValType::UnionRef(&[$($id::TYPE),*]);
+		}
+		impl<$($id),*> TryFrom<Val> for $name<$($id),*>
+		where
+			$($id: Typed,)*
+		{
+			type Error = LocError;
+
+			fn try_from(value: Val) -> Result<Self> {
+				$(
+					if $id::TYPE.check(&value).is_ok() {
+						$id::try_from(value).map(Self::$id)
+					} else
+				)* {
+					<Self as Typed>::TYPE.check(&value)?;
+					unreachable!()
+				}
+			}
+		}
+		impl<$($id),*> TryFrom<$name<$($id),*>> for Val
+		where
+			$($id: Typed,)*
+		{
+			type Error = LocError;
+			fn try_from(value: $name<$($id),*>) -> Result<Self> {
+				match value {$(
+					$name::$id(v) => v.try_into()
+				),*}
+			}
+		}
+	)*}
+}
+decl_either!(
+	Either1, A;
+	Either2, A B;
+	Either3, A B C;
+	Either4, A B C D;
+	Either5, A B C D E;
+	Either6, A B C D E F;
+	Either7, A B C D E F G
+);
+#[macro_export]
+macro_rules! Either {
+	($a:ty) => {Either1<$a>};
+	($a:ty, $b:ty) => {Either2<$a, $b>};
+	($a:ty, $b:ty, $c:ty) => {Either3<$a, $b, $c>};
+	($a:ty, $b:ty, $c:ty, $d:ty) => {Either4<$a, $b, $c, $d>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty) => {Either5<$a, $b, $c, $d, $e>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty) => {Either6<$a, $b, $c, $d, $e, $f>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty, $g:ty) => {Either7<$a, $b, $c, $d, $e, $f, $g>};
 }
 
-impl<A, B> Either<A, B> {
-	pub fn to_left(self, f: impl FnOnce(B) -> A) -> A {
-		match self {
-			Either::Left(l) => l,
-			Either::Right(r) => f(r),
-		}
-	}
-	#[allow(clippy::missing_const_for_fn)]
-	pub fn left(self) -> Option<A> {
-		match self {
-			Either::Left(a) => Some(a),
-			Either::Right(_) => None,
-		}
-	}
-}
-
-impl<A, B> Typed for Either<A, B>
-where
-	A: Typed,
-	B: Typed,
-{
-	const TYPE: &'static ComplexValType = &ComplexValType::UnionRef(&[A::TYPE, B::TYPE]);
-}
-impl<A, B> TryFrom<Val> for Either<A, B>
-where
-	A: Typed,
-	B: Typed,
-{
-	type Error = LocError;
-
-	fn try_from(value: Val) -> Result<Self> {
-		if A::TYPE.check(&value).is_ok() {
-			A::try_from(value).map(Self::Left)
-		} else if B::TYPE.check(&value).is_ok() {
-			B::try_from(value).map(Self::Right)
-		} else {
-			<Self as Typed>::TYPE.check(&value)?;
-			unreachable!()
-		}
-	}
-}
-impl<A, B> TryFrom<Either<A, B>> for Val
-where
-	A: Typed,
-	B: Typed,
-{
-	type Error = LocError;
-
-	fn try_from(value: Either<A, B>) -> Result<Self> {
-		match value {
-			Either::Left(a) => a.try_into(),
-			Either::Right(b) => b.try_into(),
-		}
-	}
-}
+pub type MyType = Either![u32, f64, String];
 
 impl Typed for ArrValue {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
