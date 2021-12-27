@@ -1,14 +1,15 @@
 use crate::{
-	error::Error::*, evaluate, evaluate_named, gc::TraceBox, throw, Context, FutureWrapper,
-	GcHashMap, LazyVal, LazyValValue, Result, Val,
+	error::{Error::*, LocError},
+	evaluate, evaluate_named,
+	gc::TraceBox,
+	throw,
+	typed::Typed,
+	Context, FutureWrapper, GcHashMap, LazyVal, LazyValValue, Result, Val,
 };
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, LocExpr, ParamsDesc};
-use std::collections::HashMap;
-
-const NO_DEFAULT_CONTEXT: &str =
-	"no default context set for call with defined default parameter value";
+use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
+use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
 
 #[derive(Trace)]
 struct EvaluateLazyVal {
@@ -18,6 +19,248 @@ struct EvaluateLazyVal {
 impl LazyValValue for EvaluateLazyVal {
 	fn get(self: Box<Self>) -> Result<Val> {
 		evaluate(self.context, &self.expr)
+	}
+}
+
+pub trait ArgLike {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
+}
+impl ArgLike for &LocExpr {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+		Ok(if tailstrict {
+			LazyVal::new_resolved(evaluate(ctx, self)?)
+		} else {
+			LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+				context: ctx,
+				expr: (*self).clone(),
+			})))
+		})
+	}
+}
+impl<T> ArgLike for T
+where
+	T: Typed + Clone,
+	Val: TryFrom<T, Error = LocError>,
+{
+	fn evaluate_arg(&self, _ctx: Context, _tailstrict: bool) -> Result<LazyVal> {
+		let val: Val = Val::try_from(self.clone())?;
+		Ok(LazyVal::new_resolved(val))
+	}
+}
+pub enum TlaArg {
+	String(IStr),
+	Code(LocExpr),
+	Val(Val),
+}
+impl ArgLike for TlaArg {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+		match self {
+			TlaArg::String(s) => Ok(LazyVal::new_resolved(Val::Str(s.clone()))),
+			TlaArg::Code(code) => Ok(if tailstrict {
+				LazyVal::new_resolved(evaluate(ctx, code)?)
+			} else {
+				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+					context: ctx,
+					expr: code.clone(),
+				})))
+			}),
+			TlaArg::Val(val) => Ok(LazyVal::new_resolved(val.clone())),
+		}
+	}
+}
+
+pub trait ArgsLike {
+	fn unnamed_len(&self) -> usize;
+	fn unnamed_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()>;
+	fn named_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()>;
+	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
+}
+
+impl ArgsLike for ArgsDesc {
+	fn unnamed_len(&self) -> usize {
+		self.unnamed.len()
+	}
+
+	fn unnamed_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		for (id, arg) in self.unnamed.iter().enumerate() {
+			handler(
+				id,
+				if tailstrict {
+					LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+				} else {
+					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+						context: ctx.clone(),
+						expr: arg.clone(),
+					})))
+				},
+			)?;
+		}
+		Ok(())
+	}
+
+	fn named_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		for (name, arg) in self.named.iter() {
+			handler(
+				name,
+				if tailstrict {
+					LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+				} else {
+					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+						context: ctx.clone(),
+						expr: arg.clone(),
+					})))
+				},
+			)?;
+		}
+		Ok(())
+	}
+
+	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+		for (name, _) in self.named.iter() {
+			handler(name)
+		}
+	}
+}
+
+impl<A: ArgLike> ArgsLike for [(IStr, A)] {
+	fn unnamed_len(&self) -> usize {
+		0
+	}
+
+	fn unnamed_iter(
+		&self,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	fn named_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		for (name, val) in self.iter() {
+			handler(name, val.evaluate_arg(ctx.clone(), tailstrict)?)?;
+		}
+		Ok(())
+	}
+
+	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+		for (name, _) in self.iter() {
+			handler(name);
+		}
+	}
+}
+
+impl<A: ArgLike> ArgsLike for HashMap<IStr, A> {
+	fn unnamed_len(&self) -> usize {
+		0
+	}
+
+	fn unnamed_iter(
+		&self,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	fn named_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		for (name, value) in self.iter() {
+			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
+		}
+		Ok(())
+	}
+
+	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+		for (name, _) in self.iter() {
+			handler(name);
+		}
+	}
+}
+
+impl<A: ArgLike> ArgsLike for [A] {
+	fn unnamed_len(&self) -> usize {
+		self.len()
+	}
+
+	fn unnamed_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		for (i, arg) in self.iter().enumerate() {
+			handler(i, arg.evaluate_arg(ctx.clone(), tailstrict)?)?;
+		}
+		Ok(())
+	}
+
+	fn named_iter(
+		&self,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+}
+impl<A: ArgLike> ArgsLike for &[A] {
+	fn unnamed_len(&self) -> usize {
+		(*self).unnamed_len()
+	}
+
+	fn unnamed_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		(*self).unnamed_iter(ctx, tailstrict, handler)
+	}
+
+	fn named_iter(
+		&self,
+		ctx: Context,
+		tailstrict: bool,
+		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		(*self).named_iter(ctx, tailstrict, handler)
+	}
+
+	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+		(*self).named_names(handler)
 	}
 }
 
@@ -33,55 +276,34 @@ pub fn parse_function_call(
 	ctx: Context,
 	body_ctx: Context,
 	params: &ParamsDesc,
-	args: &ArgsDesc,
+	args: &dyn ArgsLike,
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut passed_args = GcHashMap::with_capacity(params.len());
-	if args.unnamed.len() > params.len() {
+	if args.unnamed_len() > params.len() {
 		throw!(TooManyArgsFunctionHas(params.len()))
 	}
 
 	let mut filled_args = 0;
 
-	for (id, arg) in args.unnamed.iter().enumerate() {
+	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
-		passed_args.insert(
-			name,
-			if tailstrict {
-				LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
-			} else {
-				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-					context: ctx.clone(),
-					expr: arg.clone(),
-				})))
-			},
-		);
+		passed_args.insert(name, arg);
 		filled_args += 1;
-	}
+		Ok(())
+	})?;
 
-	for (name, value) in args.named.iter() {
+	args.named_iter(ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
 		if !params.iter().any(|p| &p.0 == name) {
 			throw!(UnknownFunctionParameter((name as &str).to_owned()));
 		}
-		if passed_args
-			.insert(
-				name.clone(),
-				if tailstrict {
-					LazyVal::new_resolved(evaluate(ctx.clone(), value)?)
-				} else {
-					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-						context: ctx.clone(),
-						expr: value.clone(),
-					})))
-				},
-			)
-			.is_some()
-		{
+		if passed_args.insert(name.clone(), value).is_some() {
 			throw!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_args += 1;
-	}
+		Ok(())
+	})?;
 
 	if filled_args < params.len() {
 		// Some args are unset, but maybe we have defaults for them
@@ -123,8 +345,14 @@ pub fn parse_function_call(
 
 		// Some args still wasn't filled
 		if filled_args != params.len() {
-			for param in params.iter().skip(args.unnamed.len()) {
-				if !args.named.iter().any(|a| a.0 == param.0) {
+			for param in params.iter().skip(args.unnamed_len()) {
+				let mut found = false;
+				args.named_names(&mut |name| {
+					if name == &param.0 {
+						found = true;
+					}
+				});
+				if !found {
 					throw!(FunctionParameterNotBoundInCall(param.0.clone()));
 				}
 			}
@@ -141,10 +369,31 @@ pub fn parse_function_call(
 	}
 }
 
-#[derive(Clone, Copy)]
+type BuiltinParamName = Cow<'static, str>;
+
+#[derive(Clone)]
 pub struct BuiltinParam {
-	pub name: &'static str,
+	pub name: BuiltinParamName,
 	pub has_default: bool,
+}
+
+pub trait Builtin: Trace {
+	fn name(&self) -> &str;
+	fn params(&self) -> &[BuiltinParam];
+	fn call(
+		&self,
+		context: Context,
+		loc: Option<&ExprLocation>,
+		args: &dyn ArgsLike,
+	) -> Result<Val>;
+}
+
+pub trait StaticBuiltin: Builtin + Send + Sync
+where
+	Self: 'static,
+{
+	// In impl, to make it object safe:
+	// const INST: &'static Self;
 }
 
 /// You shouldn't probally use this function, use jrsonnet_macros::builtin instead
@@ -154,58 +403,38 @@ pub struct BuiltinParam {
 /// * `params`: function parameters' definition
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
-pub fn parse_builtin_call<'k>(
+pub fn parse_builtin_call(
 	ctx: Context,
-	params: &'static [BuiltinParam],
-	args: &'k ArgsDesc,
+	params: &[BuiltinParam],
+	args: &dyn ArgsLike,
 	tailstrict: bool,
-) -> Result<GcHashMap<&'k str, LazyVal>> {
+) -> Result<GcHashMap<BuiltinParamName, LazyVal>> {
 	let mut passed_args = GcHashMap::with_capacity(params.len());
-	if args.unnamed.len() > params.len() {
+	if args.unnamed_len() > params.len() {
 		throw!(TooManyArgsFunctionHas(params.len()))
 	}
 
 	let mut filled_args = 0;
 
-	for (id, arg) in args.unnamed.iter().enumerate() {
-		let name = params[id].name;
-		passed_args.insert(
-			name,
-			if tailstrict {
-				LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
-			} else {
-				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-					context: ctx.clone(),
-					expr: arg.clone(),
-				})))
-			},
-		);
+	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+		let name = params[id].name.clone();
+		passed_args.insert(name, arg);
 		filled_args += 1;
-	}
+		Ok(())
+	})?;
 
-	for (name, value) in args.named.iter() {
+	args.named_iter(ctx, tailstrict, &mut |name, arg| {
 		// FIXME: O(n) for arg existence check
-		if !params.iter().any(|p| p.name == name as &str) {
-			throw!(UnknownFunctionParameter((name as &str).to_owned()));
-		}
-		if passed_args
-			.insert(
-				name,
-				if tailstrict {
-					LazyVal::new_resolved(evaluate(ctx.clone(), value)?)
-				} else {
-					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-						context: ctx.clone(),
-						expr: value.clone(),
-					})))
-				},
-			)
-			.is_some()
-		{
+		let p = params
+			.iter()
+			.find(|p| p.name == name as &str)
+			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
+		if passed_args.insert(p.name.clone(), arg).is_some() {
 			throw!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_args += 1;
-	}
+		Ok(())
+	})?;
 
 	if filled_args < params.len() {
 		for param in params.iter().filter(|p| p.has_default) {
@@ -217,97 +446,19 @@ pub fn parse_builtin_call<'k>(
 
 		// Some args still wasn't filled
 		if filled_args != params.len() {
-			for param in params.iter().skip(args.unnamed.len()) {
-				if !args.named.iter().any(|a| &a.0 as &str == param.name) {
-					throw!(FunctionParameterNotBoundInCall(param.name.into()));
+			for param in params.iter().skip(args.unnamed_len()) {
+				let mut found = false;
+				args.named_names(&mut |name| {
+					if name as &str == &param.name as &str {
+						found = true;
+					}
+				});
+				if !found {
+					throw!(FunctionParameterNotBoundInCall(param.name.clone().into()));
 				}
 			}
 			unreachable!();
 		}
 	}
 	Ok(passed_args)
-}
-
-pub fn parse_function_call_map(
-	ctx: Context,
-	body_ctx: Option<Context>,
-	params: &ParamsDesc,
-	args: &HashMap<IStr, Val>,
-	tailstrict: bool,
-) -> Result<Context> {
-	let mut out = GcHashMap::with_capacity(params.len());
-	let mut positioned_args = vec![None; params.0.len()];
-	for (name, val) in args.iter() {
-		let idx = params
-			.iter()
-			.position(|p| *p.0 == **name)
-			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
-
-		if idx >= params.len() {
-			throw!(TooManyArgsFunctionHas(params.len()));
-		}
-		if positioned_args[idx].is_some() {
-			throw!(BindingParameterASecondTime(params[idx].0.clone()));
-		}
-		positioned_args[idx] = Some(val.clone());
-	}
-	// Fill defaults
-	for (id, p) in params.iter().enumerate() {
-		let val = if let Some(arg) = positioned_args[id].take() {
-			LazyVal::new_resolved(arg)
-		} else if let Some(default) = &p.1 {
-			if tailstrict {
-				LazyVal::new_resolved(evaluate(
-					body_ctx.clone().expect(NO_DEFAULT_CONTEXT),
-					default,
-				)?)
-			} else {
-				let body_ctx = body_ctx.clone();
-				let default = default.clone();
-				#[derive(Trace)]
-				struct EvaluateLazyVal {
-					body_ctx: Option<Context>,
-					default: LocExpr,
-				}
-				impl LazyValValue for EvaluateLazyVal {
-					fn get(self: Box<Self>) -> Result<Val> {
-						evaluate(
-							self.body_ctx.clone().expect(NO_DEFAULT_CONTEXT),
-							&self.default,
-						)
-					}
-				}
-				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal { body_ctx, default })))
-			}
-		} else {
-			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
-		};
-		out.insert(p.0.clone(), val);
-	}
-
-	Ok(body_ctx.unwrap_or(ctx).extend(out, None, None, None))
-}
-
-pub fn place_args(body_ctx: Context, params: &ParamsDesc, args: &[Val]) -> Result<Context> {
-	let mut out = GcHashMap::with_capacity(params.len());
-	let mut positioned_args = vec![None; params.0.len()];
-	for (id, arg) in args.iter().enumerate() {
-		if id >= params.len() {
-			throw!(TooManyArgsFunctionHas(params.len()));
-		}
-		positioned_args[id] = Some(arg);
-	}
-	// Fill defaults
-	for (id, p) in params.iter().enumerate() {
-		let val = if let Some(arg) = &positioned_args[id] {
-			(*arg).clone()
-		} else if let Some(default) = &p.1 {
-			evaluate(body_ctx.clone(), default)?
-		} else {
-			throw!(FunctionParameterNotBoundInCall(p.0.clone()));
-		};
-		out.insert(p.0.clone(), LazyVal::new_resolved(val));
-	}
-
-	Ok(body_ctx.extend(out, None, None, None))
 }

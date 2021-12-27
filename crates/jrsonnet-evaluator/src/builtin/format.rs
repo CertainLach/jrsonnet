@@ -577,10 +577,8 @@ pub fn format_code(
 			}
 		}
 		ConvTypeV::Char => match value.clone() {
-			Val::Num(n) => tmp_out.push(
-				std::char::from_u32(n as u32)
-					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
-			),
+			Val::Num(n) => tmp_out
+				.push(std::char::from_u32(n as u32).ok_or(InvalidUnicodeCodepointGot(n as u32))?),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
 					throw!(RuntimeError(

@@ -37,7 +37,7 @@ macro_rules! impl_int {
 								.into()
 							))
 						}
-						Ok(n as $ty)
+						Ok(n as Self)
 					}
 					_ => unreachable!(),
 				}
@@ -249,6 +249,7 @@ where
 
 /// To be used in Vec<Any>
 /// Regular Val can't be used here, because it has wrong TryFrom::Error type
+#[derive(Clone)]
 pub struct Any(pub Val);
 
 impl Typed for Any {

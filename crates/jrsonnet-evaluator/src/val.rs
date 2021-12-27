@@ -1,24 +1,20 @@
 use crate::{
-	builtin::{
-		call_builtin,
-		manifest::{
-			manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType,
-			ManifestYamlOptions,
-		},
+	builtin::manifest::{
+		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
 	},
 	cc_ptr_eq,
 	error::{Error::*, LocError},
 	evaluate,
-	function::{parse_function_call, parse_function_call_map, place_args},
+	function::{parse_function_call, ArgsLike, Builtin, StaticBuiltin},
 	gc::TraceBox,
 	native::NativeCallback,
 	throw, Context, ObjValue, Result,
 };
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
+use jrsonnet_parser::{ExprLocation, LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
-use std::{cell::RefCell, collections::HashMap, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub trait LazyValValue: Trace {
 	fn get(self: Box<Self>) -> Result<Val>;
@@ -40,6 +36,10 @@ impl LazyVal {
 	}
 	pub fn new_resolved(val: Val) -> Self {
 		Self(Cc::new(RefCell::new(LazyValInternals::Computed(val))))
+	}
+	pub fn force(&self) -> Result<()> {
+		self.evaluate()?;
+		Ok(())
 	}
 	pub fn evaluate(&self) -> Result<Val> {
 		match &*self.0.borrow() {
@@ -86,42 +86,63 @@ pub struct FuncDesc {
 	pub body: LocExpr,
 }
 
-#[derive(Debug, Trace)]
+#[derive(Trace)]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(FuncDesc),
 	/// Standard library function
-	Intrinsic(IStr),
+	StaticBuiltin(#[skip_trace] &'static dyn StaticBuiltin),
+
+	Builtin(TraceBox<dyn Builtin>),
 	/// Library functions implemented in native
 	NativeExt(IStr, Cc<NativeCallback>),
+}
+
+impl Debug for FuncVal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		match self {
+			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
+			Self::StaticBuiltin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
+			Self::Builtin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
+			Self::NativeExt(arg0, arg1) => {
+				f.debug_tuple("NativeExt").field(arg0).field(arg1).finish()
+			}
+		}
+	}
 }
 
 impl PartialEq for FuncVal {
 	fn eq(&self, other: &Self) -> bool {
 		match (self, other) {
 			(Self::Normal(a), Self::Normal(b)) => a == b,
-			(Self::Intrinsic(an), Self::Intrinsic(bn)) => an == bn,
+			(Self::StaticBuiltin(an), Self::StaticBuiltin(bn)) => std::ptr::eq(*an, *bn),
 			(Self::NativeExt(an, _), Self::NativeExt(bn, _)) => an == bn,
 			(..) => false,
 		}
 	}
 }
 impl FuncVal {
-	pub fn is_ident(&self) -> bool {
-		matches!(&self, Self::Intrinsic(n) if n as &str == "id")
+	pub fn args_len(&self) -> usize {
+		match self {
+			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
+			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default).count(),
+			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default).count(),
+			Self::NativeExt(_, n) => n.params.iter().filter(|p| p.1.is_none()).count(),
+		}
 	}
 	pub fn name(&self) -> IStr {
 		match self {
 			Self::Normal(normal) => normal.name.clone(),
-			Self::Intrinsic(name) => format!("std.{}", name).into(),
+			Self::StaticBuiltin(builtin) => builtin.name().into(),
+			Self::Builtin(builtin) => builtin.name().into(),
 			Self::NativeExt(n, _) => format!("native.{}", n).into(),
 		}
 	}
 	pub fn evaluate(
 		&self,
 		call_ctx: Context,
-		loc: &ExprLocation,
-		args: &ArgsDesc,
+		loc: Option<&ExprLocation>,
+		args: &dyn ArgsLike,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
@@ -135,7 +156,8 @@ impl FuncVal {
 				)?;
 				evaluate(ctx, &func.body)
 			}
-			Self::Intrinsic(name) => call_builtin(call_ctx, loc, name, args),
+			Self::StaticBuiltin(name) => name.call(call_ctx, loc, args),
+			Self::Builtin(b) => b.call(call_ctx, loc, args),
 			Self::NativeExt(_name, handler) => {
 				let args =
 					parse_function_call(call_ctx, Context::new(), &handler.params, args, true)?;
@@ -143,42 +165,12 @@ impl FuncVal {
 				for p in handler.params.0.iter() {
 					out_args.push(args.binding(p.0.clone())?.evaluate()?);
 				}
-				Ok(handler.call(loc.0.clone(), &out_args)?)
+				Ok(handler.call(loc.expect("todo").0.clone(), &out_args)?)
 			}
 		}
 	}
-
-	pub fn evaluate_map(
-		&self,
-		call_ctx: Context,
-		args: &HashMap<IStr, Val>,
-		tailstrict: bool,
-	) -> Result<Val> {
-		match self {
-			Self::Normal(func) => {
-				let ctx = parse_function_call_map(
-					call_ctx,
-					Some(func.ctx.clone()),
-					&func.params,
-					args,
-					tailstrict,
-				)?;
-				evaluate(ctx, &func.body)
-			}
-			Self::Intrinsic(_) => todo!(),
-			Self::NativeExt(_, _) => todo!(),
-		}
-	}
-
-	pub fn evaluate_values(&self, args: &[Val]) -> Result<Val> {
-		match self {
-			Self::Normal(func) => {
-				let ctx = place_args(func.ctx.clone(), &func.params, args)?;
-				evaluate(ctx, &func.body)
-			}
-			Self::Intrinsic(_) => todo!(),
-			Self::NativeExt(_, _) => todo!(),
-		}
+	pub fn evaluate_simple(&self, args: &dyn ArgsLike) -> Result<Val> {
+		self.evaluate(Context::default(), None, args, true)
 	}
 }
 

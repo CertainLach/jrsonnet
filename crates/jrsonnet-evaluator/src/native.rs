@@ -8,6 +8,7 @@ use std::fmt::Debug;
 use std::path::Path;
 use std::rc::Rc;
 
+#[deprecated(note = "Use builtins instead")]
 pub trait NativeCallbackHandler: Trace {
 	fn call(&self, from: Rc<Path>, args: &[Val]) -> Result<Val>;
 }

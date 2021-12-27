@@ -40,7 +40,7 @@ parser! {
 			/ "#" (!eol()[_])* eol()
 
 		rule single_whitespace() = quiet!{([' ' | '\r' | '\n' | '\t'] / comment())} / expected!("<whitespace>")
-		rule _() = single_whitespace()*
+		rule _() = quiet!{([' ' | '\r' | '\n' | '\t']+) / comment()}* / expected!("<whitespace>")
 
 		/// For comma-delimited elements
 		rule comma() = quiet!{_ "," _} / expected!("<comma>")
@@ -304,6 +304,14 @@ parser! {
 pub type ParseError = peg::error::ParseError<peg::str::LineCol>;
 pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError> {
 	jsonnet_parser::jsonnet(str, settings)
+}
+/// Used for importstr values
+pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
+	let len = str.len();
+	LocExpr(
+		Rc::new(Expr::Str(str)),
+		ExprLocation(settings.file_name.clone(), 0, len),
+	)
 }
 
 #[cfg(test)]

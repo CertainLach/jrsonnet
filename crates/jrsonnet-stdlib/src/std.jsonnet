@@ -375,9 +375,7 @@
 
   manifestJsonEx:: $intrinsic(manifestJsonEx),
 
-  manifestYamlDocImpl:: $intrinsic(manifestYamlDocImpl),
-
-  manifestYamlDoc(value, indent_array_in_object=false, quote_keys=true):: std.manifestYamlDocImpl(value, indent_array_in_object, quote_keys),
+  manifestYamlDoc:: $intrinsic(manifestYamlDoc),
 
   manifestYamlStream(value, indent_array_in_object=false, c_document_end=true)::
     if !std.isArray(value) then
@@ -443,10 +441,7 @@
 
   reverse:: $intrinsic(reverse),
 
-  sortImpl:: $intrinsic(sortImpl),
-
-  sort(arr, keyF=id)::
-    std.sortImpl(arr, keyF),
+  sort:: $intrinsic(sort),
 
   uniq(arr, keyF=id)::
     local f(a, b) =

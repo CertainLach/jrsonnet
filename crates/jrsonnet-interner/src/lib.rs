@@ -2,6 +2,7 @@ use gcmodule::Trace;
 use rustc_hash::FxHashMap;
 use serde::{Deserialize, Serialize};
 use std::{
+	borrow::Cow,
 	cell::RefCell,
 	fmt::{self, Display},
 	hash::{BuildHasherDefault, Hash, Hasher},
@@ -87,6 +88,12 @@ impl From<&str> for IStr {
 impl From<String> for IStr {
 	fn from(str: String) -> Self {
 		(&str as &str).into()
+	}
+}
+
+impl<'i> From<Cow<'i, str>> for IStr {
+	fn from(c: Cow<'i, str>) -> Self {
+		(&c as &str).into()
 	}
 }
 

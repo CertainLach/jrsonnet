@@ -25,6 +25,7 @@ pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 pub use function::parse_function_call;
+use function::TlaArg;
 use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace};
 pub use import::*;
@@ -77,7 +78,7 @@ pub struct EvaluationSettings {
 	/// Used for ext.native
 	pub ext_natives: HashMap<IStr, Cc<NativeCallback>>,
 	/// TLA vars
-	pub tla_vars: HashMap<IStr, Val>,
+	pub tla_vars: HashMap<IStr, TlaArg>,
 	/// Global variables are inserted in default context
 	pub globals: HashMap<IStr, Val>,
 	/// Used to resolve file locations/contents
@@ -174,7 +175,7 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
 pub(crate) fn push_frame<T>(
-	e: &ExprLocation,
+	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
@@ -203,24 +204,21 @@ pub struct EvaluationState(Rc<EvaluationStateInternals>);
 
 impl EvaluationState {
 	/// Parses and adds file as loaded
-	pub fn add_file(&self, path: Rc<Path>, source_code: IStr) -> Result<()> {
-		self.add_parsed_file(
-			path.clone(),
-			source_code.clone(),
-			parse(
-				&source_code,
-				&ParserSettings {
-					file_name: path.clone(),
-				},
-			)
-			.map_err(|error| ImportSyntaxError {
-				error: Box::new(error),
-				path: path.to_owned(),
-				source_code,
-			})?,
-		)?;
+	pub fn add_file(&self, path: Rc<Path>, source_code: IStr) -> Result<LocExpr> {
+		let parsed = parse(
+			&source_code,
+			&ParserSettings {
+				file_name: path.clone(),
+			},
+		)
+		.map_err(|error| ImportSyntaxError {
+			error: Box::new(error),
+			path: path.to_owned(),
+			source_code: source_code.clone(),
+		})?;
+		self.add_parsed_file(path, source_code, parsed.clone())?;
 
-		Ok(())
+		Ok(parsed)
 	}
 
 	pub fn reset_evaluation_state(&self, name: &Path) {
@@ -341,7 +339,7 @@ impl EvaluationState {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: &ExprLocation,
+		e: Option<&ExprLocation>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -364,7 +362,7 @@ impl EvaluationState {
 		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: Some(e.clone()),
+				location: e.cloned(),
 				desc: frame_desc(),
 			});
 			return Err(err);
@@ -506,8 +504,9 @@ impl EvaluationState {
 				Val::Func(func) => push_description_frame(
 					|| "during TLA call".to_owned(),
 					|| {
-						func.evaluate_map(
+						func.evaluate(
 							self.create_default_context(),
+							None,
 							&self.settings().tla_vars,
 							true,
 						)
@@ -581,15 +580,20 @@ impl EvaluationState {
 	}
 
 	pub fn add_tla(&self, name: IStr, value: Val) {
-		self.settings_mut().tla_vars.insert(name, value);
+		self.settings_mut()
+			.tla_vars
+			.insert(name, TlaArg::Val(value));
 	}
 	pub fn add_tla_str(&self, name: IStr, value: IStr) {
-		self.add_tla(name, Val::Str(value));
+		self.settings_mut()
+			.tla_vars
+			.insert(name, TlaArg::String(value));
 	}
 	pub fn add_tla_code(&self, name: IStr, code: IStr) -> Result<()> {
-		let value =
-			self.evaluate_snippet_raw(PathBuf::from(format!("tla_code {}", name)).into(), code)?;
-		self.add_tla(name, value);
+		let parsed = self.add_file(PathBuf::from(format!("tla_code {}", name)).into(), code)?;
+		self.settings_mut()
+			.tla_vars
+			.insert(name, TlaArg::Code(parsed));
 		Ok(())
 	}
 
@@ -668,11 +672,11 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20),
+					Some(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40),
+							Some(&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40)),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
@@ -977,13 +981,6 @@ pub mod tests {
 			r#"std.parseJson('{"a": -1,"b": 1,"c": 3.141,"d": []}')"#,
 			r#"{"a": -1,"b": 1,"c": 3.141,"d": []}"#
 		);
-		// TODO: this should in fact fail as is no proper JSON syntax
-		assert_json!(
-			r#"std.parseJson("{a:-1, b:1, c:3.141, d:[]}")"#,
-			r#"{"a": -1,"b": 1,"c": 3.141,"d": []}"#
-		);
-		// TODO: this is also no valid JSON
-		assert_json!(r#"std.parseJson('local x = 2; x * x')"#, r#"4"#);
 	}
 
 	#[test]

@@ -83,17 +83,16 @@ fn main() {
 		std::process::exit(0);
 	};
 
-	let success;
-	if let Some(size) = opts.debug.os_stack {
-		success = std::thread::Builder::new()
+	let success = if let Some(size) = opts.debug.os_stack {
+		std::thread::Builder::new()
 			.stack_size(size * 1024 * 1024)
 			.spawn(|| main_catch(opts))
 			.expect("new thread spawned")
 			.join()
-			.expect("thread finished successfully");
+			.expect("thread finished successfully")
 	} else {
-		success = main_catch(opts)
-	}
+		main_catch(opts)
+	};
 	if !success {
 		std::process::exit(1);
 	}

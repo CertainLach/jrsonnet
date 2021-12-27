@@ -1,3 +1,4 @@
+use crate::function::StaticBuiltin;
 use crate::typed::{Any, Either, Null, PositiveF64, VecVal, M1};
 use crate::{self as jrsonnet_evaluator, ObjValue};
 use crate::{
@@ -5,21 +6,16 @@ use crate::{
 	equals,
 	error::{Error::*, Result},
 	operator::evaluate_mod_op,
-	primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal,
-	IndexableVal, Val,
+	primitive_equals, push_frame, throw, with_state, ArrValue, Context, FuncVal, IndexableVal, Val,
 };
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, ExprLocation};
+use jrsonnet_parser::ExprLocation;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
-use std::{
-	collections::HashMap,
-	convert::{TryFrom, TryInto},
-	path::PathBuf,
-	rc::Rc,
-};
+use std::collections::HashMap;
+use std::convert::{TryFrom, TryInto};
 
 pub mod stdlib;
 pub use stdlib::*;
@@ -32,7 +28,7 @@ pub mod sort;
 
 pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 	push_frame(
-		&ExprLocation(Rc::from(PathBuf::from("std.jsonnet")), 0, 0),
+		None,
 		|| format!("std.format of {}", str),
 		|| {
 			Ok(match vals {
@@ -76,85 +72,84 @@ pub fn std_slice(
 	}
 }
 
-type Builtin = fn(context: Context, loc: &ExprLocation, args: &ArgsDesc) -> Result<Val>;
-
-type BuiltinsType = HashMap<Box<str>, Builtin>;
+type BuiltinsType = HashMap<IStr, &'static dyn StaticBuiltin>;
 
 thread_local! {
-	static BUILTINS: BuiltinsType = {
+	pub static BUILTINS: BuiltinsType = {
 		[
-			("length".into(), builtin_length as Builtin),
-			("type".into(), builtin_type),
-			("makeArray".into(), builtin_make_array),
-			("codepoint".into(), builtin_codepoint),
-			("objectFieldsEx".into(), builtin_object_fields_ex),
-			("objectHasEx".into(), builtin_object_has_ex),
-			("slice".into(), builtin_slice),
-			("substr".into(), builtin_substr),
-			("primitiveEquals".into(), builtin_primitive_equals),
-			("equals".into(), builtin_equals),
-			("modulo".into(), builtin_modulo),
-			("mod".into(), builtin_mod),
-			("floor".into(), builtin_floor),
-			("ceil".into(), builtin_ceil),
-			("log".into(), builtin_log),
-			("pow".into(), builtin_pow),
-			("sqrt".into(), builtin_sqrt),
-			("sin".into(), builtin_sin),
-			("cos".into(), builtin_cos),
-			("tan".into(), builtin_tan),
-			("asin".into(), builtin_asin),
-			("acos".into(), builtin_acos),
-			("atan".into(), builtin_atan),
-			("exp".into(), builtin_exp),
-			("mantissa".into(), builtin_mantissa),
-			("exponent".into(), builtin_exponent),
-			("extVar".into(), builtin_ext_var),
-			("native".into(), builtin_native),
-			("filter".into(), builtin_filter),
-			("map".into(), builtin_map),
-			("flatMap".into(), builtin_flatmap),
-			("foldl".into(), builtin_foldl),
-			("foldr".into(), builtin_foldr),
-			("sortImpl".into(), builtin_sort_impl),
-			("format".into(), builtin_format),
-			("range".into(), builtin_range),
-			("char".into(), builtin_char),
-			("encodeUTF8".into(), builtin_encode_utf8),
-			("decodeUTF8".into(), builtin_decode_utf8),
-			("md5".into(), builtin_md5),
-			("base64".into(), builtin_base64),
-			("base64DecodeBytes".into(), builtin_base64_decode_bytes),
-			("base64Decode".into(), builtin_base64_decode),
-			("trace".into(), builtin_trace),
-			("join".into(), builtin_join),
-			("escapeStringJson".into(), builtin_escape_string_json),
-			("manifestJsonEx".into(), builtin_manifest_json_ex),
-			("manifestYamlDocImpl".into(), builtin_manifest_yaml_doc),
-			("reverse".into(), builtin_reverse),
-			("id".into(), builtin_id),
-			("strReplace".into(), builtin_str_replace),
-			("splitLimit".into(), builtin_splitlimit),
-			("parseJson".into(), builtin_parse_json),
-			("parseYaml".into(), builtin_parse_yaml),
-			("asciiUpper".into(), builtin_ascii_upper),
-			("asciiLower".into(), builtin_ascii_lower),
-			("member".into(), builtin_member),
-			("count".into(), builtin_count),
+			("length".into(), builtin_length::INST),
+			("type".into(), builtin_type::INST),
+			("makeArray".into(), builtin_make_array::INST),
+			("codepoint".into(), builtin_codepoint::INST),
+			("objectFieldsEx".into(), builtin_object_fields_ex::INST),
+			("objectHasEx".into(), builtin_object_has_ex::INST),
+			("slice".into(), builtin_slice::INST),
+			("substr".into(), builtin_substr::INST),
+			("primitiveEquals".into(), builtin_primitive_equals::INST),
+			("equals".into(), builtin_equals::INST),
+			("modulo".into(), builtin_modulo::INST),
+			("mod".into(), builtin_mod::INST),
+			("floor".into(), builtin_floor::INST),
+			("ceil".into(), builtin_ceil::INST),
+			("log".into(), builtin_log::INST),
+			("pow".into(), builtin_pow::INST),
+			("sqrt".into(), builtin_sqrt::INST),
+			("sin".into(), builtin_sin::INST),
+			("cos".into(), builtin_cos::INST),
+			("tan".into(), builtin_tan::INST),
+			("asin".into(), builtin_asin::INST),
+			("acos".into(), builtin_acos::INST),
+			("atan".into(), builtin_atan::INST),
+			("exp".into(), builtin_exp::INST),
+			("mantissa".into(), builtin_mantissa::INST),
+			("exponent".into(), builtin_exponent::INST),
+			("extVar".into(), builtin_ext_var::INST),
+			("native".into(), builtin_native::INST),
+			("filter".into(), builtin_filter::INST),
+			("map".into(), builtin_map::INST),
+			("flatMap".into(), builtin_flatmap::INST),
+			("foldl".into(), builtin_foldl::INST),
+			("foldr".into(), builtin_foldr::INST),
+			("sort".into(), builtin_sort::INST),
+			("format".into(), builtin_format::INST),
+			("range".into(), builtin_range::INST),
+			("char".into(), builtin_char::INST),
+			("encodeUTF8".into(), builtin_encode_utf8::INST),
+			("decodeUTF8".into(), builtin_decode_utf8::INST),
+			("md5".into(), builtin_md5::INST),
+			("base64".into(), builtin_base64::INST),
+			("base64DecodeBytes".into(), builtin_base64_decode_bytes::INST),
+			("base64Decode".into(), builtin_base64_decode::INST),
+			("trace".into(), builtin_trace::INST),
+			("join".into(), builtin_join::INST),
+			("escapeStringJson".into(), builtin_escape_string_json::INST),
+			("manifestJsonEx".into(), builtin_manifest_json_ex::INST),
+			("manifestYamlDoc".into(), builtin_manifest_yaml_doc::INST),
+			("reverse".into(), builtin_reverse::INST),
+			("id".into(), builtin_id::INST),
+			("strReplace".into(), builtin_str_replace::INST),
+			("splitLimit".into(), builtin_splitlimit::INST),
+			("parseJson".into(), builtin_parse_json::INST),
+			("parseYaml".into(), builtin_parse_yaml::INST),
+			("asciiUpper".into(), builtin_ascii_upper::INST),
+			("asciiLower".into(), builtin_ascii_lower::INST),
+			("member".into(), builtin_member::INST),
+			("count".into(), builtin_count::INST),
 		].iter().cloned().collect()
 	};
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_length(x: Either<IStr, Either<VecVal, ObjValue>>) -> Result<usize> {
+fn builtin_length(x: Either<IStr, Either<VecVal, Either<ObjValue, Cc<FuncVal>>>>) -> Result<usize> {
 	Ok(match x {
 		Either::Left(x) => x.len(),
 		Either::Right(Either::Left(x)) => x.0.len(),
-		Either::Right(Either::Right(x)) => x
+		Either::Right(Either::Right(Either::Left(x))) => x
 			.fields_visibility()
 			.into_iter()
 			.filter(|(_k, v)| *v)
 			.count(),
+		Either::Right(Either::Right(Either::Right(f))) => f.args_len(),
 	})
 }
 
@@ -167,7 +162,7 @@ fn builtin_type(x: Any) -> Result<IStr> {
 fn builtin_make_array(sz: usize, func: Cc<FuncVal>) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
-		out.push(func.evaluate_values(&[Val::Num(i as f64)])?)
+		out.push(func.evaluate_simple(&[i as f64].as_slice())?)
 	}
 	Ok(VecVal(out))
 }
@@ -354,12 +349,12 @@ fn builtin_native(name: IStr) -> Result<Cc<FuncVal>> {
 
 #[jrsonnet_macros::builtin]
 fn builtin_filter(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::try_from(func.evaluate_values(&[val.clone()])?))
+	arr.filter(|val| bool::try_from(func.evaluate_simple(&[Any(val.clone())].as_slice())?))
 }
 
 #[jrsonnet_macros::builtin]
 fn builtin_map(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
-	arr.map(|val| func.evaluate_values(&[val]))
+	arr.map(|val| func.evaluate_simple(&[Any(val)].as_slice()))
 }
 
 #[jrsonnet_macros::builtin]
@@ -368,7 +363,7 @@ fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal>
 		IndexableVal::Str(s) => {
 			let mut out = String::new();
 			for c in s.chars() {
-				match func.evaluate_values(&[Val::Str(c.to_string().into())])? {
+				match func.evaluate_simple(&[c.to_string()].as_slice())? {
 					Val::Str(o) => out.push_str(&o),
 					_ => throw!(RuntimeError(
 						"in std.join all items should be strings".into()
@@ -381,7 +376,7 @@ fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal>
 			let mut out = Vec::new();
 			for el in a.iter() {
 				let el = el?;
-				match func.evaluate_values(&[el])? {
+				match func.evaluate_simple(&[Any(el)].as_slice())? {
 					Val::Arr(o) => {
 						for oe in o.iter() {
 							out.push(oe?)
@@ -401,7 +396,7 @@ fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal>
 fn builtin_foldl(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter() {
-		acc = func.evaluate_values(&[acc, i?])?;
+		acc = func.evaluate_simple(&[Any(acc), Any(i?)].as_slice())?;
 	}
 	Ok(Any(acc))
 }
@@ -410,18 +405,21 @@ fn builtin_foldl(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
 fn builtin_foldr(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter().rev() {
-		acc = func.evaluate_values(&[i?, acc])?;
+		acc = func.evaluate_simple(&[Any(i?), Any(acc)].as_slice())?;
 	}
 	Ok(Any(acc))
 }
 
 #[jrsonnet_macros::builtin]
 #[allow(non_snake_case)]
-fn builtin_sort_impl(arr: ArrValue, keyF: Cc<FuncVal>) -> Result<ArrValue> {
+fn builtin_sort(arr: ArrValue, keyF: Option<Cc<FuncVal>>) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	Ok(ArrValue::Eager(sort::sort(arr.evaluated()?, &keyF)?))
+	Ok(ArrValue::Eager(sort::sort(
+		arr.evaluated()?,
+		keyF.as_deref(),
+	)?))
 }
 
 #[jrsonnet_macros::builtin]
@@ -443,7 +441,7 @@ fn builtin_range(from: i32, to: i32) -> Result<VecVal> {
 
 #[jrsonnet_macros::builtin]
 fn builtin_char(n: u32) -> Result<char> {
-	Ok(std::char::from_u32(n as u32).ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?)
+	Ok(std::char::from_u32(n as u32).ok_or(InvalidUnicodeCodepointGot(n as u32))?)
 }
 
 #[jrsonnet_macros::builtin]
@@ -466,16 +464,18 @@ fn builtin_md5(str: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_trace(#[location] loc: &ExprLocation, str: IStr, rest: Any) -> Result<Any> {
+fn builtin_trace(#[location] loc: Option<&ExprLocation>, str: IStr, rest: Any) -> Result<Any> {
 	eprint!("TRACE:");
-	with_state(|s| {
-		let locs = s.map_source_locations(&loc.0, &[loc.1]);
-		eprint!(
-			" {}:{}",
-			loc.0.file_name().unwrap().to_str().unwrap(),
-			locs[0].line
-		);
-	});
+	if let Some(loc) = loc {
+		with_state(|s| {
+			let locs = s.map_source_locations(&loc.0, &[loc.1]);
+			eprint!(
+				" {}:{}",
+				loc.0.file_name().unwrap().to_str().unwrap(),
+				locs[0].line
+			);
+		});
+	}
 	eprintln!(" {}", str);
 	Ok(rest) as Result<Any>
 }
@@ -574,15 +574,19 @@ fn builtin_manifest_json_ex(value: Any, indent: IStr) -> Result<String> {
 #[jrsonnet_macros::builtin]
 fn builtin_manifest_yaml_doc(
 	value: Any,
-	indent_array_in_object: bool,
-	quote_keys: bool,
+	indent_array_in_object: Option<bool>,
+	quote_keys: Option<bool>,
 ) -> Result<String> {
 	manifest_yaml_ex(
 		&value.0,
 		&ManifestYamlOptions {
 			padding: "  ",
-			arr_element_padding: if indent_array_in_object { "  " } else { "" },
-			quote_keys,
+			arr_element_padding: if indent_array_in_object.unwrap_or(false) {
+				"  "
+			} else {
+				""
+			},
+			quote_keys: quote_keys.unwrap_or(true),
 		},
 	)
 }
@@ -648,15 +652,4 @@ fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
 		}
 	}
 	Ok(count)
-}
-
-pub fn call_builtin(
-	context: Context,
-	loc: &ExprLocation,
-	name: &str,
-	args: &ArgsDesc,
-) -> Result<Val> {
-	BUILTINS
-		.with(|builtins| builtins.get(name).copied())
-		.ok_or_else(|| IntrinsicNotFound(name.into()))?(context, loc, args)
 }
