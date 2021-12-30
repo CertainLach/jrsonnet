@@ -534,6 +534,9 @@
     else
       patch,
 
+  get(o, f, default = null, inc_hidden = true)::
+    if std.objectHasEx(o, f, inc_hidden) then o[f] else default,
+
   objectFields(o)::
     std.objectFieldsEx(o, false),
 
