@@ -18,6 +18,8 @@ pub enum ManifestType {
 pub struct ManifestJsonOptions<'s> {
 	pub padding: &'s str,
 	pub mtype: ManifestType,
+	pub newline: &'s str,
+	pub key_val_sep: &'s str,
 }
 
 pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
@@ -48,7 +50,7 @@ fn manifest_json_ex_buf(
 			buf.push('[');
 			if !items.is_empty() {
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
-					buf.push('\n');
+					buf.push_str(options.newline);
 				}
 
 				let old_len = cur_padding.len();
@@ -59,7 +61,7 @@ fn manifest_json_ex_buf(
 						if mtype == ManifestType::ToString {
 							buf.push(' ');
 						} else if mtype != ManifestType::Minify {
-							buf.push('\n');
+							buf.push_str(options.newline);
 						}
 					}
 					buf.push_str(cur_padding);
@@ -68,7 +70,7 @@ fn manifest_json_ex_buf(
 				cur_padding.truncate(old_len);
 
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
-					buf.push('\n');
+					buf.push_str(options.newline);
 					buf.push_str(cur_padding);
 				}
 			} else if mtype == ManifestType::Std {
@@ -85,7 +87,7 @@ fn manifest_json_ex_buf(
 			let fields = obj.fields();
 			if !fields.is_empty() {
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
-					buf.push('\n');
+					buf.push_str(options.newline);
 				}
 
 				let old_len = cur_padding.len();
@@ -96,12 +98,12 @@ fn manifest_json_ex_buf(
 						if mtype == ManifestType::ToString {
 							buf.push(' ');
 						} else if mtype != ManifestType::Minify {
-							buf.push('\n');
+							buf.push_str(options.newline);
 						}
 					}
 					buf.push_str(cur_padding);
 					escape_string_json_buf(&field, buf);
-					buf.push_str(": ");
+					buf.push_str(options.key_val_sep);
 					crate::push(
 						None,
 						|| format!("field <{}> manifestification", field.clone()),
@@ -114,7 +116,7 @@ fn manifest_json_ex_buf(
 				cur_padding.truncate(old_len);
 
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
-					buf.push('\n');
+					buf.push_str(options.newline);
 					buf.push_str(cur_padding);
 				}
 			} else if mtype == ManifestType::Std {

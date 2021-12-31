@@ -810,6 +810,14 @@ pub mod tests {
 	}
 
 	#[test]
+	fn json_minified() {
+		assert_json!(
+			r#"std.manifestJsonMinified({a:3, b:4, c:6})"#,
+			r#""{\"a\":3,\"b\":4,\"c\":6}""#
+		);
+	}
+
+	#[test]
 	fn parse_json() {
 		assert_json!(
 			r#"std.parseJson('{"a": -1,"b": 1,"c": 3.141,"d": []}')"#,

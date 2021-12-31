@@ -372,7 +372,11 @@
 
   manifestJson(value):: std.manifestJsonEx(value, '    '),
 
-  manifestJsonEx:: $intrinsic(manifestJsonEx),
+  manifestJsonMinified(value):: std.manifestJsonEx(value, '', '', ':'),
+
+  manifestJsonExImpl:: $intrinsic(manifestJsonExImpl),
+
+  manifestJsonEx(value, indent, newline='\n', key_val_sep=': '):: std.manifestJsonExImpl(value, indent, newline, key_val_sep),
 
   manifestYamlDocImpl:: $intrinsic(manifestYamlDocImpl),
 
