@@ -121,7 +121,7 @@ thread_local! {
 			("trace".into(), builtin_trace),
 			("join".into(), builtin_join),
 			("escapeStringJson".into(), builtin_escape_string_json),
-			("manifestJsonEx".into(), builtin_manifest_json_ex),
+			("manifestJsonExImpl".into(), builtin_manifest_json_ex_impl),
 			("manifestYamlDocImpl".into(), builtin_manifest_yaml_doc),
 			("reverse".into(), builtin_reverse),
 			("id".into(), builtin_id),
@@ -754,18 +754,22 @@ fn builtin_escape_string_json(
 	})
 }
 
-fn builtin_manifest_json_ex(
+fn builtin_manifest_json_ex_impl(
 	context: Context,
 	_loc: Option<&ExprLocation>,
 	args: &ArgsDesc,
 ) -> Result<Val> {
-	parse_args!(context, "manifestJsonEx", args, 2, [
+	parse_args!(context, "manifestJsonEx", args, 4, [
 		0, value: ty!(any);
 		1, indent: ty!(string) => Val::Str;
+		2, newline: ty!(string) => Val::Str;
+		3, key_val_sep: ty!(string) => Val::Str;
 	], {
 		Ok(Val::Str(manifest_json_ex(&value, &ManifestJsonOptions {
 			padding: &indent,
 			mtype: ManifestType::Std,
+			newline: &newline,
+			key_val_sep: &key_val_sep,
 		})?.into()))
 	})
 }
