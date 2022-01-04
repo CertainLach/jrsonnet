@@ -5,6 +5,9 @@
 	clippy::ptr_arg
 )]
 
+// For jrsonnet-macros
+extern crate self as jrsonnet_evaluator;
+
 mod builtin;
 mod ctx;
 mod dynamic;
@@ -972,6 +975,14 @@ pub mod tests {
 		assert_json!(
 			r#"std.manifestJsonEx({a:3, b:4, c:6},"")"#,
 			r#""{\n\"a\": 3,\n\"b\": 4,\n\"c\": 6\n}""#
+		);
+	}
+
+	#[test]
+	fn json_minified() {
+		assert_json!(
+			r#"std.manifestJsonMinified({a:3, b:4, c:6})"#,
+			r#""{\"a\":3,\"b\":4,\"c\":6}""#
 		);
 	}
 

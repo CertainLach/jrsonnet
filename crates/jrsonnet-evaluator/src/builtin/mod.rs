@@ -1,6 +1,5 @@
 use crate::function::StaticBuiltin;
-use crate::typed::{Any, Null, PositiveF64, VecVal, M1};
-use crate::{self as jrsonnet_evaluator, Either, ObjValue};
+use crate::typed::{Any, PositiveF64, VecVal, M1};
 use crate::{
 	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	equals,
@@ -10,6 +9,7 @@ use crate::{
 	typed::{Either2, Either4},
 	with_state, ArrValue, Context, FuncVal, IndexableVal, Val,
 };
+use crate::{Either, ObjValue};
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
@@ -145,7 +145,7 @@ thread_local! {
 fn builtin_length(x: Either![IStr, VecVal, ObjValue, Cc<FuncVal>]) -> Result<usize> {
 	use Either4::*;
 	Ok(match x {
-		A(x) => x.len(),
+		A(x) => x.chars().count(),
 		B(x) => x.0.len(),
 		C(x) => x
 			.fields_visibility()
@@ -566,12 +566,21 @@ fn builtin_escape_string_json(str_: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_manifest_json_ex(value: Any, indent: IStr) -> Result<String> {
+fn builtin_manifest_json_ex(
+	value: Any,
+	indent: IStr,
+	newline: Option<IStr>,
+	key_val_sep: Option<IStr>,
+) -> Result<String> {
+	let newline = newline.as_deref().unwrap_or("\n");
+	let key_val_sep = key_val_sep.as_deref().unwrap_or(": ");
 	manifest_json_ex(
 		&value.0,
 		&ManifestJsonOptions {
 			padding: &indent,
 			mtype: ManifestType::Std,
+			newline,
+			key_val_sep,
 		},
 	)
 }

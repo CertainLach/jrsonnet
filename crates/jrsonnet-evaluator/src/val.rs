@@ -400,6 +400,8 @@ impl Val {
 				&ManifestJsonOptions {
 					padding: "",
 					mtype: ManifestType::ToString,
+					newline: "\n",
+					key_val_sep: ": ",
 				},
 			)?
 			.into(),
@@ -484,6 +486,8 @@ impl Val {
 				} else {
 					ManifestType::Manifest
 				},
+				newline: "\n",
+				key_val_sep: ": ",
 			},
 		)
 		.map(|s| s.into())
@@ -496,6 +500,8 @@ impl Val {
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
 				mtype: ManifestType::Std,
+				newline: "\n",
+				key_val_sep: ": ",
 			},
 		)
 		.map(|s| s.into())

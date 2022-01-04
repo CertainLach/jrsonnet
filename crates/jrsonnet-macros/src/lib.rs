@@ -105,7 +105,7 @@ pub fn builtin(
 				if let Some(opt_ty) = extract_type_from_option(&t.ty) {
 					quote! {{
 						if let Some(value) = parsed.get(#ident) {
-							Some(jrsonnet_evaluator::push_description_frame(
+							Some(::jrsonnet_evaluator::push_description_frame(
 								|| format!("argument <{}> evaluation", #ident),
 								|| <#opt_ty>::try_from(value.evaluate()?),
 							)?)
@@ -117,7 +117,7 @@ pub fn builtin(
 					quote! {{
 						let value = parsed.get(#ident).unwrap();
 
-						jrsonnet_evaluator::push_description_frame(
+						::jrsonnet_evaluator::push_description_frame(
 							|| format!("argument <{}> evaluation", #ident),
 							|| <#ty>::try_from(value.evaluate()?),
 						)?
@@ -136,7 +136,7 @@ pub fn builtin(
 		#[derive(Clone, Copy, gcmodule::Trace)]
 		#vis struct #name {}
 		const _: () = {
-			use jrsonnet_evaluator::function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike};
+			use ::jrsonnet_evaluator::function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike};
 			const PARAMS: &'static [BuiltinParam] = &[
 				#(#params),*
 			];
@@ -156,7 +156,7 @@ pub fn builtin(
 					PARAMS
 				}
 				fn call(&self, context: Context, loc: Option<&ExprLocation>, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = jrsonnet_evaluator::function::parse_builtin_call(context, &PARAMS, args, false)?;
+					let parsed = ::jrsonnet_evaluator::function::parse_builtin_call(context, &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#args),*);
 					let result = result?;

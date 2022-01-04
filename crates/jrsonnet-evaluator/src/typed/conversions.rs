@@ -19,7 +19,7 @@ macro_rules! impl_int {
 	($($ty:ty)*) => {$(
 		impl Typed for $ty {
 			const TYPE: &'static ComplexValType =
-				&ComplexValType::BoundedNumber(Some(<$ty>::MIN as f64), Some(<$ty>::MAX as f64));
+				&ComplexValType::BoundedNumber(Some(Self::MIN as f64), Some(Self::MAX as f64));
 		}
 		impl TryFrom<Val> for $ty {
 			type Error = LocError;
