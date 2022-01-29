@@ -700,5 +700,12 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			import_location.pop();
 			Val::Str(with_state(|s| s.import_file_str(&import_location, path))?)
 		}
+		ImportBin(path) => {
+			let tmp = loc.clone().0;
+			let mut import_location = tmp.to_path_buf();
+			import_location.pop();
+			let bytes = with_state(|s| s.import_file_bin(&import_location, path))?;
+			Val::Arr(ArrValue::Bytes(bytes))
+		}
 	})
 }

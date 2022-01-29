@@ -4,10 +4,12 @@ use serde::{Deserialize, Serialize};
 use std::{
 	borrow::Cow,
 	cell::RefCell,
+	convert::TryFrom,
 	fmt::{self, Display},
 	hash::{BuildHasherDefault, Hash, Hasher},
 	ops::Deref,
 	rc::Rc,
+	str::Utf8Error,
 };
 
 #[derive(Clone, PartialOrd, Ord, Eq)]
@@ -82,6 +84,15 @@ impl From<&str> for IStr {
 				rc
 			}
 		}))
+	}
+}
+
+impl TryFrom<&[u8]> for IStr {
+	type Error = Utf8Error;
+
+	fn try_from(value: &[u8]) -> Result<Self, Self::Error> {
+		let str = std::str::from_utf8(value)?;
+		Ok(str.into())
 	}
 }
 

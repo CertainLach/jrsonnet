@@ -306,6 +306,8 @@ pub enum Expr {
 	Import(PathBuf),
 	/// importStr "file.txt"
 	ImportStr(PathBuf),
+	/// importBin "file.txt"
+	ImportBin(PathBuf),
 	/// error "I'm broken"
 	ErrorStmt(LocExpr),
 	/// a(b, c)

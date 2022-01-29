@@ -82,6 +82,8 @@ pub enum Error {
 	ResolvedFileNotFound(PathBuf),
 	#[error("imported file is not valid utf-8: {0:?}")]
 	ImportBadFileUtf8(PathBuf),
+	#[error("import io error: {0}")]
+	ImportIo(String),
 	#[error("tried to import {1} from {0}, but imports is not supported")]
 	ImportNotSupported(PathBuf, PathBuf),
 	#[error(

@@ -119,8 +119,9 @@ struct EvaluationData {
 
 	breakpoints: Breakpoints,
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: HashMap<Rc<Path>, FileData>,
-	str_files: HashMap<Rc<Path>, IStr>,
+	files: GcHashMap<Rc<Path>, FileData>,
+	str_files: GcHashMap<Rc<Path>, IStr>,
+	bin_files: GcHashMap<Rc<Path>, Rc<[u8]>>,
 }
 
 pub struct FileData {
@@ -276,17 +277,25 @@ impl EvaluationState {
 				return self.evaluate_loaded_file_raw(&file_path);
 			}
 		}
-		let contents = self.load_file_contents(&file_path)?;
+		let contents = self.load_file_str(&file_path)?;
 		self.add_file(file_path.clone(), contents)?;
 		self.evaluate_loaded_file_raw(&file_path)
 	}
 	pub(crate) fn import_file_str(&self, from: &Path, path: &Path) -> Result<IStr> {
 		let path = self.resolve_file(from, path)?;
 		if !self.data().str_files.contains_key(&path) {
-			let file_str = self.load_file_contents(&path)?;
+			let file_str = self.load_file_str(&path)?;
 			self.data_mut().str_files.insert(path.clone(), file_str);
 		}
 		Ok(self.data().str_files.get(&path).cloned().unwrap())
+	}
+	pub(crate) fn import_file_bin(&self, from: &Path, path: &Path) -> Result<Rc<[u8]>> {
+		let path = self.resolve_file(from, path)?;
+		if !self.data().bin_files.contains_key(&path) {
+			let file_bin = self.load_file_bin(&path)?;
+			self.data_mut().bin_files.insert(path.clone(), file_bin);
+		}
+		Ok(self.data().bin_files.get(&path).cloned().unwrap())
 	}
 
 	fn evaluate_loaded_file_raw(&self, name: &Path) -> Result<Val> {
@@ -603,8 +612,11 @@ impl EvaluationState {
 	pub fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
 		self.settings().import_resolver.resolve_file(from, path)
 	}
-	pub fn load_file_contents(&self, path: &Path) -> Result<IStr> {
-		self.settings().import_resolver.load_file_contents(path)
+	pub fn load_file_str(&self, path: &Path) -> Result<IStr> {
+		self.settings().import_resolver.load_file_str(path)
+	}
+	pub fn load_file_bin(&self, path: &Path) -> Result<Rc<[u8]>> {
+		self.settings().import_resolver.load_file_bin(path)
 	}
 
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
@@ -661,7 +673,6 @@ pub mod tests {
 		EvaluationState,
 	};
 	use gcmodule::{Cc, Trace};
-	use jrsonnet_interner::IStr;
 	use jrsonnet_parser::*;
 	use std::{
 		path::{Path, PathBuf},
@@ -1165,17 +1176,21 @@ pub mod tests {
 		Ok(())
 	}
 
-	struct TestImportResolver(IStr);
+	struct TestImportResolver(Vec<u8>);
 	impl crate::import::ImportResolver for TestImportResolver {
 		fn resolve_file(&self, _: &Path, _: &Path) -> crate::error::Result<Rc<Path>> {
 			Ok(PathBuf::from("/test").into())
 		}
 
-		fn load_file_contents(&self, _: &Path) -> crate::error::Result<IStr> {
+		fn load_file_contents(&self, _: &Path) -> crate::error::Result<Vec<u8>> {
 			Ok(self.0.clone())
 		}
 
 		unsafe fn as_any(&self) -> &dyn std::any::Any {
+			panic!()
+		}
+
+		fn load_file_bin(&self, _resolved: &Path) -> crate::error::Result<Rc<[u8]>> {
 			panic!()
 		}
 	}

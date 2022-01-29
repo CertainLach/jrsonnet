@@ -53,7 +53,7 @@ parser! {
 		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.parse().map_err(|_| "<number>") }} / expected!("<number>")
 
 		/// Reserved word followed by any non-alphanumberic
-		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
+		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "importbin" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
 		rule id() = quiet!{ !reserved() alpha() (alpha() / digit())*} / expected!("<identifier>")
 
 		rule keyword(id: &'static str) -> ()
@@ -218,6 +218,7 @@ parser! {
 			/ array_comp_expr(s)
 
 			/ keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}
+			/ keyword("importbin") _ path:string() {Expr::ImportBin(PathBuf::from(path))}
 			/ keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}
 
 			/ var_expr(s)
