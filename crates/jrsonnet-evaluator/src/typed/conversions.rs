@@ -1,4 +1,7 @@
-use std::convert::{TryFrom, TryInto};
+use std::{
+	convert::{TryFrom, TryInto},
+	rc::Rc,
+};
 
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
@@ -292,6 +295,44 @@ impl TryFrom<VecVal> for Val {
 
 	fn try_from(value: VecVal) -> Result<Self> {
 		Ok(Self::Arr(value.0.into()))
+	}
+}
+
+/// Specialization
+pub struct Bytes(pub Rc<[u8]>);
+
+impl Typed for Bytes {
+	const TYPE: &'static ComplexValType =
+		&ComplexValType::ArrayRef(&ComplexValType::BoundedNumber(Some(0.0), Some(255.0)));
+}
+impl TryFrom<Val> for Bytes {
+	type Error = LocError;
+
+	fn try_from(value: Val) -> Result<Self> {
+		match value {
+			Val::Arr(ArrValue::Bytes(bytes)) => Ok(Self(bytes)),
+			_ => {
+				<Self as Typed>::TYPE.check(&value)?;
+				match value {
+					Val::Arr(a) => {
+						let mut out = Vec::with_capacity(a.len());
+						for e in a.iter() {
+							let r = e?;
+							out.push(u8::try_from(r)?);
+						}
+						Ok(Self(out.into()))
+					}
+					_ => unreachable!(),
+				}
+			}
+		}
+	}
+}
+impl TryFrom<Bytes> for Val {
+	type Error = LocError;
+
+	fn try_from(value: Bytes) -> Result<Self> {
+		Ok(Val::Arr(ArrValue::Bytes(value.0)))
 	}
 }
 

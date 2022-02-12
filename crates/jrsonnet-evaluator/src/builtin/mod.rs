@@ -1,5 +1,5 @@
 use crate::function::StaticBuiltin;
-use crate::typed::{Any, PositiveF64, VecVal, M1};
+use crate::typed::{Any, Bytes, PositiveF64, VecVal, M1};
 use crate::{
 	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	equals,
@@ -449,17 +449,15 @@ fn builtin_char(n: u32) -> Result<char> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_encode_utf8(str: IStr) -> Result<VecVal> {
-	Ok(VecVal(
-		str.bytes()
-			.map(|b| Val::Num(b as f64))
-			.collect::<Vec<Val>>(),
-	))
+fn builtin_encode_utf8(str: IStr) -> Result<Bytes> {
+	Ok(Bytes(str.bytes().map(|b| b).collect::<Vec<u8>>().into()))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_decode_utf8(arr: Vec<u8>) -> Result<String> {
-	Ok(String::from_utf8(arr).map_err(|_| RuntimeError("bad utf8".into()))?)
+fn builtin_decode_utf8(arr: Bytes) -> Result<IStr> {
+	Ok(std::str::from_utf8(&arr.0)
+		.map_err(|_| RuntimeError("bad utf8".into()))?
+		.into())
 }
 
 #[jrsonnet_macros::builtin]
@@ -485,17 +483,21 @@ fn builtin_trace(#[location] loc: Option<&ExprLocation>, str: IStr, rest: Any) -
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_base64(input: Either![Vec<u8>, IStr]) -> Result<String> {
+fn builtin_base64(input: Either![Bytes, IStr]) -> Result<String> {
 	use Either2::*;
 	Ok(match input {
-		A(a) => base64::encode(a),
+		A(a) => base64::encode(a.0),
 		B(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
 	})
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_base64_decode_bytes(input: IStr) -> Result<Vec<u8>> {
-	Ok(base64::decode(&input.as_bytes()).map_err(|_| RuntimeError("bad base64".into()))?)
+fn builtin_base64_decode_bytes(input: IStr) -> Result<Bytes> {
+	Ok(Bytes(
+		base64::decode(&input.as_bytes())
+			.map_err(|_| RuntimeError("bad base64".into()))?
+			.into(),
+	))
 }
 
 #[jrsonnet_macros::builtin]
