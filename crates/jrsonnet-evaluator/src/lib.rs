@@ -23,6 +23,8 @@ pub mod trace;
 pub mod typed;
 mod val;
 
+pub use jrsonnet_parser as parser;
+
 pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
@@ -175,7 +177,7 @@ thread_local! {
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
 }
-pub(crate) fn push_frame<T>(
+pub fn push_frame<T>(
 	e: Option<&ExprLocation>,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
@@ -184,7 +186,7 @@ pub(crate) fn push_frame<T>(
 }
 
 #[allow(dead_code)]
-pub(crate) fn push_val_frame(
+pub fn push_val_frame(
 	e: &ExprLocation,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<Val>,
@@ -192,7 +194,7 @@ pub(crate) fn push_val_frame(
 	with_state(|s| s.push_val(e, frame_desc, f))
 }
 #[allow(dead_code)]
-pub(crate) fn push_description_frame<T>(
+pub fn push_description_frame<T>(
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {

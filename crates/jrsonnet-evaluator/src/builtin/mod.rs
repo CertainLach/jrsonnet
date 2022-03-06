@@ -7,7 +7,7 @@ use crate::{
 	operator::evaluate_mod_op,
 	primitive_equals, push_frame, throw,
 	typed::{Either2, Either4},
-	with_state, ArrValue, Context, FuncVal, IndexableVal, Val,
+	with_state, ArrValue, FuncVal, IndexableVal, Val,
 };
 use crate::{Either, ObjValue};
 use format::{format_arr, format_obj};

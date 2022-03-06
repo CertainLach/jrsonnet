@@ -114,8 +114,8 @@ parser! {
 			/ "\\x" hex_char() hex_char()
 			/ ['\\'] (quiet! { ['b' | 'f' | 'n' | 'r' | 't'] / c() } / expected!("<escape character>"))
 		pub rule string() -> String
-			= ['"'] str:$(string_char(<['"']>)*) ['"'] {? unescape::unescape(str).ok_or("<escaped string>")}
-			/ ['\''] str:$(string_char(<['\'']>)*) ['\''] {? unescape::unescape(str).ok_or("<escaped string>")}
+			= ['"'] str:$(string_char(<"\"">)*) ['"'] {? unescape::unescape(str).ok_or("<escaped string>")}
+			/ ['\''] str:$(string_char(<"\'">)*) ['\''] {? unescape::unescape(str).ok_or("<escaped string>")}
 			/ quiet!{ "@'" str:$(("''" / (!['\''][_]))*) "'" {str.replace("''", "'")}
 			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
 			/ string_block() } / expected!("<string>")

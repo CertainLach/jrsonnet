@@ -4,7 +4,7 @@ description = "Rust implementation of libjsonnet.so"
 version = "0.4.2"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 publish = false
 
 [dependencies]

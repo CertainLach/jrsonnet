@@ -136,7 +136,11 @@ pub fn builtin(
 		#[derive(Clone, Copy, gcmodule::Trace)]
 		#vis struct #name {}
 		const _: () = {
-			use ::jrsonnet_evaluator::function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike};
+			use ::jrsonnet_evaluator::{
+				function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
+				error::Result, Context,
+				parser::ExprLocation,
+			};
 			const PARAMS: &'static [BuiltinParam] = &[
 				#(#params),*
 			];
@@ -156,7 +160,7 @@ pub fn builtin(
 					PARAMS
 				}
 				fn call(&self, context: Context, loc: Option<&ExprLocation>, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = ::jrsonnet_evaluator::function::parse_builtin_call(context, &PARAMS, args, false)?;
+					let parsed = parse_builtin_call(context, &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#args),*);
 					let result = result?;

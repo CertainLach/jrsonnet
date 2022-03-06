@@ -4,8 +4,8 @@ description = "Jrsonnet type system definition"
 version = "0.4.2"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
-edition = "2018"
+edition = "2021"
 
 [dependencies]
-peg = "0.7.0"
+peg = "0.8.0"
 gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
