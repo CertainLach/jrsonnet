@@ -1,9 +1,9 @@
 use crate::{ConfigureState, ExtFile, ExtStr};
-use clap::Clap;
+use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState};
 
-#[derive(Clap)]
-#[clap(help_heading = "TOP LEVEL ARGUMENTS")]
+#[derive(Parser)]
+#[clap(next_help_heading = "TOP LEVEL ARGUMENTS")]
 pub struct TLAOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.

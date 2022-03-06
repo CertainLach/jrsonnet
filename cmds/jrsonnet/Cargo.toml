@@ -18,11 +18,5 @@ jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.4.2" }
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
 gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
-
-[dependencies.clap]
-git = "https://github.com/clap-rs/clap"
-rev = "f0c5ea5e1503de5c8e74d8c047a799cf51498e83"
-
-[dependencies.clap_generate]
-git = "https://github.com/clap-rs/clap"
-rev = "f0c5ea5e1503de5c8e74d8c047a799cf51498e83"
+clap = { version = "3.1", features = ["derive"] }
+clap_complete = { version = "3.1" }

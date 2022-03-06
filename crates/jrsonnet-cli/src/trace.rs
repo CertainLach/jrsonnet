@@ -1,5 +1,5 @@
 use crate::ConfigureState;
-use clap::Clap;
+use clap::Parser;
 use jrsonnet_evaluator::{
 	error::Result,
 	trace::{CompactFormat, ExplainingFormat, PathResolver},
@@ -24,8 +24,8 @@ impl FromStr for TraceFormatName {
 	}
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "STACK TRACE VISUAL")]
+#[derive(Parser)]
+#[clap(next_help_heading = "STACK TRACE VISUAL")]
 pub struct TraceOpts {
 	/// Format of stack traces' display in console.
 	/// `compact` format only shows `filename:line:column`s

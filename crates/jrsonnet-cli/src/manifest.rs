@@ -1,5 +1,5 @@
 use crate::ConfigureState;
-use clap::Clap;
+use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState, ManifestFormat};
 use std::{path::PathBuf, str::FromStr};
 
@@ -22,8 +22,8 @@ impl FromStr for ManifestFormatName {
 	}
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "MANIFESTIFICATION OUTPUT")]
+#[derive(Parser)]
+#[clap(next_help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
 	/// Output format, wraps resulting value to corresponding std.manifest call.
 	/// If set to `string` then plain string value is expected to be returned,
@@ -66,7 +66,7 @@ impl ConfigureState for ManifestOpts {
 	}
 }
 
-#[derive(Clap)]
+#[derive(Parser)]
 pub struct OutputOpts {
 	/// Write to the output file rather than stdout
 	#[clap(long, short = 'o')]

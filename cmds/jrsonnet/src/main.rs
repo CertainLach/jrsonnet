@@ -1,4 +1,5 @@
-use clap::{AppSettings, Clap, IntoApp};
+use clap::{AppSettings, IntoApp, Parser};
+use clap_complete::Shell;
 use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, EvaluationState};
 use std::{
@@ -6,51 +7,39 @@ use std::{
 	io::Read,
 	io::Write,
 	path::PathBuf,
-	str::FromStr,
 };
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
 static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
 
-#[derive(Clap)]
-#[clap(help_heading = "DEBUG")]
+#[derive(Parser)]
+enum SubOpts {
+	/// Generate completions for specified shell
+	Generate {
+		/// Target shell name
+		shell: Shell,
+	},
+}
+
+#[derive(Parser)]
+#[clap(next_help_heading = "DEBUG")]
 struct DebugOpts {
 	/// Required OS stack size.
 	/// This shouldn't be changed unless jrsonnet is failing with stack overflow error.
 	#[clap(long, name = "size")]
 	pub os_stack: Option<usize>,
-	/// Generate completions script
-	#[clap(long)]
-	generate: Option<GenerateTarget>,
 }
 
-enum GenerateTarget {
-	Bash,
-	Zsh,
-	Fish,
-	PowerShell,
-}
-impl FromStr for GenerateTarget {
-	type Err = &'static str;
-
-	fn from_str(s: &str) -> Result<Self, Self::Err> {
-		match s {
-			"bash" => Ok(Self::Bash),
-			"zsh" => Ok(Self::Zsh),
-			"fish" => Ok(Self::Fish),
-			"powershell" => Ok(Self::PowerShell),
-			_ => Err("unknown target"),
-		}
-	}
-}
-
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(
-	global_setting = AppSettings::ColoredHelp,
 	global_setting = AppSettings::DeriveDisplayOrder,
+	// args_conflicts_with_subcommands = true,
 )]
 struct Opts {
+	#[clap(subcommand)]
+	sub: Option<SubOpts>,
+
 	#[clap(flatten)]
 	input: InputOpts,
 	#[clap(flatten)]
@@ -68,20 +57,17 @@ struct Opts {
 fn main() {
 	let opts: Opts = Opts::parse();
 
-	if let Some(target) = opts.debug.generate {
-		use clap_generate::{generate, generators};
-		use GenerateTarget::*;
-		let app = &mut Opts::into_app();
-		let buf = &mut std::io::stdout();
-		let bin = "jrsonnet";
-		match target {
-			Bash => generate::<generators::Bash, _>(app, bin, buf),
-			Zsh => generate::<generators::Zsh, _>(app, bin, buf),
-			Fish => generate::<generators::Fish, _>(app, bin, buf),
-			PowerShell => generate::<generators::PowerShell, _>(app, bin, buf),
+	if let Some(sub) = opts.sub {
+		match sub {
+			SubOpts::Generate { shell } => {
+				use clap_complete::generate;
+				let app = &mut Opts::command();
+				let buf = &mut std::io::stdout();
+				generate(shell, app, "jrsonnet", buf);
+				std::process::exit(0)
+			}
 		}
-		std::process::exit(0);
-	};
+	}
 
 	let success = if let Some(size) = opts.debug.os_stack {
 		std::thread::Builder::new()

@@ -1,5 +1,5 @@
 use crate::ConfigureState;
-use clap::Clap;
+use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState};
 use std::{fs::read_to_string, str::FromStr};
 
@@ -53,8 +53,8 @@ impl FromStr for ExtFile {
 	}
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "EXTERNAL VARIABLES")]
+#[derive(Parser)]
+#[clap(next_help_heading = "EXTERNAL VARIABLES")]
 pub struct ExtVarOpts {
 	/// Add string external variable.
 	/// External variables are globally available so it is preferred

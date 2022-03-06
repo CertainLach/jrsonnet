@@ -8,7 +8,7 @@ pub use manifest::*;
 pub use tla::*;
 pub use trace::*;
 
-use clap::Clap;
+use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
 use std::{env, path::PathBuf};
 
@@ -16,24 +16,19 @@ pub trait ConfigureState {
 	fn configure(&self, state: &EvaluationState) -> Result<()>;
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "INPUT")]
+#[derive(Parser)]
+#[clap(next_help_heading = "INPUT")]
 pub struct InputOpts {
-	#[clap(
-		long,
-		short = 'e',
-		about = "Treat input as code, evaluate them instead of reading file"
-	)]
+	/// Treat input as code, evaluate them instead of reading file
+	#[clap(long, short = 'e')]
 	pub exec: bool,
 
-	#[clap(
-		about = "Path to the file to be compiled if `--evaluate` is unset, otherwise code itself"
-	)]
+	/// Path to the file to be compiled if `--evaluate` is unset, otherwise code itself
 	pub input: String,
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "OPTIONS")]
+#[derive(Parser)]
+#[clap(next_help_heading = "OPTIONS")]
 pub struct MiscOpts {
 	/// Disable standard library.
 	/// By default standard library will be available via global `std` variable.
@@ -74,7 +69,7 @@ impl ConfigureState for MiscOpts {
 }
 
 /// General configuration of jsonnet
-#[derive(Clap)]
+#[derive(Parser)]
 #[clap(name = "jrsonnet", version, author)]
 pub struct GeneralOpts {
 	#[clap(flatten)]
@@ -100,8 +95,8 @@ impl ConfigureState for GeneralOpts {
 	}
 }
 
-#[derive(Clap)]
-#[clap(help_heading = "GARBAGE COLLECTION")]
+#[derive(Parser)]
+#[clap(next_help_heading = "GARBAGE COLLECTION")]
 pub struct GcOpts {
 	/// Do not skip gc on exit
 	#[clap(long)]
