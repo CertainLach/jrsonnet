@@ -7,7 +7,6 @@ use crate::{
 	evaluate,
 	function::{parse_function_call, ArgsLike, Builtin, StaticBuiltin},
 	gc::TraceBox,
-	native::NativeCallback,
 	throw, Context, ObjValue, Result,
 };
 use gcmodule::{Cc, Trace};
@@ -86,16 +85,14 @@ pub struct FuncDesc {
 	pub body: LocExpr,
 }
 
-#[derive(Trace)]
+#[derive(Trace, Clone)]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
-	Normal(FuncDesc),
+	Normal(Cc<FuncDesc>),
 	/// Standard library function
 	StaticBuiltin(#[skip_trace] &'static dyn StaticBuiltin),
 
-	Builtin(TraceBox<dyn Builtin>),
-	/// Library functions implemented in native
-	NativeExt(IStr, Cc<NativeCallback>),
+	Builtin(Cc<TraceBox<dyn Builtin>>),
 }
 
 impl Debug for FuncVal {
@@ -104,9 +101,6 @@ impl Debug for FuncVal {
 			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
 			Self::StaticBuiltin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
 			Self::Builtin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
-			Self::NativeExt(arg0, arg1) => {
-				f.debug_tuple("NativeExt").field(arg0).field(arg1).finish()
-			}
 		}
 	}
 }
@@ -116,7 +110,6 @@ impl PartialEq for FuncVal {
 		match (self, other) {
 			(Self::Normal(a), Self::Normal(b)) => a == b,
 			(Self::StaticBuiltin(an), Self::StaticBuiltin(bn)) => std::ptr::eq(*an, *bn),
-			(Self::NativeExt(an, _), Self::NativeExt(bn, _)) => an == bn,
 			(..) => false,
 		}
 	}
@@ -127,7 +120,6 @@ impl FuncVal {
 			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
 			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default).count(),
 			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default).count(),
-			Self::NativeExt(_, n) => n.params.iter().filter(|p| p.1.is_none()).count(),
 		}
 	}
 	pub fn name(&self) -> IStr {
@@ -135,7 +127,6 @@ impl FuncVal {
 			Self::Normal(normal) => normal.name.clone(),
 			Self::StaticBuiltin(builtin) => builtin.name().into(),
 			Self::Builtin(builtin) => builtin.name().into(),
-			Self::NativeExt(n, _) => format!("native.{}", n).into(),
 		}
 	}
 	pub fn evaluate(
@@ -158,15 +149,6 @@ impl FuncVal {
 			}
 			Self::StaticBuiltin(name) => name.call(call_ctx, loc, args),
 			Self::Builtin(b) => b.call(call_ctx, loc, args),
-			Self::NativeExt(_name, handler) => {
-				let args =
-					parse_function_call(call_ctx, Context::new(), &handler.params, args, true)?;
-				let mut out_args = Vec::with_capacity(handler.params.len());
-				for p in handler.params.0.iter() {
-					out_args.push(args.binding(p.0.clone())?.evaluate()?);
-				}
-				Ok(handler.call(loc.expect("todo").0.clone(), &out_args)?)
-			}
 		}
 	}
 	pub fn evaluate_simple(&self, args: &dyn ArgsLike) -> Result<Val> {
@@ -352,7 +334,7 @@ pub enum Val {
 	Num(f64),
 	Arr(ArrValue),
 	Obj(ObjValue),
-	Func(Cc<FuncVal>),
+	Func(FuncVal),
 }
 
 impl Val {

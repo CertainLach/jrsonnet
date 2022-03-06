@@ -1,11 +1,11 @@
 use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
+	function::BuiltinParam,
 	gc::TraceBox,
 	native::{NativeCallback, NativeCallbackHandler},
 	EvaluationState, IStr, Val,
 };
-use jrsonnet_parser::{Param, ParamsDesc};
 use std::{
 	convert::TryFrom,
 	ffi::{c_void, CStr},
@@ -28,7 +28,7 @@ struct JsonnetNativeCallbackHandler {
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, _from: Rc<Path>, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, _from: Option<Rc<Path>>, args: &[Val]) -> Result<Val, LocError> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));
@@ -68,16 +68,19 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 			break;
 		}
 		let param = CStr::from_ptr(*raw_params).to_str().expect("not utf8");
-		params.push(Param(param.into(), None));
+		params.push(BuiltinParam {
+			name: param.into(),
+			has_default: false,
+		});
 		raw_params = raw_params.offset(1);
 	}
-	let params = ParamsDesc(Rc::new(params));
 
 	vm.add_native(
 		name,
-		Cc::new(NativeCallback::new(
+		#[allow(deprecated)]
+		Cc::new(TraceBox(Box::new(NativeCallback::new(
 			params,
 			TraceBox(Box::new(JsonnetNativeCallbackHandler { ctx, cb })),
-		)),
+		)))),
 	)
 }

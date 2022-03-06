@@ -13,7 +13,7 @@ mod ctx;
 mod dynamic;
 pub mod error;
 mod evaluate;
-mod function;
+pub mod function;
 mod import;
 mod integrations;
 mod map;
@@ -27,14 +27,12 @@ pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
-pub use function::parse_function_call;
-use function::TlaArg;
+use function::{Builtin, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace};
 pub use import::*;
 pub use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
-use native::NativeCallback;
 pub use obj::*;
 use std::{
 	cell::{Ref, RefCell, RefMut},
@@ -79,7 +77,7 @@ pub struct EvaluationSettings {
 	/// Used for s`td.extVar`
 	pub ext_vars: HashMap<IStr, Val>,
 	/// Used for ext.native
-	pub ext_natives: HashMap<IStr, Cc<NativeCallback>>,
+	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
 	/// TLA vars
 	pub tla_vars: HashMap<IStr, TlaArg>,
 	/// Global variables are inserted in default context
@@ -614,7 +612,7 @@ impl EvaluationState {
 		self.settings_mut().import_resolver = resolver;
 	}
 
-	pub fn add_native(&self, name: IStr, cb: Cc<NativeCallback>) {
+	pub fn add_native(&self, name: IStr, cb: Cc<TraceBox<dyn Builtin>>) {
 		self.settings_mut().ext_natives.insert(name, cb);
 	}
 
@@ -657,8 +655,8 @@ pub fn cc_ptr_eq<T>(a: &Cc<T>, b: &Cc<T>) -> bool {
 pub mod tests {
 	use super::Val;
 	use crate::{
-		error::Error::*, gc::TraceBox, native::NativeCallbackHandler, primitive_equals,
-		EvaluationState,
+		error::Error::*, function::BuiltinParam, gc::TraceBox, native::NativeCallbackHandler,
+		primitive_equals, EvaluationState,
 	};
 	use gcmodule::{Cc, Trace};
 	use jrsonnet_interner::IStr;
@@ -1096,8 +1094,11 @@ pub mod tests {
 		#[derive(Trace)]
 		struct NativeAdd;
 		impl NativeCallbackHandler for NativeAdd {
-			fn call(&self, from: Rc<Path>, args: &[Val]) -> crate::error::Result<Val> {
-				assert_eq!(&from as &Path, &PathBuf::from("native_caller.jsonnet"));
+			fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> crate::error::Result<Val> {
+				assert_eq!(
+					&from.unwrap() as &Path,
+					&PathBuf::from("native_caller.jsonnet")
+				);
 				match (&args[0], &args[1]) {
 					(Val::Num(a), Val::Num(b)) => Ok(Val::Num(a + b)),
 					(_, _) => unreachable!(),
@@ -1106,13 +1107,20 @@ pub mod tests {
 		}
 		evaluator.settings_mut().ext_natives.insert(
 			"native_add".into(),
-			Cc::new(NativeCallback::new(
-				ParamsDesc(Rc::new(vec![
-					Param("a".into(), None),
-					Param("b".into(), None),
-				])),
+			#[allow(deprecated)]
+			Cc::new(TraceBox(Box::new(NativeCallback::new(
+				vec![
+					BuiltinParam {
+						name: "a".into(),
+						has_default: false,
+					},
+					BuiltinParam {
+						name: "b".into(),
+						has_default: false,
+					},
+				],
 				TraceBox(Box::new(NativeAdd)),
-			)),
+			)))),
 		);
 		evaluator.evaluate_snippet_raw(
 			PathBuf::from("native_caller.jsonnet").into(),

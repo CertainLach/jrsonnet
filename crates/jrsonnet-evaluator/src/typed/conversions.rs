@@ -1,6 +1,5 @@
 use std::convert::{TryFrom, TryInto};
 
-use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use jrsonnet_types::{ComplexValType, ValType};
 
@@ -400,10 +399,10 @@ impl TryFrom<ArrValue> for Val {
 	}
 }
 
-impl Typed for Cc<FuncVal> {
+impl Typed for FuncVal {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
 }
-impl TryFrom<Val> for Cc<FuncVal> {
+impl TryFrom<Val> for FuncVal {
 	type Error = LocError;
 
 	fn try_from(value: Val) -> Result<Self> {
@@ -414,10 +413,10 @@ impl TryFrom<Val> for Cc<FuncVal> {
 		}
 	}
 }
-impl TryFrom<Cc<FuncVal>> for Val {
+impl TryFrom<FuncVal> for Val {
 	type Error = LocError;
 
-	fn try_from(value: Cc<FuncVal>) -> Result<Self> {
+	fn try_from(value: FuncVal) -> Result<Self> {
 		Ok(Self::Func(value))
 	}
 }

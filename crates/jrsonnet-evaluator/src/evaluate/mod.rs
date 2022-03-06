@@ -177,7 +177,7 @@ pub fn evaluate_binding(b: &BindSpec, context_creator: ContextCreator) -> (IStr,
 }
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(Cc::new(FuncVal::Normal(FuncDesc {
+	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -630,11 +630,11 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
 		}
-		Intrinsic(name) => Val::Func(Cc::new(FuncVal::StaticBuiltin(
+		Intrinsic(name) => Val::Func(FuncVal::StaticBuiltin(
 			BUILTINS
 				.with(|b| b.get(name).copied())
 				.ok_or_else(|| IntrinsicNotFound(name.clone()))?,
-		))),
+		)),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(context.clone(), assert)?;
 			evaluate(context, returned)?

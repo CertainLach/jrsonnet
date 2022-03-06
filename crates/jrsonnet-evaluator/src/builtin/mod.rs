@@ -11,7 +11,6 @@ use crate::{
 };
 use crate::{Either, ObjValue};
 use format::{format_arr, format_obj};
-use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::ExprLocation;
 use serde::Deserialize;
@@ -142,7 +141,7 @@ thread_local! {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_length(x: Either![IStr, VecVal, ObjValue, Cc<FuncVal>]) -> Result<usize> {
+fn builtin_length(x: Either![IStr, VecVal, ObjValue, FuncVal]) -> Result<usize> {
 	use Either4::*;
 	Ok(match x {
 		A(x) => x.chars().count(),
@@ -162,7 +161,7 @@ fn builtin_type(x: Any) -> Result<IStr> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_make_array(sz: usize, func: Cc<FuncVal>) -> Result<VecVal> {
+fn builtin_make_array(sz: usize, func: FuncVal) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
 		out.push(func.evaluate_simple(&[i as f64].as_slice())?)
@@ -345,24 +344,24 @@ fn builtin_ext_var(x: IStr) -> Result<Any> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_native(name: IStr) -> Result<Cc<FuncVal>> {
+fn builtin_native(name: IStr) -> Result<FuncVal> {
 	Ok(with_state(|s| s.settings().ext_natives.get(&name).cloned())
-		.map(|v| Cc::new(FuncVal::NativeExt(name.clone(), v)))
+		.map(|v| FuncVal::Builtin(v.clone()))
 		.ok_or(UndefinedExternalFunction(name))?)
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_filter(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
+fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 	arr.filter(|val| bool::try_from(func.evaluate_simple(&[Any(val.clone())].as_slice())?))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_map(func: Cc<FuncVal>, arr: ArrValue) -> Result<ArrValue> {
+fn builtin_map(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 	arr.map(|val| func.evaluate_simple(&[Any(val)].as_slice()))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal> {
+fn builtin_flatmap(func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
 	match arr {
 		IndexableVal::Str(s) => {
 			let mut out = String::new();
@@ -397,7 +396,7 @@ fn builtin_flatmap(func: Cc<FuncVal>, arr: IndexableVal) -> Result<IndexableVal>
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_foldl(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
+fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter() {
 		acc = func.evaluate_simple(&[Any(acc), Any(i?)].as_slice())?;
@@ -406,7 +405,7 @@ fn builtin_foldl(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_foldr(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
+fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter().rev() {
 		acc = func.evaluate_simple(&[Any(i?), Any(acc)].as_slice())?;
@@ -416,13 +415,13 @@ fn builtin_foldr(func: Cc<FuncVal>, arr: ArrValue, init: Any) -> Result<Any> {
 
 #[jrsonnet_macros::builtin]
 #[allow(non_snake_case)]
-fn builtin_sort(arr: ArrValue, keyF: Option<Cc<FuncVal>>) -> Result<ArrValue> {
+fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
 	Ok(ArrValue::Eager(sort::sort(
 		arr.evaluated()?,
-		keyF.as_deref(),
+		keyF.as_ref(),
 	)?))
 }
 

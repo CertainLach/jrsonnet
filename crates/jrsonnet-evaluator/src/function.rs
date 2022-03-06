@@ -371,7 +371,7 @@ pub fn parse_function_call(
 
 type BuiltinParamName = Cow<'static, str>;
 
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub struct BuiltinParam {
 	pub name: BuiltinParamName,
 	pub has_default: bool,
