@@ -1,10 +1,15 @@
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::{
-	parse_macro_input, FnArg, GenericArgument, ItemFn, Pat, PatType, Path, PathArguments, Type,
+	parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned,
+	token::Comma, FnArg, GenericArgument, Ident, ItemFn, Pat, PatType, Path, PathArguments, Token,
+	Type,
 };
 
 fn is_location_arg(t: &PatType) -> bool {
 	t.attrs.iter().any(|a| a.path.is_ident("location"))
+}
+fn is_self_arg(t: &PatType) -> bool {
+	t.attrs.iter().any(|a| a.path.is_ident("self"))
 }
 
 trait RetainHad<T> {
@@ -45,16 +50,58 @@ fn extract_type_from_option(ty: &Type) -> Option<&Type> {
 	}
 }
 
+struct Field {
+	name: Ident,
+	_colon: Token![:],
+	ty: Type,
+}
+impl Parse for Field {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		Ok(Self {
+			name: input.parse()?,
+			_colon: input.parse()?,
+			ty: input.parse()?,
+		})
+	}
+}
+
+mod kw {
+	syn::custom_keyword!(fields);
+}
+
+struct BuiltinAttrs {
+	fields: Vec<Field>,
+}
+impl Parse for BuiltinAttrs {
+	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+		if input.is_empty() {
+			return Ok(Self { fields: Vec::new() });
+		}
+		input.parse::<kw::fields>()?;
+		let fields;
+		parenthesized!(fields in input);
+		let p = Punctuated::<Field, Comma>::parse_terminated(&fields)?;
+		Ok(Self {
+			fields: p.into_iter().collect(),
+		})
+	}
+}
+
 #[proc_macro_attribute]
 pub fn builtin(
-	_attr: proc_macro::TokenStream,
+	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	// syn::ItemFn::parse(input)
+	let attrs = parse_macro_input!(attr as BuiltinAttrs);
 	let mut fun: ItemFn = parse_macro_input!(item);
 
 	let result = match fun.sig.output {
-		syn::ReturnType::Default => panic!("builtin should return something"),
+		syn::ReturnType::Default => {
+			return quote_spanned! { fun.sig.span() =>
+				compile_error!("builtins should return something");
+			}
+			.into()
+		}
 		syn::ReturnType::Type(_, ref ty) => ty.clone(),
 	};
 
@@ -66,11 +113,16 @@ pub fn builtin(
 			FnArg::Receiver(_) => unreachable!(),
 			FnArg::Typed(t) => t,
 		})
-		.filter(|a| !is_location_arg(a))
+		.filter(|a| !is_location_arg(a) && !is_self_arg(a))
 		.map(|t| {
 			let ident = match &t.pat as &Pat {
 				Pat::Ident(i) => i.ident.to_string(),
-				_ => panic!("only idents supported yet"),
+				_ => {
+					return quote_spanned! { t.pat.span() =>
+						compile_error!("args should be plain identifiers")
+					}
+					.into()
+				}
 			};
 			let optional = extract_type_from_option(&t.ty).is_some();
 			quote! {
@@ -91,15 +143,23 @@ pub fn builtin(
 			FnArg::Typed(t) => t,
 		})
 		.map(|t| {
-			let is_location = t.attrs.retain_had(|a| !a.path.is_ident("location"));
-			if is_location {
+			if t.attrs.retain_had(|a| !a.path.is_ident("location")) {
 				quote! {{
 					loc
+				}}
+			} else if t.attrs.retain_had(|a| !a.path.is_ident("self")) {
+				quote! {{
+					self
 				}}
 			} else {
 				let ident = match &t.pat as &Pat {
 					Pat::Ident(i) => i.ident.to_string(),
-					_ => panic!("only idents supported yet"),
+					_ => {
+						return quote_spanned! { t.pat.span() =>
+							compile_error!("args should be plain identifiers")
+						}
+						.into()
+					}
 				};
 				let ty = &t.ty;
 				if let Some(opt_ty) = extract_type_from_option(&t.ty) {
@@ -127,14 +187,40 @@ pub fn builtin(
 		})
 		.collect::<Vec<_>>();
 
+	let fields = attrs.fields.iter().map(|field| {
+		let name = &field.name;
+		let ty = &field.ty;
+		quote! {
+			pub #name: #ty,
+		}
+	});
+
 	let name = &fun.sig.ident;
 	let vis = &fun.vis;
+	let static_ext = if attrs.fields.is_empty() {
+		quote! {
+			impl #name {
+				pub const INST: &'static dyn StaticBuiltin = &#name {};
+			}
+			impl StaticBuiltin for #name {}
+		}
+	} else {
+		quote! {}
+	};
+	let static_derive_copy = if attrs.fields.is_empty() {
+		quote! {, Copy}
+	} else {
+		quote! {}
+	};
+
 	(quote! {
 		#fun
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
-		#[derive(Clone, Copy, gcmodule::Trace)]
-		#vis struct #name {}
+		#[derive(Clone, gcmodule::Trace #static_derive_copy)]
+		#vis struct #name {
+			#(#fields)*
+		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
@@ -145,10 +231,7 @@ pub fn builtin(
 				#(#params),*
 			];
 
-			impl #name {
-				pub const INST: &'static dyn StaticBuiltin = &#name {};
-			}
-			impl StaticBuiltin for #name {}
+			#static_ext
 			impl Builtin for #name
 			where
 				Self: 'static
