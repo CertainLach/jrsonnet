@@ -15,9 +15,6 @@ explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
 
-# Unlocks extra features, but works only on unstable
-unstable = []
-
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }

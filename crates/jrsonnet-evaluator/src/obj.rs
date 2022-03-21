@@ -1,7 +1,7 @@
 use crate::gc::{GcHashMap, GcHashSet, TraceBox};
 use crate::operator::evaluate_add_op;
-use crate::{cc_ptr_eq, Bindable, LazyBinding, LazyVal, Result, Val};
-use gcmodule::{Cc, Trace};
+use crate::{cc_ptr_eq, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, Val};
+use gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
@@ -22,7 +22,7 @@ pub trait ObjectAssertion: Trace {
 }
 
 // Field => This
-type CacheKey = (IStr, ObjValue);
+type CacheKey = (IStr, WeakObjValue);
 #[derive(Trace)]
 #[force_tracking]
 pub struct ObjValueInternals {
@@ -32,6 +32,22 @@ pub struct ObjValueInternals {
 	this_obj: Option<ObjValue>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
 	value_cache: RefCell<GcHashMap<CacheKey, Option<Val>>>,
+}
+
+#[derive(Clone, Trace)]
+pub struct WeakObjValue(#[skip_trace] pub(crate) Weak<ObjValueInternals>);
+
+impl PartialEq for WeakObjValue {
+	fn eq(&self, other: &Self) -> bool {
+		weak_ptr_eq(self.0.clone(), other.0.clone())
+	}
+}
+
+impl Eq for WeakObjValue {}
+impl Hash for WeakObjValue {
+	fn hash<H: Hasher>(&self, hasher: &mut H) {
+		hasher.write_usize(weak_raw(self.0.clone()) as usize)
+	}
 }
 
 #[derive(Clone, Trace)]
@@ -50,14 +66,7 @@ impl Debug for ObjValue {
 		for (name, member) in self.0.this_entries.iter() {
 			debug.field(name, member);
 		}
-		#[cfg(feature = "unstable")]
-		{
-			debug.finish_non_exhaustive()
-		}
-		#[cfg(not(feature = "unstable"))]
-		{
-			debug.finish()
-		}
+		debug.finish_non_exhaustive()
 	}
 }
 
@@ -217,7 +226,7 @@ impl ObjValue {
 
 	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
-		let cache_key = (key.clone(), real_this.clone());
+		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
 
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
 			return Ok(v.clone());

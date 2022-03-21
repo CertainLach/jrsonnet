@@ -1,4 +1,3 @@
-#![cfg_attr(feature = "unstable", feature(stmt_expr_attributes))]
 #![warn(clippy::all, clippy::nursery)]
 #![allow(
 	macro_expanded_macro_exports_accessed_by_absolute_paths,
@@ -31,7 +30,7 @@ use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 use function::{Builtin, TlaArg};
 use gc::{GcHashMap, TraceBox};
-use gcmodule::{Cc, Trace};
+use gcmodule::{Cc, Trace, Weak};
 pub use import::*;
 pub use jrsonnet_interner::IStr;
 use jrsonnet_parser::*;
@@ -651,6 +650,28 @@ pub fn cc_ptr_eq<T>(a: &Cc<T>, b: &Cc<T>) -> bool {
 	let a = a as &T;
 	let b = b as &T;
 	std::ptr::eq(a, b)
+}
+
+fn weak_raw<T>(a: Weak<T>) -> *const () {
+	unsafe { std::mem::transmute(a) }
+}
+fn weak_ptr_eq<T>(a: Weak<T>, b: Weak<T>) -> bool {
+	std::ptr::eq(weak_raw(a), weak_raw(b))
+}
+
+#[test]
+fn weak_unsafe() {
+	let a = Cc::new(1);
+	let b = Cc::new(2);
+
+	let aw1 = a.clone().downgrade();
+	let aw2 = a.clone().downgrade();
+	let aw3 = a.clone().downgrade();
+
+	let bw = b.clone().downgrade();
+
+	assert!(weak_ptr_eq(aw1, aw2));
+	assert!(!weak_ptr_eq(aw3, bw));
 }
 
 #[cfg(test)]

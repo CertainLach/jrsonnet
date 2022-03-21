@@ -133,10 +133,6 @@ impl Context {
 		}
 		Ok(self.extend(new, new_dollar, this, super_obj))
 	}
-	#[cfg(feature = "unstable")]
-	pub fn into_weak(self) -> WeakContext {
-		WeakContext(Rc::downgrade(&self.0))
-	}
 }
 
 impl Default for Context {
