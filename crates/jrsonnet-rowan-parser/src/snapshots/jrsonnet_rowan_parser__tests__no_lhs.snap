@@ -1,0 +1,23 @@
+---
+source: crates/jrsonnet-rowan-parser/src/lib.rs
+assertion_line: 88
+expression: "+ 2\n"
+
+---
+Root@0..4
+  OpPlus@0..1 "+"
+  Whitespace@1..2 " "
+  Number@2..3 "2"
+  Whitespace@3..4 "\n"
+===
+Missing { expected: Named("value"), offset: 0 }
+Custom { error: "unexpected input after expression", range: 0..3 }
+===
+  [38;2;255;30;30m×[0m syntax error
+   ╭────
+ [2m1[0m │ + 2
+   · [38;2;246;87;248m▲[0m[38;2;30;201;212m─┬─[0m
+   · [38;2;246;87;248m│[0m[38;2;30;201;212m╰── [38;2;30;201;212munexpected input after expression[0m[0m
+   · [38;2;246;87;248m╰── [38;2;246;87;248mmissing value[0m[0m
+   ╰────
+

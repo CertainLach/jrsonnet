@@ -1,6 +1,6 @@
 [workspace]
 package.version = "0.5.0"
-members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
+members = ["crates/*", "bindings/jsonnet", "cmds/*", "tests"]
 default-members = ["cmds/jrsonnet"]
 
 [workspace.dependencies]

@@ -1,0 +1,47 @@
+---
+source: crates/jrsonnet-rowan-parser/src/lib.rs
+assertion_line: 88
+expression: "local a =\nlocal b = 3;\n1\n"
+
+---
+Root@0..25
+  Local@0..25
+    KeywordLocal@0..5 "local"
+    Whitespace@5..6 " "
+    Ident@6..7 "a"
+    Whitespace@7..8 " "
+    SymbolAssign@8..9 "="
+    Whitespace@9..10 "\n"
+    Local@10..25
+      KeywordLocal@10..15 "local"
+      Whitespace@15..16 " "
+      Ident@16..17 "b"
+      Whitespace@17..18 " "
+      SymbolAssign@18..19 "="
+      Whitespace@19..20 " "
+      Literal@20..21
+        Number@20..21 "3"
+      SymbolSemi@21..22 ";"
+      Whitespace@22..23 "\n"
+      BodyDef@23..25
+        Literal@23..25
+          Number@23..24 "1"
+          Whitespace@24..25 "\n"
+    BodyDef@25..25
+===
+Missing { expected: Unnamed(SymbolSemi), offset: 24 }
+Custom { error: "unusal local placement, missing ';' ?", range: 8..9 }
+Missing { expected: Named("value"), offset: 24 }
+===
+  [38;2;255;30;30m×[0m syntax error
+   ╭─[1:1]
+ [2m1[0m │ local a =
+   · [38;2;246;87;248m        ┬[0m
+   ·         [38;2;246;87;248m╰── [38;2;246;87;248munusal local placement, missing ';' ?[0m[0m
+ [2m2[0m │ local b = 3;
+ [2m3[0m │ 1
+   · [38;2;30;201;212m ▲[0m
+   ·  [38;2;30;201;212m│[0m[38;2;145;246;111m╰── [38;2;145;246;111mmissing value[0m[0m
+   ·  [38;2;30;201;212m╰── [38;2;30;201;212mmissing SymbolSemi[0m[0m
+   ╰────
+

@@ -1,0 +1,29 @@
+---
+source: crates/jrsonnet-rowan-parser/src/lib.rs
+assertion_line: 88
+expression: "function(a, b)\n"
+
+---
+Root@0..15
+  FunctionDef@0..15
+    KeywordFunction@0..8 "function"
+    LParen@8..9 "("
+    DefPositionalArg@9..10
+      Ident@9..10 "a"
+    SymbolComma@10..11 ","
+    Whitespace@11..12 " "
+    DefPositionalArg@12..13
+      Ident@12..13 "b"
+    RParen@13..14 ")"
+    Whitespace@14..15 "\n"
+    BodyDef@15..15
+===
+Missing { expected: Named("value"), offset: 14 }
+===
+  [38;2;255;30;30m×[0m syntax error
+   ╭────
+ [2m1[0m │ function(a, b)
+   · [38;2;246;87;248m              ▲[0m
+   ·               [38;2;246;87;248m╰── [38;2;246;87;248mmissing value[0m[0m
+   ╰────
+
