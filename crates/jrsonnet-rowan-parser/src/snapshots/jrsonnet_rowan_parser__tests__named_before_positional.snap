@@ -1,0 +1,63 @@
+---
+source: crates/jrsonnet-rowan-parser/src/lib.rs
+assertion_line: 88
+expression: "a(1, 2, b=4, 3, 5, k = 12, 6)\n"
+
+---
+Root@0..30
+  FunctionCall@0..30
+    Ident@0..1
+      Ident@0..1 "a"
+    LParen@1..2 "("
+    DefPositionalArg@2..3
+      Literal@2..3
+        Number@2..3 "1"
+    SymbolComma@3..4 ","
+    Whitespace@4..5 " "
+    DefPositionalArg@5..6
+      Literal@5..6
+        Number@5..6 "2"
+    SymbolComma@6..7 ","
+    Whitespace@7..8 " "
+    DefNamedArg@8..11
+      Ident@8..9 "b"
+      SymbolAssign@9..10 "="
+      Literal@10..11
+        Number@10..11 "4"
+    SymbolComma@11..12 ","
+    Whitespace@12..13 " "
+    ErrorPositionalAfterNamed@13..28
+      DefPositionalArg@13..14
+        Literal@13..14
+          Number@13..14 "3"
+      SymbolComma@14..15 ","
+      Whitespace@15..16 " "
+      DefPositionalArg@16..17
+        Literal@16..17
+          Number@16..17 "5"
+      SymbolComma@17..18 ","
+      Whitespace@18..19 " "
+      DefNamedArg@19..25
+        Ident@19..20 "k"
+        Whitespace@20..21 " "
+        SymbolAssign@21..22 "="
+        Whitespace@22..23 " "
+        Literal@23..25
+          Number@23..25 "12"
+      SymbolComma@25..26 ","
+      Whitespace@26..27 " "
+      DefPositionalArg@27..28
+        Literal@27..28
+          Number@27..28 "6"
+    RParen@28..29 ")"
+    Whitespace@29..30 "\n"
+===
+Custom { error: "positional arguments can't be placed after named", range: 13..28 }
+===
+  [38;2;255;30;30m×[0m syntax error
+   ╭────
+ [2m1[0m │ a(1, 2, b=4, 3, 5, k = 12, 6)
+   · [38;2;246;87;248m             ───────┬───────[0m
+   ·                     [38;2;246;87;248m╰── [38;2;246;87;248mpositional arguments can't be placed after named[0m[0m
+   ╰────
+

@@ -1,0 +1,29 @@
+---
+source: crates/jrsonnet-rowan-parser/src/lib.rs
+assertion_line: 88
+expression: "local a =\n"
+
+---
+Root@0..10
+  Local@0..10
+    KeywordLocal@0..5 "local"
+    Whitespace@5..6 " "
+    Ident@6..7 "a"
+    Whitespace@7..8 " "
+    SymbolAssign@8..9 "="
+    Whitespace@9..10 "\n"
+    BodyDef@10..10
+===
+Missing { expected: Named("value"), offset: 9 }
+Missing { expected: Unnamed(SymbolSemi), offset: 9 }
+Missing { expected: Named("value"), offset: 9 }
+===
+  [38;2;255;30;30m×[0m syntax error
+   ╭────
+ [2m1[0m │ local a =
+   · [38;2;246;87;248m         ▲[0m
+   ·          [38;2;145;246;111m╰── [38;2;145;246;111mmissing value[0m[0m
+   ·          [38;2;246;87;248m│[0m[38;2;30;201;212m╰── [38;2;30;201;212mmissing SymbolSemi[0m[0m
+   ·          [38;2;246;87;248m╰── [38;2;246;87;248mmissing value[0m[0m
+   ╰────
+
