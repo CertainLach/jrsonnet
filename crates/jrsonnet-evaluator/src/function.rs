@@ -8,6 +8,7 @@ use crate::{
 };
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
+pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
 use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
 
@@ -377,6 +378,7 @@ pub struct BuiltinParam {
 	pub has_default: bool,
 }
 
+/// Do not implement it directly, instead use #[builtin] macro
 pub trait Builtin: Trace {
 	fn name(&self) -> &str;
 	fn params(&self) -> &[BuiltinParam];

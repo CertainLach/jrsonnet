@@ -1,6 +1,7 @@
 use std::convert::{TryFrom, TryInto};
 
 use jrsonnet_interner::IStr;
+pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{

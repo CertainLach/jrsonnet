@@ -8,20 +8,8 @@ use crate::{
 	push_description_frame, Val,
 };
 use gcmodule::Trace;
-use jrsonnet_types::{ComplexValType, ValType};
+pub use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
-
-#[macro_export]
-macro_rules! unwrap_type {
-	($desc:expr, $value:expr, $typ:expr => $match:path) => {{
-		use $crate::{push_frame, typed::CheckType};
-		push_frame(None, $desc, || Ok($typ.check(&$value)?))?;
-		match $value {
-			$match(v) => v,
-			_ => unreachable!(),
-		}
-	}};
-}
 
 #[derive(Debug, Error, Clone, Trace)]
 pub enum TypeError {
@@ -136,7 +124,7 @@ enum ValuePathItem {
 impl Display for ValuePathItem {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Field(name) => write!(f, ".{}", name)?,
+			Self::Field(name) => write!(f, ".{:?}", name)?,
 			Self::Index(idx) => write!(f, "[{}]", idx)?,
 		}
 		Ok(())

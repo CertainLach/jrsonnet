@@ -122,7 +122,7 @@ pub enum ComplexValType {
 	BoundedNumber(Option<f64>, Option<f64>),
 	Array(Box<ComplexValType>),
 	ArrayRef(&'static ComplexValType),
-	ObjectRef(&'static [(&'static str, ComplexValType)]),
+	ObjectRef(&'static [(&'static str, &'static ComplexValType)]),
 	Union(Vec<ComplexValType>),
 	UnionRef(&'static [&'static ComplexValType]),
 	Sum(Vec<ComplexValType>),

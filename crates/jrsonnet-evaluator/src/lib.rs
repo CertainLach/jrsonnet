@@ -174,7 +174,11 @@ thread_local! {
 	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
-	EVAL_STATE.with(|s| f(s.borrow().as_ref().unwrap()))
+	EVAL_STATE.with(|s| {
+		f(s.borrow().as_ref().expect(
+			"missing evaluation state, some functions should be called inside of run_in_state call",
+		))
+	})
 }
 pub fn push_frame<T>(
 	e: Option<&ExprLocation>,
@@ -728,12 +732,15 @@ pub mod tests {
 	}
 
 	macro_rules! eval {
-		($str: expr) => {
-			EvaluationState::default()
-				.with_stdlib()
-				.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
-				.unwrap()
-		};
+		($str: expr) => {{
+			let evaluator = EvaluationState::default();
+			evaluator.with_stdlib();
+			evaluator.run_in_state(|| {
+				evaluator
+					.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
+					.unwrap()
+			})
+		}};
 	}
 	macro_rules! eval_json {
 		($str: expr) => {{
@@ -1264,5 +1271,48 @@ pub mod tests {
 		assert_eval!(r#"std.assertEqual(std.count([], ""), 0)"#);
 		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "d"), 0)"#);
 		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "a"), 2)"#);
+	}
+
+	mod derive_typed {
+		use crate::{typed::Typed, EvaluationState};
+		use std::path::PathBuf;
+
+		#[derive(Typed, PartialEq, Debug)]
+		struct MyTyped {
+			a: u32,
+			b: String,
+		}
+
+		#[test]
+		fn test() {
+			let es = EvaluationState::default();
+			let val = eval!("{a: 14, b: 'Hello, world!'}");
+			let typed = es.run_in_state(|| MyTyped::try_from(val).unwrap());
+
+			assert_eq!(
+				typed,
+				MyTyped {
+					a: 14,
+					b: "Hello, world!".to_string()
+				}
+			);
+			es.settings_mut().globals.insert(
+				"mytyped".into(),
+				es.run_in_state(|| typed.try_into()).unwrap(),
+			);
+
+			let v = es
+				.evaluate_snippet_raw(
+					PathBuf::from("raw.jsonnet").into(),
+					"
+				mytyped == {a: 14, b: 'Hello, world!'}
+			"
+					.into(),
+				)
+				.unwrap()
+				.as_bool()
+				.unwrap();
+			assert!(v)
+		}
 	}
 }

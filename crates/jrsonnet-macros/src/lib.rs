@@ -1,8 +1,8 @@
 use quote::{quote, quote_spanned};
 use syn::{
 	parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned,
-	token::Comma, FnArg, GenericArgument, Ident, ItemFn, Pat, PatType, Path, PathArguments, Token,
-	Type,
+	token::Comma, DeriveInput, FnArg, GenericArgument, Ident, ItemFn, Pat, PatType, Path,
+	PathArguments, Token, Type,
 };
 
 fn is_location_arg(t: &PatType) -> bool {
@@ -252,5 +252,88 @@ pub fn builtin(
 			}
 		};
 	})
+	.into()
+}
+
+#[proc_macro_derive(Typed)]
+pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(item as DeriveInput);
+	let data = match &input.data {
+		syn::Data::Struct(s) => s,
+		_ => {
+			return syn::Error::new(input.span(), "only structs supported")
+				.to_compile_error()
+				.into()
+		}
+	};
+
+	let ident = &input.ident;
+
+	let fields_def = data.fields.iter().map(|f| {
+		let name = f
+			.ident
+			.as_ref()
+			.expect("only named fields supported")
+			.to_string();
+		let ty = &f.ty;
+		quote! {
+			(#name, #ty::TYPE),
+		}
+	});
+	let fields_parse = data.fields.iter().map(|f| {
+		let ident = f.ident.as_ref().unwrap();
+		let name = ident.to_string();
+		let ty = &f.ty;
+		quote! {
+			#ident: #ty::try_from(obj.get(#name.into())?.expect("shape is correct"))?,
+		}
+	});
+	let fields_serialize = data.fields.iter().map(|f| {
+		let ident = f.ident.as_ref().unwrap();
+		let name = ident.to_string();
+		quote! {
+			out.member(#name.into()).value(self.#ident.try_into()?);
+		}
+	});
+	let field_count = data.fields.len();
+
+	quote! {
+		const _: () = {
+			use ::jrsonnet_evaluator::{
+				typed::{ComplexValType, Typed, CheckType},
+				Val,
+				error::LocError,
+				obj::ObjValueBuilder,
+			};
+
+			const ITEMS: [(&'static str, &'static ComplexValType); #field_count] = [
+				#(#fields_def)*
+			];
+			impl Typed for #ident {
+				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
+			}
+
+			impl TryFrom<Val> for #ident {
+				type Error = LocError;
+				fn try_from(value: Val) -> Result<Self, Self::Error> {
+					<Self as Typed>::TYPE.check(&value)?;
+					let obj = value.as_obj().expect("shape is correct");
+
+					Ok(Self {
+						#(#fields_parse)*
+					})
+				}
+			}
+			impl TryInto<Val> for #ident {
+				type Error = LocError;
+				fn try_into(self) -> Result<Val, Self::Error> {
+					let mut out = ObjValueBuilder::new();
+					#(#fields_serialize)*
+					Ok(Val::Obj(out.build()))
+				}
+			}
+			()
+		};
+	}
 	.into()
 }

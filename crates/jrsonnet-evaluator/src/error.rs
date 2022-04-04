@@ -179,7 +179,7 @@ impl LocError {
 	}
 }
 
-pub type Result<V> = std::result::Result<V, LocError>;
+pub type Result<V, E = LocError> = std::result::Result<V, E>;
 
 #[macro_export]
 macro_rules! throw {

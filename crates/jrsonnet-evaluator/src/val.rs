@@ -91,7 +91,7 @@ pub enum FuncVal {
 	Normal(Cc<FuncDesc>),
 	/// Standard library function
 	StaticBuiltin(#[skip_trace] &'static dyn StaticBuiltin),
-
+	/// User-provided function
 	Builtin(Cc<TraceBox<dyn Builtin>>),
 }
 
@@ -99,8 +99,10 @@ impl Debug for FuncVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
-			Self::StaticBuiltin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
-			Self::Builtin(arg0) => f.debug_tuple("Intrinsic").field(&arg0.name()).finish(),
+			Self::StaticBuiltin(arg0) => {
+				f.debug_tuple("StaticBuiltin").field(&arg0.name()).finish()
+			}
+			Self::Builtin(arg0) => f.debug_tuple("Builtin").field(&arg0.name()).finish(),
 		}
 	}
 }
@@ -338,6 +340,49 @@ pub enum Val {
 }
 
 impl Val {
+	pub fn as_bool(&self) -> Option<bool> {
+		match self {
+			Val::Bool(v) => Some(*v),
+			_ => None,
+		}
+	}
+	pub fn as_null(&self) -> Option<()> {
+		match self {
+			Val::Null => Some(()),
+			_ => None,
+		}
+	}
+	pub fn as_str(&self) -> Option<IStr> {
+		match self {
+			Val::Str(s) => Some(s.clone()),
+			_ => None,
+		}
+	}
+	pub fn as_num(&self) -> Option<f64> {
+		match self {
+			Val::Num(n) => Some(*n),
+			_ => None,
+		}
+	}
+	pub fn as_arr(&self) -> Option<ArrValue> {
+		match self {
+			Val::Arr(a) => Some(a.clone()),
+			_ => None,
+		}
+	}
+	pub fn as_obj(&self) -> Option<ObjValue> {
+		match self {
+			Val::Obj(o) => Some(o.clone()),
+			_ => None,
+		}
+	}
+	pub fn as_func(&self) -> Option<FuncVal> {
+		match self {
+			Val::Func(f) => Some(f.clone()),
+			_ => None,
+		}
+	}
+
 	/// Creates `Val::Num` after checking for numeric overflow.
 	/// As numbers are `f64`, we can just check for their finity.
 	pub fn new_checked_num(num: f64) -> Result<Self> {
