@@ -23,6 +23,18 @@ impl LazyValValue for EvaluateLazyVal {
 	}
 }
 
+#[derive(Trace)]
+struct EvaluateNamedLazyVal {
+	future_context: FutureWrapper<Context>,
+	name: IStr,
+	value: LocExpr,
+}
+impl LazyValValue for EvaluateNamedLazyVal {
+	fn get(self: Box<Self>) -> Result<Val> {
+		evaluate_named(self.future_context.unwrap(), &self.value, self.name)
+	}
+}
+
 pub trait ArgLike {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
 }
@@ -309,25 +321,14 @@ pub fn parse_function_call(
 	if filled_args < params.len() {
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
-		let future_context = FutureWrapper::<Context>::new();
+		let future_context = Context::new_future();
 		let mut defaults = GcHashMap::with_capacity(params.len() - filled_args);
 
 		for param in params.iter().filter(|p| p.1.is_some()) {
 			if passed_args.contains_key(&param.0.clone()) {
 				continue;
 			}
-			#[derive(Trace)]
-			struct LazyNamedBinding {
-				future_context: FutureWrapper<Context>,
-				name: IStr,
-				value: LocExpr,
-			}
-			impl LazyValValue for LazyNamedBinding {
-				fn get(self: Box<Self>) -> Result<Val> {
-					evaluate_named(self.future_context.unwrap(), &self.value, self.name)
-				}
-			}
-			LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
+			LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
 				future_context: future_context.clone(),
 				name: param.0.clone(),
 				value: param.1.clone().unwrap(),
@@ -335,7 +336,7 @@ pub fn parse_function_call(
 
 			defaults.insert(
 				param.0.clone(),
-				LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
+				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
 					future_context: future_context.clone(),
 					name: param.0.clone(),
 					value: param.1.clone().unwrap(),
@@ -463,4 +464,40 @@ pub fn parse_builtin_call(
 		}
 	}
 	Ok(passed_args)
+}
+
+/// Creates Context, which has all argument default values applied
+/// and with unbound values causing error to be returned
+pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Context {
+	let ctx = Context::new_future();
+
+	let mut bindings = GcHashMap::new();
+
+	#[derive(Trace)]
+	struct DependsOnUnbound(IStr);
+	impl LazyValValue for DependsOnUnbound {
+		fn get(self: Box<Self>) -> Result<Val> {
+			Err(FunctionParameterNotBoundInCall(self.0.clone()).into())
+		}
+	}
+
+	for param in params.iter() {
+		if let Some(v) = &param.1 {
+			bindings.insert(
+				param.0.clone(),
+				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
+					future_context: ctx.clone(),
+					name: param.0.clone(),
+					value: v.clone(),
+				}))),
+			);
+		} else {
+			bindings.insert(
+				param.0.clone(),
+				LazyVal::new(TraceBox(Box::new(DependsOnUnbound(param.0.clone())))),
+			);
+		}
+	}
+
+	body_ctx.extend(bindings, None, None, None).into_future(ctx)
 }

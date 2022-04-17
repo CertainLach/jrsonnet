@@ -5,7 +5,9 @@ use crate::{
 	cc_ptr_eq,
 	error::{Error::*, LocError},
 	evaluate,
-	function::{parse_function_call, ArgsLike, Builtin, StaticBuiltin},
+	function::{
+		parse_default_function_call, parse_function_call, ArgsLike, Builtin, StaticBuiltin,
+	},
 	gc::TraceBox,
 	throw, Context, ObjValue, Result,
 };
@@ -84,6 +86,22 @@ pub struct FuncDesc {
 	pub params: ParamsDesc,
 	pub body: LocExpr,
 }
+impl FuncDesc {
+	/// Create body context, but fill arguments without defaults with lazy error
+	pub fn default_body_context(&self) -> Context {
+		parse_default_function_call(self.ctx.clone(), &self.params)
+	}
+
+	/// Create context, with which body code will run
+	pub fn call_body_context(
+		&self,
+		call_ctx: Context,
+		args: &dyn ArgsLike,
+		tailstrict: bool,
+	) -> Result<Context> {
+		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
+	}
+}
 
 #[derive(Trace, Clone)]
 pub enum FuncVal {
@@ -140,16 +158,10 @@ impl FuncVal {
 	) -> Result<Val> {
 		match self {
 			Self::Normal(func) => {
-				let ctx = parse_function_call(
-					call_ctx,
-					func.ctx.clone(),
-					&func.params,
-					args,
-					tailstrict,
-				)?;
-				evaluate(ctx, &func.body)
+				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
+				evaluate(body_ctx, &func.body)
 			}
-			Self::StaticBuiltin(name) => name.call(call_ctx, loc, args),
+			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
 			Self::Builtin(b) => b.call(call_ctx, loc, args),
 		}
 	}
