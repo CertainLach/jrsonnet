@@ -1,9 +1,37 @@
+use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{
-	parenthesized, parse::Parse, parse_macro_input, punctuated::Punctuated, spanned::Spanned,
-	token::Comma, DeriveInput, FnArg, GenericArgument, Ident, ItemFn, Pat, PatType, Path,
-	PathArguments, Token, Type,
+	parenthesized,
+	parse::{Parse, ParseStream},
+	parse_macro_input,
+	punctuated::Punctuated,
+	spanned::Spanned,
+	token::Comma,
+	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, PatType,
+	Path, PathArguments, Result, Token, Type,
 };
+
+fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
+where
+	Ident: PartialEq<I>,
+{
+	let attrs = attrs
+		.iter()
+		.filter(|a| a.path.is_ident(&ident))
+		.collect::<Vec<_>>();
+	if attrs.len() > 1 {
+		return Err(Error::new(
+			attrs[1].span(),
+			"this attribute may be specified only once",
+		));
+	} else if attrs.is_empty() {
+		return Ok(None);
+	}
+	let attr = attrs[0];
+	let attr = attr.parse_args::<A>()?;
+
+	Ok(Some(attr))
+}
 
 fn is_location_arg(t: &PatType) -> bool {
 	t.attrs.iter().any(|a| a.path.is_ident("location"))
@@ -56,7 +84,7 @@ struct Field {
 	ty: Type,
 }
 impl Parse for Field {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
 		Ok(Self {
 			name: input.parse()?,
 			_colon: input.parse()?,
@@ -67,13 +95,22 @@ impl Parse for Field {
 
 mod kw {
 	syn::custom_keyword!(fields);
+	syn::custom_keyword!(rename);
+	syn::custom_keyword!(flatten);
+}
+
+struct EmptyAttr;
+impl Parse for EmptyAttr {
+	fn parse(input: ParseStream) -> Result<Self> {
+		Ok(Self)
+	}
 }
 
 struct BuiltinAttrs {
 	fields: Vec<Field>,
 }
 impl Parse for BuiltinAttrs {
-	fn parse(input: syn::parse::ParseStream) -> syn::Result<Self> {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
 		if input.is_empty() {
 			return Ok(Self { fields: Vec::new() });
 		}
@@ -255,7 +292,172 @@ pub fn builtin(
 	.into()
 }
 
-#[proc_macro_derive(Typed)]
+#[derive(Default)]
+struct TypedAttr {
+	rename: Option<String>,
+	flatten: bool,
+}
+impl Parse for TypedAttr {
+	fn parse(input: ParseStream) -> syn::Result<Self> {
+		let mut out = Self::default();
+		loop {
+			let lookahead = input.lookahead1();
+			if lookahead.peek(kw::rename) {
+				input.parse::<kw::rename>()?;
+				input.parse::<Token![=]>()?;
+				let name = input.parse::<LitStr>()?;
+				if out.rename.is_some() {
+					return Err(Error::new(
+						name.span(),
+						"rename attribute may only be specified once",
+					));
+				}
+				out.rename = Some(name.value());
+			} else if lookahead.peek(kw::flatten) {
+				input.parse::<kw::flatten>()?;
+				out.flatten = true;
+			} else if input.is_empty() {
+				break;
+			} else {
+				return Err(lookahead.error());
+			}
+			if input.peek(Token![,]) {
+				input.parse::<Token![,]>()?;
+			} else {
+				break;
+			}
+		}
+		// input.parse::<kw::rename>()?;
+		// input.parse::<Token![=]>()?;
+		// let rename = input.parse::<LitStr>()?.value();
+		Ok(out)
+	}
+}
+
+struct TypedField<'f>(&'f syn::Field, TypedAttr);
+impl<'f> TypedField<'f> {
+	fn try_new(field: &'f syn::Field) -> Result<Self> {
+		let attr =
+			parse_attr::<TypedAttr, _>(&field.attrs, "typed")?.unwrap_or_else(Default::default);
+		if field.ident.is_none() {
+			return Err(Error::new(
+				field.span(),
+				"this field should appear in output object, but it has no visible name",
+			));
+		}
+		Ok(Self(field, attr))
+	}
+	fn ident(&self) -> Ident {
+		self.0
+			.ident
+			.clone()
+			.expect("constructor disallows fields without name")
+	}
+	/// None if this field is flattened in jsonnet output
+	fn name(&self) -> Option<String> {
+		if self.1.flatten {
+			return None;
+		}
+		Some(
+			self.1
+				.rename
+				.clone()
+				.unwrap_or_else(|| self.ident().to_string()),
+		)
+	}
+
+	fn expand_shallow_field(&self) -> Option<TokenStream> {
+		if self.is_option() {
+			return None;
+		}
+		let name = self.name()?;
+		Some(quote! {
+			(#name, ComplexValType::Any)
+		})
+	}
+	fn expand_field(&self) -> Option<TokenStream> {
+		if self.is_option() {
+			return None;
+		}
+		let name = self.name()?;
+		let ty = &self.0.ty;
+		Some(quote! {
+			(#name, <#ty>::TYPE)
+		})
+	}
+	fn expand_parse(&self) -> TokenStream {
+		let ident = self.ident();
+		let ty = &self.0.ty;
+		if self.1.flatten {
+			// optional flatten is handled in same way as serde
+			return if self.is_option() {
+				quote! {
+					#ident: <#ty>::parse(&obj).ok(),
+				}
+			} else {
+				quote! {
+					#ident: <#ty>::parse(&obj)?,
+				}
+			};
+		};
+
+		let name = self.name().unwrap();
+		let value = if let Some(ty) = self.as_option() {
+			quote! {
+				if let Some(value) = obj.get(#name.into())? {
+					Some(<#ty>::try_from(vakue)?)
+				} else {
+					None
+				}
+			}
+		} else {
+			quote! {
+				<#ty>::try_from(obj.get(#name.into())?.ok_or_else(|| Error::NoSuchField(#name.into()))?)?
+			}
+		};
+
+		quote! {
+			#ident: #value,
+		}
+	}
+	fn expand_serialize(&self) -> TokenStream {
+		let ident = self.ident();
+		if let Some(name) = self.name() {
+			if self.is_option() {
+				quote! {
+					if let Some(value) = self.#ident {
+						out.member(#name.into()).value(value.try_into()?);
+					}
+				}
+			} else {
+				quote! {
+					out.member(#name.into()).value(self.#ident.try_into()?);
+				}
+			}
+		} else {
+			if self.is_option() {
+				quote! {
+					if let Some(value) = self.#ident {
+						value.serialize(out)?;
+					}
+				}
+			} else {
+				quote! {
+					self.#ident.serialize(out)?;
+				}
+			}
+		}
+	}
+
+	fn as_option(&self) -> Option<&Type> {
+		extract_type_from_option(&self.0.ty)
+	}
+	fn is_option(&self) -> bool {
+		self.as_option().is_some()
+	}
+}
+
+#[proc_macro_derive(Typed, attributes(typed))]
 pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(item as DeriveInput);
 	let data = match &input.data {
@@ -268,67 +470,71 @@ pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	};
 
 	let ident = &input.ident;
+	let fields = match data
+		.fields
+		.iter()
+		.map(TypedField::try_new)
+		.collect::<Result<Vec<_>>>()
+	{
+		Ok(v) => v,
+		Err(e) => return e.to_compile_error().into(),
+	};
 
-	let fields_def = data.fields.iter().map(|f| {
-		let name = f
-			.ident
-			.as_ref()
-			.expect("only named fields supported")
-			.to_string();
-		let ty = &f.ty;
+	let typed = {
+		let fields = fields
+			.iter()
+			.flat_map(TypedField::expand_field)
+			.collect::<Vec<_>>();
+		let len = fields.len();
 		quote! {
-			(#name, #ty::TYPE),
+			const ITEMS: [(&'static str, &'static ComplexValType); #len] = [
+				#(#fields,)*
+			];
+			impl Typed for #ident {
+				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
+			}
 		}
-	});
-	let fields_parse = data.fields.iter().map(|f| {
-		let ident = f.ident.as_ref().unwrap();
-		let name = ident.to_string();
-		let ty = &f.ty;
-		quote! {
-			#ident: #ty::try_from(obj.get(#name.into())?.expect("shape is correct"))?,
-		}
-	});
-	let fields_serialize = data.fields.iter().map(|f| {
-		let ident = f.ident.as_ref().unwrap();
-		let name = ident.to_string();
-		quote! {
-			out.member(#name.into()).value(self.#ident.try_into()?);
-		}
-	});
-	let field_count = data.fields.len();
+	};
+
+	let fields_parse = fields.iter().map(TypedField::expand_parse);
+	let fields_serialize = fields.iter().map(TypedField::expand_serialize);
 
 	quote! {
 		const _: () = {
 			use ::jrsonnet_evaluator::{
-				typed::{ComplexValType, Typed, CheckType},
+				typed::{ComplexValType, Typed, TypedObj, CheckType},
 				Val,
-				error::LocError,
-				obj::ObjValueBuilder,
+				error::{LocError, Error},
+				ObjValueBuilder, ObjValue,
 			};
 
-			const ITEMS: [(&'static str, &'static ComplexValType); #field_count] = [
-				#(#fields_def)*
-			];
-			impl Typed for #ident {
-				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
+			#typed
+
+			impl #ident {
+				fn serialize(self, out: &mut ObjValueBuilder) -> Result<(), LocError> {
+					#(#fields_serialize)*
+
+					Ok(())
+				}
+				fn parse(obj: &ObjValue) -> Result<Self, LocError> {
+					Ok(Self {
+						#(#fields_parse)*
+					})
+				}
 			}
 
 			impl TryFrom<Val> for #ident {
 				type Error = LocError;
 				fn try_from(value: Val) -> Result<Self, Self::Error> {
-					<Self as Typed>::TYPE.check(&value)?;
 					let obj = value.as_obj().expect("shape is correct");
-
-					Ok(Self {
-						#(#fields_parse)*
-					})
+					Self::parse(&obj)
 				}
 			}
 			impl TryInto<Val> for #ident {
 				type Error = LocError;
 				fn try_into(self) -> Result<Val, Self::Error> {
 					let mut out = ObjValueBuilder::new();
-					#(#fields_serialize)*
+					self.serialize(&mut out)?;
 					Ok(Val::Obj(out.build()))
 				}
 			}

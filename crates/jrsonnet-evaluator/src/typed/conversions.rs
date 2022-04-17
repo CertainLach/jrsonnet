@@ -8,8 +8,18 @@ use crate::{
 	error::{Error::*, LocError, Result},
 	throw,
 	typed::CheckType,
-	ArrValue, FuncVal, IndexableVal, ObjValue, Val,
+	ArrValue, FuncVal, IndexableVal, ObjValue, ObjValueBuilder, Val,
 };
+
+pub trait TypedObj: Typed {
+	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
+	fn parse(obj: &ObjValue) -> Result<Self>;
+	fn into_object(self) -> Result<ObjValue> {
+		let mut builder = ObjValueBuilder::new();
+		self.serialize(&mut builder)?;
+		Ok(builder.build())
+	}
+}
 
 pub trait Typed: TryFrom<Val, Error = LocError> + TryInto<Val, Error = LocError> {
 	const TYPE: &'static ComplexValType;

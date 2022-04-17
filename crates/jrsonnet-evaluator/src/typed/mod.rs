@@ -15,7 +15,7 @@ use thiserror::Error;
 pub enum TypeError {
 	#[error("expected {0}, got {1}")]
 	ExpectedGot(ComplexValType, ValType),
-	#[error("missing property {0} from {1:?}")]
+	#[error("missing property {0} from {1}")]
 	MissingProperty(#[skip_trace] Rc<str>, ComplexValType),
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),

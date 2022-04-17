@@ -1280,7 +1280,8 @@ pub mod tests {
 		#[derive(Typed, PartialEq, Debug)]
 		struct MyTyped {
 			a: u32,
-			b: String,
+			#[typed(rename = "b")]
+			c: String,
 		}
 
 		#[test]
@@ -1293,7 +1294,7 @@ pub mod tests {
 				typed,
 				MyTyped {
 					a: 14,
-					b: "Hello, world!".to_string()
+					c: "Hello, world!".to_string()
 				}
 			);
 			es.settings_mut().globals.insert(
