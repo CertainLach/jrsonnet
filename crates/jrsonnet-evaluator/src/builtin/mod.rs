@@ -192,8 +192,6 @@ fn builtin_object_fields_ex(
 	inc_hidden: bool,
 	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<VecVal> {
-	#[cfg(not(feature = "exp-preserve-order"))]
-	let preserve_order = false;
 	#[cfg(feature = "exp-preserve-order")]
 	let preserve_order = preserve_order.unwrap_or(false);
 	let out = obj.fields_ex(

@@ -201,16 +201,16 @@ pub struct Slice {
 	pub(crate) step: u32,
 }
 impl Slice {
-	fn from(&self) -> usize {
+	const fn from(&self) -> usize {
 		self.from as usize
 	}
-	fn to(&self) -> usize {
+	const fn to(&self) -> usize {
 		self.to as usize
 	}
-	fn step(&self) -> usize {
+	const fn step(&self) -> usize {
 		self.step as usize
 	}
-	fn len(&self) -> usize {
+	const fn len(&self) -> usize {
 		// TODO: use div_ceil
 		let diff = self.to() - self.from();
 		let rem = diff % self.step();

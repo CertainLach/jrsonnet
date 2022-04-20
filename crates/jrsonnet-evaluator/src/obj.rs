@@ -19,13 +19,13 @@ use crate::{
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
-pub(crate) mod ordering {
+mod ordering {
 	use gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace)]
 	pub struct FieldIndex;
 	impl FieldIndex {
-		pub fn next(self) -> Self {
+		pub const fn next(self) -> Self {
 			Self
 		}
 	}
@@ -33,7 +33,7 @@ pub(crate) mod ordering {
 	#[derive(Clone, Copy, Default, Debug, Trace)]
 	pub struct SuperDepth;
 	impl SuperDepth {
-		pub fn deeper(self) -> Self {
+		pub const fn deeper(self) -> Self {
 			Self
 		}
 	}
@@ -41,7 +41,7 @@ pub(crate) mod ordering {
 	#[derive(Clone, Copy)]
 	pub struct FieldSortKey;
 	impl FieldSortKey {
-		pub fn new(_: SuperDepth, _: FieldIndex) -> Self {
+		pub const fn new(_: SuperDepth, _: FieldIndex) -> Self {
 			Self
 		}
 	}
@@ -87,7 +87,7 @@ mod ordering {
 	}
 }
 
-pub(crate) use ordering::*;
+use ordering::*;
 
 #[derive(Debug, Trace)]
 pub struct ObjMember {
@@ -594,7 +594,7 @@ impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
 	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
 	}
-	pub fn binding(self, binding: LazyBinding) -> () {
+	pub fn binding(self, binding: LazyBinding) {
 		let (receiver, name, member) = self.build_member(binding);
 		let new = receiver.0.clone();
 		*receiver.0 = new.extend_with_raw_member(name, member)

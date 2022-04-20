@@ -680,7 +680,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 					Ok(Some(push_frame(
 						loc,
 						|| format!("slice {}", desc),
-						|| Ok(evaluate(context.clone(), value)?.try_into()?),
+						|| evaluate(context.clone(), value)?.try_into(),
 					)?))
 				} else {
 					Ok(None)
