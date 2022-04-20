@@ -21,6 +21,8 @@ pub struct ManifestJsonOptions<'s> {
 	pub mtype: ManifestType,
 	pub newline: &'s str,
 	pub key_val_sep: &'s str,
+	#[cfg(feature = "exp-preserve-order")]
+	pub preserve_order: bool,
 }
 
 pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
@@ -85,7 +87,10 @@ fn manifest_json_ex_buf(
 		Val::Obj(obj) => {
 			obj.run_assertions()?;
 			buf.push('{');
-			let fields = obj.fields();
+			let fields = obj.fields(
+				#[cfg(feature = "exp-preserve-order")]
+				options.preserve_order,
+			);
 			if !fields.is_empty() {
 				if mtype != ManifestType::ToString && mtype != ManifestType::Minify {
 					buf.push_str(options.newline);
@@ -182,6 +187,10 @@ pub struct ManifestYamlOptions<'s> {
 	/// safe_key: 1
 	/// ```
 	pub quote_keys: bool,
+	/// If true - then order of fields is preserved as written,
+	/// instead of sorting alphabetically
+	#[cfg(feature = "exp-preserve-order")]
+	pub preserve_order: bool,
 }
 
 /// From https://github.com/chyh1990/yaml-rust/blob/da52a68615f2ecdd6b7e4567019f280c433c1521/src/emitter.rs#L289
@@ -287,7 +296,14 @@ fn manifest_yaml_ex_buf(
 			if o.is_empty() {
 				buf.push_str("{}");
 			} else {
-				for (i, key) in o.fields().iter().enumerate() {
+				for (i, key) in o
+					.fields(
+						#[cfg(feature = "exp-preserve-order")]
+						options.preserve_order,
+					)
+					.iter()
+					.enumerate()
+				{
 					if i != 0 {
 						buf.push('\n');
 						buf.push_str(cur_padding);

@@ -43,20 +43,30 @@ pub struct ManifestOpts {
 	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml]
 	#[clap(long)]
 	line_padding: Option<usize>,
+	/// Preserve order in object manifestification
+	#[cfg(feature = "exp-preserve-order")]
+	#[clap(long)]
+	exp_preserve_order: bool,
 }
 impl ConfigureState for ManifestOpts {
 	fn configure(&self, state: &EvaluationState) -> Result<()> {
 		if self.string {
 			state.set_manifest_format(ManifestFormat::String);
 		} else {
+			#[cfg(feature = "exp-preserve-order")]
+			let preserve_order = self.exp_preserve_order;
 			match self.format {
 				ManifestFormatName::String => state.set_manifest_format(ManifestFormat::String),
-				ManifestFormatName::Json => {
-					state.set_manifest_format(ManifestFormat::Json(self.line_padding.unwrap_or(3)))
-				}
-				ManifestFormatName::Yaml => {
-					state.set_manifest_format(ManifestFormat::Yaml(self.line_padding.unwrap_or(2)))
-				}
+				ManifestFormatName::Json => state.set_manifest_format(ManifestFormat::Json {
+					padding: self.line_padding.unwrap_or(3),
+					#[cfg(feature = "exp-preserve-order")]
+					preserve_order,
+				}),
+				ManifestFormatName::Yaml => state.set_manifest_format(ManifestFormat::Yaml {
+					padding: self.line_padding.unwrap_or(2),
+					#[cfg(feature = "exp-preserve-order")]
+					preserve_order,
+				}),
 			}
 		}
 		if self.yaml_stream {

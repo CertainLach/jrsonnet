@@ -167,10 +167,30 @@ impl FuncVal {
 #[derive(Clone)]
 pub enum ManifestFormat {
 	YamlStream(Box<ManifestFormat>),
-	Yaml(usize),
-	Json(usize),
+	Yaml {
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order: bool,
+	},
+	Json {
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order: bool,
+	},
 	ToString,
 	String,
+}
+impl ManifestFormat {
+	#[cfg(feature = "exp-preserve-order")]
+	fn preserve_order(&self) -> bool {
+		match self {
+			ManifestFormat::YamlStream(s) => s.preserve_order(),
+			ManifestFormat::Yaml { preserve_order, .. } => *preserve_order,
+			ManifestFormat::Json { preserve_order, .. } => *preserve_order,
+			ManifestFormat::ToString => false,
+			ManifestFormat::String => false,
+		}
+	}
 }
 
 #[derive(Debug, Clone, Trace)]
@@ -559,6 +579,8 @@ impl Val {
 					mtype: ManifestType::ToString,
 					newline: "\n",
 					key_val_sep: ": ",
+					#[cfg(feature = "exp-preserve-order")]
+					preserve_order: false,
 				},
 			)?
 			.into(),
@@ -571,7 +593,10 @@ impl Val {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
 		};
-		let keys = obj.fields();
+		let keys = obj.fields(
+			#[cfg(feature = "exp-preserve-order")]
+			ty.preserve_order(),
+		);
 		let mut out = Vec::with_capacity(keys.len());
 		for key in keys {
 			let value = obj
@@ -622,8 +647,24 @@ impl Val {
 
 				out.into()
 			}
-			ManifestFormat::Yaml(padding) => self.to_yaml(*padding)?,
-			ManifestFormat::Json(padding) => self.to_json(*padding)?,
+			ManifestFormat::Yaml {
+				padding,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			} => self.to_yaml(
+				*padding,
+				#[cfg(feature = "exp-preserve-order")]
+				*preserve_order,
+			)?,
+			ManifestFormat::Json {
+				padding,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			} => self.to_json(
+				*padding,
+				#[cfg(feature = "exp-preserve-order")]
+				*preserve_order,
+			)?,
 			ManifestFormat::ToString => self.to_string()?,
 			ManifestFormat::String => match self {
 				Self::Str(s) => s.clone(),
@@ -633,7 +674,11 @@ impl Val {
 	}
 
 	/// For manifestification
-	pub fn to_json(&self, padding: usize) -> Result<IStr> {
+	pub fn to_json(
+		&self,
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Result<IStr> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -645,13 +690,19 @@ impl Val {
 				},
 				newline: "\n",
 				key_val_sep: ": ",
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
 			},
 		)
 		.map(|s| s.into())
 	}
 
 	/// Calls `std.manifestJson`
-	pub fn to_std_json(&self, padding: usize) -> Result<Rc<str>> {
+	pub fn to_std_json(
+		&self,
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Result<Rc<str>> {
 		manifest_json_ex(
 			self,
 			&ManifestJsonOptions {
@@ -659,12 +710,18 @@ impl Val {
 				mtype: ManifestType::Std,
 				newline: "\n",
 				key_val_sep: ": ",
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
 			},
 		)
 		.map(|s| s.into())
 	}
 
-	pub fn to_yaml(&self, padding: usize) -> Result<IStr> {
+	pub fn to_yaml(
+		&self,
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Result<IStr> {
 		let padding = &" ".repeat(padding);
 		manifest_yaml_ex(
 			self,
@@ -672,6 +729,8 @@ impl Val {
 				padding,
 				arr_element_padding: padding,
 				quote_keys: false,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
 			},
 		)
 		.map(|s| s.into())
@@ -733,8 +792,15 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			if ObjValue::ptr_eq(a, b) {
 				return Ok(true);
 			}
-			let fields = a.fields();
-			if fields != b.fields() {
+			let fields = a.fields(
+				#[cfg(feature = "exp-preserve-order")]
+				false,
+			);
+			if fields
+				!= b.fields(
+					#[cfg(feature = "exp-preserve-order")]
+					false,
+				) {
 				return Ok(false);
 			}
 			for field in fields {

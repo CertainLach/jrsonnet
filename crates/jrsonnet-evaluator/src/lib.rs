@@ -100,7 +100,11 @@ impl Default for EvaluationSettings {
 			ext_natives: Default::default(),
 			tla_vars: Default::default(),
 			import_resolver: Box::new(DummyImportResolver),
-			manifest_format: ManifestFormat::Json(4),
+			manifest_format: ManifestFormat::Json {
+				padding: 4,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order: false,
+			},
 			trace_format: Box::new(CompactFormat {
 				padding: 4,
 				resolver: trace::PathResolver::Absolute,

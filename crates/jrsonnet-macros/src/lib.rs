@@ -122,6 +122,7 @@ enum ArgInfo {
 		ty: Box<Type>,
 		is_option: bool,
 		name: String,
+		cfg_attrs: Vec<Attribute>,
 		// ident: Ident,
 	},
 	Lazy {
@@ -134,20 +135,15 @@ enum ArgInfo {
 
 impl ArgInfo {
 	fn parse(arg: &FnArg) -> Result<Self> {
-		let typed = match arg {
+		let arg = match arg {
 			FnArg::Receiver(_) => unreachable!(),
 			FnArg::Typed(a) => a,
 		};
-		let ident = match &typed.pat as &Pat {
+		let ident = match &arg.pat as &Pat {
 			Pat::Ident(i) => i.ident.clone(),
-			_ => {
-				return Err(Error::new(
-					typed.pat.span(),
-					"arg should be plain identifier",
-				))
-			}
+			_ => return Err(Error::new(arg.pat.span(), "arg should be plain identifier")),
 		};
-		let ty = &typed.ty;
+		let ty = &arg.ty;
 		if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
 		} else if type_is_path(ty, "Self").is_some() {
@@ -172,11 +168,18 @@ impl ArgInfo {
 			(false, ty.clone())
 		};
 
+		let cfg_attrs = arg
+			.attrs
+			.iter()
+			.filter(|a| a.path.is_ident("cfg"))
+			.cloned()
+			.collect();
+
 		Ok(Self::Normal {
 			ty,
 			is_option,
 			name: ident.to_string(),
-			// ident,
+			cfg_attrs,
 		})
 	}
 }
@@ -215,13 +218,22 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 
 	let params_desc = args.iter().flat_map(|a| match a {
 		ArgInfo::Normal {
-			is_option, name, ..
-		}
-		| ArgInfo::Lazy { is_option, name } => Some(quote! {
+			is_option,
+			name,
+			cfg_attrs,
+			..
+		} => Some(quote! {
+			#(#cfg_attrs)*
 			BuiltinParam {
 				name: std::borrow::Cow::Borrowed(#name),
 				has_default: #is_option,
-			}
+			},
+		}),
+		ArgInfo::Lazy { is_option, name } => Some(quote! {
+			BuiltinParam {
+				name: std::borrow::Cow::Borrowed(#name),
+				has_default: #is_option,
+			},
 		}),
 		ArgInfo::Location => None,
 		ArgInfo::This => None,
@@ -232,23 +244,27 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 			ty,
 			is_option,
 			name,
-			// ident,
+			cfg_attrs,
 		} => {
 			let eval = quote! {::jrsonnet_evaluator::push_description_frame(
 				|| format!("argument <{}> evaluation", #name),
 				|| <#ty>::try_from(value.evaluate()?),
 			)?};
-			if *is_option {
+			let value = if *is_option {
 				quote! {if let Some(value) = parsed.get(#name) {
 					Some(#eval)
 				} else {
 					None
-				}}
+				},}
 			} else {
 				quote! {{
 					let value = parsed.get(#name).expect("args shape is checked");
 					#eval
-				}}
+				},}
+			};
+			quote! {
+				#(#cfg_attrs)*
+				#value
 			}
 		}
 		ArgInfo::Lazy { is_option, name } => {
@@ -260,12 +276,12 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				}}
 			} else {
 				quote! {
-					parsed.get(#name).expect("args shape is correct").clone()
+					parsed.get(#name).expect("args shape is correct").clone(),
 				}
 			}
 		}
-		ArgInfo::Location => quote! {location},
-		ArgInfo::This => quote! {self},
+		ArgInfo::Location => quote! {location,},
+		ArgInfo::This => quote! {self,},
 	});
 
 	let fields = attr.fields.iter().map(|field| {
@@ -309,7 +325,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				parser::ExprLocation,
 			};
 			const PARAMS: &'static [BuiltinParam] = &[
-				#(#params_desc),*
+				#(#params_desc)*
 			];
 
 			#static_ext
@@ -326,7 +342,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				fn call(&self, context: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 					let parsed = parse_builtin_call(context, &PARAMS, args, false)?;
 
-					let result: #result = #name(#(#pass),*);
+					let result: #result = #name(#(#pass)*);
 					let result = result?;
 					result.try_into()
 				}

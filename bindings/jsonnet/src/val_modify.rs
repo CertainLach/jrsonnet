@@ -5,8 +5,7 @@
 use std::{ffi::CStr, os::raw::c_char};
 
 use gcmodule::Cc;
-use jrsonnet_evaluator::{val::ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, Val};
-use jrsonnet_parser::Visibility;
+use jrsonnet_evaluator::{val::ArrValue, EvaluationState, LazyVal, Val};
 
 /// # Safety
 ///
@@ -41,19 +40,9 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 	val: &Val,
 ) {
 	match obj {
-		Val::Obj(old) => {
-			let new_obj = old.clone().extend_with_field(
-				CStr::from_ptr(name).to_str().unwrap().into(),
-				ObjMember {
-					add: false,
-					visibility: Visibility::Normal,
-					invoke: LazyBinding::Bound(LazyVal::new_resolved(val.clone())),
-					location: None,
-				},
-			);
-
-			*obj = Val::Obj(new_obj);
-		}
+		Val::Obj(old) => old
+			.extend_field(CStr::from_ptr(name).to_str().unwrap().into())
+			.value(val.clone()),
 		_ => panic!("should receive object"),
 	}
 }

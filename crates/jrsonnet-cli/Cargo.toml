@@ -6,6 +6,9 @@ authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2021"
 
+[features]
+exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
+
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2", features = [
     "explaining-traces",

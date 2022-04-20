@@ -18,10 +18,82 @@ use crate::{
 	push_frame, throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, Val,
 };
 
+#[cfg(not(feature = "exp-preserve-order"))]
+pub(crate) mod ordering {
+	use gcmodule::Trace;
+
+	#[derive(Clone, Copy, Default, Debug, Trace)]
+	pub struct FieldIndex;
+	impl FieldIndex {
+		pub fn next(self) -> Self {
+			Self
+		}
+	}
+
+	#[derive(Clone, Copy, Default, Debug, Trace)]
+	pub struct SuperDepth;
+	impl SuperDepth {
+		pub fn deeper(self) -> Self {
+			Self
+		}
+	}
+
+	#[derive(Clone, Copy)]
+	pub struct FieldSortKey;
+	impl FieldSortKey {
+		pub fn new(_: SuperDepth, _: FieldIndex) -> Self {
+			Self
+		}
+	}
+}
+
+#[cfg(feature = "exp-preserve-order")]
+mod ordering {
+	use std::cmp::Reverse;
+
+	use gcmodule::Trace;
+
+	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
+	pub struct FieldIndex(u32);
+	impl FieldIndex {
+		pub fn next(self) -> Self {
+			Self(self.0 + 1)
+		}
+	}
+
+	#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
+	pub struct SuperDepth(u32);
+	impl SuperDepth {
+		pub fn deeper(self) -> Self {
+			Self(self.0 + 1)
+		}
+	}
+
+	#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+	pub struct FieldSortKey(Reverse<SuperDepth>, FieldIndex);
+	impl FieldSortKey {
+		pub fn new(depth: SuperDepth, index: FieldIndex) -> Self {
+			Self(Reverse(depth), index)
+		}
+		pub fn collide(self, other: Self) -> Self {
+			if self.0 .0 > other.0 .0 {
+				self
+			} else if self.0 .0 < other.0 .0 {
+				other
+			} else {
+				unreachable!("object can't have two fields with same name")
+			}
+		}
+	}
+}
+
+pub(crate) use ordering::*;
+
 #[derive(Debug, Trace)]
 pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
+	original_index: FieldIndex,
 	pub invoke: LazyBinding,
 	pub location: Option<ExprLocation>,
 }
@@ -120,6 +192,14 @@ impl ObjValue {
 			),
 		}
 	}
+	pub(crate) fn extend_with_raw_member(self, key: IStr, value: ObjMember) -> Self {
+		let mut new = GcHashMap::with_capacity(1);
+		new.insert(key, value);
+		Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
+	}
+	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder> {
+		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
+	}
 	pub fn with_this(&self, this_obj: Self) -> Self {
 		Self(Cc::new(ObjValueInternals {
 			super_obj: self.0.super_obj.clone(),
@@ -129,6 +209,13 @@ impl ObjValue {
 			this_entries: self.0.this_entries.clone(),
 			value_cache: RefCell::new(GcHashMap::new()),
 		}))
+	}
+
+	pub fn len(&self) -> usize {
+		self.fields_visibility()
+			.into_iter()
+			.filter(|(_, (visible, _))| *visible)
+			.count()
 	}
 
 	pub fn is_empty(&self) -> bool {
@@ -143,51 +230,93 @@ impl ObjValue {
 	}
 
 	/// Run callback for every field found in object
-	pub(crate) fn enum_fields(&self, handler: &mut impl FnMut(&IStr, &ObjMember) -> bool) -> bool {
+	pub(crate) fn enum_fields(
+		&self,
+		depth: SuperDepth,
+		handler: &mut impl FnMut(SuperDepth, &IStr, &ObjMember) -> bool,
+	) -> bool {
 		if let Some(s) = &self.0.super_obj {
-			if s.enum_fields(handler) {
+			if s.enum_fields(depth.deeper(), handler) {
 				return true;
 			}
 		}
 		for (name, member) in self.0.this_entries.iter() {
-			if handler(name, member) {
+			if handler(depth, name, member) {
 				return true;
 			}
 		}
 		false
 	}
 
-	pub fn fields_visibility(&self) -> FxHashMap<IStr, bool> {
+	pub fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
 		let mut out = FxHashMap::default();
-		self.enum_fields(&mut |name, member| {
+		self.enum_fields(SuperDepth::default(), &mut |depth, name, member| {
+			let new_sort_key = FieldSortKey::new(depth, member.original_index);
 			match member.visibility {
 				Visibility::Normal => {
 					let entry = out.entry(name.to_owned());
-					entry.or_insert(true);
+					let v = entry.or_insert((true, new_sort_key));
+					v.1 = new_sort_key;
 				}
 				Visibility::Hidden => {
-					out.insert(name.to_owned(), false);
+					out.insert(name.to_owned(), (false, new_sort_key));
 				}
 				Visibility::Unhide => {
-					out.insert(name.to_owned(), true);
+					out.insert(name.to_owned(), (true, new_sort_key));
 				}
 			};
 			false
 		});
 		out
 	}
-	pub fn fields_ex(&self, include_hidden: bool) -> Vec<IStr> {
+	pub fn fields_ex(
+		&self,
+		include_hidden: bool,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Vec<IStr> {
+		#[cfg(feature = "exp-preserve-order")]
+		if preserve_order {
+			let (mut fields, mut keys): (Vec<_>, Vec<_>) = self
+				.fields_visibility()
+				.into_iter()
+				.filter(|(_, (visible, _))| include_hidden || *visible)
+				.enumerate()
+				.map(|(idx, (k, (_, sk)))| (k, (sk, idx)))
+				.unzip();
+			keys.sort_unstable_by_key(|v| v.0);
+			// Reorder in-place by resulting indexes
+			for i in 0..fields.len() {
+				let x = fields[i].clone();
+				let mut j = i;
+				loop {
+					let k = keys[j].1;
+					keys[j].1 = j;
+					if k == i {
+						break;
+					}
+					fields[j] = fields[k].clone();
+					j = k
+				}
+				fields[j] = x;
+			}
+			return fields;
+		}
+
 		let mut fields: Vec<_> = self
 			.fields_visibility()
 			.into_iter()
-			.filter(|(_k, v)| include_hidden || *v)
+			.filter(|(_, (visible, _))| include_hidden || *visible)
 			.map(|(k, _)| k)
 			.collect();
 		fields.sort_unstable();
 		fields
 	}
-	pub fn fields(&self) -> Vec<IStr> {
-		self.fields_ex(false)
+	pub fn fields(&self, #[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> Vec<IStr> {
+		self.fields_ex(
+			false,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		)
 	}
 
 	pub fn field_visibility(&self, name: IStr) -> Option<Visibility> {
@@ -236,11 +365,7 @@ impl ObjValue {
 		self.get_raw(key, self.0.this_obj.as_ref())
 	}
 
-	pub fn extend_with_field(self, key: IStr, value: ObjMember) -> Self {
-		let mut new = GcHashMap::with_capacity(1);
-		new.insert(key, value);
-		Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
-	}
+	// pub fn extend_with(self, key: )
 
 	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
@@ -339,6 +464,7 @@ pub struct ObjValueBuilder {
 	super_obj: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
 	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
+	next_field_index: FieldIndex,
 }
 impl ObjValueBuilder {
 	pub fn new() -> Self {
@@ -349,6 +475,7 @@ impl ObjValueBuilder {
 			super_obj: None,
 			map: GcHashMap::with_capacity(capacity),
 			assertions: Vec::new(),
+			next_field_index: FieldIndex::default(),
 		}
 	}
 	pub fn reserve_asserts(&mut self, capacity: usize) -> &mut Self {
@@ -364,14 +491,10 @@ impl ObjValueBuilder {
 		self.assertions.push(assertion);
 		self
 	}
-	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder {
-		ObjMemberBuilder {
-			value: self,
-			name,
-			add: false,
-			visibility: Visibility::Normal,
-			location: None,
-		}
+	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder> {
+		let field_index = self.next_field_index;
+		self.next_field_index = self.next_field_index.next();
+		ObjMemberBuilder::new(ValueBuilder(self), name, field_index)
 	}
 
 	pub fn build(self) -> ObjValue {
@@ -385,16 +508,28 @@ impl Default for ObjValueBuilder {
 }
 
 #[must_use = "value not added unless binding() was called"]
-pub struct ObjMemberBuilder<'v> {
-	value: &'v mut ObjValueBuilder,
+pub struct ObjMemberBuilder<Kind> {
+	kind: Kind,
 	name: IStr,
 	add: bool,
 	visibility: Visibility,
+	original_index: FieldIndex,
 	location: Option<ExprLocation>,
 }
 
 #[allow(clippy::missing_const_for_fn)]
-impl<'v> ObjMemberBuilder<'v> {
+impl<Kind> ObjMemberBuilder<Kind> {
+	pub(crate) fn new(kind: Kind, name: IStr, original_index: FieldIndex) -> Self {
+		Self {
+			kind,
+			name,
+			original_index,
+			add: false,
+			visibility: Visibility::Normal,
+			location: None,
+		}
+	}
+
 	pub const fn with_add(mut self, add: bool) -> Self {
 		self.add = add;
 		self
@@ -413,6 +548,23 @@ impl<'v> ObjMemberBuilder<'v> {
 		self.location = Some(location);
 		self
 	}
+	fn build_member(self, binding: LazyBinding) -> (Kind, IStr, ObjMember) {
+		(
+			self.kind,
+			self.name,
+			ObjMember {
+				add: self.add,
+				visibility: self.visibility,
+				original_index: self.original_index,
+				invoke: binding,
+				location: self.location,
+			},
+		)
+	}
+}
+
+pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
+impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 	pub fn value(self, value: Val) -> Result<()> {
 		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
 	}
@@ -420,22 +572,31 @@ impl<'v> ObjMemberBuilder<'v> {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
 	}
 	pub fn binding(self, binding: LazyBinding) -> Result<()> {
-		let old = self.value.map.insert(
-			self.name.clone(),
-			ObjMember {
-				add: self.add,
-				visibility: self.visibility,
-				invoke: binding,
-				location: self.location.clone(),
-			},
-		);
+		let (receiver, name, member) = self.build_member(binding);
+		let location = member.location.clone();
+		let old = receiver.0.map.insert(name.clone(), member);
 		if old.is_some() {
 			push_frame(
-				CallLocation(self.location.as_ref()),
-				|| format!("field <{}> initializtion", self.name.clone()),
-				|| throw!(DuplicateFieldName(self.name.clone())),
+				CallLocation(location.as_ref()),
+				|| format!("field <{}> initializtion", name.clone()),
+				|| throw!(DuplicateFieldName(name.clone())),
 			)?
 		}
 		Ok(())
+	}
+}
+
+pub struct ExtendBuilder<'v>(&'v mut ObjValue);
+impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
+	pub fn value(self, value: Val) {
+		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
+	}
+	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) {
+		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
+	}
+	pub fn binding(self, binding: LazyBinding) -> () {
+		let (receiver, name, member) = self.build_member(binding);
+		let new = receiver.0.clone();
+		*receiver.0 = new.extend_with_raw_member(name, member)
 	}
 }

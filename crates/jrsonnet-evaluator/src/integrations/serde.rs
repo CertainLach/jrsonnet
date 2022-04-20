@@ -28,7 +28,10 @@ impl TryFrom<&Val> for Value {
 			}
 			Val::Obj(o) => {
 				let mut out = Map::new();
-				for key in o.fields() {
+				for key in o.fields(
+					#[cfg(feature = "exp-preserve-order")]
+					cfg!(feature = "exp-serde-preserve-order"),
+				) {
 					out.insert(
 						(&key as &str).into(),
 						o.get(key)?

@@ -162,11 +162,7 @@ fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> Result<usize
 	Ok(match x {
 		A(x) => x.chars().count(),
 		B(x) => x.len(),
-		C(x) => x
-			.fields_visibility()
-			.into_iter()
-			.filter(|(_k, v)| *v)
-			.count(),
+		C(x) => x.len(),
 		D(f) => f.args_len(),
 	})
 }
@@ -191,8 +187,20 @@ const fn builtin_codepoint(str: char) -> Result<u32> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_object_fields_ex(obj: ObjValue, inc_hidden: bool) -> Result<VecVal> {
-	let out = obj.fields_ex(inc_hidden);
+fn builtin_object_fields_ex(
+	obj: ObjValue,
+	inc_hidden: bool,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> Result<VecVal> {
+	#[cfg(not(feature = "exp-preserve-order"))]
+	let preserve_order = false;
+	#[cfg(feature = "exp-preserve-order")]
+	let preserve_order = preserve_order.unwrap_or(false);
+	let out = obj.fields_ex(
+		inc_hidden,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	);
 	Ok(VecVal(Cc::new(
 		out.into_iter().map(Val::Str).collect::<Vec<_>>(),
 	)))
@@ -586,6 +594,7 @@ fn builtin_manifest_json_ex(
 	indent: IStr,
 	newline: Option<IStr>,
 	key_val_sep: Option<IStr>,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<String> {
 	let newline = newline.as_deref().unwrap_or("\n");
 	let key_val_sep = key_val_sep.as_deref().unwrap_or(": ");
@@ -596,6 +605,8 @@ fn builtin_manifest_json_ex(
 			mtype: ManifestType::Std,
 			newline,
 			key_val_sep,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order: preserve_order.unwrap_or(false),
 		},
 	)
 }
@@ -605,6 +616,7 @@ fn builtin_manifest_yaml_doc(
 	value: Any,
 	indent_array_in_object: Option<bool>,
 	quote_keys: Option<bool>,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<String> {
 	manifest_yaml_ex(
 		&value.0,
@@ -616,6 +628,8 @@ fn builtin_manifest_yaml_doc(
 				""
 			},
 			quote_keys: quote_keys.unwrap_or(true),
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order: preserve_order.unwrap_or(false),
 		},
 	)
 }

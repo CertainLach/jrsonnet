@@ -15,6 +15,10 @@ explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
 
+# Allows to preserve field order in objects
+exp-preserve-order = []
+exp-serde-preserve-order = ["serde_json/preserve_order"]
+
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
