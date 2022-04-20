@@ -135,6 +135,8 @@ thread_local! {
 			("asciiLower".into(), builtin_ascii_lower::INST),
 			("member".into(), builtin_member::INST),
 			("count".into(), builtin_count::INST),
+			("any".into(), builtin_any::INST),
+			("all".into(), builtin_all::INST),
 		].iter().cloned().collect()
 	};
 }
@@ -667,4 +669,26 @@ fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
 		}
 	}
 	Ok(count)
+}
+
+#[jrsonnet_macros::builtin]
+fn builtin_any(arr: ArrValue) -> Result<bool> {
+	for v in arr.iter() {
+		let v: bool = v?.try_into()?;
+		if v {
+			return Ok(true);
+		}
+	}
+	Ok(false)
+}
+
+#[jrsonnet_macros::builtin]
+fn builtin_all(arr: ArrValue) -> Result<bool> {
+	for v in arr.iter() {
+		let v: bool = v?.try_into()?;
+		if !v {
+			return Ok(false);
+		}
+	}
+	Ok(true)
 }

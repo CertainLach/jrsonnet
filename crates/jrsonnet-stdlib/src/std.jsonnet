@@ -40,6 +40,9 @@
   mantissa:: $intrinsic(mantissa),
   exponent:: $intrinsic(exponent),
 
+  any:: $intrinsic(any),
+  all:: $intrinsic(all),
+
   isString(v):: std.type(v) == 'string',
   isNumber(v):: std.type(v) == 'number',
   isBoolean(v):: std.type(v) == 'boolean',
