@@ -1,9 +1,11 @@
+use std::convert::{TryFrom, TryInto};
+
+use serde_json::{Map, Number, Value};
+
 use crate::{
 	error::{Error::*, LocError, Result},
 	throw, ObjValueBuilder, Val,
 };
-use serde_json::{Map, Number, Value};
-use std::convert::{TryFrom, TryInto};
 
 impl TryFrom<&Val> for Value {
 	type Error = LocError;

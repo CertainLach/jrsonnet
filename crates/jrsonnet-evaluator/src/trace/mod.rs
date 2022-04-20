@@ -1,8 +1,10 @@
 mod location;
 
-use crate::{error::Error, EvaluationState, LocError};
-pub use location::*;
 use std::path::{Path, PathBuf};
+
+pub use location::*;
+
+use crate::{error::Error, EvaluationState, LocError};
 
 /// The way paths should be displayed
 pub enum PathResolver {

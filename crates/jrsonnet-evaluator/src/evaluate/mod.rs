@@ -1,15 +1,5 @@
 use std::convert::TryFrom;
 
-use crate::{
-	builtin::{std_slice, BUILTINS},
-	error::Error::*,
-	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
-	function::CallLocation,
-	gc::TraceBox,
-	push_frame, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
-	FutureWrapper, GcHashMap, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder,
-	ObjectAssertion, Result, Val,
-};
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
@@ -17,6 +7,19 @@ use jrsonnet_parser::{
 	LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
+
+use crate::{
+	builtin::{std_slice, BUILTINS},
+	error::Error::*,
+	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	function::CallLocation,
+	gc::TraceBox,
+	push_frame, throw,
+	typed::BoundedUsize,
+	val::{ArrValue, FuncDesc, FuncVal, LazyValValue},
+	with_state, Bindable, Context, ContextCreator, FutureWrapper, GcHashMap, LazyBinding, LazyVal,
+	ObjValue, ObjValueBuilder, ObjectAssertion, Result, Val,
+};
 pub mod operator;
 
 pub fn evaluate_binding_in_future(

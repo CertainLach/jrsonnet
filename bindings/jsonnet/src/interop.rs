@@ -1,11 +1,13 @@
 //! Jrsonnet specific additional binding helpers
 
-use crate::{import::jsonnet_import_callback, native::jsonnet_native_callback};
-use jrsonnet_evaluator::{EvaluationState, Val};
 use std::{
 	ffi::c_void,
 	os::raw::{c_char, c_int},
 };
+
+use jrsonnet_evaluator::{EvaluationState, Val};
+
+use crate::{import::jsonnet_import_callback, native::jsonnet_native_callback};
 
 extern "C" {
 	pub fn _jrsonnet_static_import_callback(

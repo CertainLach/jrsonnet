@@ -2,10 +2,11 @@
 //! Only tested with variables, which haven't altered by code before appearing here
 //! In jrsonnet every value is immutable, and this code is probally broken
 
-use gcmodule::Cc;
-use jrsonnet_evaluator::{ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, Val};
-use jrsonnet_parser::Visibility;
 use std::{ffi::CStr, os::raw::c_char};
+
+use gcmodule::Cc;
+use jrsonnet_evaluator::{val::ArrValue, EvaluationState, LazyBinding, LazyVal, ObjMember, Val};
+use jrsonnet_parser::Visibility;
 
 /// # Safety
 ///

@@ -1,9 +1,5 @@
 //! Import resolution manipulation utilities
 
-use jrsonnet_evaluator::{
-	error::{Error::*, Result},
-	throw, EvaluationState, ImportResolver,
-};
 use std::{
 	any::Any,
 	cell::RefCell,
@@ -15,6 +11,11 @@ use std::{
 	path::{Path, PathBuf},
 	ptr::null_mut,
 	rc::Rc,
+};
+
+use jrsonnet_evaluator::{
+	error::{Error::*, Result},
+	throw, EvaluationState, ImportResolver,
 };
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(

@@ -1,10 +1,12 @@
+use gcmodule::{Cc, Trace};
+
 use crate::{
 	error::{Error, LocError, Result},
 	throw,
 	typed::Any,
-	FuncVal, Val,
+	val::FuncVal,
+	Val,
 };
-use gcmodule::{Cc, Trace};
 
 #[derive(Debug, Clone, thiserror::Error, Trace)]
 pub enum SortError {

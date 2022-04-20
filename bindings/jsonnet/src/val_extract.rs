@@ -1,11 +1,11 @@
 //! Extract values from VM
 
-use jrsonnet_evaluator::{EvaluationState, Val};
-
 use std::{
 	ffi::CString,
 	os::raw::{c_char, c_double, c_int},
 };
+
+use jrsonnet_evaluator::{EvaluationState, Val};
 
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &EvaluationState, v: &Val) -> *mut c_char {

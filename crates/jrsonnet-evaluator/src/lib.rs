@@ -13,6 +13,7 @@ mod dynamic;
 pub mod error;
 mod evaluate;
 pub mod function;
+pub mod gc;
 mod import;
 mod integrations;
 mod map;
@@ -20,9 +21,15 @@ pub mod native;
 mod obj;
 pub mod trace;
 pub mod typed;
-mod val;
+pub mod val;
 
-pub use jrsonnet_parser as parser;
+use std::{
+	cell::{Ref, RefCell, RefMut},
+	collections::HashMap,
+	fmt::Debug,
+	path::{Path, PathBuf},
+	rc::Rc,
+};
 
 pub use ctx::*;
 pub use dynamic::*;
@@ -33,18 +40,11 @@ use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace, Weak};
 pub use import::*;
 pub use jrsonnet_interner::IStr;
+pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
-use std::{
-	cell::{Ref, RefCell, RefMut},
-	collections::HashMap,
-	fmt::Debug,
-	path::{Path, PathBuf},
-	rc::Rc,
-};
 use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
-pub use val::*;
-pub mod gc;
+pub use val::{LazyVal, ManifestFormat, Val};
 
 pub trait Bindable: Trace + 'static {
 	fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal>;
@@ -693,16 +693,22 @@ fn weak_unsafe() {
 
 #[cfg(test)]
 pub mod tests {
-	use super::Val;
-	use crate::{
-		error::Error::*, function::BuiltinParam, gc::TraceBox, native::NativeCallbackHandler,
-		primitive_equals, EvaluationState,
-	};
-	use gcmodule::{Cc, Trace};
-	use jrsonnet_parser::*;
 	use std::{
 		path::{Path, PathBuf},
 		rc::Rc,
+	};
+
+	use gcmodule::{Cc, Trace};
+	use jrsonnet_parser::*;
+
+	use super::Val;
+	use crate::{
+		error::Error::*,
+		function::{BuiltinParam, CallLocation},
+		gc::TraceBox,
+		native::NativeCallbackHandler,
+		val::primitive_equals,
+		EvaluationState,
 	};
 
 	#[test]
@@ -712,11 +718,15 @@ pub mod tests {
 		state.run_in_state(|| {
 			state
 				.push(
-					Some(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
+					CallLocation::new(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
 					|| "outer".to_owned(),
 					|| {
 						state.push(
-							Some(&ExprLocation(PathBuf::from("test2.jsonnet").into(), 30, 40)),
+							CallLocation::new(&ExprLocation(
+								PathBuf::from("test2.jsonnet").into(),
+								30,
+								40,
+							)),
 							|| "inner".to_owned(),
 							|| Err(RuntimeError("".into()).into()),
 						)?;
@@ -1290,10 +1300,11 @@ pub mod tests {
 	}
 
 	mod derive_typed {
-		use crate::{typed::Typed, EvaluationState};
 		use std::path::PathBuf;
 
-		#[derive(Typed, PartialEq, Debug)]
+		use crate::{typed::Typed, EvaluationState};
+
+		#[derive(PartialEq, Debug, Typed)]
 		struct MyTyped {
 			a: u32,
 			#[typed(rename = "b")]

@@ -1,12 +1,14 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
+use std::convert::TryFrom;
+
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
-use std::convert::TryFrom;
 use thiserror::Error;
+
+use crate::{error::Error::*, throw, LocError, ObjValue, Result, Val};
 
 #[derive(Debug, Clone, Error, Trace)]
 pub enum FormatError {

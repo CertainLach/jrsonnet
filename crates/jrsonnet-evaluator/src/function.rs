@@ -1,16 +1,19 @@
+use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
+
+use gcmodule::Trace;
+use jrsonnet_interner::IStr;
+pub use jrsonnet_macros::builtin;
+use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
+
 use crate::{
 	error::{Error::*, LocError},
 	evaluate, evaluate_named,
 	gc::TraceBox,
 	throw,
 	typed::Typed,
-	Context, FutureWrapper, GcHashMap, LazyVal, LazyValValue, Result, Val,
+	val::LazyValValue,
+	Context, FutureWrapper, GcHashMap, LazyVal, Result, Val,
 };
-use gcmodule::Trace;
-use jrsonnet_interner::IStr;
-pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
-use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
 
 #[derive(Clone, Copy)]
 pub struct CallLocation<'l>(pub Option<&'l ExprLocation>);

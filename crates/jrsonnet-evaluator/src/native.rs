@@ -1,12 +1,15 @@
 #![allow(clippy::type_complexity)]
 
-use crate::function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam, CallLocation};
-use crate::gc::TraceBox;
-use crate::Context;
-use crate::{error::Result, Val};
+use std::{path::Path, rc::Rc};
+
 use gcmodule::Trace;
-use std::path::Path;
-use std::rc::Rc;
+
+use crate::{
+	error::Result,
+	function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam, CallLocation},
+	gc::TraceBox,
+	Context, Val,
+};
 
 #[derive(Trace)]
 pub struct NativeCallback {

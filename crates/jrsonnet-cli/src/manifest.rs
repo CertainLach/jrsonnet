@@ -1,7 +1,9 @@
-use crate::ConfigureState;
+use std::{path::PathBuf, str::FromStr};
+
 use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState, ManifestFormat};
-use std::{path::PathBuf, str::FromStr};
+
+use crate::ConfigureState;
 
 pub enum ManifestFormatName {
 	/// Expect string as output, and write them directly

@@ -1,13 +1,14 @@
-use gcmodule::Trace;
-use jrsonnet_interner::IStr;
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
 use std::{
 	fmt::{Debug, Display},
 	ops::Deref,
 	path::{Path, PathBuf},
 	rc::Rc,
 };
+
+use gcmodule::Trace;
+use jrsonnet_interner::IStr;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]

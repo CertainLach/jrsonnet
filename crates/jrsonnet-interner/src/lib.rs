@@ -1,6 +1,3 @@
-use gcmodule::Trace;
-use rustc_hash::FxHashMap;
-use serde::{Deserialize, Serialize};
 use std::{
 	borrow::Cow,
 	cell::RefCell,
@@ -11,6 +8,10 @@ use std::{
 	rc::Rc,
 	str::Utf8Error,
 };
+
+use gcmodule::Trace;
+use rustc_hash::FxHashMap;
+use serde::{Deserialize, Serialize};
 
 #[derive(Clone, PartialOrd, Ord, Eq)]
 pub struct IStr(Rc<str>);

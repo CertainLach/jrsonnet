@@ -1,16 +1,19 @@
+use std::{
+	any::Any,
+	convert::TryFrom,
+	fs,
+	io::Read,
+	path::{Path, PathBuf},
+	rc::Rc,
+};
+
+use fs::File;
+use jrsonnet_interner::IStr;
+
 use crate::{
 	error::{Error::*, Result},
 	throw,
 };
-use fs::File;
-use jrsonnet_interner::IStr;
-use std::fs;
-use std::{
-	any::Any,
-	path::{Path, PathBuf},
-	rc::Rc,
-};
-use std::{convert::TryFrom, io::Read};
 
 /// Implements file resolution logic for `import` and `importStr`
 pub trait ImportResolver {

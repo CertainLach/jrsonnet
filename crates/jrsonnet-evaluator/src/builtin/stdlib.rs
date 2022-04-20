@@ -1,5 +1,6 @@
-use jrsonnet_parser::{LocExpr, ParserSettings};
 use std::path::PathBuf;
+
+use jrsonnet_parser::{LocExpr, ParserSettings};
 
 thread_local! {
 	/// To avoid parsing again when issued from the same thread

@@ -1,7 +1,9 @@
-use crate::ConfigureState;
+use std::{fs::read_to_string, str::FromStr};
+
 use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState};
-use std::{fs::read_to_string, str::FromStr};
+
+use crate::ConfigureState;
 
 #[derive(Clone)]
 pub struct ExtStr {

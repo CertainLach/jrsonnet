@@ -1,11 +1,12 @@
 //! Create values in VM
 
-use gcmodule::Cc;
-use jrsonnet_evaluator::{ArrValue, EvaluationState, ObjValue, Val};
 use std::{
 	ffi::CStr,
 	os::raw::{c_char, c_double, c_int},
 };
+
+use gcmodule::Cc;
+use jrsonnet_evaluator::{val::ArrValue, EvaluationState, ObjValue, Val};
 
 /// # Safety
 ///

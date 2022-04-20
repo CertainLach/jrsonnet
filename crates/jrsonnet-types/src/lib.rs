@@ -1,7 +1,8 @@
 #![allow(clippy::redundant_closure_call)]
 
-use gcmodule::Trace;
 use std::fmt::Display;
+
+use gcmodule::Trace;
 
 #[macro_export]
 macro_rules! ty {

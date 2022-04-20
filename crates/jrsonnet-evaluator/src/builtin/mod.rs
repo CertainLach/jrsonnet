@@ -1,22 +1,24 @@
-use crate::function::{CallLocation, StaticBuiltin};
-use crate::typed::{Any, Bytes, PositiveF64, VecVal, M1};
-use crate::{
-	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
-	equals,
-	error::{Error::*, Result},
-	operator::evaluate_mod_op,
-	primitive_equals, push_frame, throw,
-	typed::{Either2, Either4},
-	with_state, ArrValue, FuncVal, IndexableVal, Val,
+use std::{
+	collections::HashMap,
+	convert::{TryFrom, TryInto},
 };
-use crate::{Either, ObjValue};
+
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
-use std::collections::HashMap;
-use std::convert::{TryFrom, TryInto};
+
+use crate::{
+	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
+	error::{Error::*, Result},
+	function::{CallLocation, StaticBuiltin},
+	operator::evaluate_mod_op,
+	push_frame, throw,
+	typed::{Any, BoundedUsize, Bytes, Either2, Either4, PositiveF64, VecVal, M1},
+	val::{equals, primitive_equals, ArrValue, FuncVal, IndexableVal, Slice},
+	with_state, Either, ObjValue, Val,
+};
 
 pub mod stdlib;
 pub use stdlib::*;
@@ -58,12 +60,12 @@ pub fn std_slice(
 			}
 
 			Ok(Val::Str(
-			(s.chars()
-				.skip(index)
-				.take(end - index)
-				.step_by(step)
-				.collect::<String>())
-			.into(),
+				(s.chars()
+					.skip(index)
+					.take(end - index)
+					.step_by(step)
+					.collect::<String>())
+				.into(),
 			))
 		}
 		IndexableVal::Arr(arr) => {

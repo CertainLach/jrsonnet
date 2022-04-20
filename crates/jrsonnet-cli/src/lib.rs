@@ -3,14 +3,14 @@ mod manifest;
 mod tla;
 mod trace;
 
+use std::{env, path::PathBuf};
+
+use clap::Parser;
 pub use ext::*;
+use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
 pub use manifest::*;
 pub use tla::*;
 pub use trace::*;
-
-use clap::Parser;
-use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
-use std::{env, path::PathBuf};
 
 pub trait ConfigureState {
 	fn configure(&self, state: &EvaluationState) -> Result<()>;

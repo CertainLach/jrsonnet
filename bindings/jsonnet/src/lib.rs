@@ -8,14 +8,15 @@ pub mod val_make;
 pub mod val_modify;
 pub mod vars_tlas;
 
-use import::NativeImportResolver;
-use jrsonnet_evaluator::{EvaluationState, IStr, ManifestFormat, Val};
 use std::{
 	alloc::Layout,
 	ffi::{CStr, CString},
 	os::raw::{c_char, c_double, c_int, c_uint},
 	path::PathBuf,
 };
+
+use import::NativeImportResolver;
+use jrsonnet_evaluator::{EvaluationState, IStr, ManifestFormat, Val};
 
 /// WASM stub
 #[cfg(target_arch = "wasm32")]

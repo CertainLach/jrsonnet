@@ -1,12 +1,12 @@
-use crate::cc_ptr_eq;
-use crate::gc::GcHashMap;
-use crate::{
-	error::Error::*, map::LayeredHashMap, FutureWrapper, LazyBinding, LazyVal, ObjValue, Result,
-	Val,
-};
+use std::fmt::Debug;
+
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use std::fmt::Debug;
+
+use crate::{
+	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, FutureWrapper, LazyBinding,
+	LazyVal, ObjValue, Result, Val,
+};
 
 #[derive(Clone, Trace)]
 pub struct ContextCreator(pub Context, pub FutureWrapper<GcHashMap<IStr, LazyBinding>>);

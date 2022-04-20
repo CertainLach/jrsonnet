@@ -1,19 +1,22 @@
-use crate::error::LocError;
-use crate::function::CallLocation;
-use crate::gc::{GcHashMap, GcHashSet, TraceBox};
-use crate::operator::evaluate_add_op;
-use crate::push_frame;
-use crate::{
-	cc_ptr_eq, error::Error::*, throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal,
-	Result, Val,
+use std::{
+	cell::RefCell,
+	fmt::Debug,
+	hash::{Hash, Hasher},
 };
+
 use gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
-use std::cell::RefCell;
-use std::fmt::Debug;
-use std::hash::{Hash, Hasher};
+
+use crate::{
+	cc_ptr_eq,
+	error::{Error::*, LocError},
+	function::CallLocation,
+	gc::{GcHashMap, GcHashSet, TraceBox},
+	operator::evaluate_add_op,
+	push_frame, throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, Val,
+};
 
 #[derive(Debug, Trace)]
 pub struct ObjMember {

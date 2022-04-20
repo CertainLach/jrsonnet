@@ -1,7 +1,8 @@
 //! Manipulate external variables and top level arguments
 
-use jrsonnet_evaluator::EvaluationState;
 use std::{ffi::CStr, os::raw::c_char};
+
+use jrsonnet_evaluator::EvaluationState;
 
 /// # Safety
 #[no_mangle]

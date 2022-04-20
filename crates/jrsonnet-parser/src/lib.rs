@@ -1,10 +1,11 @@
 #![allow(clippy::redundant_closure_call)]
 
-use peg::parser;
 use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 };
+
+use peg::parser;
 mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
@@ -317,10 +318,12 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 
 #[cfg(test)]
 pub mod tests {
+	use std::path::PathBuf;
+
+	use BinaryOpType::*;
+
 	use super::{expr::*, parse};
 	use crate::ParserSettings;
-	use std::path::PathBuf;
-	use BinaryOpType::*;
 
 	macro_rules! parse {
 		($s:expr) => {

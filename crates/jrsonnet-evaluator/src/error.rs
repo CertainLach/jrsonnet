@@ -1,16 +1,18 @@
-use crate::{
-	builtin::{format::FormatError, sort::SortError},
-	typed::TypeLocError,
-};
-use gcmodule::Trace;
-use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
-use jrsonnet_types::ValType;
 use std::{
 	path::{Path, PathBuf},
 	rc::Rc,
 };
+
+use gcmodule::Trace;
+use jrsonnet_interner::IStr;
+use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_types::ValType;
 use thiserror::Error;
+
+use crate::{
+	builtin::{format::FormatError, sort::SortError},
+	typed::TypeLocError,
+};
 
 #[derive(Error, Debug, Clone, Trace)]
 pub enum Error {

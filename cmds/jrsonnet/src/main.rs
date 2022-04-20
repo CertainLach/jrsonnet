@@ -1,13 +1,13 @@
+use std::{
+	fs::{create_dir_all, File},
+	io::{Read, Write},
+	path::PathBuf,
+};
+
 use clap::{AppSettings, IntoApp, Parser};
 use clap_complete::Shell;
 use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, EvaluationState};
-use std::{
-	fs::{create_dir_all, File},
-	io::Read,
-	io::Write,
-	path::PathBuf,
-};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]

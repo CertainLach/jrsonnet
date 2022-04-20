@@ -1,6 +1,7 @@
-use crate::{ConfigureState, ExtFile, ExtStr};
 use clap::Parser;
 use jrsonnet_evaluator::{error::Result, EvaluationState};
+
+use crate::{ConfigureState, ExtFile, ExtStr};
 
 #[derive(Parser)]
 #[clap(next_help_heading = "TOP LEVEL ARGUMENTS")]

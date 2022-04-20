@@ -1,7 +1,7 @@
-use crate::error::Error::*;
-use crate::error::Result;
-use crate::push_description_frame;
-use crate::{throw, Val};
+use crate::{
+	error::{Error::*, Result},
+	push_description_frame, throw, Val,
+};
 
 #[derive(PartialEq, Clone, Copy)]
 pub enum ManifestType {

@@ -1,11 +1,13 @@
-use crate::ConfigureState;
+use std::str::FromStr;
+
 use clap::Parser;
 use jrsonnet_evaluator::{
 	error::Result,
 	trace::{CompactFormat, ExplainingFormat, PathResolver},
 	EvaluationState,
 };
-use std::str::FromStr;
+
+use crate::ConfigureState;
 
 #[derive(PartialEq)]
 pub enum TraceFormatName {

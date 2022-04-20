@@ -1,9 +1,10 @@
 use std::convert::TryInto;
 
-use crate::builtin::std_format;
-use crate::{equals, evaluate, Context, Val};
-use crate::{error::Error::*, throw, Result};
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
+
+use crate::{
+	builtin::std_format, error::Error::*, evaluate, throw, val::equals, Context, Result, Val,
+};
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	use UnaryOpType::*;

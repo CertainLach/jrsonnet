@@ -2,14 +2,14 @@ use std::{fmt::Display, rc::Rc};
 
 mod conversions;
 pub use conversions::*;
+use gcmodule::Trace;
+pub use jrsonnet_types::{ComplexValType, ValType};
+use thiserror::Error;
 
 use crate::{
 	error::{Error, LocError, Result},
 	push_description_frame, Val,
 };
-use gcmodule::Trace;
-pub use jrsonnet_types::{ComplexValType, ValType};
-use thiserror::Error;
 
 #[derive(Debug, Error, Clone, Trace)]
 pub enum TypeError {

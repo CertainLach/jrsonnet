@@ -1,12 +1,13 @@
-use bincode::serialize;
-use jrsonnet_parser::{parse, ParserSettings};
-use jrsonnet_stdlib::STDLIB_STR;
 use std::{
 	env,
 	fs::File,
 	io::Write,
 	path::{Path, PathBuf},
 };
+
+use bincode::serialize;
+use jrsonnet_parser::{parse, ParserSettings};
+use jrsonnet_stdlib::STDLIB_STR;
 
 fn main() {
 	let parsed = parse(

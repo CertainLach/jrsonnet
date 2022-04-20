@@ -1,3 +1,10 @@
+use std::{cell::RefCell, fmt::Debug, rc::Rc};
+
+use gcmodule::{Cc, Trace};
+use jrsonnet_interner::IStr;
+use jrsonnet_parser::{LocExpr, ParamsDesc};
+use jrsonnet_types::ValType;
+
 use crate::{
 	builtin::manifest::{
 		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
@@ -12,11 +19,6 @@ use crate::{
 	gc::TraceBox,
 	throw, Context, ObjValue, Result,
 };
-use gcmodule::{Cc, Trace};
-use jrsonnet_interner::IStr;
-use jrsonnet_parser::{LocExpr, ParamsDesc};
-use jrsonnet_types::ValType;
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 pub trait LazyValValue: Trace {
 	fn get(self: Box<Self>) -> Result<Val>;

@@ -1,3 +1,11 @@
+use std::{
+	convert::TryFrom,
+	ffi::{c_void, CStr},
+	os::raw::{c_char, c_int},
+	path::Path,
+	rc::Rc,
+};
+
 use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
@@ -5,13 +13,6 @@ use jrsonnet_evaluator::{
 	gc::TraceBox,
 	native::{NativeCallback, NativeCallbackHandler},
 	EvaluationState, IStr, Val,
-};
-use std::{
-	convert::TryFrom,
-	ffi::{c_void, CStr},
-	os::raw::{c_char, c_int},
-	path::Path,
-	rc::Rc,
 };
 
 type JsonnetNativeCallback = unsafe extern "C" fn(
