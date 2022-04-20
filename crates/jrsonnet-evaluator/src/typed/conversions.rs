@@ -285,7 +285,7 @@ impl TryFrom<Any> for Val {
 }
 
 /// Specialization, provides faster TryFrom<VecVal> for Val
-pub struct VecVal(pub Vec<Val>);
+pub struct VecVal(pub Cc<Vec<Val>>);
 
 impl Typed for VecVal {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
@@ -296,7 +296,7 @@ impl TryFrom<Val> for VecVal {
 	fn try_from(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Arr(a) => Ok(Self(a.evaluated()?.to_vec())),
+			Val::Arr(a) => Ok(Self(a.evaluated()?)),
 			_ => unreachable!(),
 		}
 	}
@@ -305,7 +305,7 @@ impl TryFrom<VecVal> for Val {
 	type Error = LocError;
 
 	fn try_from(value: VecVal) -> Result<Self> {
-		Ok(Self::Arr(value.0.into()))
+		Ok(Self::Arr(ArrValue::Eager(value.0)))
 	}
 }
 

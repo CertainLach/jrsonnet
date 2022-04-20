@@ -11,6 +11,7 @@ use crate::{
 };
 use crate::{Either, ObjValue};
 use format::{format_arr, format_obj};
+use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
@@ -142,11 +143,11 @@ thread_local! {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_length(x: Either![IStr, VecVal, ObjValue, FuncVal]) -> Result<usize> {
+fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> Result<usize> {
 	use Either4::*;
 	Ok(match x {
 		A(x) => x.chars().count(),
-		B(x) => x.0.len(),
+		B(x) => x.len(),
 		C(x) => x
 			.fields_visibility()
 			.into_iter()
@@ -167,7 +168,7 @@ fn builtin_make_array(sz: usize, func: FuncVal) -> Result<VecVal> {
 	for i in 0..sz {
 		out.push(func.evaluate_simple(&[i as f64].as_slice())?)
 	}
-	Ok(VecVal(out))
+	Ok(VecVal(Cc::new(out)))
 }
 
 #[jrsonnet_macros::builtin]
@@ -178,7 +179,9 @@ const fn builtin_codepoint(str: char) -> Result<u32> {
 #[jrsonnet_macros::builtin]
 fn builtin_object_fields_ex(obj: ObjValue, inc_hidden: bool) -> Result<VecVal> {
 	let out = obj.fields_ex(inc_hidden);
-	Ok(VecVal(out.into_iter().map(Val::Str).collect::<Vec<_>>()))
+	Ok(VecVal(Cc::new(
+		out.into_iter().map(Val::Str).collect::<Vec<_>>(),
+	)))
 }
 
 #[jrsonnet_macros::builtin]
@@ -432,15 +435,11 @@ fn builtin_format(str: IStr, vals: Any) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_range(from: i32, to: i32) -> Result<VecVal> {
+fn builtin_range(from: i32, to: i32) -> Result<ArrValue> {
 	if to < from {
-		return Ok(VecVal(Vec::new()));
+		return Ok(ArrValue::new_eager());
 	}
-	let mut out = Vec::with_capacity((1 + to as usize - from as usize).max(0));
-	for i in from as usize..=to as usize {
-		out.push(Val::Num(i as f64));
-	}
-	Ok(VecVal(out))
+	Ok(ArrValue::new_range(from, to))
 }
 
 #[jrsonnet_macros::builtin]

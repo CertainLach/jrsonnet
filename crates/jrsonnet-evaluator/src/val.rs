@@ -178,10 +178,16 @@ pub enum ArrValue {
 	Lazy(Cc<Vec<LazyVal>>),
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
+	Range(i32, i32),
+	Reversed(Box<Self>),
 }
 impl ArrValue {
 	pub fn new_eager() -> Self {
 		Self::Eager(Cc::new(Vec::new()))
+	}
+	pub fn new_range(a: i32, b: i32) -> Self {
+		assert!(a <= b);
+		Self::Range(a, b)
 	}
 
 	pub fn len(&self) -> usize {
@@ -190,6 +196,8 @@ impl ArrValue {
 			Self::Lazy(l) => l.len(),
 			Self::Eager(e) => e.len(),
 			Self::Extended(v) => v.0.len() + v.1.len(),
+			Self::Range(a, b) => a.abs_diff(*b) as usize,
+			Self::Reversed(i) => i.len(),
 		}
 	}
 
@@ -218,6 +226,19 @@ impl ArrValue {
 					v.1.get(index - a_len)
 				}
 			}
+			Self::Range(a, _) => {
+				if index >= self.len() {
+					return Ok(None);
+				}
+				Ok(Some(Val::Num(((*a as isize) + index as isize) as f64)))
+			}
+			Self::Reversed(v) => {
+				let len = v.len();
+				if index >= len {
+					return Ok(None);
+				}
+				v.get(len - index - 1)
+			}
 		}
 	}
 
@@ -235,6 +256,21 @@ impl ArrValue {
 				} else {
 					v.1.get_lazy(index - a_len)
 				}
+			}
+			Self::Range(a, _) => {
+				if index >= self.len() {
+					return None;
+				}
+				Some(LazyVal::new_resolved(Val::Num(
+					((*a as isize) + index as isize) as f64,
+				)))
+			}
+			Self::Reversed(v) => {
+				let len = v.len();
+				if index >= len {
+					return None;
+				}
+				v.get_lazy(len - index - 1)
 			}
 		}
 	}
@@ -263,46 +299,50 @@ impl ArrValue {
 				}
 				Cc::new(out)
 			}
+			Self::Range(a, b) => {
+				let mut out = Vec::with_capacity(self.len());
+				for i in *a..*b {
+					out.push(Val::Num(i as f64));
+				}
+				Cc::new(out)
+			}
+			Self::Reversed(r) => {
+				let mut r = r.evaluated()?;
+				Cc::update_with(&mut r, |v| v.reverse());
+				r
+			}
 		})
 	}
 
 	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
-		(0..self.len()).map(move |idx| match self {
+		// if let Self::Reversed(v) = self {
+		// 	return v.iter().rev();
+		// }
+		let len = self.len();
+		(0..len).map(move |idx| match self {
 			Self::Bytes(b) => Ok(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].evaluate(),
 			Self::Eager(e) => Ok(e[idx].clone()),
 			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
+			Self::Range(..) => self.get(idx).map(|e| e.unwrap()),
+			Self::Reversed(..) => self.get(len - idx - 1).map(|e| e.unwrap()),
 		})
 	}
 
 	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
-		(0..self.len()).map(move |idx| match self {
+		let len = self.len();
+		(0..len).map(move |idx| match self {
 			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].clone(),
 			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
 			Self::Extended(_) => self.get_lazy(idx).unwrap(),
+			Self::Range(..) => self.get_lazy(idx).unwrap(),
+			Self::Reversed(..) => self.get_lazy(len - idx - 1).unwrap(),
 		})
 	}
 
 	pub fn reversed(self) -> Self {
-		match self {
-			Self::Bytes(b) => {
-				let mut out = b.to_vec();
-				out.reverse();
-				Self::Bytes(out.into())
-			}
-			Self::Lazy(vec) => {
-				let mut out = (&vec as &Vec<_>).clone();
-				out.reverse();
-				Self::Lazy(Cc::new(out))
-			}
-			Self::Eager(vec) => {
-				let mut out = (&vec as &Vec<_>).clone();
-				out.reverse();
-				Self::Eager(Cc::new(out))
-			}
-			Self::Extended(b) => Self::Extended(Box::new((b.1.reversed(), b.0.reversed()))),
-		}
+		Self::Reversed(Box::new(self))
 	}
 
 	pub fn map(self, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
