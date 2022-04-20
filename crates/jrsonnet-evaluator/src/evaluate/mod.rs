@@ -643,7 +643,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		ErrorStmt(e) => push_frame(
 			CallLocation::new(loc),
 			|| "error statement".to_owned(),
-			|| throw!(RuntimeError(IStr::try_from(evaluate(context, e)?)?,)),
+			|| throw!(RuntimeError(evaluate(context, e)?.to_string()?,)),
 		)?,
 		IfElse {
 			cond,
