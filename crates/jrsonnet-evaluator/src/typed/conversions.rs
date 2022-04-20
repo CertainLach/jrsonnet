@@ -1,5 +1,6 @@
 use std::{
 	convert::{TryFrom, TryInto},
+	ops::Deref,
 	rc::Rc,
 };
 
@@ -12,7 +13,8 @@ use crate::{
 	error::{Error::*, LocError, Result},
 	throw,
 	typed::CheckType,
-	ArrValue, FuncDesc, FuncVal, IndexableVal, ObjValue, ObjValueBuilder, Val,
+	val::{ArrValue, FuncDesc, FuncVal, IndexableVal},
+	ObjValue, ObjValueBuilder, Val,
 };
 
 pub trait TypedObj: Typed {
@@ -68,6 +70,76 @@ macro_rules! impl_int {
 }
 
 impl_int!(i8 u8 i16 u16 i32 u32);
+
+macro_rules! impl_bounded_int {
+	($($name:ident = $ty:ty)*) => {$(
+		#[derive(Clone, Copy)]
+		pub struct $name<const MIN: $ty, const MAX: $ty>($ty);
+		impl<const MIN: $ty, const MAX: $ty> $name<MIN, MAX> {
+			pub const fn new(value: $ty) -> Option<$name<MIN, MAX>> {
+				if value >= MIN && value <= MAX {
+					Some(Self(value))
+				} else {
+					None
+				}
+			}
+			pub const fn value(self) -> $ty {
+				self.0
+			}
+		}
+		impl<const MIN: $ty, const MAX: $ty> Deref for $name<MIN, MAX> {
+			type Target = $ty;
+			fn deref(&self) -> &Self::Target {
+				&self.0
+			}
+		}
+
+		impl<const MIN: $ty, const MAX: $ty> Typed for $name<MIN, MAX> {
+			const TYPE: &'static ComplexValType =
+				&ComplexValType::BoundedNumber(
+					Some(MIN as f64),
+					Some(MAX as f64),
+				);
+		}
+		impl<const MIN: $ty, const MAX: $ty> TryFrom<Val> for $name<MIN, MAX> {
+			type Error = LocError;
+
+			fn try_from(value: Val) -> Result<Self> {
+				<Self as Typed>::TYPE.check(&value)?;
+				match value {
+					Val::Num(n) => {
+						if n.trunc() != n {
+							throw!(RuntimeError(
+								format!(
+									"cannot convert number with fractional part to {}",
+									stringify!($ty)
+								)
+								.into()
+							))
+						}
+						Ok(Self(n as $ty))
+					}
+					_ => unreachable!(),
+				}
+			}
+		}
+		impl<const MIN: $ty, const MAX: $ty> TryFrom<$name<MIN, MAX>> for Val {
+			type Error = LocError;
+
+			fn try_from(value: $name<MIN, MAX>) -> Result<Self> {
+				Ok(Self::Num(value.0 as f64))
+			}
+		}
+	)*};
+}
+
+impl_bounded_int!(
+	BoundedI8 = i8
+	BoundedI16 = i16
+	BoundedI32 = i32
+	BoundedI64 = i64
+	BoundedUsize = usize
+);
 
 impl Typed for f64 {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Num);

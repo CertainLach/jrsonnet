@@ -43,33 +43,45 @@ pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 
 pub fn std_slice(
 	indexable: IndexableVal,
-	index: Option<usize>,
-	end: Option<usize>,
-	step: Option<usize>,
+	index: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+	end: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+	step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
 ) -> Result<Val> {
-	let index = index.unwrap_or(0);
-	let end = end.unwrap_or_else(|| match &indexable {
-		IndexableVal::Str(_) => usize::MAX,
-		IndexableVal::Arr(v) => v.len(),
-	});
-	let step = step.unwrap_or(1);
 	match &indexable {
-		IndexableVal::Str(s) => Ok(Val::Str(
+		IndexableVal::Str(s) => {
+			let index = index.as_deref().copied().unwrap_or(0);
+			let end = end.as_deref().copied().unwrap_or(usize::MAX);
+			let step = step.as_deref().copied().unwrap_or(1);
+
+			if index >= end {
+				return Ok(Val::Str("".into()));
+			}
+
+			Ok(Val::Str(
 			(s.chars()
 				.skip(index)
 				.take(end - index)
 				.step_by(step)
 				.collect::<String>())
 			.into(),
-		)),
-		IndexableVal::Arr(arr) => Ok(Val::Arr(
-			(arr.iter()
-				.skip(index)
-				.take(end - index)
-				.step_by(step)
-				.collect::<Result<Vec<Val>>>()?)
-			.into(),
-		)),
+			))
+		}
+		IndexableVal::Arr(arr) => {
+			let index = index.as_deref().copied().unwrap_or(0);
+			let end = end.as_deref().copied().unwrap_or(usize::MAX).min(arr.len());
+			let step = step.as_deref().copied().unwrap_or(1);
+
+			if index >= end {
+				return Ok(Val::Arr(ArrValue::new_eager()));
+			}
+
+			Ok(Val::Arr(ArrValue::Slice(Box::new(Slice {
+				inner: arr.clone(),
+				from: index as u32,
+				to: end as u32,
+				step: step as u32,
+			}))))
+		}
 	}
 }
 
@@ -221,9 +233,9 @@ fn builtin_parse_yaml(s: IStr) -> Result<Any> {
 #[jrsonnet_macros::builtin]
 fn builtin_slice(
 	indexable: IndexableVal,
-	index: Option<usize>,
-	end: Option<usize>,
-	step: Option<usize>,
+	index: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+	end: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+	step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
 ) -> Result<Any> {
 	std_slice(indexable, index, end, step).map(Any)
 }

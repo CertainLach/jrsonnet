@@ -172,6 +172,37 @@ pub enum ManifestFormat {
 }
 
 #[derive(Debug, Clone, Trace)]
+pub struct Slice {
+	pub(crate) inner: ArrValue,
+	pub(crate) from: u32,
+	pub(crate) to: u32,
+	pub(crate) step: u32,
+}
+impl Slice {
+	fn from(&self) -> usize {
+		self.from as usize
+	}
+	fn to(&self) -> usize {
+		self.to as usize
+	}
+	fn step(&self) -> usize {
+		self.step as usize
+	}
+	fn len(&self) -> usize {
+		// TODO: use div_ceil
+		let diff = self.to() - self.from();
+		let rem = diff % self.step();
+		let div = diff / self.step();
+
+		if rem != 0 {
+			div + 1
+		} else {
+			div
+		}
+	}
+}
+
+#[derive(Debug, Clone, Trace)]
 #[force_tracking]
 pub enum ArrValue {
 	Bytes(#[skip_trace] Rc<[u8]>),
@@ -179,6 +210,7 @@ pub enum ArrValue {
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
 	Range(i32, i32),
+	Slice(Box<Slice>),
 	Reversed(Box<Self>),
 }
 impl ArrValue {
@@ -190,6 +222,22 @@ impl ArrValue {
 		Self::Range(a, b)
 	}
 
+	pub fn slice(self, from: Option<usize>, to: Option<usize>, step: Option<usize>) -> Self {
+		let len = self.len();
+		let from = from.unwrap_or(0);
+		let to = to.unwrap_or(len).min(len);
+		let step = step.unwrap_or(1);
+		assert!(from < to);
+		assert!(step > 0);
+
+		Self::Slice(Box::new(Slice {
+			inner: self,
+			from: from as u32,
+			to: to as u32,
+			step: step as u32,
+		}))
+	}
+
 	pub fn len(&self) -> usize {
 		match self {
 			Self::Bytes(i) => i.len(),
@@ -198,6 +246,7 @@ impl ArrValue {
 			Self::Extended(v) => v.0.len() + v.1.len(),
 			Self::Range(a, b) => a.abs_diff(*b) as usize,
 			Self::Reversed(i) => i.len(),
+			Self::Slice(s) => s.len(),
 		}
 	}
 
@@ -239,6 +288,13 @@ impl ArrValue {
 				}
 				v.get(len - index - 1)
 			}
+			Self::Slice(s) => {
+				let index = s.from() + index * s.step();
+				if index >= s.to() {
+					return Ok(None);
+				}
+				s.inner.get(index as usize)
+			}
 		}
 	}
 
@@ -271,6 +327,13 @@ impl ArrValue {
 					return None;
 				}
 				v.get_lazy(len - index - 1)
+			}
+			Self::Slice(s) => {
+				let index = s.from() + index * s.step();
+				if index >= s.to() {
+					return None;
+				}
+				s.inner.get_lazy(index as usize)
 			}
 		}
 	}
@@ -311,33 +374,43 @@ impl ArrValue {
 				Cc::update_with(&mut r, |v| v.reverse());
 				r
 			}
+			Self::Slice(v) => {
+				let mut out = Vec::with_capacity(v.inner.len());
+				for v in v
+					.inner
+					.iter_lazy()
+					.skip(v.from())
+					.take(v.to() - v.from())
+					.step_by(v.step())
+				{
+					out.push(v.evaluate()?)
+				}
+				Cc::new(out)
+			}
 		})
 	}
 
 	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
-		// if let Self::Reversed(v) = self {
-		// 	return v.iter().rev();
-		// }
-		let len = self.len();
-		(0..len).map(move |idx| match self {
+		(0..self.len()).map(move |idx| match self {
 			Self::Bytes(b) => Ok(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].evaluate(),
 			Self::Eager(e) => Ok(e[idx].clone()),
 			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
 			Self::Range(..) => self.get(idx).map(|e| e.unwrap()),
-			Self::Reversed(..) => self.get(len - idx - 1).map(|e| e.unwrap()),
+			Self::Reversed(..) => self.get(idx).map(|e| e.unwrap()),
+			Self::Slice(..) => self.get(idx).map(|e| e.unwrap()),
 		})
 	}
 
 	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
-		let len = self.len();
-		(0..len).map(move |idx| match self {
+		(0..self.len()).map(move |idx| match self {
 			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].clone(),
 			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
 			Self::Extended(_) => self.get_lazy(idx).unwrap(),
 			Self::Range(..) => self.get_lazy(idx).unwrap(),
-			Self::Reversed(..) => self.get_lazy(len - idx - 1).unwrap(),
+			Self::Reversed(..) => self.get_lazy(idx).unwrap(),
+			Self::Slice(..) => self.get_lazy(idx).unwrap(),
 		})
 	}
 
@@ -459,17 +532,6 @@ impl Val {
 		}
 	}
 
-	pub fn try_cast_nullable_num(self, context: &'static str) -> Result<Option<f64>> {
-		Ok(match self {
-			Val::Null => None,
-			Val::Num(num) => Some(num),
-			_ => throw!(TypeMismatch(
-				context,
-				vec![ValType::Null, ValType::Num],
-				self.value_type()
-			)),
-		})
-	}
 	pub const fn value_type(&self) -> ValType {
 		match self {
 			Self::Str(..) => ValType::Str,

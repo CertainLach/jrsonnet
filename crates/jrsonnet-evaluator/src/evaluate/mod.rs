@@ -665,23 +665,28 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Slice(value, desc) => {
 			let indexable = evaluate(context.clone(), value)?;
+			let loc = CallLocation::new(loc);
 
-			fn parse_num(
+			fn parse_idx<const MIN: usize>(
+				loc: CallLocation,
 				context: &Context,
-				expr: Option<&LocExpr>,
+				expr: &Option<LocExpr>,
 				desc: &'static str,
-			) -> Result<Option<usize>> {
-				Ok(match expr {
-					Some(s) => evaluate(context.clone(), s)?
-						.try_cast_nullable_num(desc)?
-						.map(|v| v as usize),
-					None => None,
-				})
+			) -> Result<Option<BoundedUsize<MIN, { i32::MAX as usize }>>> {
+				if let Some(value) = expr {
+					Ok(Some(push_frame(
+						loc,
+						|| format!("slice {}", desc),
+						|| Ok(evaluate(context.clone(), value)?.try_into()?),
+					)?))
+				} else {
+					Ok(None)
+				}
 			}
 
-			let start = parse_num(&context, desc.start.as_ref(), "start")?;
-			let end = parse_num(&context, desc.end.as_ref(), "end")?;
-			let step = parse_num(&context, desc.step.as_ref(), "step")?;
+			let start = parse_idx(loc, &context, &desc.start, "start")?;
+			let end = parse_idx(loc, &context, &desc.end, "end")?;
+			let step = parse_idx(loc, &context, &desc.step, "step")?;
 
 			std_slice(indexable.into_indexable()?, start, end, step)?
 		}

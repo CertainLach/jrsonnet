@@ -191,3 +191,10 @@ macro_rules! throw {
 		return Err($e.into())
 	};
 }
+
+#[macro_export]
+macro_rules! throw_runtime {
+	($($tt:tt)*) => {
+		return Err($crate::error::Error::RuntimeError(format!($($tt)*).into()).into())
+	};
+}
