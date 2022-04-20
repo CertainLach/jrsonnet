@@ -126,15 +126,6 @@ impl Debug for FuncVal {
 	}
 }
 
-impl PartialEq for FuncVal {
-	fn eq(&self, other: &Self) -> bool {
-		match (self, other) {
-			(Self::Normal(a), Self::Normal(b)) => a == b,
-			(Self::StaticBuiltin(an), Self::StaticBuiltin(bn)) => std::ptr::eq(*an, *bn),
-			(..) => false,
-		}
-	}
-}
 impl FuncVal {
 	pub fn args_len(&self) -> usize {
 		match self {
@@ -353,13 +344,13 @@ pub enum Val {
 }
 
 impl Val {
-	pub fn as_bool(&self) -> Option<bool> {
+	pub const fn as_bool(&self) -> Option<bool> {
 		match self {
 			Val::Bool(v) => Some(*v),
 			_ => None,
 		}
 	}
-	pub fn as_null(&self) -> Option<()> {
+	pub const fn as_null(&self) -> Option<()> {
 		match self {
 			Val::Null => Some(()),
 			_ => None,
@@ -371,7 +362,7 @@ impl Val {
 			_ => None,
 		}
 	}
-	pub fn as_num(&self) -> Option<f64> {
+	pub const fn as_num(&self) -> Option<f64> {
 		match self {
 			Val::Num(n) => Some(*n),
 			_ => None,

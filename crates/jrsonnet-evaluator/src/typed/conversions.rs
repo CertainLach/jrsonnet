@@ -442,7 +442,7 @@ impl TryFrom<Val> for Cc<FuncDesc> {
 	fn try_from(value: Val) -> Result<Self, Self::Error> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Func(FuncVal::Normal(desc)) => Ok(desc.clone()),
+			Val::Func(FuncVal::Normal(desc)) => Ok(desc),
 			Val::Func(_) => throw!(RuntimeError("expected normal function, not builtin".into())),
 			_ => unreachable!(),
 		}

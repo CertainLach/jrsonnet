@@ -20,7 +20,7 @@ impl TryFrom<&Val> for Value {
 			Val::Arr(a) => {
 				let mut out = Vec::with_capacity(a.len());
 				for item in a.iter() {
-					out.push((&item?).try_into()?);
+					out.push(item?.try_into()?);
 				}
 				Self::Array(out)
 			}
@@ -29,8 +29,8 @@ impl TryFrom<&Val> for Value {
 				for key in o.fields() {
 					out.insert(
 						(&key as &str).into(),
-						(&o.get(key)?
-							.expect("key is present in fields, so value should exist"))
+						o.get(key)?
+							.expect("key is present in fields, so value should exist")
 							.try_into()?,
 					);
 				}
@@ -38,6 +38,13 @@ impl TryFrom<&Val> for Value {
 			}
 			Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
 		})
+	}
+}
+impl TryFrom<Val> for Value {
+	type Error = LocError;
+
+	fn try_from(value: Val) -> Result<Self, Self::Error> {
+		<Self as TryFrom<&Val>>::try_from(&value)
 	}
 }
 
@@ -66,5 +73,12 @@ impl TryFrom<&Value> for Val {
 				Self::Obj(builder.build())
 			}
 		})
+	}
+}
+impl TryFrom<Value> for Val {
+	type Error = LocError;
+
+	fn try_from(value: Value) -> Result<Self, Self::Error> {
+		<Self as TryFrom<&Value>>::try_from(&value)
 	}
 }

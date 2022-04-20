@@ -15,12 +15,12 @@ use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
 #[derive(Clone, Copy)]
 pub struct CallLocation<'l>(pub Option<&'l ExprLocation>);
 impl<'l> CallLocation<'l> {
-	pub fn new(loc: &'l ExprLocation) -> Self {
+	pub const fn new(loc: &'l ExprLocation) -> Self {
 		Self(Some(loc))
 	}
 }
 impl CallLocation<'static> {
-	pub fn native() -> Self {
+	pub const fn native() -> Self {
 		Self(None)
 	}
 }

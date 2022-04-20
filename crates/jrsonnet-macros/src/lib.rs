@@ -35,7 +35,7 @@ where
 
 fn path_is(path: &Path, needed: &str) -> bool {
 	path.leading_colon.is_none()
-		&& path.segments.len() >= 1
+		&& !path.segments.is_empty()
 		&& path.segments.iter().last().unwrap().ident == needed
 }
 
@@ -119,7 +119,7 @@ impl Parse for BuiltinAttrs {
 
 enum ArgInfo {
 	Normal {
-		ty: Type,
+		ty: Box<Type>,
 		is_option: bool,
 		name: String,
 		// ident: Ident,
@@ -147,27 +147,27 @@ impl ArgInfo {
 				))
 			}
 		};
-		let ty = &typed.ty as &Type;
-		if type_is_path(&ty, "CallLocation").is_some() {
+		let ty = &typed.ty;
+		if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
-		} else if type_is_path(&ty, "Self").is_some() {
+		} else if type_is_path(ty, "Self").is_some() {
 			return Ok(Self::This);
-		} else if type_is_path(&ty, "LazyVal").is_some() {
+		} else if type_is_path(ty, "LazyVal").is_some() {
 			return Ok(Self::Lazy {
 				is_option: false,
 				name: ident.to_string(),
 			});
 		}
 
-		let (is_option, ty) = if let Some(ty) = extract_type_from_option(&ty)? {
-			if type_is_path(&ty, "LazyVal").is_some() {
+		let (is_option, ty) = if let Some(ty) = extract_type_from_option(ty)? {
+			if type_is_path(ty, "LazyVal").is_some() {
 				return Ok(Self::Lazy {
 					is_option: true,
 					name: ident.to_string(),
 				});
 			}
 
-			(true, ty.clone())
+			(true, Box::new(ty.clone()))
 		} else {
 			(false, ty.clone())
 		};
@@ -210,7 +210,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		.sig
 		.inputs
 		.iter()
-		.map(|a| ArgInfo::parse(a))
+		.map(ArgInfo::parse)
 		.collect::<Result<Vec<_>>>()?;
 
 	let params_desc = args.iter().flat_map(|a| match a {
@@ -380,8 +380,7 @@ impl Parse for TypedAttr {
 struct TypedField<'f>(&'f syn::Field, TypedAttr);
 impl<'f> TypedField<'f> {
 	fn try_new(field: &'f syn::Field) -> Result<Self> {
-		let attr =
-			parse_attr::<TypedAttr, _>(&field.attrs, "typed")?.unwrap_or_else(Default::default);
+		let attr = parse_attr::<TypedAttr, _>(&field.attrs, "typed")?.unwrap_or_default();
 		if field.ident.is_none() {
 			return Err(Error::new(
 				field.span(),
@@ -468,17 +467,15 @@ impl<'f> TypedField<'f> {
 					out.member(#name.into()).value(self.#ident.try_into()?);
 				}
 			}
+		} else if self.is_option() {
+			quote! {
+				if let Some(value) = self.#ident {
+					value.serialize(out)?;
+				}
+			}
 		} else {
-			if self.is_option() {
-				quote! {
-					if let Some(value) = self.#ident {
-						value.serialize(out)?;
-					}
-				}
-			} else {
-				quote! {
-					self.#ident.serialize(out)?;
-				}
+			quote! {
+				self.#ident.serialize(out)?;
 			}
 		}
 	}
