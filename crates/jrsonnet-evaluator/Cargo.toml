@@ -9,7 +9,7 @@ edition = "2021"
 [features]
 default = ["serialized-stdlib", "explaining-traces"]
 # Serializes standard library AST instead of parsing them every run
-serialized-stdlib = ["bincode", "jrsonnet-parser/deserialize"]
+serialized-stdlib = ["bincode", "jrsonnet-parser/serde"]
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
@@ -21,11 +21,11 @@ jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.2" }
 jrsonnet-macros = { path = "../jrsonnet-macros", version = "0.4.2" }
-pathdiff = "0.2.0"
+pathdiff = "0.2.1"
 
 md5 = "0.7.0"
 base64 = "0.13.0"
-rustc-hash = "1.1.0"
+rustc-hash = "1.1"
 
 thiserror = "1.0"
 gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
@@ -40,7 +40,7 @@ optional = true
 
 # Serialized stdlib
 [dependencies.bincode]
-version = "1.3.1"
+version = "1.3"
 optional = true
 
 # Explaining traces
@@ -50,10 +50,7 @@ features = ["color"]
 optional = true
 
 [build-dependencies]
-jrsonnet-parser = { path = "../jrsonnet-parser", features = [
-    "serialize",
-    "deserialize",
-], version = "0.4.2" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
+jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
 serde = "1.0"
-bincode = "1.3.1"
+bincode = "1.3"

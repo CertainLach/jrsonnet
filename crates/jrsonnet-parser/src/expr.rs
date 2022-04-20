@@ -1,9 +1,7 @@
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
-#[cfg(feature = "deserialize")]
-use serde::Deserialize;
-#[cfg(feature = "serialize")]
-use serde::Serialize;
+#[cfg(feature = "serde")]
+use serde::{Deserialize, Serialize};
 use std::{
 	fmt::{Debug, Display},
 	ops::Deref,
@@ -11,8 +9,7 @@ use std::{
 	rc::Rc,
 };
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub enum FieldName {
 	/// {fixed: 2}
@@ -21,8 +18,7 @@ pub enum FieldName {
 	Dyn(LocExpr),
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Trace)]
 pub enum Visibility {
 	/// :
@@ -39,13 +35,11 @@ impl Visibility {
 	}
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, Debug, PartialEq, Trace)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct FieldMember {
 	pub name: FieldName,
@@ -55,8 +49,7 @@ pub struct FieldMember {
 	pub value: LocExpr,
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub enum Member {
 	Field(FieldMember),
@@ -64,8 +57,7 @@ pub enum Member {
 	AssertStmt(AssertStmt),
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Trace)]
 pub enum UnaryOpType {
 	Plus,
@@ -90,8 +82,7 @@ impl Display for UnaryOpType {
 	}
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Trace)]
 pub enum BinaryOpType {
 	Mul,
@@ -157,14 +148,12 @@ impl Display for BinaryOpType {
 }
 
 /// name, default value
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct Param(pub IStr, pub Option<LocExpr>);
 
 /// Defined function parameters
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Trace)]
 pub struct ParamsDesc(pub Rc<Vec<Param>>);
 
@@ -175,8 +164,7 @@ impl Deref for ParamsDesc {
 	}
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct ArgsDesc {
 	pub unnamed: Vec<LocExpr>,
@@ -188,8 +176,7 @@ impl ArgsDesc {
 	}
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Trace)]
 pub struct BindSpec {
 	pub name: IStr,
@@ -197,26 +184,22 @@ pub struct BindSpec {
 	pub value: LocExpr,
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct IfSpecData(pub LocExpr);
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct ForSpecData(pub IStr, pub LocExpr);
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
@@ -227,16 +210,14 @@ pub struct ObjComp {
 	pub compspecs: Vec<CompSpec>,
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp(ObjComp),
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Clone, Copy, Trace)]
 pub enum LiteralType {
 	This,
@@ -247,8 +228,7 @@ pub enum LiteralType {
 	False,
 }
 
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
@@ -257,8 +237,7 @@ pub struct SliceDesc {
 }
 
 /// Syntax base
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
 pub enum Expr {
 	Literal(LiteralType),
@@ -326,8 +305,7 @@ pub enum Expr {
 }
 
 /// file, begin offset, end offset
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Trace)]
 #[skip_trace]
 pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
@@ -344,8 +322,7 @@ impl Debug for ExprLocation {
 }
 
 /// Holds AST expression and its location in source file
-#[cfg_attr(feature = "serialize", derive(Serialize))]
-#[cfg_attr(feature = "deserialize", derive(Deserialize))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Trace)]
 pub struct LocExpr(pub Rc<Expr>, pub ExprLocation);
 
