@@ -448,7 +448,7 @@ fn builtin_char(n: u32) -> Result<char> {
 
 #[jrsonnet_macros::builtin]
 fn builtin_encode_utf8(str: IStr) -> Result<Bytes> {
-	Ok(Bytes(str.bytes().map(|b| b).collect::<Vec<u8>>().into()))
+	Ok(Bytes(str.bytes().collect::<Vec<u8>>().into()))
 }
 
 #[jrsonnet_macros::builtin]

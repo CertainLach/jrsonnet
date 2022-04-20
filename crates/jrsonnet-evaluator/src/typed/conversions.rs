@@ -343,7 +343,7 @@ impl TryFrom<Bytes> for Val {
 	type Error = LocError;
 
 	fn try_from(value: Bytes) -> Result<Self> {
-		Ok(Val::Arr(ArrValue::Bytes(value.0)))
+		Ok(Self::Arr(ArrValue::Bytes(value.0)))
 	}
 }
 
