@@ -174,6 +174,7 @@ pub enum ManifestFormat {
 #[derive(Debug, Clone, Trace)]
 #[force_tracking]
 pub enum ArrValue {
+	Bytes(#[skip_trace] Rc<[u8]>),
 	Lazy(Cc<Vec<LazyVal>>),
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
@@ -185,6 +186,7 @@ impl ArrValue {
 
 	pub fn len(&self) -> usize {
 		match self {
+			Self::Bytes(i) => i.len(),
 			Self::Lazy(l) => l.len(),
 			Self::Eager(e) => e.len(),
 			Self::Extended(v) => v.0.len() + v.1.len(),
@@ -197,6 +199,9 @@ impl ArrValue {
 
 	pub fn get(&self, index: usize) -> Result<Option<Val>> {
 		match self {
+			Self::Bytes(i) => i
+				.get(index)
+				.map_or(Ok(None), |v| Ok(Some(Val::Num(*v as f64)))),
 			Self::Lazy(vec) => {
 				if let Some(v) = vec.get(index) {
 					Ok(Some(v.evaluate()?))
@@ -218,6 +223,9 @@ impl ArrValue {
 
 	pub fn get_lazy(&self, index: usize) -> Option<LazyVal> {
 		match self {
+			Self::Bytes(i) => i
+				.get(index)
+				.map(|b| LazyVal::new_resolved(Val::Num(*b as f64))),
 			Self::Lazy(vec) => vec.get(index).cloned(),
 			Self::Eager(vec) => vec.get(index).cloned().map(LazyVal::new_resolved),
 			Self::Extended(v) => {
@@ -233,6 +241,13 @@ impl ArrValue {
 
 	pub fn evaluated(&self) -> Result<Cc<Vec<Val>>> {
 		Ok(match self {
+			Self::Bytes(i) => {
+				let mut out = Vec::with_capacity(i.len());
+				for v in i.iter() {
+					out.push(Val::Num(*v as f64));
+				}
+				Cc::new(out)
+			}
 			Self::Lazy(vec) => {
 				let mut out = Vec::with_capacity(vec.len());
 				for item in vec.iter() {
@@ -253,6 +268,7 @@ impl ArrValue {
 
 	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
+			Self::Bytes(b) => Ok(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].evaluate(),
 			Self::Eager(e) => Ok(e[idx].clone()),
 			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
@@ -261,6 +277,7 @@ impl ArrValue {
 
 	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
 		(0..self.len()).map(move |idx| match self {
+			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(b[idx] as f64)),
 			Self::Lazy(l) => l[idx].clone(),
 			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
 			Self::Extended(_) => self.get_lazy(idx).unwrap(),
@@ -269,6 +286,11 @@ impl ArrValue {
 
 	pub fn reversed(self) -> Self {
 		match self {
+			Self::Bytes(b) => {
+				let mut out = b.to_vec();
+				out.reverse();
+				Self::Bytes(out.into())
+			}
 			Self::Lazy(vec) => {
 				let mut out = (&vec as &Vec<_>).clone();
 				out.reverse();

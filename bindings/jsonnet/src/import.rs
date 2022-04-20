@@ -2,7 +2,7 @@
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, EvaluationState, IStr, ImportResolver,
+	throw, EvaluationState, ImportResolver,
 };
 use std::{
 	any::Any,
@@ -29,8 +29,7 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 pub struct CallbackImportResolver {
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
-
-	out: RefCell<HashMap<PathBuf, IStr>>,
+	out: RefCell<HashMap<PathBuf, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
 	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
@@ -75,9 +74,10 @@ impl ImportResolver for CallbackImportResolver {
 
 		Ok(found_here_buf.into())
 	}
-	fn load_file_contents(&self, resolved: &Path) -> Result<IStr> {
+	fn load_file_contents(&self, resolved: &Path) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
+
 	unsafe fn as_any(&self) -> &dyn Any {
 		self
 	}
@@ -124,12 +124,12 @@ impl ImportResolver for NativeImportResolver {
 			throw!(ImportFileNotFound(from.to_owned(), path.to_owned()))
 		}
 	}
-	fn load_file_contents(&self, id: &Path) -> Result<IStr> {
+	fn load_file_contents(&self, id: &Path) -> Result<Vec<u8>> {
 		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.to_owned()))?;
-		let mut out = String::new();
-		file.read_to_string(&mut out)
-			.map_err(|_e| ImportBadFileUtf8(id.to_owned()))?;
-		Ok(out.into())
+		let mut out = Vec::new();
+		file.read_to_end(&mut out)
+			.map_err(|e| ImportIo(e.to_string()))?;
+		Ok(out)
 	}
 	unsafe fn as_any(&self) -> &dyn Any {
 		self
