@@ -47,7 +47,7 @@ impl LazyVal {
 		match &*self.0.borrow() {
 			LazyValInternals::Computed(v) => return Ok(v.clone()),
 			LazyValInternals::Errored(e) => return Err(e.clone()),
-			LazyValInternals::Pending => return Err(RecursiveLazyValueEvaluation.into()),
+			LazyValInternals::Pending => return Err(InfiniteRecursionDetected.into()),
 			_ => (),
 		};
 		let value = if let LazyValInternals::Waiting(value) =

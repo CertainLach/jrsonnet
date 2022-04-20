@@ -1,3 +1,4 @@
+use crate::error::LocError;
 use crate::function::CallLocation;
 use crate::gc::{GcHashMap, GcHashSet, TraceBox};
 use crate::operator::evaluate_add_op;
@@ -28,6 +29,15 @@ pub trait ObjectAssertion: Trace {
 
 // Field => This
 type CacheKey = (IStr, WeakObjValue);
+
+#[derive(Trace)]
+enum CacheValue {
+	Cached(Val),
+	NotFound,
+	Pending,
+	Errored(LocError),
+}
+
 #[derive(Trace)]
 #[force_tracking]
 pub struct ObjValueInternals {
@@ -36,7 +46,7 @@ pub struct ObjValueInternals {
 	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_obj: Option<ObjValue>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<CacheKey, Option<Val>>>,
+	value_cache: RefCell<GcHashMap<CacheKey, CacheValue>>,
 }
 
 #[derive(Clone, Trace)]
@@ -234,8 +244,17 @@ impl ObjValue {
 		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
 
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
-			return Ok(v.clone());
+			return Ok(match v {
+				CacheValue::Cached(v) => Some(v.clone()),
+				CacheValue::NotFound => None,
+				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+				CacheValue::Errored(e) => return Err(e.clone()),
+			});
 		}
+		self.0
+			.value_cache
+			.borrow_mut()
+			.insert(cache_key.clone(), CacheValue::Pending);
 		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
 			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
 			(Some(k), Some(s)) => {
@@ -251,11 +270,24 @@ impl ObjValue {
 			}
 			(None, Some(s)) => s.get_raw(key, Some(real_this)),
 			(None, None) => Ok(None),
-		}?;
-		self.0
-			.value_cache
-			.borrow_mut()
-			.insert(cache_key, value.clone());
+		};
+		let value = match value {
+			Ok(v) => v,
+			Err(e) => {
+				self.0
+					.value_cache
+					.borrow_mut()
+					.insert(cache_key, CacheValue::Errored(e.clone()));
+				return Err(e);
+			}
+		};
+		self.0.value_cache.borrow_mut().insert(
+			cache_key,
+			match &value {
+				Some(v) => CacheValue::Cached(v.clone()),
+				None => CacheValue::NotFound,
+			},
+		);
 		Ok(value)
 	}
 	fn evaluate_this(&self, v: &ObjMember, real_this: &Self) -> Result<Val> {

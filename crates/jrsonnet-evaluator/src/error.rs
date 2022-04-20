@@ -106,7 +106,7 @@ pub enum Error {
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
 	#[error("infinite recursion detected")]
-	RecursiveLazyValueEvaluation,
+	InfiniteRecursionDetected,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
 	#[error("attempted to divide by zero")]
