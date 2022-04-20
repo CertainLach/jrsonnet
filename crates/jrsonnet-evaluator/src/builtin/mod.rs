@@ -623,12 +623,15 @@ fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_splitlimit(str: IStr, c: char, maxsplits: Either![usize, M1]) -> Result<VecVal> {
+fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> Result<VecVal> {
 	use Either2::*;
-	Ok(VecVal(match maxsplits {
-		A(n) => str.splitn(n + 1, c).map(|s| Val::Str(s.into())).collect(),
-		B(_) => str.split(c).map(|s| Val::Str(s.into())).collect(),
-	}))
+	Ok(VecVal(Cc::new(match maxsplits {
+		A(n) => str
+			.splitn(n + 1, &c as &str)
+			.map(|s| Val::Str(s.into()))
+			.collect(),
+		B(_) => str.split(&c as &str).map(|s| Val::Str(s.into())).collect(),
+	})))
 }
 
 #[jrsonnet_macros::builtin]

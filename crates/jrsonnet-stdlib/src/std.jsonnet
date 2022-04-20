@@ -122,11 +122,7 @@
     assert std.length(str) > 0 : 'Not hexadecimal: ""';
     parse_nat(str, 16),
 
-  split(str, c)::
-    assert std.isString(str) : 'std.split first parameter should be a string, got ' + std.type(str);
-    assert std.isString(c) : 'std.split second parameter should be a string, got ' + std.type(c);
-    assert std.length(c) == 1 : 'std.split second parameter should have length 1, got ' + std.length(c);
-    std.splitLimit(str, c, -1),
+  split(str, c):: std.splitLimit(str, c, -1),
 
   splitLimit:: $intrinsic(splitLimit),
 
