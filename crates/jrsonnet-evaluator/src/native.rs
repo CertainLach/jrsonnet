@@ -1,11 +1,10 @@
 #![allow(clippy::type_complexity)]
 
-use crate::function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam};
+use crate::function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam, CallLocation};
 use crate::gc::TraceBox;
 use crate::Context;
 use crate::{error::Result, Val};
 use gcmodule::Trace;
-use jrsonnet_parser::ExprLocation;
 use std::path::Path;
 use std::rc::Rc;
 
@@ -32,18 +31,13 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(
-		&self,
-		context: Context,
-		loc: Option<&ExprLocation>,
-		args: &dyn ArgsLike,
-	) -> Result<Val> {
+	fn call(&self, context: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 		let args = parse_builtin_call(context, &self.params, args, true)?;
 		let mut out_args = Vec::with_capacity(self.params.len());
 		for p in self.params.iter() {
 			out_args.push(args[&p.name].evaluate()?);
 		}
-		self.handler.call(loc.map(|l| l.0.clone()), &out_args)
+		self.handler.call(loc.0.map(|l| l.0.clone()), &out_args)
 	}
 }
 

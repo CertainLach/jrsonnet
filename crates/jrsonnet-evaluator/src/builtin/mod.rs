@@ -1,4 +1,4 @@
-use crate::function::StaticBuiltin;
+use crate::function::{CallLocation, StaticBuiltin};
 use crate::typed::{Any, PositiveF64, VecVal, M1};
 use crate::{
 	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
@@ -12,7 +12,6 @@ use crate::{
 use crate::{Either, ObjValue};
 use format::{format_arr, format_obj};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::ExprLocation;
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
 use std::collections::HashMap;
@@ -29,7 +28,7 @@ pub mod sort;
 
 pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 	push_frame(
-		None,
+		CallLocation::native(),
 		|| format!("std.format of {}", str),
 		|| {
 			Ok(match vals {
@@ -467,9 +466,9 @@ fn builtin_md5(str: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_trace(#[location] loc: Option<&ExprLocation>, str: IStr, rest: Any) -> Result<Any> {
+fn builtin_trace(loc: CallLocation, str: IStr, rest: Any) -> Result<Any> {
 	eprint!("TRACE:");
-	if let Some(loc) = loc {
+	if let Some(loc) = loc.0 {
 		with_state(|s| {
 			let locs = s.map_source_locations(&loc.0, &[loc.1]);
 			eprint!(

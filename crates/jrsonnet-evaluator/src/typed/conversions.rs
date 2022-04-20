@@ -1,5 +1,6 @@
 use std::convert::{TryFrom, TryInto};
 
+use gcmodule::Cc;
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
@@ -8,7 +9,7 @@ use crate::{
 	error::{Error::*, LocError, Result},
 	throw,
 	typed::CheckType,
-	ArrValue, FuncVal, IndexableVal, ObjValue, ObjValueBuilder, Val,
+	ArrValue, FuncDesc, FuncVal, IndexableVal, ObjValue, ObjValueBuilder, Val,
 };
 
 pub trait TypedObj: Typed {
@@ -431,6 +432,30 @@ impl TryFrom<FuncVal> for Val {
 		Ok(Self::Func(value))
 	}
 }
+
+impl Typed for Cc<FuncDesc> {
+	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
+}
+impl TryFrom<Val> for Cc<FuncDesc> {
+	type Error = LocError;
+
+	fn try_from(value: Val) -> Result<Self, Self::Error> {
+		<Self as Typed>::TYPE.check(&value)?;
+		match value {
+			Val::Func(FuncVal::Normal(desc)) => Ok(desc.clone()),
+			Val::Func(_) => throw!(RuntimeError("expected normal function, not builtin".into())),
+			_ => unreachable!(),
+		}
+	}
+}
+impl TryFrom<Cc<FuncDesc>> for Val {
+	type Error = LocError;
+
+	fn try_from(value: Cc<FuncDesc>) -> Result<Self, Self::Error> {
+		Ok(Self::Func(FuncVal::Normal(value)))
+	}
+}
+
 impl Typed for ObjValue {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Obj);
 }

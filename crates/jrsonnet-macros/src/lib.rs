@@ -1,5 +1,5 @@
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
+use quote::quote;
 use syn::{
 	parenthesized,
 	parse::{Parse, ParseStream},
@@ -7,8 +7,8 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::Comma,
-	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, PatType,
-	Path, PathArguments, Result, Token, Type,
+	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
+	PathArguments, Result, ReturnType, Token, Type,
 };
 
 fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
@@ -33,49 +33,42 @@ where
 	Ok(Some(attr))
 }
 
-fn is_location_arg(t: &PatType) -> bool {
-	t.attrs.iter().any(|a| a.path.is_ident("location"))
-}
-fn is_self_arg(t: &PatType) -> bool {
-	t.attrs.iter().any(|a| a.path.is_ident("self"))
-}
-
-trait RetainHad<T> {
-	fn retain_had(&mut self, h: impl FnMut(&T) -> bool) -> bool;
-}
-impl<T> RetainHad<T> for Vec<T> {
-	fn retain_had(&mut self, h: impl FnMut(&T) -> bool) -> bool {
-		let before = self.len();
-		self.retain(h);
-		let after = self.len();
-		before != after
-	}
+fn path_is(path: &Path, needed: &str) -> bool {
+	path.leading_colon.is_none()
+		&& path.segments.len() >= 1
+		&& path.segments.iter().last().unwrap().ident == needed
 }
 
-fn extract_type_from_option(ty: &Type) -> Option<&Type> {
-	fn path_is_option(path: &Path) -> bool {
-		path.leading_colon.is_none()
-			&& path.segments.len() == 1
-			&& path.segments.iter().next().unwrap().ident == "Option"
-	}
-
+fn type_is_path<'ty>(ty: &'ty Type, needed: &str) -> Option<&'ty PathArguments> {
 	match ty {
-		Type::Path(typepath) if typepath.qself.is_none() && path_is_option(&typepath.path) => {
-			// Get the first segment of the path (there is only one, in fact: "Option"):
-			let type_params = &typepath.path.segments.iter().next().unwrap().arguments;
-			// It should have only on angle-bracketed param ("<String>"):
-			let generic_arg = match type_params {
-				PathArguments::AngleBracketed(params) => params.args.iter().next().unwrap(),
-				_ => panic!("missing option generic"),
-			};
-			// This argument must be a type:
-			match generic_arg {
-				GenericArgument::Type(ty) => Some(ty),
-				_ => panic!("option generic should be a type"),
-			}
+		Type::Path(path) if path.qself.is_none() && path_is(&path.path, needed) => {
+			let args = &path.path.segments.iter().last().unwrap().arguments;
+			Some(args)
 		}
 		_ => None,
 	}
+}
+
+fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
+	Ok(if let Some(args) = type_is_path(ty, "Option") {
+		// It should have only on angle-bracketed param ("<String>"):
+		let generic_arg = match args {
+			PathArguments::AngleBracketed(params) => params.args.iter().next().unwrap(),
+			_ => return Err(Error::new(args.span(), "missing option generic")),
+		};
+		// This argument must be a type:
+		match generic_arg {
+			GenericArgument::Type(ty) => Some(ty),
+			_ => {
+				return Err(Error::new(
+					generic_arg.span(),
+					"option generic should be a type",
+				))
+			}
+		}
+	} else {
+		None
+	})
 }
 
 struct Field {
@@ -101,7 +94,7 @@ mod kw {
 
 struct EmptyAttr;
 impl Parse for EmptyAttr {
-	fn parse(input: ParseStream) -> Result<Self> {
+	fn parse(_input: ParseStream) -> Result<Self> {
 		Ok(Self)
 	}
 }
@@ -124,107 +117,158 @@ impl Parse for BuiltinAttrs {
 	}
 }
 
+enum ArgInfo {
+	Normal {
+		ty: Type,
+		is_option: bool,
+		name: String,
+		// ident: Ident,
+	},
+	Lazy {
+		is_option: bool,
+		name: String,
+	},
+	Location,
+	This,
+}
+
+impl ArgInfo {
+	fn parse(arg: &FnArg) -> Result<Self> {
+		let typed = match arg {
+			FnArg::Receiver(_) => unreachable!(),
+			FnArg::Typed(a) => a,
+		};
+		let ident = match &typed.pat as &Pat {
+			Pat::Ident(i) => i.ident.clone(),
+			_ => {
+				return Err(Error::new(
+					typed.pat.span(),
+					"arg should be plain identifier",
+				))
+			}
+		};
+		let ty = &typed.ty as &Type;
+		if type_is_path(&ty, "CallLocation").is_some() {
+			return Ok(Self::Location);
+		} else if type_is_path(&ty, "Self").is_some() {
+			return Ok(Self::This);
+		} else if type_is_path(&ty, "LazyVal").is_some() {
+			return Ok(Self::Lazy {
+				is_option: false,
+				name: ident.to_string(),
+			});
+		}
+
+		let (is_option, ty) = if let Some(ty) = extract_type_from_option(&ty)? {
+			if type_is_path(&ty, "LazyVal").is_some() {
+				return Ok(Self::Lazy {
+					is_option: true,
+					name: ident.to_string(),
+				});
+			}
+
+			(true, ty.clone())
+		} else {
+			(false, ty.clone())
+		};
+
+		Ok(Self::Normal {
+			ty,
+			is_option,
+			name: ident.to_string(),
+			// ident,
+		})
+	}
+}
+
 #[proc_macro_attribute]
 pub fn builtin(
 	attr: proc_macro::TokenStream,
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
-	let attrs = parse_macro_input!(attr as BuiltinAttrs);
-	let mut fun: ItemFn = parse_macro_input!(item);
+	let attr = parse_macro_input!(attr as BuiltinAttrs);
+	let item: ItemFn = parse_macro_input!(item);
 
+	match builtin_inner(attr, item) {
+		Ok(v) => v.into(),
+		Err(e) => e.into_compile_error().into(),
+	}
+}
+
+fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 	let result = match fun.sig.output {
-		syn::ReturnType::Default => {
-			return quote_spanned! { fun.sig.span() =>
-				compile_error!("builtins should return something");
-			}
-			.into()
+		ReturnType::Default => {
+			return Err(Error::new(
+				fun.sig.span(),
+				"builtin should return something",
+			))
 		}
-		syn::ReturnType::Type(_, ref ty) => ty.clone(),
+		ReturnType::Type(_, ref ty) => ty.clone(),
 	};
-
-	let params = fun
-		.sig
-		.inputs
-		.iter()
-		.map(|i| match i {
-			FnArg::Receiver(_) => unreachable!(),
-			FnArg::Typed(t) => t,
-		})
-		.filter(|a| !is_location_arg(a) && !is_self_arg(a))
-		.map(|t| {
-			let ident = match &t.pat as &Pat {
-				Pat::Ident(i) => i.ident.to_string(),
-				_ => {
-					return quote_spanned! { t.pat.span() =>
-						compile_error!("args should be plain identifiers")
-					}
-					.into()
-				}
-			};
-			let optional = extract_type_from_option(&t.ty).is_some();
-			quote! {
-				BuiltinParam {
-					name: std::borrow::Cow::Borrowed(#ident),
-					has_default: #optional,
-				}
-			}
-		})
-		.collect::<Vec<_>>();
 
 	let args = fun
 		.sig
 		.inputs
-		.iter_mut()
-		.map(|i| match i {
-			FnArg::Receiver(_) => unreachable!(),
-			FnArg::Typed(t) => t,
-		})
-		.map(|t| {
-			if t.attrs.retain_had(|a| !a.path.is_ident("location")) {
-				quote! {{
-					loc
-				}}
-			} else if t.attrs.retain_had(|a| !a.path.is_ident("self")) {
-				quote! {{
-					self
+		.iter()
+		.map(|a| ArgInfo::parse(a))
+		.collect::<Result<Vec<_>>>()?;
+
+	let params_desc = args.iter().flat_map(|a| match a {
+		ArgInfo::Normal {
+			is_option, name, ..
+		}
+		| ArgInfo::Lazy { is_option, name } => Some(quote! {
+			BuiltinParam {
+				name: std::borrow::Cow::Borrowed(#name),
+				has_default: #is_option,
+			}
+		}),
+		ArgInfo::Location => None,
+		ArgInfo::This => None,
+	});
+
+	let pass = args.iter().map(|a| match a {
+		ArgInfo::Normal {
+			ty,
+			is_option,
+			name,
+			// ident,
+		} => {
+			let eval = quote! {::jrsonnet_evaluator::push_description_frame(
+				|| format!("argument <{}> evaluation", #name),
+				|| <#ty>::try_from(value.evaluate()?),
+			)?};
+			if *is_option {
+				quote! {if let Some(value) = parsed.get(#name) {
+					Some(#eval)
+				} else {
+					None
 				}}
 			} else {
-				let ident = match &t.pat as &Pat {
-					Pat::Ident(i) => i.ident.to_string(),
-					_ => {
-						return quote_spanned! { t.pat.span() =>
-							compile_error!("args should be plain identifiers")
-						}
-						.into()
-					}
-				};
-				let ty = &t.ty;
-				if let Some(opt_ty) = extract_type_from_option(&t.ty) {
-					quote! {{
-						if let Some(value) = parsed.get(#ident) {
-							Some(::jrsonnet_evaluator::push_description_frame(
-								|| format!("argument <{}> evaluation", #ident),
-								|| <#opt_ty>::try_from(value.evaluate()?),
-							)?)
-						} else {
-							None
-						}
-					}}
+				quote! {{
+					let value = parsed.get(#name).expect("args shape is checked");
+					#eval
+				}}
+			}
+		}
+		ArgInfo::Lazy { is_option, name } => {
+			if *is_option {
+				quote! {if let Some(value) = parsed.get(#name) {
+					Some(value.clone())
 				} else {
-					quote! {{
-						let value = parsed.get(#ident).unwrap();
-
-						::jrsonnet_evaluator::push_description_frame(
-							|| format!("argument <{}> evaluation", #ident),
-							|| <#ty>::try_from(value.evaluate()?),
-						)?
-					}}
+					None
+				}}
+			} else {
+				quote! {
+					parsed.get(#name).expect("args shape is correct").clone()
 				}
 			}
-		})
-		.collect::<Vec<_>>();
+		}
+		ArgInfo::Location => quote! {location},
+		ArgInfo::This => quote! {self},
+	});
 
-	let fields = attrs.fields.iter().map(|field| {
+	let fields = attr.fields.iter().map(|field| {
 		let name = &field.name;
 		let ty = &field.ty;
 		quote! {
@@ -234,7 +278,7 @@ pub fn builtin(
 
 	let name = &fun.sig.ident;
 	let vis = &fun.vis;
-	let static_ext = if attrs.fields.is_empty() {
+	let static_ext = if attr.fields.is_empty() {
 		quote! {
 			impl #name {
 				pub const INST: &'static dyn StaticBuiltin = &#name {};
@@ -244,13 +288,13 @@ pub fn builtin(
 	} else {
 		quote! {}
 	};
-	let static_derive_copy = if attrs.fields.is_empty() {
+	let static_derive_copy = if attr.fields.is_empty() {
 		quote! {, Copy}
 	} else {
 		quote! {}
 	};
 
-	(quote! {
+	Ok(quote! {
 		#fun
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
@@ -260,12 +304,12 @@ pub fn builtin(
 		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
-				function::{Builtin, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
+				function::{Builtin, CallLocation, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
 				error::Result, Context,
 				parser::ExprLocation,
 			};
 			const PARAMS: &'static [BuiltinParam] = &[
-				#(#params),*
+				#(#params_desc),*
 			];
 
 			#static_ext
@@ -279,17 +323,16 @@ pub fn builtin(
 				fn params(&self) -> &[BuiltinParam] {
 					PARAMS
 				}
-				fn call(&self, context: Context, loc: Option<&ExprLocation>, args: &dyn ArgsLike) -> Result<Val> {
+				fn call(&self, context: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 					let parsed = parse_builtin_call(context, &PARAMS, args, false)?;
 
-					let result: #result = #name(#(#args),*);
+					let result: #result = #name(#(#pass),*);
 					let result = result?;
 					result.try_into()
 				}
 			}
 		};
 	})
-	.into()
 }
 
 #[derive(Default)]
@@ -366,15 +409,6 @@ impl<'f> TypedField<'f> {
 		)
 	}
 
-	fn expand_shallow_field(&self) -> Option<TokenStream> {
-		if self.is_option() {
-			return None;
-		}
-		let name = self.name()?;
-		Some(quote! {
-			(#name, ComplexValType::Any)
-		})
-	}
 	fn expand_field(&self) -> Option<TokenStream> {
 		if self.is_option() {
 			return None;
@@ -450,7 +484,7 @@ impl<'f> TypedField<'f> {
 	}
 
 	fn as_option(&self) -> Option<&Type> {
-		extract_type_from_option(&self.0.ty)
+		extract_type_from_option(&self.0.ty).unwrap()
 	}
 	fn is_option(&self) -> bool {
 		self.as_option().is_some()
@@ -460,25 +494,25 @@ impl<'f> TypedField<'f> {
 #[proc_macro_derive(Typed, attributes(typed))]
 pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(item as DeriveInput);
+
+	match derive_typed_inner(input) {
+		Ok(v) => v.into(),
+		Err(e) => e.to_compile_error().into(),
+	}
+}
+
+fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	let data = match &input.data {
 		syn::Data::Struct(s) => s,
-		_ => {
-			return syn::Error::new(input.span(), "only structs supported")
-				.to_compile_error()
-				.into()
-		}
+		_ => return Err(Error::new(input.span(), "only structs supported")),
 	};
 
 	let ident = &input.ident;
-	let fields = match data
+	let fields = data
 		.fields
 		.iter()
 		.map(TypedField::try_new)
-		.collect::<Result<Vec<_>>>()
-	{
-		Ok(v) => v,
-		Err(e) => return e.to_compile_error().into(),
-	};
+		.collect::<Result<Vec<_>>>()?;
 
 	let typed = {
 		let fields = fields
@@ -499,7 +533,7 @@ pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let fields_parse = fields.iter().map(TypedField::expand_parse);
 	let fields_serialize = fields.iter().map(TypedField::expand_serialize);
 
-	quote! {
+	Ok(quote! {
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				typed::{ComplexValType, Typed, TypedObj, CheckType},
@@ -540,6 +574,5 @@ pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 			}
 			()
 		};
-	}
-	.into()
+	})
 }

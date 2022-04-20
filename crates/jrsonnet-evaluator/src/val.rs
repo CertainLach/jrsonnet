@@ -6,14 +6,15 @@ use crate::{
 	error::{Error::*, LocError},
 	evaluate,
 	function::{
-		parse_default_function_call, parse_function_call, ArgsLike, Builtin, StaticBuiltin,
+		parse_default_function_call, parse_function_call, ArgsLike, Builtin, CallLocation,
+		StaticBuiltin,
 	},
 	gc::TraceBox,
 	throw, Context, ObjValue, Result,
 };
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ExprLocation, LocExpr, ParamsDesc};
+use jrsonnet_parser::{LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
@@ -152,7 +153,7 @@ impl FuncVal {
 	pub fn evaluate(
 		&self,
 		call_ctx: Context,
-		loc: Option<&ExprLocation>,
+		loc: CallLocation,
 		args: &dyn ArgsLike,
 		tailstrict: bool,
 	) -> Result<Val> {
@@ -166,7 +167,7 @@ impl FuncVal {
 		}
 	}
 	pub fn evaluate_simple(&self, args: &dyn ArgsLike) -> Result<Val> {
-		self.evaluate(Context::default(), None, args, true)
+		self.evaluate(Context::default(), CallLocation::native(), args, true)
 	}
 }
 

@@ -4,6 +4,7 @@ use crate::{
 	builtin::{std_slice, BUILTINS},
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	function::CallLocation,
 	gc::TraceBox,
 	push_frame, throw, with_state, ArrValue, Bindable, Context, ContextCreator, FuncDesc, FuncVal,
 	FutureWrapper, GcHashMap, LazyBinding, LazyVal, LazyValValue, ObjValue, ObjValueBuilder,
@@ -12,8 +13,8 @@ use crate::{
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, ExprLocation, FieldMember, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
+	LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 pub mod operator;
@@ -192,7 +193,7 @@ pub fn evaluate_field_name(
 	Ok(match field_name {
 		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
 		jrsonnet_parser::FieldName::Dyn(expr) => push_frame(
-			Some(&expr.1),
+			CallLocation::new(&expr.1),
 			|| "evaluating field name".to_string(),
 			|| {
 				let value = evaluate(context, expr)?;
@@ -442,7 +443,7 @@ pub fn evaluate_apply(
 	context: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: Option<&ExprLocation>,
+	loc: CallLocation,
 	tailstrict: bool,
 ) -> Result<Val> {
 	let value = evaluate(context.clone(), value)?;
@@ -463,13 +464,13 @@ pub fn evaluate_assert(context: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = push_frame(
-		Some(&value.1),
+		CallLocation::new(&value.1),
 		|| "assertion condition".to_owned(),
 		|| bool::try_from(evaluate(context.clone(), value)?),
 	)?;
 	if !assertion_result {
 		push_frame(
-			Some(&value.1),
+			CallLocation::new(&value.1),
 			|| "assertion failure".to_owned(),
 			|| {
 				if let Some(msg) = msg {
@@ -519,7 +520,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(context, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(context, v)?)?,
 		Var(name) => push_frame(
-			Some(loc),
+			CallLocation::new(loc),
 			|| format!("variable <{}> access", name),
 			|| context.binding(name.clone())?.evaluate(),
 		)?,
@@ -528,7 +529,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(v), Val::Str(s)) => {
 					let sn = s.clone();
 					push_frame(
-						Some(loc),
+						CallLocation::new(loc),
 						|| format!("field <{}> access", sn),
 						|| {
 							if let Some(v) = v.get(s.clone())? {
@@ -625,7 +626,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			&Val::Obj(evaluate_object(context, t)?),
 		)?,
 		Apply(value, args, tailstrict) => {
-			evaluate_apply(context, value, args, Some(loc), *tailstrict)?
+			evaluate_apply(context, value, args, CallLocation::new(loc), *tailstrict)?
 		}
 		Function(params, body) => {
 			evaluate_method(context, "anonymous".into(), params.clone(), body.clone())
@@ -640,7 +641,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate(context, returned)?
 		}
 		ErrorStmt(e) => push_frame(
-			Some(loc),
+			CallLocation::new(loc),
 			|| "error statement".to_owned(),
 			|| throw!(RuntimeError(IStr::try_from(evaluate(context, e)?)?,)),
 		)?,
@@ -650,7 +651,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			cond_else,
 		} => {
 			if push_frame(
-				Some(loc),
+				CallLocation::new(loc),
 				|| "if condition".to_owned(),
 				|| bool::try_from(evaluate(context.clone(), &cond.0)?),
 			)? {
@@ -689,7 +690,7 @@ pub fn evaluate(context: Context, expr: &LocExpr) -> Result<Val> {
 			let mut import_location = tmp.to_path_buf();
 			import_location.pop();
 			push_frame(
-				Some(loc),
+				CallLocation::new(loc),
 				|| format!("import {:?}", path),
 				|| with_state(|s| s.import_file(&import_location, path)),
 			)?

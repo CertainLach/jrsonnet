@@ -28,7 +28,7 @@ pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
-use function::{Builtin, TlaArg};
+use function::{Builtin, CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace, Weak};
 pub use import::*;
@@ -173,6 +173,7 @@ thread_local! {
 	/// Global state is fine here.
 	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
 }
+
 pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	EVAL_STATE.with(|s| {
 		f(s.borrow().as_ref().expect(
@@ -181,7 +182,7 @@ pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
 	})
 }
 pub fn push_frame<T>(
-	e: Option<&ExprLocation>,
+	e: CallLocation,
 	frame_desc: impl FnOnce() -> String,
 	f: impl FnOnce() -> Result<T>,
 ) -> Result<T> {
@@ -345,7 +346,7 @@ impl EvaluationState {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: Option<&ExprLocation>,
+		e: CallLocation,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -368,7 +369,7 @@ impl EvaluationState {
 		}
 		if let Err(mut err) = result {
 			err.trace_mut().0.push(StackTraceElement {
-				location: e.cloned(),
+				location: e.0.cloned(),
 				desc: frame_desc(),
 			});
 			return Err(err);
@@ -512,7 +513,7 @@ impl EvaluationState {
 					|| {
 						func.evaluate(
 							self.create_default_context(),
-							None,
+							CallLocation::native(),
 							&self.settings().tla_vars,
 							true,
 						)

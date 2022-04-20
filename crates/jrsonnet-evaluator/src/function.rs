@@ -12,6 +12,19 @@ pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
 use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
 
+#[derive(Clone, Copy)]
+pub struct CallLocation<'l>(pub Option<&'l ExprLocation>);
+impl<'l> CallLocation<'l> {
+	pub fn new(loc: &'l ExprLocation) -> Self {
+		Self(Some(loc))
+	}
+}
+impl CallLocation<'static> {
+	pub fn native() -> Self {
+		Self(None)
+	}
+}
+
 #[derive(Trace)]
 struct EvaluateLazyVal {
 	context: Context,
@@ -383,12 +396,7 @@ pub struct BuiltinParam {
 pub trait Builtin: Trace {
 	fn name(&self) -> &str;
 	fn params(&self) -> &[BuiltinParam];
-	fn call(
-		&self,
-		context: Context,
-		loc: Option<&ExprLocation>,
-		args: &dyn ArgsLike,
-	) -> Result<Val>;
+	fn call(&self, context: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
