@@ -1,6 +1,11 @@
+use crate::function::CallLocation;
 use crate::gc::{GcHashMap, GcHashSet, TraceBox};
 use crate::operator::evaluate_add_op;
-use crate::{cc_ptr_eq, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, Val};
+use crate::push_frame;
+use crate::{
+	cc_ptr_eq, error::Error::*, throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal,
+	Result, Val,
+};
 use gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
@@ -373,22 +378,29 @@ impl<'v> ObjMemberBuilder<'v> {
 		self.location = Some(location);
 		self
 	}
-	pub fn value(self, value: Val) -> &'v mut ObjValueBuilder {
+	pub fn value(self, value: Val) -> Result<()> {
 		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) -> &'v mut ObjValueBuilder {
+	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) -> Result<()> {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
 	}
-	pub fn binding(self, binding: LazyBinding) -> &'v mut ObjValueBuilder {
-		self.value.map.insert(
-			self.name,
+	pub fn binding(self, binding: LazyBinding) -> Result<()> {
+		let old = self.value.map.insert(
+			self.name.clone(),
 			ObjMember {
 				add: self.add,
 				visibility: self.visibility,
 				invoke: binding,
-				location: self.location,
+				location: self.location.clone(),
 			},
 		);
-		self.value
+		if old.is_some() {
+			push_frame(
+				CallLocation(self.location.as_ref()),
+				|| format!("field <{}> initializtion", self.name.clone()),
+				|| throw!(DuplicateFieldName(self.name.clone())),
+			)?
+		}
+		Ok(())
 	}
 }

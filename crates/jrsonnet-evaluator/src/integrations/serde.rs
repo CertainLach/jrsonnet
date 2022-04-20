@@ -68,7 +68,7 @@ impl TryFrom<&Value> for Val {
 			Value::Object(o) => {
 				let mut builder = ObjValueBuilder::with_capacity(o.len());
 				for (k, v) in o {
-					builder.member((k as &str).into()).value(v.try_into()?);
+					builder.member((k as &str).into()).value(v.try_into()?)?;
 				}
 				Self::Obj(builder.build())
 			}

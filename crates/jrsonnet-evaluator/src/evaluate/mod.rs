@@ -298,7 +298,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						context_creator: context_creator.clone(),
 						value: value.clone(),
 						name,
-					})));
+					})))?;
 			}
 			Member::Field(FieldMember {
 				name,
@@ -341,7 +341,7 @@ pub fn evaluate_member_list_object(context: Context, members: &[Member]) -> Resu
 						value: value.clone(),
 						params: params.clone(),
 						name,
-					})));
+					})))?;
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
@@ -424,7 +424,7 @@ pub fn evaluate_object(context: Context, object: &ObjBody) -> Result<ObjValue> {
 							.bindable(TraceBox(Box::new(ObjCompBinding {
 								context: ctx,
 								value: obj.value.clone(),
-							})));
+							})))?;
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}

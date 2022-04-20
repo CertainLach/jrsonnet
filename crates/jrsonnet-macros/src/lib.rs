@@ -459,12 +459,12 @@ impl<'f> TypedField<'f> {
 			if self.is_option() {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into()).value(value.try_into()?);
+						out.member(#name.into()).value(value.try_into()?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into()).value(self.#ident.try_into()?);
+					out.member(#name.into()).value(self.#ident.try_into()?)?;
 				}
 			}
 		} else if self.is_option() {

@@ -63,6 +63,8 @@ pub enum Error {
 
 	#[error("field name should be string, got {0}")]
 	FieldMustBeStringGot(ValType),
+	#[error("duplicate field name: {0}")]
+	DuplicateFieldName(IStr),
 
 	#[error("attempted to index array with string {0}")]
 	AttemptedIndexAnArrayWithString(IStr),
