@@ -1,5 +1,5 @@
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, EvaluationState};
+use jrsonnet_evaluator::{error::Result, State};
 
 use crate::{ConfigureState, ExtFile, ExtStr};
 
@@ -47,18 +47,18 @@ pub struct TLAOpts {
 	tla_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for TLAOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		for tla in self.tla_str.iter() {
-			state.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into());
+			s.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into());
 		}
 		for tla in self.tla_str_file.iter() {
-			state.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into())
+			s.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into())
 		}
 		for tla in self.tla_code.iter() {
-			state.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
+			s.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
 		}
 		for tla in self.tla_code_file.iter() {
-			state.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
+			s.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
 		}
 		Ok(())
 	}

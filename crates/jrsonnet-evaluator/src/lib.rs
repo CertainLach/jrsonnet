@@ -47,7 +47,12 @@ use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat,
 pub use val::{LazyVal, ManifestFormat, Val};
 
 pub trait Bindable: Trace + 'static {
-	fn bind(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal>;
+	fn bind(
+		&self,
+		s: State,
+		this: Option<ObjValue>,
+		super_obj: Option<ObjValue>,
+	) -> Result<LazyVal>;
 }
 
 #[derive(Clone, Trace)]
@@ -62,9 +67,14 @@ impl Debug for LazyBinding {
 	}
 }
 impl LazyBinding {
-	pub fn evaluate(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<LazyVal> {
+	pub fn evaluate(
+		&self,
+		s: State,
+		this: Option<ObjValue>,
+		super_obj: Option<ObjValue>,
+	) -> Result<LazyVal> {
 		match self {
-			Self::Bindable(v) => v.bind(this, super_obj),
+			Self::Bindable(v) => v.bind(s, this, super_obj),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
@@ -173,48 +183,11 @@ pub struct EvaluationStateInternals {
 	settings: RefCell<EvaluationSettings>,
 }
 
-thread_local! {
-	/// Contains the state for a currently executed file.
-	/// Global state is fine here.
-	pub(crate) static EVAL_STATE: RefCell<Option<EvaluationState>> = RefCell::new(None)
-}
-
-pub(crate) fn with_state<T>(f: impl FnOnce(&EvaluationState) -> T) -> T {
-	EVAL_STATE.with(|s| {
-		f(s.borrow().as_ref().expect(
-			"missing evaluation state, some functions should be called inside of run_in_state call",
-		))
-	})
-}
-pub fn push_frame<T>(
-	e: CallLocation,
-	frame_desc: impl FnOnce() -> String,
-	f: impl FnOnce() -> Result<T>,
-) -> Result<T> {
-	with_state(|s| s.push(e, frame_desc, f))
-}
-
-#[allow(dead_code)]
-pub fn push_val_frame(
-	e: &ExprLocation,
-	frame_desc: impl FnOnce() -> String,
-	f: impl FnOnce() -> Result<Val>,
-) -> Result<Val> {
-	with_state(|s| s.push_val(e, frame_desc, f))
-}
-#[allow(dead_code)]
-pub fn push_description_frame<T>(
-	frame_desc: impl FnOnce() -> String,
-	f: impl FnOnce() -> Result<T>,
-) -> Result<T> {
-	with_state(|s| s.push_description(frame_desc, f))
-}
-
 /// Maintains stack trace and import resolution
 #[derive(Default, Clone)]
-pub struct EvaluationState(Rc<EvaluationStateInternals>);
+pub struct State(Rc<EvaluationStateInternals>);
 
-impl EvaluationState {
+impl State {
 	/// Parses and adds file as loaded
 	pub fn add_file(&self, path: Rc<Path>, source_code: IStr) -> Result<LocExpr> {
 		let parsed = parse(
@@ -317,7 +290,7 @@ impl EvaluationState {
 			}
 			value.parsed.clone()
 		};
-		let value = evaluate(self.create_default_context(), &expr)?;
+		let value = evaluate(self.clone(), self.create_default_context(), &expr)?;
 		{
 			self.data_mut()
 				.files
@@ -333,16 +306,15 @@ impl EvaluationState {
 	pub fn with_stdlib(&self) -> &Self {
 		use jrsonnet_stdlib::STDLIB_STR;
 		let std_path: Rc<Path> = PathBuf::from("std.jsonnet").into();
-		self.run_in_state(|| {
-			self.add_parsed_file(
-				std_path.clone(),
-				STDLIB_STR.to_owned().into(),
-				builtin::get_parsed_stdlib(),
-			)
-			.unwrap();
-			let val = self.evaluate_loaded_file_raw(&std_path).unwrap();
-			self.settings_mut().globals.insert("std".into(), val);
-		});
+
+		self.add_parsed_file(
+			std_path.clone(),
+			STDLIB_STR.to_owned().into(),
+			builtin::get_parsed_stdlib(),
+		)
+		.unwrap();
+		let val = self.evaluate_loaded_file_raw(&std_path).unwrap();
+		self.settings_mut().globals.insert("std".into(), val);
 		self
 	}
 
@@ -459,40 +431,6 @@ impl EvaluationState {
 		result
 	}
 
-	/// Runs passed function in state (required if function needs to modify stack trace)
-	pub fn run_in_state<T>(&self, f: impl FnOnce() -> T) -> T {
-		EVAL_STATE.with(|v| {
-			let has_state = v.borrow().is_some();
-			if !has_state {
-				v.borrow_mut().replace(self.clone());
-			}
-			let result = f();
-			if !has_state {
-				v.borrow_mut().take();
-			}
-			result
-		})
-	}
-	pub fn run_in_state_with_breakpoint(
-		&self,
-		bp: Rc<Breakpoint>,
-		f: impl FnOnce() -> Result<()>,
-	) -> Result<()> {
-		{
-			let mut data = self.data_mut();
-			data.breakpoints.0.push(bp);
-		}
-
-		let result = self.run_in_state(f);
-
-		{
-			let mut data = self.data_mut();
-			data.breakpoints.0.pop();
-		}
-
-		result
-	}
-
 	pub fn stringify_err(&self, e: &LocError) -> String {
 		let mut out = String::new();
 		self.settings()
@@ -503,43 +441,40 @@ impl EvaluationState {
 	}
 
 	pub fn manifest(&self, val: Val) -> Result<IStr> {
-		self.run_in_state(|| {
-			push_description_frame(
-				|| "manifestification".to_string(),
-				|| val.manifest(&self.manifest_format()),
-			)
-		})
+		self.push_description(
+			|| "manifestification".to_string(),
+			|| val.manifest(self.clone(), &self.manifest_format()),
+		)
 	}
 	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(IStr, IStr)>> {
-		self.run_in_state(|| val.manifest_multi(&self.manifest_format()))
+		val.manifest_multi(self.clone(), &self.manifest_format())
 	}
 	pub fn manifest_stream(&self, val: Val) -> Result<Vec<IStr>> {
-		self.run_in_state(|| val.manifest_stream(&self.manifest_format()))
+		val.manifest_stream(self.clone(), &self.manifest_format())
 	}
 
 	/// If passed value is function then call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
-		self.run_in_state(|| {
-			Ok(match val {
-				Val::Func(func) => push_description_frame(
-					|| "during TLA call".to_owned(),
-					|| {
-						func.evaluate(
-							self.create_default_context(),
-							CallLocation::native(),
-							&self.settings().tla_vars,
-							true,
-						)
-					},
-				)?,
-				v => v,
-			})
+		Ok(match val {
+			Val::Func(func) => self.push_description(
+				|| "during TLA call".to_owned(),
+				|| {
+					func.evaluate(
+						self.clone(),
+						self.create_default_context(),
+						CallLocation::native(),
+						&self.settings().tla_vars,
+						true,
+					)
+				},
+			)?,
+			v => v,
 		})
 	}
 }
 
 /// Internals
-impl EvaluationState {
+impl State {
 	fn data(&self) -> Ref<EvaluationData> {
 		self.0.data.borrow()
 	}
@@ -555,12 +490,12 @@ impl EvaluationState {
 }
 
 /// Raw methods evaluate passed values but don't perform TLA execution
-impl EvaluationState {
+impl State {
 	pub fn evaluate_file_raw(&self, name: &Path) -> Result<Val> {
-		self.run_in_state(|| self.import_file(&std::env::current_dir().expect("cwd"), name))
+		self.import_file(&std::env::current_dir().expect("cwd"), name)
 	}
 	pub fn evaluate_file_raw_nocwd(&self, name: &Path) -> Result<Val> {
-		self.run_in_state(|| self.import_file(&PathBuf::from("."), name))
+		self.import_file(&PathBuf::from("."), name)
 	}
 	/// Parses and evaluates the given snippet
 	pub fn evaluate_snippet_raw(&self, source: Rc<Path>, code: IStr) -> Result<Val> {
@@ -580,12 +515,12 @@ impl EvaluationState {
 	}
 	/// Evaluates the parsed expression
 	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
-		self.run_in_state(|| evaluate(self.create_default_context(), &code))
+		evaluate(self.clone(), self.create_default_context(), &code)
 	}
 }
 
 /// Settings utilities
-impl EvaluationState {
+impl State {
 	pub fn add_ext_var(&self, name: IStr, value: Val) {
 		self.settings_mut().ext_vars.insert(name, value);
 	}
@@ -712,38 +647,36 @@ pub mod tests {
 		gc::TraceBox,
 		native::NativeCallbackHandler,
 		val::primitive_equals,
-		EvaluationState,
+		State,
 	};
 
 	#[test]
 	#[should_panic]
 	fn eval_state_stacktrace() {
-		let state = EvaluationState::default();
-		state.run_in_state(|| {
-			state
-				.push(
-					CallLocation::new(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
-					|| "outer".to_owned(),
-					|| {
-						state.push(
-							CallLocation::new(&ExprLocation(
-								PathBuf::from("test2.jsonnet").into(),
-								30,
-								40,
-							)),
-							|| "inner".to_owned(),
-							|| Err(RuntimeError("".into()).into()),
-						)?;
-						Ok(Val::Null)
-					},
-				)
-				.unwrap();
-		});
+		let state = State::default();
+		state
+			.push(
+				CallLocation::new(&ExprLocation(PathBuf::from("test1.jsonnet").into(), 10, 20)),
+				|| "outer".to_owned(),
+				|| {
+					state.push(
+						CallLocation::new(&ExprLocation(
+							PathBuf::from("test2.jsonnet").into(),
+							30,
+							40,
+						)),
+						|| "inner".to_owned(),
+						|| Err(RuntimeError("".into()).into()),
+					)?;
+					Ok(Val::Null)
+				},
+			)
+			.unwrap();
 	}
 
 	#[test]
 	fn eval_state_standard() {
-		let state = EvaluationState::default();
+		let state = State::default();
 		state.with_stdlib();
 		assert!(primitive_equals(
 			&state
@@ -759,27 +692,23 @@ pub mod tests {
 
 	macro_rules! eval {
 		($str: expr) => {{
-			let evaluator = EvaluationState::default();
+			let evaluator = State::default();
 			evaluator.with_stdlib();
-			evaluator.run_in_state(|| {
-				evaluator
-					.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
-					.unwrap()
-			})
+			evaluator
+				.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
+				.unwrap()
 		}};
 	}
 	macro_rules! eval_json {
 		($str: expr) => {{
-			let evaluator = EvaluationState::default();
+			let evaluator = State::default();
 			evaluator.with_stdlib();
-			evaluator.run_in_state(|| {
-				evaluator
-					.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
-					.unwrap()
-					.to_json(0)
-					.unwrap()
-					.replace("\n", "")
-			})
+			evaluator
+				.evaluate_snippet_raw(PathBuf::from("raw.jsonnet").into(), $str.into())
+				.unwrap()
+				.to_json(0)
+				.unwrap()
+				.replace("\n", "")
 		}};
 	}
 
@@ -1143,7 +1072,7 @@ pub mod tests {
 	#[test]
 	fn native_ext() -> crate::error::Result<()> {
 		use super::native::NativeCallback;
-		let evaluator = EvaluationState::default();
+		let evaluator = State::default();
 
 		evaluator.with_stdlib();
 
@@ -1178,10 +1107,12 @@ pub mod tests {
 				TraceBox(Box::new(NativeAdd)),
 			)))),
 		);
+		dbg!(evaluator.settings().ext_natives.keys().collect::<Vec<_>>());
 		evaluator.evaluate_snippet_raw(
 			PathBuf::from("native_caller.jsonnet").into(),
 			"std.assertEqual(std.native(\"native_add\")(1, 2), 3)".into(),
 		)?;
+		dbg!(evaluator.settings().ext_natives.keys().collect::<Vec<_>>());
 		Ok(())
 	}
 
@@ -1250,14 +1181,14 @@ pub mod tests {
 
 	#[test]
 	fn issue_23() {
-		let state = EvaluationState::default();
+		let state = State::default();
 		state.set_import_resolver(Box::new(TestImportResolver(r#"import "/test""#.into())));
 		let _ = state.evaluate_file_raw(&PathBuf::from("/test"));
 	}
 
 	#[test]
 	fn issue_40() {
-		let state = EvaluationState::default();
+		let state = State::default();
 		state.with_stdlib();
 
 		let error = state
@@ -1306,7 +1237,7 @@ pub mod tests {
 	mod derive_typed {
 		use std::path::PathBuf;
 
-		use crate::{typed::Typed, EvaluationState};
+		use crate::{typed::Typed, State};
 
 		#[derive(PartialEq, Debug, Typed)]
 		struct MyTyped {
@@ -1317,9 +1248,9 @@ pub mod tests {
 
 		#[test]
 		fn test() {
-			let es = EvaluationState::default();
+			let es = State::default();
 			let val = eval!("{a: 14, b: 'Hello, world!'}");
-			let typed = es.run_in_state(|| MyTyped::try_from(val).unwrap());
+			let typed = MyTyped::try_from(val).unwrap();
 
 			assert_eq!(
 				typed,
@@ -1328,10 +1259,9 @@ pub mod tests {
 					c: "Hello, world!".to_string()
 				}
 			);
-			es.settings_mut().globals.insert(
-				"mytyped".into(),
-				es.run_in_state(|| typed.try_into()).unwrap(),
-			);
+			es.settings_mut()
+				.globals
+				.insert("mytyped".into(), typed.try_into().unwrap());
 
 			let v = es
 				.evaluate_snippet_raw(

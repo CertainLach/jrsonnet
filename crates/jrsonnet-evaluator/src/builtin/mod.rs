@@ -1,7 +1,4 @@
-use std::{
-	collections::HashMap,
-	convert::{TryFrom, TryInto},
-};
+use std::collections::HashMap;
 
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
@@ -14,10 +11,10 @@ use crate::{
 	error::{Error::*, Result},
 	function::{CallLocation, StaticBuiltin},
 	operator::evaluate_mod_op,
-	push_frame, throw,
-	typed::{Any, BoundedUsize, Bytes, Either2, Either4, PositiveF64, VecVal, M1},
+	throw,
+	typed::{Any, BoundedUsize, Bytes, Either2, Either4, PositiveF64, Typed, VecVal, M1},
 	val::{equals, primitive_equals, ArrValue, FuncVal, IndexableVal, Slice},
-	with_state, Either, ObjValue, Val,
+	Either, ObjValue, State, Val,
 };
 
 pub mod stdlib;
@@ -29,15 +26,15 @@ pub mod format;
 pub mod manifest;
 pub mod sort;
 
-pub fn std_format(str: IStr, vals: Val) -> Result<String> {
-	push_frame(
+pub fn std_format(s: State, str: IStr, vals: Val) -> Result<String> {
+	s.push(
 		CallLocation::native(),
 		|| format!("std.format of {}", str),
 		|| {
 			Ok(match vals {
-				Val::Arr(vals) => format_arr(&str, &vals.evaluated()?)?,
-				Val::Obj(obj) => format_obj(&str, &obj)?,
-				o => format_arr(&str, &[o])?,
+				Val::Arr(vals) => format_arr(s.clone(), &str, &vals.evaluated(s.clone())?)?,
+				Val::Obj(obj) => format_obj(s.clone(), &str, &obj)?,
+				o => format_arr(s.clone(), &str, &[o])?,
 			})
 		},
 	)
@@ -173,10 +170,10 @@ fn builtin_type(x: Any) -> Result<IStr> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_make_array(sz: usize, func: FuncVal) -> Result<VecVal> {
+fn builtin_make_array(s: State, sz: usize, func: FuncVal) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
-		out.push(func.evaluate_simple(&[i as f64].as_slice())?)
+		out.push(func.evaluate_simple(s.clone(), &[i as f64].as_slice())?)
 	}
 	Ok(VecVal(Cc::new(out)))
 }
@@ -210,23 +207,25 @@ fn builtin_object_has_ex(obj: ObjValue, f: IStr, inc_hidden: bool) -> Result<boo
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_parse_json(s: IStr) -> Result<Any> {
-	let value: serde_json::Value = serde_json::from_str(&s)
+fn builtin_parse_json(st: State, s: IStr) -> Result<Any> {
+	use serde_json::Value;
+	let value: Value = serde_json::from_str(&s)
 		.map_err(|e| RuntimeError(format!("failed to parse json: {}", e).into()))?;
-	Ok(Any(Val::try_from(&value)?))
+	Ok(Any(Value::into_untyped(value, st)?))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_parse_yaml(s: IStr) -> Result<Any> {
+fn builtin_parse_yaml(st: State, s: IStr) -> Result<Any> {
+	use serde_json::Value;
 	let value = serde_yaml::Deserializer::from_str_with_quirks(
 		&s,
 		DeserializingQuirks { old_octals: true },
 	);
 	let mut out = vec![];
 	for item in value {
-		let value = serde_json::Value::deserialize(item)
+		let value = Value::deserialize(item)
 			.map_err(|e| RuntimeError(format!("failed to parse yaml: {}", e).into()))?;
-		let val = Val::try_from(&value)?;
+		let val = Value::into_untyped(value, st.clone())?;
 		out.push(val);
 	}
 	Ok(Any(if out.is_empty() {
@@ -259,8 +258,8 @@ fn builtin_primitive_equals(a: Any, b: Any) -> Result<bool> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_equals(a: Any, b: Any) -> Result<bool> {
-	equals(&a.0, &b.0)
+fn builtin_equals(s: State, a: Any, b: Any) -> Result<bool> {
+	equals(s, &a.0, &b.0)
 }
 
 #[jrsonnet_macros::builtin]
@@ -269,9 +268,10 @@ fn builtin_modulo(a: f64, b: f64) -> Result<f64> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_mod(a: Either![f64, IStr], b: Any) -> Result<Any> {
+fn builtin_mod(s: State, a: Either![f64, IStr], b: Any) -> Result<Any> {
 	use Either2::*;
 	Ok(Any(evaluate_mod_op(
+		s,
 		&match a {
 			A(v) => Val::Num(v),
 			B(s) => Val::Str(s),
@@ -362,35 +362,49 @@ fn builtin_exponent(x: f64) -> Result<i16> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_ext_var(x: IStr) -> Result<Any> {
-	Ok(Any(with_state(|s| s.settings().ext_vars.get(&x).cloned())
+fn builtin_ext_var(s: State, x: IStr) -> Result<Any> {
+	Ok(Any(s
+		.settings()
+		.ext_vars
+		.get(&x)
+		.cloned()
 		.ok_or(UndefinedExternalVariable(x))?))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_native(name: IStr) -> Result<FuncVal> {
-	Ok(with_state(|s| s.settings().ext_natives.get(&name).cloned())
+fn builtin_native(s: State, name: IStr) -> Result<FuncVal> {
+	Ok(s.settings()
+		.ext_natives
+		.get(&name)
+		.cloned()
 		.map(|v| FuncVal::Builtin(v.clone()))
 		.ok_or(UndefinedExternalFunction(name))?)
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::try_from(func.evaluate_simple(&[Any(val.clone())].as_slice())?))
+fn builtin_filter(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
+	arr.filter(s.clone(), |val| {
+		bool::from_untyped(
+			func.evaluate_simple(s.clone(), &[Any(val.clone())].as_slice())?,
+			s.clone(),
+		)
+	})
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_map(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.map(|val| func.evaluate_simple(&[Any(val)].as_slice()))
+fn builtin_map(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
+	arr.map(s.clone(), |val| {
+		func.evaluate_simple(s.clone(), &[Any(val)].as_slice())
+	})
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_flatmap(func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
+fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
 	match arr {
-		IndexableVal::Str(s) => {
+		IndexableVal::Str(str) => {
 			let mut out = String::new();
-			for c in s.chars() {
-				match func.evaluate_simple(&[c.to_string()].as_slice())? {
+			for c in str.chars() {
+				match func.evaluate_simple(s.clone(), &[c.to_string()].as_slice())? {
 					Val::Str(o) => out.push_str(&o),
 					_ => throw!(RuntimeError(
 						"in std.join all items should be strings".into()
@@ -401,11 +415,11 @@ fn builtin_flatmap(func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
 		}
 		IndexableVal::Arr(a) => {
 			let mut out = Vec::new();
-			for el in a.iter() {
+			for el in a.iter(s.clone()) {
 				let el = el?;
-				match func.evaluate_simple(&[Any(el)].as_slice())? {
+				match func.evaluate_simple(s.clone(), &[Any(el)].as_slice())? {
 					Val::Arr(o) => {
-						for oe in o.iter() {
+						for oe in o.iter(s.clone()) {
 							out.push(oe?)
 						}
 					}
@@ -420,38 +434,39 @@ fn builtin_flatmap(func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
+fn builtin_foldl(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
-	for i in arr.iter() {
-		acc = func.evaluate_simple(&[Any(acc), Any(i?)].as_slice())?;
+	for i in arr.iter(s.clone()) {
+		acc = func.evaluate_simple(s.clone(), &[Any(acc), Any(i?)].as_slice())?;
 	}
 	Ok(Any(acc))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
+fn builtin_foldr(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
-	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&[Any(i?), Any(acc)].as_slice())?;
+	for i in arr.iter(s.clone()).rev() {
+		acc = func.evaluate_simple(s.clone(), &[Any(i?), Any(acc)].as_slice())?;
 	}
 	Ok(Any(acc))
 }
 
 #[jrsonnet_macros::builtin]
 #[allow(non_snake_case)]
-fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+fn builtin_sort(s: State, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
 	Ok(ArrValue::Eager(sort::sort(
-		arr.evaluated()?,
+		s.clone(),
+		arr.evaluated(s)?,
 		keyF.as_ref(),
 	)?))
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_format(str: IStr, vals: Any) -> Result<String> {
-	std_format(str, vals.0)
+fn builtin_format(s: State, str: IStr, vals: Any) -> Result<String> {
+	std_format(s, str, vals.0)
 }
 
 #[jrsonnet_macros::builtin]
@@ -485,17 +500,15 @@ fn builtin_md5(str: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_trace(loc: CallLocation, str: IStr, rest: Any) -> Result<Any> {
+fn builtin_trace(s: State, loc: CallLocation, str: IStr, rest: Any) -> Result<Any> {
 	eprint!("TRACE:");
 	if let Some(loc) = loc.0 {
-		with_state(|s| {
-			let locs = s.map_source_locations(&loc.0, &[loc.1]);
-			eprint!(
-				" {}:{}",
-				loc.0.file_name().unwrap().to_str().unwrap(),
-				locs[0].line
-			);
-		});
+		let locs = s.map_source_locations(&loc.0, &[loc.1]);
+		eprint!(
+			" {}:{}",
+			loc.0.file_name().unwrap().to_str().unwrap(),
+			locs[0].line
+		);
 	}
 	eprintln!(" {}", str);
 	Ok(rest) as Result<Any>
@@ -526,26 +539,25 @@ fn builtin_base64_decode(input: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
+fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 	Ok(match sep {
 		IndexableVal::Arr(joiner_items) => {
 			let mut out = Vec::new();
 
 			let mut first = true;
-			for item in arr.iter() {
+			for item in arr.iter(s.clone()) {
 				let item = item?.clone();
 				if let Val::Arr(items) = item {
 					if !first {
 						out.reserve(joiner_items.len());
 						// TODO: extend
-						for item in joiner_items.iter() {
+						for item in joiner_items.iter(s.clone()) {
 							out.push(item?);
 						}
 					}
 					first = false;
 					out.reserve(items.len());
-					// TODO: extend
-					for item in items.iter() {
+					for item in items.iter(s.clone()) {
 						out.push(item?);
 					}
 				} else {
@@ -561,7 +573,7 @@ fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 			let mut out = String::new();
 
 			let mut first = true;
-			for item in arr.iter() {
+			for item in arr.iter(s) {
 				let item = item?.clone();
 				if let Val::Str(item) = item {
 					if !first {
@@ -588,6 +600,7 @@ fn builtin_escape_string_json(str_: IStr) -> Result<String> {
 
 #[jrsonnet_macros::builtin]
 fn builtin_manifest_json_ex(
+	s: State,
 	value: Any,
 	indent: IStr,
 	newline: Option<IStr>,
@@ -597,6 +610,7 @@ fn builtin_manifest_json_ex(
 	let newline = newline.as_deref().unwrap_or("\n");
 	let key_val_sep = key_val_sep.as_deref().unwrap_or(": ");
 	manifest_json_ex(
+		s,
 		&value.0,
 		&ManifestJsonOptions {
 			padding: &indent,
@@ -611,12 +625,14 @@ fn builtin_manifest_json_ex(
 
 #[jrsonnet_macros::builtin]
 fn builtin_manifest_yaml_doc(
+	s: State,
 	value: Any,
 	indent_array_in_object: Option<bool>,
 	quote_keys: Option<bool>,
 	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<String> {
 	manifest_yaml_ex(
+		s,
 		&value.0,
 		&ManifestYamlOptions {
 			padding: "  ",
@@ -670,16 +686,16 @@ fn builtin_ascii_lower(str: IStr) -> Result<String> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
+fn builtin_member(s: State, arr: IndexableVal, x: Any) -> Result<bool> {
 	match arr {
-		IndexableVal::Str(s) => {
-			let x: IStr = IStr::try_from(x.0)?;
-			Ok(!x.is_empty() && s.contains(&*x))
+		IndexableVal::Str(str) => {
+			let x: IStr = IStr::from_untyped(x.0, s)?;
+			Ok(!x.is_empty() && str.contains(&*x))
 		}
 		IndexableVal::Arr(a) => {
-			for item in a.iter() {
+			for item in a.iter(s.clone()) {
 				let item = item?;
-				if equals(&item, &x.0)? {
+				if equals(s.clone(), &item, &x.0)? {
 					return Ok(true);
 				}
 			}
@@ -689,10 +705,10 @@ fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
+fn builtin_count(s: State, arr: Vec<Any>, v: Any) -> Result<usize> {
 	let mut count = 0;
 	for item in arr.iter() {
-		if equals(&item.0, &v.0)? {
+		if equals(s.clone(), &item.0, &v.0)? {
 			count += 1;
 		}
 	}
@@ -700,9 +716,9 @@ fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_any(arr: ArrValue) -> Result<bool> {
-	for v in arr.iter() {
-		let v: bool = v?.try_into()?;
+fn builtin_any(s: State, arr: ArrValue) -> Result<bool> {
+	for v in arr.iter(s.clone()) {
+		let v = bool::from_untyped(v?, s.clone())?;
 		if v {
 			return Ok(true);
 		}
@@ -711,9 +727,9 @@ fn builtin_any(arr: ArrValue) -> Result<bool> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_all(arr: ArrValue) -> Result<bool> {
-	for v in arr.iter() {
-		let v: bool = v?.try_into()?;
+fn builtin_all(s: State, arr: ArrValue) -> Result<bool> {
+	for v in arr.iter(s.clone()) {
+		let v = bool::from_untyped(v?, s.clone())?;
 		if !v {
 			return Ok(false);
 		}

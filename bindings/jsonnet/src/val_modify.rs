@@ -5,17 +5,13 @@
 use std::{ffi::CStr, os::raw::c_char};
 
 use gcmodule::Cc;
-use jrsonnet_evaluator::{val::ArrValue, EvaluationState, LazyVal, Val};
+use jrsonnet_evaluator::{val::ArrValue, LazyVal, State, Val};
 
 /// # Safety
 ///
 /// Received arr value should be correct pointer to array allocated by make_array
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_json_array_append(
-	_vm: &EvaluationState,
-	arr: &mut Val,
-	val: &Val,
-) {
+pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, val: &Val) {
 	match arr {
 		Val::Arr(old) => {
 			let mut new = Vec::new();
@@ -34,7 +30,7 @@ pub unsafe extern "C" fn jsonnet_json_array_append(
 /// This function is safe if passed name is ok
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_object_append(
-	_vm: &EvaluationState,
+	_vm: &State,
 	obj: &mut Val,
 	name: *const c_char,
 	val: &Val,

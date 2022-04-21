@@ -7,13 +7,13 @@ use std::{env, path::PathBuf};
 
 use clap::Parser;
 pub use ext::*;
-use jrsonnet_evaluator::{error::Result, EvaluationState, FileImportResolver};
+use jrsonnet_evaluator::{error::Result, FileImportResolver, State};
 pub use manifest::*;
 pub use tla::*;
 pub use trace::*;
 
 pub trait ConfigureState {
-	fn configure(&self, state: &EvaluationState) -> Result<()>;
+	fn configure(&self, s: &State) -> Result<()>;
 }
 
 #[derive(Parser)]
@@ -50,9 +50,9 @@ pub struct MiscOpts {
 	jpath: Vec<PathBuf>,
 }
 impl ConfigureState for MiscOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		if !self.no_stdlib {
-			state.with_stdlib();
+			s.with_stdlib();
 		}
 
 		let mut library_paths = self.jpath.clone();
@@ -61,9 +61,9 @@ impl ConfigureState for MiscOpts {
 			library_paths.extend(env::split_paths(path.as_os_str()));
 		}
 
-		state.set_import_resolver(Box::new(FileImportResolver { library_paths }));
+		s.set_import_resolver(Box::new(FileImportResolver { library_paths }));
 
-		state.set_max_stack(self.max_stack);
+		s.set_max_stack(self.max_stack);
 		Ok(())
 	}
 }
@@ -85,12 +85,12 @@ pub struct GeneralOpts {
 }
 
 impl ConfigureState for GeneralOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		// Configure trace first, because tla-code/ext-code can throw
-		self.trace.configure(state)?;
-		self.misc.configure(state)?;
-		self.tla.configure(state)?;
-		self.ext.configure(state)?;
+		self.trace.configure(s)?;
+		self.misc.configure(s)?;
+		self.tla.configure(s)?;
+		self.ext.configure(s)?;
 		Ok(())
 	}
 }

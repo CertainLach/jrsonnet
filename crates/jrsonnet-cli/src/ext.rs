@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, EvaluationState};
+use jrsonnet_evaluator::{error::Result, State};
 
 use crate::ConfigureState;
 
@@ -100,18 +100,18 @@ pub struct ExtVarOpts {
 	ext_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for ExtVarOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		for ext in self.ext_str.iter() {
-			state.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
+			s.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
 		for ext in self.ext_str_file.iter() {
-			state.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
+			s.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
 		for ext in self.ext_code.iter() {
-			state.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
+			s.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
 		}
 		for ext in self.ext_code_file.iter() {
-			state.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
+			s.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
 		}
 		Ok(())
 	}

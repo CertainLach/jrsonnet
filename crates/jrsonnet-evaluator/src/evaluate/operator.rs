@@ -1,9 +1,8 @@
-use std::convert::TryInto;
-
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
-	builtin::std_format, error::Error::*, evaluate, throw, val::equals, Context, Result, Val,
+	builtin::std_format, error::Error::*, evaluate, throw, typed::Typed, val::equals, Context,
+	Result, State, Val,
 };
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
@@ -17,7 +16,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
+pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	Ok(match (a, b) {
 		(Str(v1), Str(v2)) => Str(((**v1).to_owned() + v2).into()),
@@ -26,8 +25,8 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Num(n), Str(o)) => Str(format!("{}{}", n, o).into()),
 		(Str(o), Num(n)) => Str(format!("{}{}", o, n).into()),
 
-		(Str(s), o) => Str(format!("{}{}", s, o.clone().to_string()?).into()),
-		(o, Str(s)) => Str(format!("{}{}", o.clone().to_string()?, s).into()),
+		(Str(a), o) => Str(format!("{}{}", a, o.clone().to_string(s)?).into()),
+		(o, Str(a)) => Str(format!("{}{}", o.clone().to_string(s)?, a).into()),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => {
@@ -45,11 +44,13 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
+pub fn evaluate_mod_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	match (a, b) {
 		(Num(a), Num(b)) => Ok(Num(a % b)),
-		(Str(str), vals) => std_format(str.clone(), vals.clone())?.try_into(),
+		(Str(str), vals) => {
+			String::into_untyped(std_format(s.clone(), str.clone(), vals.clone())?, s)
+		}
 		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mod,
 			a.value_type(),
@@ -59,31 +60,32 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 }
 
 pub fn evaluate_binary_op_special(
-	context: Context,
+	s: State,
+	ctx: Context,
 	a: &LocExpr,
 	op: BinaryOpType,
 	b: &LocExpr,
 ) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
-	Ok(match (evaluate(context.clone(), a)?, op, b) {
+	Ok(match (evaluate(s.clone(), ctx.clone(), a)?, op, b) {
 		(Bool(true), Or, _o) => Val::Bool(true),
 		(Bool(false), And, _o) => Val::Bool(false),
-		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(context, eb)?)?,
+		(a, op, eb) => evaluate_binary_op_normal(s.clone(), &a, op, &evaluate(s, ctx, eb)?)?,
 	})
 }
 
-pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
+pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
-		(a, Add, b) => evaluate_add_op(a, b)?,
+		(a, Add, b) => evaluate_add_op(s, a, b)?,
 
-		(a, Eq, b) => Bool(equals(a, b)?),
-		(a, Neq, b) => Bool(!equals(a, b)?),
+		(a, Eq, b) => Bool(equals(s, a, b)?),
+		(a, Neq, b) => Bool(!equals(s, a, b)?),
 
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
-		(a, Mod, b) => evaluate_mod_op(a, b)?,
+		(a, Mod, b) => evaluate_mod_op(s, a, b)?,
 
 		(Str(v1), Mul, Num(v2)) => Str(v1.repeat(*v2 as usize).into()),
 

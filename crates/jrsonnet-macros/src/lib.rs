@@ -129,6 +129,7 @@ enum ArgInfo {
 		is_option: bool,
 		name: String,
 	},
+	State,
 	Location,
 	This,
 }
@@ -144,7 +145,9 @@ impl ArgInfo {
 			_ => return Err(Error::new(arg.pat.span(), "arg should be plain identifier")),
 		};
 		let ty = &arg.ty;
-		if type_is_path(ty, "CallLocation").is_some() {
+		if type_is_path(ty, "State").is_some() {
+			return Ok(Self::State);
+		} else if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
 		} else if type_is_path(ty, "Self").is_some() {
 			return Ok(Self::This);
@@ -208,6 +211,24 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		}
 		ReturnType::Type(_, ref ty) => ty.clone(),
 	};
+	let result_inner = if let Some(args) = type_is_path(&result, "Result") {
+		let generic_arg = match args {
+			PathArguments::AngleBracketed(params) => params.args.iter().next().unwrap(),
+			_ => return Err(Error::new(args.span(), "missing result generic")),
+		};
+		// This argument must be a type:
+		match generic_arg {
+			GenericArgument::Type(ty) => ty,
+			_ => {
+				return Err(Error::new(
+					generic_arg.span(),
+					"option generic should be a type",
+				))
+			}
+		}
+	} else {
+		return Err(Error::new(result.span(), "return value should be result"));
+	};
 
 	let args = fun
 		.sig
@@ -235,6 +256,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				has_default: #is_option,
 			},
 		}),
+		ArgInfo::State => None,
 		ArgInfo::Location => None,
 		ArgInfo::This => None,
 	});
@@ -246,9 +268,9 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 			name,
 			cfg_attrs,
 		} => {
-			let eval = quote! {::jrsonnet_evaluator::push_description_frame(
+			let eval = quote! {s.push_description(
 				|| format!("argument <{}> evaluation", #name),
-				|| <#ty>::try_from(value.evaluate()?),
+				|| <#ty>::from_untyped(value.evaluate(s.clone())?, s.clone()),
 			)?};
 			let value = if *is_option {
 				quote! {if let Some(value) = parsed.get(#name) {
@@ -280,6 +302,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				}
 			}
 		}
+		ArgInfo::State => quote! {s.clone(),},
 		ArgInfo::Location => quote! {location,},
 		ArgInfo::This => quote! {self,},
 	});
@@ -320,6 +343,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
+				State,
 				function::{Builtin, CallLocation, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
 				error::Result, Context,
 				parser::ExprLocation,
@@ -339,12 +363,12 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				fn params(&self) -> &[BuiltinParam] {
 					PARAMS
 				}
-				fn call(&self, context: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(context, &PARAMS, args, false)?;
+				fn call(&self, s: State, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+					let parsed = parse_builtin_call(s.clone(), ctx, &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#pass)*);
 					let result = result?;
-					result.try_into()
+					<#result_inner>::into_untyped(result, s)
 				}
 			}
 		};
@@ -539,6 +563,18 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			];
 			impl Typed for #ident {
 				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
+
+				fn from_untyped(value: Val, s: State) -> Result<Self> {
+					let obj = value.as_obj().expect("shape is correct");
+					Self::parse(&obj)
+				}
+
+				fn into_untyped(value: Self, s: State) -> Result<Val> {
+					let mut out = ObjValueBuilder::new();
+					value.serialize(&mut out)?;
+					Ok(Val::Obj(out.build()))
+				}
+
 			}
 		}
 	};
@@ -569,23 +605,6 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 					})
 				}
 			}
-
-			impl TryFrom<Val> for #ident {
-				type Error = LocError;
-				fn try_from(value: Val) -> Result<Self, Self::Error> {
-					let obj = value.as_obj().expect("shape is correct");
-					Self::parse(&obj)
-				}
-			}
-			impl TryInto<Val> for #ident {
-				type Error = LocError;
-				fn try_into(self) -> Result<Val, Self::Error> {
-					let mut out = ObjValueBuilder::new();
-					self.serialize(&mut out)?;
-					Ok(Val::Obj(out.build()))
-				}
-			}
-			()
 		};
 	})
 }

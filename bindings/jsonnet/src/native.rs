@@ -1,5 +1,4 @@
 use std::{
-	convert::TryFrom,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 	path::Path,
@@ -12,7 +11,8 @@ use jrsonnet_evaluator::{
 	function::BuiltinParam,
 	gc::TraceBox,
 	native::{NativeCallback, NativeCallbackHandler},
-	EvaluationState, IStr, Val,
+	typed::Typed,
+	IStr, State, Val,
 };
 
 type JsonnetNativeCallback = unsafe extern "C" fn(
@@ -29,7 +29,7 @@ struct JsonnetNativeCallbackHandler {
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, _from: Option<Rc<Path>>, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, s: State, _from: Option<Rc<Path>>, args: &[Val]) -> Result<Val, LocError> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));
@@ -47,7 +47,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		if success == 1 {
 			Ok(v)
 		} else {
-			let e = IStr::try_from(v).expect("error msg");
+			let e = IStr::from_untyped(v, s).expect("error msg");
 			Err(Error::RuntimeError(e).into())
 		}
 	}
@@ -56,7 +56,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_native_callback(
-	vm: &EvaluationState,
+	vm: &State,
 	name: *const c_char,
 	cb: JsonnetNativeCallback,
 	ctx: *const c_void,

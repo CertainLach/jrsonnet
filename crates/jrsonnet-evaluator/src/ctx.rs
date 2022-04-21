@@ -5,14 +5,20 @@ use jrsonnet_interner::IStr;
 
 use crate::{
 	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, FutureWrapper, LazyBinding,
-	LazyVal, ObjValue, Result, Val,
+	LazyVal, ObjValue, Result, State, Val,
 };
 
 #[derive(Clone, Trace)]
 pub struct ContextCreator(pub Context, pub FutureWrapper<GcHashMap<IStr, LazyBinding>>);
 impl ContextCreator {
-	pub fn create(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<Context> {
+	pub fn create(
+		&self,
+		s: State,
+		this: Option<ObjValue>,
+		super_obj: Option<ObjValue>,
+	) -> Result<Context> {
 		self.0.clone().extend_unbound(
+			s,
 			self.1.clone().unwrap(),
 			self.0.dollar().clone().or_else(|| this.clone()),
 			this,
@@ -120,6 +126,7 @@ impl Context {
 	}
 	pub fn extend_unbound(
 		self,
+		s: State,
 		new_bindings: GcHashMap<IStr, LazyBinding>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
@@ -129,7 +136,7 @@ impl Context {
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
 		let mut new = GcHashMap::with_capacity(new_bindings.len());
 		for (k, v) in new_bindings.0.into_iter() {
-			new.insert(k, v.evaluate(this.clone(), super_obj.clone())?);
+			new.insert(k, v.evaluate(s.clone(), this.clone(), super_obj.clone())?);
 		}
 		Ok(self.extend(new, new_dollar, this, super_obj))
 	}

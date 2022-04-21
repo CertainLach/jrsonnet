@@ -15,7 +15,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	push_frame, throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, Val,
+	throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, State, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -99,7 +99,7 @@ pub struct ObjMember {
 }
 
 pub trait ObjectAssertion: Trace {
-	fn run(&self, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<()>;
+	fn run(&self, s: State, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<()>;
 }
 
 // Field => This
@@ -360,14 +360,14 @@ impl ObjValue {
 			.unwrap_or(false)
 	}
 
-	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
-		self.run_assertions()?;
-		self.get_raw(key, self.0.this_obj.as_ref())
+	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
+		self.run_assertions(s.clone())?;
+		self.get_raw(s, key, self.0.this_obj.as_ref())
 	}
 
 	// pub fn extend_with(self, key: )
 
-	fn get_raw(&self, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
+	fn get_raw(&self, s: State, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
 		let real_this = real_this.unwrap_or(self);
 		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
 
@@ -384,19 +384,20 @@ impl ObjValue {
 			.borrow_mut()
 			.insert(cache_key.clone(), CacheValue::Pending);
 		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
-			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
-			(Some(k), Some(s)) => {
-				let our = self.evaluate_this(k, real_this)?;
+			(Some(k), None) => Ok(Some(self.evaluate_this(s, k, real_this)?)),
+			(Some(k), Some(super_obj)) => {
+				let our = self.evaluate_this(s.clone(), k, real_this)?;
 				if k.add {
-					s.get_raw(key, Some(real_this))?
+					super_obj
+						.get_raw(s.clone(), key, Some(real_this))?
 						.map_or(Ok(Some(our.clone())), |v| {
-							Ok(Some(evaluate_add_op(&v, &our)?))
+							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
 						})
 				} else {
 					Ok(Some(our))
 				}
 			}
-			(None, Some(s)) => s.get_raw(key, Some(real_this)),
+			(None, Some(super_obj)) => super_obj.get_raw(s, key, Some(real_this)),
 			(None, None) => Ok(None),
 		};
 		let value = match value {
@@ -418,28 +419,30 @@ impl ObjValue {
 		);
 		Ok(value)
 	}
-	fn evaluate_this(&self, v: &ObjMember, real_this: &Self) -> Result<Val> {
+	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: &Self) -> Result<Val> {
 		v.invoke
-			.evaluate(Some(real_this.clone()), self.0.super_obj.clone())?
-			.evaluate()
+			.evaluate(s.clone(), Some(real_this.clone()), self.0.super_obj.clone())?
+			.evaluate(s)
 	}
 
-	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
+	fn run_assertions_raw(&self, s: State, real_this: &Self) -> Result<()> {
 		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
-				if let Err(e) = assertion.run(Some(real_this.clone()), self.0.super_obj.clone()) {
+				if let Err(e) =
+					assertion.run(s.clone(), Some(real_this.clone()), self.0.super_obj.clone())
+				{
 					self.0.assertions_ran.borrow_mut().remove(real_this);
 					return Err(e);
 				}
 			}
 			if let Some(super_obj) = &self.0.super_obj {
-				super_obj.run_assertions_raw(real_this)?;
+				super_obj.run_assertions_raw(s, real_this)?;
 			}
 		}
 		Ok(())
 	}
-	pub fn run_assertions(&self) -> Result<()> {
-		self.run_assertions_raw(self)
+	pub fn run_assertions(&self, s: State) -> Result<()> {
+		self.run_assertions_raw(s, self)
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
@@ -565,18 +568,18 @@ impl<Kind> ObjMemberBuilder<Kind> {
 
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
 impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
-	pub fn value(self, value: Val) -> Result<()> {
-		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
+	pub fn value(self, s: State, value: Val) -> Result<()> {
+		self.binding(s, LazyBinding::Bound(LazyVal::new_resolved(value)))
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) -> Result<()> {
-		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
+	pub fn bindable(self, s: State, bindable: TraceBox<dyn Bindable>) -> Result<()> {
+		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
 	}
-	pub fn binding(self, binding: LazyBinding) -> Result<()> {
+	pub fn binding(self, s: State, binding: LazyBinding) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
 		let location = member.location.clone();
 		let old = receiver.0.map.insert(name.clone(), member);
 		if old.is_some() {
-			push_frame(
+			s.push(
 				CallLocation(location.as_ref()),
 				|| format!("field <{}> initializtion", name.clone()),
 				|| throw!(DuplicateFieldName(name.clone())),

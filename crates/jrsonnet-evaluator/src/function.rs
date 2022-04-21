@@ -1,4 +1,4 @@
-use std::{borrow::Cow, collections::HashMap, convert::TryFrom};
+use std::{borrow::Cow, collections::HashMap};
 
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
@@ -6,13 +6,8 @@ pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{ArgsDesc, ExprLocation, LocExpr, ParamsDesc};
 
 use crate::{
-	error::{Error::*, LocError},
-	evaluate, evaluate_named,
-	gc::TraceBox,
-	throw,
-	typed::Typed,
-	val::LazyValValue,
-	Context, FutureWrapper, GcHashMap, LazyVal, Result, Val,
+	error::Error::*, evaluate, evaluate_named, gc::TraceBox, throw, typed::Typed,
+	val::LazyValValue, Context, FutureWrapper, GcHashMap, LazyVal, Result, State, Val,
 };
 
 #[derive(Clone, Copy)]
@@ -30,37 +25,37 @@ impl CallLocation<'static> {
 
 #[derive(Trace)]
 struct EvaluateLazyVal {
-	context: Context,
+	ctx: Context,
 	expr: LocExpr,
 }
 impl LazyValValue for EvaluateLazyVal {
-	fn get(self: Box<Self>) -> Result<Val> {
-		evaluate(self.context, &self.expr)
+	fn get(self: Box<Self>, s: State) -> Result<Val> {
+		evaluate(s, self.ctx, &self.expr)
 	}
 }
 
 #[derive(Trace)]
 struct EvaluateNamedLazyVal {
-	future_context: FutureWrapper<Context>,
+	ctx: FutureWrapper<Context>,
 	name: IStr,
 	value: LocExpr,
 }
 impl LazyValValue for EvaluateNamedLazyVal {
-	fn get(self: Box<Self>) -> Result<Val> {
-		evaluate_named(self.future_context.unwrap(), &self.value, self.name)
+	fn get(self: Box<Self>, s: State) -> Result<Val> {
+		evaluate_named(s, self.ctx.unwrap(), &self.value, self.name)
 	}
 }
 
 pub trait ArgLike {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
 }
 impl ArgLike for &LocExpr {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
 		Ok(if tailstrict {
-			LazyVal::new_resolved(evaluate(ctx, self)?)
+			LazyVal::new_resolved(evaluate(s, ctx, self)?)
 		} else {
 			LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-				context: ctx,
+				ctx,
 				expr: (*self).clone(),
 			})))
 		})
@@ -69,10 +64,9 @@ impl ArgLike for &LocExpr {
 impl<T> ArgLike for T
 where
 	T: Typed + Clone,
-	Val: TryFrom<T, Error = LocError>,
 {
-	fn evaluate_arg(&self, _ctx: Context, _tailstrict: bool) -> Result<LazyVal> {
-		let val: Val = Val::try_from(self.clone())?;
+	fn evaluate_arg(&self, s: State, _ctx: Context, _tailstrict: bool) -> Result<LazyVal> {
+		let val = T::into_untyped(self.clone(), s)?;
 		Ok(LazyVal::new_resolved(val))
 	}
 }
@@ -82,14 +76,14 @@ pub enum TlaArg {
 	Val(Val),
 }
 impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
 		match self {
 			TlaArg::String(s) => Ok(LazyVal::new_resolved(Val::Str(s.clone()))),
 			TlaArg::Code(code) => Ok(if tailstrict {
-				LazyVal::new_resolved(evaluate(ctx, code)?)
+				LazyVal::new_resolved(evaluate(s, ctx, code)?)
 			} else {
 				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-					context: ctx,
+					ctx,
 					expr: code.clone(),
 				})))
 			}),
@@ -102,12 +96,14 @@ pub trait ArgsLike {
 	fn unnamed_len(&self) -> usize;
 	fn unnamed_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
 	) -> Result<()>;
 	fn named_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
@@ -122,6 +118,7 @@ impl ArgsLike for ArgsDesc {
 
 	fn unnamed_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
@@ -130,10 +127,10 @@ impl ArgsLike for ArgsDesc {
 			handler(
 				id,
 				if tailstrict {
-					LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+					LazyVal::new_resolved(evaluate(s.clone(), ctx.clone(), arg)?)
 				} else {
 					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-						context: ctx.clone(),
+						ctx: ctx.clone(),
 						expr: arg.clone(),
 					})))
 				},
@@ -144,6 +141,7 @@ impl ArgsLike for ArgsDesc {
 
 	fn named_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
@@ -152,10 +150,10 @@ impl ArgsLike for ArgsDesc {
 			handler(
 				name,
 				if tailstrict {
-					LazyVal::new_resolved(evaluate(ctx.clone(), arg)?)
+					LazyVal::new_resolved(evaluate(s.clone(), ctx.clone(), arg)?)
 				} else {
 					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
-						context: ctx.clone(),
+						ctx: ctx.clone(),
 						expr: arg.clone(),
 					})))
 				},
@@ -178,6 +176,7 @@ impl<A: ArgLike> ArgsLike for [(IStr, A)] {
 
 	fn unnamed_iter(
 		&self,
+		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
@@ -187,12 +186,13 @@ impl<A: ArgLike> ArgsLike for [(IStr, A)] {
 
 	fn named_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
 	) -> Result<()> {
 		for (name, val) in self.iter() {
-			handler(name, val.evaluate_arg(ctx.clone(), tailstrict)?)?;
+			handler(name, val.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?)?;
 		}
 		Ok(())
 	}
@@ -211,6 +211,7 @@ impl<A: ArgLike> ArgsLike for HashMap<IStr, A> {
 
 	fn unnamed_iter(
 		&self,
+		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
@@ -220,12 +221,16 @@ impl<A: ArgLike> ArgsLike for HashMap<IStr, A> {
 
 	fn named_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
 	) -> Result<()> {
 		for (name, value) in self.iter() {
-			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
+			handler(
+				name,
+				value.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?,
+			)?;
 		}
 		Ok(())
 	}
@@ -244,18 +249,20 @@ impl<A: ArgLike> ArgsLike for [A] {
 
 	fn unnamed_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
 	) -> Result<()> {
 		for (i, arg) in self.iter().enumerate() {
-			handler(i, arg.evaluate_arg(ctx.clone(), tailstrict)?)?;
+			handler(i, arg.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?)?;
 		}
 		Ok(())
 	}
 
 	fn named_iter(
 		&self,
+		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
@@ -272,20 +279,22 @@ impl<A: ArgLike> ArgsLike for &[A] {
 
 	fn unnamed_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
 	) -> Result<()> {
-		(*self).unnamed_iter(ctx, tailstrict, handler)
+		(*self).unnamed_iter(s, ctx, tailstrict, handler)
 	}
 
 	fn named_iter(
 		&self,
+		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
 	) -> Result<()> {
-		(*self).named_iter(ctx, tailstrict, handler)
+		(*self).named_iter(s, ctx, tailstrict, handler)
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
@@ -302,6 +311,7 @@ impl<A: ArgLike> ArgsLike for &[A] {
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_function_call(
+	s: State,
 	ctx: Context,
 	body_ctx: Context,
 	params: &ParamsDesc,
@@ -315,14 +325,14 @@ pub fn parse_function_call(
 
 	let mut filled_args = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
 		passed_args.insert(name, arg);
 		filled_args += 1;
 		Ok(())
 	})?;
 
-	args.named_iter(ctx, tailstrict, &mut |name, value| {
+	args.named_iter(s, ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
 		if !params.iter().any(|p| &p.0 == name) {
 			throw!(UnknownFunctionParameter((name as &str).to_owned()));
@@ -337,7 +347,7 @@ pub fn parse_function_call(
 	if filled_args < params.len() {
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
-		let future_context = Context::new_future();
+		let fctx = Context::new_future();
 		let mut defaults = GcHashMap::with_capacity(params.len() - filled_args);
 
 		for param in params.iter().filter(|p| p.1.is_some()) {
@@ -345,7 +355,7 @@ pub fn parse_function_call(
 				continue;
 			}
 			LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
-				future_context: future_context.clone(),
+				ctx: fctx.clone(),
 				name: param.0.clone(),
 				value: param.1.clone().unwrap(),
 			})));
@@ -353,7 +363,7 @@ pub fn parse_function_call(
 			defaults.insert(
 				param.0.clone(),
 				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
-					future_context: future_context.clone(),
+					ctx: fctx.clone(),
 					name: param.0.clone(),
 					value: param.1.clone().unwrap(),
 				}))),
@@ -380,7 +390,7 @@ pub fn parse_function_call(
 		Ok(body_ctx
 			.extend(passed_args, None, None, None)
 			.extend_bound(defaults)
-			.into_future(future_context))
+			.into_future(fctx))
 	} else {
 		let body_ctx = body_ctx.extend(passed_args, None, None, None);
 		Ok(body_ctx)
@@ -399,7 +409,7 @@ pub struct BuiltinParam {
 pub trait Builtin: Trace {
 	fn name(&self) -> &str;
 	fn params(&self) -> &[BuiltinParam];
-	fn call(&self, context: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
@@ -418,6 +428,7 @@ where
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_builtin_call(
+	s: State,
 	ctx: Context,
 	params: &[BuiltinParam],
 	args: &dyn ArgsLike,
@@ -430,14 +441,14 @@ pub fn parse_builtin_call(
 
 	let mut filled_args = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].name.clone();
 		passed_args.insert(name, arg);
 		filled_args += 1;
 		Ok(())
 	})?;
 
-	args.named_iter(ctx, tailstrict, &mut |name, arg| {
+	args.named_iter(s, ctx, tailstrict, &mut |name, arg| {
 		// FIXME: O(n) for arg existence check
 		let p = params
 			.iter()
@@ -480,14 +491,14 @@ pub fn parse_builtin_call(
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Context {
-	let ctx = Context::new_future();
+	let fctx = Context::new_future();
 
 	let mut bindings = GcHashMap::new();
 
 	#[derive(Trace)]
 	struct DependsOnUnbound(IStr);
 	impl LazyValValue for DependsOnUnbound {
-		fn get(self: Box<Self>) -> Result<Val> {
+		fn get(self: Box<Self>, _: State) -> Result<Val> {
 			Err(FunctionParameterNotBoundInCall(self.0.clone()).into())
 		}
 	}
@@ -497,7 +508,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Co
 			bindings.insert(
 				param.0.clone(),
 				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
-					future_context: ctx.clone(),
+					ctx: fctx.clone(),
 					name: param.0.clone(),
 					value: v.clone(),
 				}))),
@@ -510,5 +521,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Co
 		}
 	}
 
-	body_ctx.extend(bindings, None, None, None).into_future(ctx)
+	body_ctx
+		.extend(bindings, None, None, None)
+		.into_future(fctx)
 }

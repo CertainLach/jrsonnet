@@ -1,7 +1,7 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, EvaluationState, ManifestFormat};
+use jrsonnet_evaluator::{error::Result, ManifestFormat, State};
 
 use crate::ConfigureState;
 
@@ -49,20 +49,20 @@ pub struct ManifestOpts {
 	exp_preserve_order: bool,
 }
 impl ConfigureState for ManifestOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		if self.string {
-			state.set_manifest_format(ManifestFormat::String);
+			s.set_manifest_format(ManifestFormat::String);
 		} else {
 			#[cfg(feature = "exp-preserve-order")]
 			let preserve_order = self.exp_preserve_order;
 			match self.format {
-				ManifestFormatName::String => state.set_manifest_format(ManifestFormat::String),
-				ManifestFormatName::Json => state.set_manifest_format(ManifestFormat::Json {
+				ManifestFormatName::String => s.set_manifest_format(ManifestFormat::String),
+				ManifestFormatName::Json => s.set_manifest_format(ManifestFormat::Json {
 					padding: self.line_padding.unwrap_or(3),
 					#[cfg(feature = "exp-preserve-order")]
 					preserve_order,
 				}),
-				ManifestFormatName::Yaml => state.set_manifest_format(ManifestFormat::Yaml {
+				ManifestFormatName::Yaml => s.set_manifest_format(ManifestFormat::Yaml {
 					padding: self.line_padding.unwrap_or(2),
 					#[cfg(feature = "exp-preserve-order")]
 					preserve_order,
@@ -70,9 +70,7 @@ impl ConfigureState for ManifestOpts {
 			}
 		}
 		if self.yaml_stream {
-			state.set_manifest_format(ManifestFormat::YamlStream(Box::new(
-				state.manifest_format(),
-			)))
+			s.set_manifest_format(ManifestFormat::YamlStream(Box::new(s.manifest_format())))
 		}
 		Ok(())
 	}

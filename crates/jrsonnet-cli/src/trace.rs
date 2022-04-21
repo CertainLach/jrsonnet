@@ -4,7 +4,7 @@ use clap::Parser;
 use jrsonnet_evaluator::{
 	error::Result,
 	trace::{CompactFormat, ExplainingFormat, PathResolver},
-	EvaluationState,
+	State,
 };
 
 use crate::ConfigureState;
@@ -41,22 +41,22 @@ pub struct TraceOpts {
 	max_trace: usize,
 }
 impl ConfigureState for TraceOpts {
-	fn configure(&self, state: &EvaluationState) -> Result<()> {
+	fn configure(&self, s: &State) -> Result<()> {
 		let resolver = PathResolver::Absolute;
 		match self
 			.trace_format
 			.as_ref()
 			.unwrap_or(&TraceFormatName::Compact)
 		{
-			TraceFormatName::Compact => state.set_trace_format(Box::new(CompactFormat {
+			TraceFormatName::Compact => s.set_trace_format(Box::new(CompactFormat {
 				resolver,
 				padding: 4,
 			})),
 			TraceFormatName::Explaining => {
-				state.set_trace_format(Box::new(ExplainingFormat { resolver }))
+				s.set_trace_format(Box::new(ExplainingFormat { resolver }))
 			}
 		}
-		state.set_max_trace(self.max_trace);
+		s.set_max_trace(self.max_trace);
 		Ok(())
 	}
 }

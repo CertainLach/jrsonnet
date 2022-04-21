@@ -7,7 +7,7 @@ use std::{
 use clap::{AppSettings, IntoApp, Parser};
 use clap_complete::Shell;
 use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
-use jrsonnet_evaluator::{error::LocError, EvaluationState};
+use jrsonnet_evaluator::{error::LocError, State};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -102,10 +102,10 @@ impl From<LocError> for Error {
 
 fn main_catch(opts: Opts) -> bool {
 	let _printer = opts.gc.stats_printer();
-	let state = EvaluationState::default();
-	if let Err(e) = main_real(&state, opts) {
+	let s = State::default();
+	if let Err(e) = main_real(&s, opts) {
 		if let Error::Evaluation(e) = e {
-			eprintln!("{}", state.stringify_err(&e));
+			eprintln!("{}", s.stringify_err(&e));
 		} else {
 			eprintln!("{}", e);
 		}
@@ -114,13 +114,13 @@ fn main_catch(opts: Opts) -> bool {
 	true
 }
 
-fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
+fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	opts.gc.configure_global();
-	opts.general.configure(state)?;
-	opts.manifest.configure(state)?;
+	opts.general.configure(s)?;
+	opts.manifest.configure(s)?;
 
 	let val = if opts.input.exec {
-		state.evaluate_snippet_raw(
+		s.evaluate_snippet_raw(
 			PathBuf::from("<cmdline>").into(),
 			(&opts.input.input as &str).into(),
 		)?
@@ -128,12 +128,12 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 		let mut input = Vec::new();
 		std::io::stdin().read_to_end(&mut input)?;
 		let input_str = std::str::from_utf8(&input)?.into();
-		state.evaluate_snippet_raw(PathBuf::from("<stdin>").into(), input_str)?
+		s.evaluate_snippet_raw(PathBuf::from("<stdin>").into(), input_str)?
 	} else {
-		state.evaluate_file_raw(&PathBuf::from(opts.input.input))?
+		s.evaluate_file_raw(&PathBuf::from(opts.input.input))?
 	};
 
-	let val = state.with_tla(val)?;
+	let val = s.with_tla(val)?;
 
 	if let Some(multi) = opts.output.multi {
 		if opts.output.create_output_dirs {
@@ -141,7 +141,7 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 			dir.pop();
 			create_dir_all(dir)?;
 		}
-		for (file, data) in state.manifest_multi(val)?.iter() {
+		for (file, data) in s.manifest_multi(val)?.iter() {
 			let mut path = multi.clone();
 			path.push(file as &str);
 			if opts.output.create_output_dirs {
@@ -160,9 +160,9 @@ fn main_real(state: &EvaluationState, opts: Opts) -> Result<(), Error> {
 			create_dir_all(dir)?;
 		}
 		let mut file = File::create(path)?;
-		writeln!(file, "{}", state.manifest(val)?)?;
+		writeln!(file, "{}", s.manifest(val)?)?;
 	} else {
-		let output = state.manifest(val)?;
+		let output = s.manifest(val)?;
 		if !output.is_empty() {
 			println!("{}", output);
 		}

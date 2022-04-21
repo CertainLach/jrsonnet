@@ -8,7 +8,7 @@ use crate::{
 	error::Result,
 	function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam, CallLocation},
 	gc::TraceBox,
-	Context, Val,
+	Context, State, Val,
 };
 
 #[derive(Trace)]
@@ -34,16 +34,16 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, context: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-		let args = parse_builtin_call(context, &self.params, args, true)?;
+	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
 		let mut out_args = Vec::with_capacity(self.params.len());
 		for p in self.params.iter() {
-			out_args.push(args[&p.name].evaluate()?);
+			out_args.push(args[&p.name].evaluate(s.clone())?);
 		}
-		self.handler.call(loc.0.map(|l| l.0.clone()), &out_args)
+		self.handler.call(s, loc.0.map(|l| l.0.clone()), &out_args)
 	}
 }
 
 pub trait NativeCallbackHandler: Trace {
-	fn call(&self, from: Option<Rc<Path>>, args: &[Val]) -> Result<Val>;
+	fn call(&self, s: State, from: Option<Rc<Path>>, args: &[Val]) -> Result<Val>;
 }

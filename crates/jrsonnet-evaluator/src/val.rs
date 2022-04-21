@@ -17,11 +17,11 @@ use crate::{
 		StaticBuiltin,
 	},
 	gc::TraceBox,
-	throw, Context, ObjValue, Result,
+	throw, Context, ObjValue, Result, State,
 };
 
 pub trait LazyValValue: Trace {
-	fn get(self: Box<Self>) -> Result<Val>;
+	fn get(self: Box<Self>, s: State) -> Result<Val>;
 }
 
 #[derive(Trace)]
@@ -41,11 +41,11 @@ impl LazyVal {
 	pub fn new_resolved(val: Val) -> Self {
 		Self(Cc::new(RefCell::new(LazyValInternals::Computed(val))))
 	}
-	pub fn force(&self) -> Result<()> {
-		self.evaluate()?;
+	pub fn force(&self, s: State) -> Result<()> {
+		self.evaluate(s)?;
 		Ok(())
 	}
-	pub fn evaluate(&self) -> Result<Val> {
+	pub fn evaluate(&self, s: State) -> Result<Val> {
 		match &*self.0.borrow() {
 			LazyValInternals::Computed(v) => return Ok(v.clone()),
 			LazyValInternals::Errored(e) => return Err(e.clone()),
@@ -59,7 +59,7 @@ impl LazyVal {
 		} else {
 			unreachable!()
 		};
-		let new_value = match value.0.get() {
+		let new_value = match value.0.get(s) {
 			Ok(v) => v,
 			Err(e) => {
 				*self.0.borrow_mut() = LazyValInternals::Errored(e.clone());
@@ -98,11 +98,19 @@ impl FuncDesc {
 	/// Create context, with which body code will run
 	pub fn call_body_context(
 		&self,
+		s: State,
 		call_ctx: Context,
 		args: &dyn ArgsLike,
 		tailstrict: bool,
 	) -> Result<Context> {
-		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
+		parse_function_call(
+			s,
+			call_ctx,
+			self.ctx.clone(),
+			&self.params,
+			args,
+			tailstrict,
+		)
 	}
 }
 
@@ -145,6 +153,7 @@ impl FuncVal {
 	}
 	pub fn evaluate(
 		&self,
+		s: State,
 		call_ctx: Context,
 		loc: CallLocation,
 		args: &dyn ArgsLike,
@@ -152,15 +161,15 @@ impl FuncVal {
 	) -> Result<Val> {
 		match self {
 			Self::Normal(func) => {
-				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
-				evaluate(body_ctx, &func.body)
+				let body_ctx = func.call_body_context(s.clone(), call_ctx, args, tailstrict)?;
+				evaluate(s, body_ctx, &func.body)
 			}
-			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.call(call_ctx, loc, args),
+			Self::StaticBuiltin(b) => b.call(s, call_ctx, loc, args),
+			Self::Builtin(b) => b.call(s, call_ctx, loc, args),
 		}
 	}
-	pub fn evaluate_simple(&self, args: &dyn ArgsLike) -> Result<Val> {
-		self.evaluate(Context::default(), CallLocation::native(), args, true)
+	pub fn evaluate_simple(&self, s: State, args: &dyn ArgsLike) -> Result<Val> {
+		self.evaluate(s, Context::default(), CallLocation::native(), args, true)
 	}
 }
 
@@ -276,14 +285,14 @@ impl ArrValue {
 		self.len() == 0
 	}
 
-	pub fn get(&self, index: usize) -> Result<Option<Val>> {
+	pub fn get(&self, s: State, index: usize) -> Result<Option<Val>> {
 		match self {
 			Self::Bytes(i) => i
 				.get(index)
 				.map_or(Ok(None), |v| Ok(Some(Val::Num(*v as f64)))),
 			Self::Lazy(vec) => {
 				if let Some(v) = vec.get(index) {
-					Ok(Some(v.evaluate()?))
+					Ok(Some(v.evaluate(s)?))
 				} else {
 					Ok(None)
 				}
@@ -292,9 +301,9 @@ impl ArrValue {
 			Self::Extended(v) => {
 				let a_len = v.0.len();
 				if a_len > index {
-					v.0.get(index)
+					v.0.get(s, index)
 				} else {
-					v.1.get(index - a_len)
+					v.1.get(s, index - a_len)
 				}
 			}
 			Self::Range(a, _) => {
@@ -308,14 +317,14 @@ impl ArrValue {
 				if index >= len {
 					return Ok(None);
 				}
-				v.get(len - index - 1)
+				v.get(s, len - index - 1)
 			}
-			Self::Slice(s) => {
-				let index = s.from() + index * s.step();
-				if index >= s.to() {
+			Self::Slice(v) => {
+				let index = v.from() + index * v.step();
+				if index >= v.to() {
 					return Ok(None);
 				}
-				s.inner.get(index as usize)
+				v.inner.get(s, index as usize)
 			}
 		}
 	}
@@ -360,7 +369,7 @@ impl ArrValue {
 		}
 	}
 
-	pub fn evaluated(&self) -> Result<Cc<Vec<Val>>> {
+	pub fn evaluated(&self, s: State) -> Result<Cc<Vec<Val>>> {
 		Ok(match self {
 			Self::Bytes(i) => {
 				let mut out = Vec::with_capacity(i.len());
@@ -372,14 +381,14 @@ impl ArrValue {
 			Self::Lazy(vec) => {
 				let mut out = Vec::with_capacity(vec.len());
 				for item in vec.iter() {
-					out.push(item.evaluate()?);
+					out.push(item.evaluate(s.clone())?);
 				}
 				Cc::new(out)
 			}
 			Self::Eager(vec) => vec.clone(),
 			Self::Extended(_v) => {
 				let mut out = Vec::with_capacity(self.len());
-				for item in self.iter() {
+				for item in self.iter(s) {
 					out.push(item?);
 				}
 				Cc::new(out)
@@ -392,7 +401,7 @@ impl ArrValue {
 				Cc::new(out)
 			}
 			Self::Reversed(r) => {
-				let mut r = r.evaluated()?;
+				let mut r = r.evaluated(s)?;
 				Cc::update_with(&mut r, |v| v.reverse());
 				r
 			}
@@ -405,22 +414,22 @@ impl ArrValue {
 					.take(v.to() - v.from())
 					.step_by(v.step())
 				{
-					out.push(v.evaluate()?)
+					out.push(v.evaluate(s.clone())?)
 				}
 				Cc::new(out)
 			}
 		})
 	}
 
-	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
+	pub fn iter(&self, s: State) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
 			Self::Bytes(b) => Ok(Val::Num(b[idx] as f64)),
-			Self::Lazy(l) => l[idx].evaluate(),
+			Self::Lazy(l) => l[idx].evaluate(s.clone()),
 			Self::Eager(e) => Ok(e[idx].clone()),
-			Self::Extended(_) => self.get(idx).map(|e| e.unwrap()),
-			Self::Range(..) => self.get(idx).map(|e| e.unwrap()),
-			Self::Reversed(..) => self.get(idx).map(|e| e.unwrap()),
-			Self::Slice(..) => self.get(idx).map(|e| e.unwrap()),
+			Self::Extended(_) => self.get(s.clone(), idx).map(|e| e.unwrap()),
+			Self::Range(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
+			Self::Reversed(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
+			Self::Slice(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
 		})
 	}
 
@@ -440,20 +449,20 @@ impl ArrValue {
 		Self::Reversed(Box::new(self))
 	}
 
-	pub fn map(self, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
+	pub fn map(self, s: State, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
 		let mut out = Vec::with_capacity(self.len());
 
-		for value in self.iter() {
+		for value in self.iter(s) {
 			out.push(mapper(value?)?);
 		}
 
 		Ok(Self::Eager(Cc::new(out)))
 	}
 
-	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
+	pub fn filter(self, s: State, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
 		let mut out = Vec::with_capacity(self.len());
 
-		for value in self.iter() {
+		for value in self.iter(s) {
 			let value = value?;
 			if filter(&value)? {
 				out.push(value);
@@ -566,13 +575,14 @@ impl Val {
 		}
 	}
 
-	pub fn to_string(&self) -> Result<IStr> {
+	pub fn to_string(&self, s: State) -> Result<IStr> {
 		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
+				s,
 				v,
 				&ManifestJsonOptions {
 					padding: "",
@@ -588,7 +598,7 @@ impl Val {
 	}
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
+	pub fn manifest_multi(&self, s: State, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
 		let obj = match self {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
@@ -600,28 +610,28 @@ impl Val {
 		let mut out = Vec::with_capacity(keys.len());
 		for key in keys {
 			let value = obj
-				.get(key.clone())?
+				.get(s.clone(), key.clone())?
 				.expect("item in object")
-				.manifest(ty)?;
+				.manifest(s.clone(), ty)?;
 			out.push((key, value));
 		}
 		Ok(out)
 	}
 
 	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
+	pub fn manifest_stream(&self, s: State, ty: &ManifestFormat) -> Result<Vec<IStr>> {
 		let arr = match self {
 			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
 		};
 		let mut out = Vec::with_capacity(arr.len());
-		for i in arr.iter() {
-			out.push(i?.manifest(ty)?);
+		for i in arr.iter(s.clone()) {
+			out.push(i?.manifest(s.clone(), ty)?);
 		}
 		Ok(out)
 	}
 
-	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
+	pub fn manifest(&self, s: State, ty: &ManifestFormat) -> Result<IStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
@@ -637,9 +647,9 @@ impl Val {
 				};
 
 				if !arr.is_empty() {
-					for v in arr.iter() {
+					for v in arr.iter(s.clone()) {
 						out.push_str("---\n");
-						out.push_str(&v?.manifest(format)?);
+						out.push_str(&v?.manifest(s.clone(), format)?);
 						out.push('\n');
 					}
 					out.push_str("...");
@@ -652,6 +662,7 @@ impl Val {
 				#[cfg(feature = "exp-preserve-order")]
 				preserve_order,
 			} => self.to_yaml(
+				s,
 				*padding,
 				#[cfg(feature = "exp-preserve-order")]
 				*preserve_order,
@@ -661,11 +672,12 @@ impl Val {
 				#[cfg(feature = "exp-preserve-order")]
 				preserve_order,
 			} => self.to_json(
+				s,
 				*padding,
 				#[cfg(feature = "exp-preserve-order")]
 				*preserve_order,
 			)?,
-			ManifestFormat::ToString => self.to_string()?,
+			ManifestFormat::ToString => self.to_string(s)?,
 			ManifestFormat::String => match self {
 				Self::Str(s) => s.clone(),
 				_ => throw!(StringManifestOutputIsNotAString),
@@ -676,10 +688,12 @@ impl Val {
 	/// For manifestification
 	pub fn to_json(
 		&self,
+		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<IStr> {
 		manifest_json_ex(
+			s,
 			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
@@ -700,10 +714,12 @@ impl Val {
 	/// Calls `std.manifestJson`
 	pub fn to_std_json(
 		&self,
+		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<Rc<str>> {
 		manifest_json_ex(
+			s,
 			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
@@ -719,11 +735,13 @@ impl Val {
 
 	pub fn to_yaml(
 		&self,
+		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<IStr> {
 		let padding = &" ".repeat(padding);
 		manifest_yaml_ex(
+			s,
 			self,
 			&ManifestYamlOptions {
 				padding,
@@ -769,7 +787,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 }
 
 /// Native implementation of `std.equals`
-pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
+pub fn equals(s: State, val_a: &Val, val_b: &Val) -> Result<bool> {
 	if val_a.value_type() != val_b.value_type() {
 		return Ok(false);
 	}
@@ -781,8 +799,8 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 			if a.len() != b.len() {
 				return Ok(false);
 			}
-			for (a, b) in a.iter().zip(b.iter()) {
-				if !equals(&a?, &b?)? {
+			for (a, b) in a.iter(s.clone()).zip(b.iter(s.clone())) {
+				if !equals(s.clone(), &a?, &b?)? {
 					return Ok(false);
 				}
 			}
@@ -804,7 +822,11 @@ pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 				return Ok(false);
 			}
 			for field in fields {
-				if !equals(&a.get(field.clone())?.unwrap(), &b.get(field)?.unwrap())? {
+				if !equals(
+					s.clone(),
+					&a.get(s.clone(), field.clone())?.unwrap(),
+					&b.get(s.clone(), field)?.unwrap(),
+				)? {
 					return Ok(false);
 				}
 			}

@@ -4,7 +4,7 @@ use std::path::{Path, PathBuf};
 
 pub use location::*;
 
-use crate::{error::Error, EvaluationState, LocError};
+use crate::{error::Error, LocError, State};
 
 /// The way paths should be displayed
 pub enum PathResolver {
@@ -39,16 +39,9 @@ pub trait TraceFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		evaluation_state: &EvaluationState,
+		s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error>;
-	// fn print_trace(
-	// 	&self,
-	// 	evaluation_state: &EvaluationState,
-	// 	error: &LocError,
-	// ) -> Result<(), std::fmt::Error> {
-	// 	self.write_trace(&mut std::fmt::stdout(), evaluation_state, error)
-	// }
 }
 
 fn print_code_location(
@@ -85,7 +78,7 @@ impl TraceFormat for CompactFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		evaluation_state: &EvaluationState,
+		s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -128,8 +121,7 @@ impl TraceFormat for CompactFormat {
 				if let Some(location) = location {
 					let mut resolved_path = self.resolver.resolve(&location.0);
 					// TODO: Process all trace elements first
-					let location = evaluation_state
-						.map_source_locations(&location.0, &[location.1, location.2]);
+					let location = s.map_source_locations(&location.0, &[location.1, location.2]);
 					write!(resolved_path, ":").unwrap();
 					print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
 					write!(resolved_path, ":").unwrap();
@@ -170,7 +162,7 @@ impl TraceFormat for JsFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		evaluation_state: &EvaluationState,
+		s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -178,8 +170,7 @@ impl TraceFormat for JsFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end =
-					evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+				let start_end = s.map_source_locations(&source.0, &[source.1, source.2]);
 
 				write!(
 					out,
@@ -207,7 +198,7 @@ impl TraceFormat for ExplainingFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		evaluation_state: &EvaluationState,
+		s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -240,11 +231,10 @@ impl TraceFormat for ExplainingFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end =
-					evaluation_state.map_source_locations(&source.0, &[source.1, source.2]);
+				let start_end = s.map_source_locations(&source.0, &[source.1, source.2]);
 				self.print_snippet(
 					out,
-					&evaluation_state.get_source(&source.0).unwrap(),
+					&s.get_source(&source.0).unwrap(),
 					&source.0,
 					&start_end[0],
 					&start_end[1],

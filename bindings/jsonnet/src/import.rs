@@ -15,7 +15,7 @@ use std::{
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, EvaluationState, ImportResolver,
+	throw, ImportResolver, State,
 };
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(
@@ -87,7 +87,7 @@ impl ImportResolver for CallbackImportResolver {
 /// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_import_callback(
-	vm: &EvaluationState,
+	vm: &State,
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
 ) {
@@ -141,7 +141,7 @@ impl ImportResolver for NativeImportResolver {
 ///
 /// This function is safe, if received v is a pointer to normal C string
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_jpath_add(vm: &EvaluationState, v: *const c_char) {
+pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, v: *const c_char) {
 	let cstr = CStr::from_ptr(v);
 	let path = PathBuf::from(cstr.to_str().unwrap());
 	let any_resolver = &vm.settings().import_resolver;
