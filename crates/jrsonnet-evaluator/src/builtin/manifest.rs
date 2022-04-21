@@ -249,6 +249,7 @@ fn manifest_yaml_ex_buf(
 				buf.push('|');
 				for line in s.split('\n') {
 					buf.push('\n');
+					buf.push_str(&cur_padding);
 					buf.push_str(options.padding);
 					buf.push_str(line);
 				}
