@@ -266,7 +266,7 @@ impl ArrValue {
 			Self::Lazy(l) => l.len(),
 			Self::Eager(e) => e.len(),
 			Self::Extended(v) => v.0.len() + v.1.len(),
-			Self::Range(a, b) => a.abs_diff(*b) as usize,
+			Self::Range(a, b) => a.abs_diff(*b) as usize + 1,
 			Self::Reversed(i) => i.len(),
 			Self::Slice(s) => s.len(),
 		}
