@@ -568,12 +568,13 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				(Val::Obj(v), Val::Str(key)) => s.push(
 					CallLocation::new(loc),
 					|| format!("field <{}> access", key),
-					|| {
-						if let Some(v) = v.get(s.clone(), key.clone())? {
-							Ok(v)
-						} else {
-							throw!(NoSuchField(key.clone()))
+					|| match v.get(s.clone(), key.clone()) {
+						Ok(Some(v)) => Ok(v),
+						Ok(None) => throw!(NoSuchField(key.clone())),
+						Err(e) if matches!(e.error(), MagicThisFileUsed) => {
+							Ok(Val::Str(loc.0.to_string_lossy().into()))
 						}
+						Err(e) => Err(e),
 					},
 				)?,
 				(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
@@ -674,6 +675,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				.with(|b| b.get(name).copied())
 				.ok_or_else(|| IntrinsicNotFound(name.clone()))?,
 		)),
+		IntrinsicThisFile => return Err(MagicThisFileUsed.into()),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(s.clone(), ctx.clone(), assert)?;
 			evaluate(s, ctx, returned)?

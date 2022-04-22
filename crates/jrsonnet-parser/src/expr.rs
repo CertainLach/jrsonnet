@@ -296,6 +296,8 @@ pub enum Expr {
 	Index(LocExpr, LocExpr),
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
+	/// std.thisFile
+	IntrinsicThisFile,
 	/// std.primitiveEquals
 	Intrinsic(IStr),
 	/// if true == false then 1 else 2

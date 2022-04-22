@@ -140,6 +140,11 @@ pub enum Error {
 	#[error("sort error: {0}")]
 	Sort(#[from] SortError),
 
+	/// Thrown as error, as this is legacy feature, and error here
+	/// is acceptable for defeating object field cache
+	#[error("should not reach outside: std.thisFile")]
+	MagicThisFileUsed,
+
 	#[cfg(feature = "anyhow-error")]
 	#[error(transparent)]
 	Other(Rc<anyhow::Error>),

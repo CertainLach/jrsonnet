@@ -2,6 +2,9 @@
   local std = self,
   local id = std.id,
 
+  # Magic legacy field
+  thisFile:: $intrinsicThisFile,
+
   # Those functions aren't normally located in stdlib
   length:: $intrinsic(length),
   type:: $intrinsic(type),

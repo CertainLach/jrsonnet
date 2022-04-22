@@ -210,6 +210,7 @@ parser! {
 		pub rule expr_basic(s: &ParserSettings) -> Expr
 			= literal(s)
 
+			/ quiet!{"$intrinsicThisFile" {Expr::IntrinsicThisFile}}
 			/ quiet!{"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}}
 
 			/ string_expr(s) / number_expr(s)
