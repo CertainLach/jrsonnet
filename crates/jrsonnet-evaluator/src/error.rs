@@ -63,8 +63,6 @@ pub enum Error {
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),
-	#[error("native is not defined: {0}")]
-	UndefinedExternalFunction(IStr),
 
 	#[error("field name should be string, got {0}")]
 	FieldMustBeStringGot(ValType),

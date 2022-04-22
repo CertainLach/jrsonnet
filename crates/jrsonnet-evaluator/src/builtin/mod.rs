@@ -375,13 +375,14 @@ fn builtin_ext_var(s: State, x: IStr) -> Result<Any> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_native(s: State, name: IStr) -> Result<FuncVal> {
-	Ok(s.settings()
+fn builtin_native(s: State, name: IStr) -> Result<Any> {
+	Ok(Any(s
+		.settings()
 		.ext_natives
 		.get(&name)
 		.cloned()
-		.map(|v| FuncVal::Builtin(v.clone()))
-		.ok_or(UndefinedExternalFunction(name))?)
+		.map(|v| Val::Func(FuncVal::Builtin(v.clone())))
+		.unwrap_or(Val::Null)))
 }
 
 #[jrsonnet_macros::builtin]
