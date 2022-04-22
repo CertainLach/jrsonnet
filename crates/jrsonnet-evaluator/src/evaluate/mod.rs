@@ -589,13 +589,19 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					n.value_type(),
 				)),
 
-				(Val::Str(s), Val::Num(n)) => Val::Str(
-					s.chars()
+				(Val::Str(s), Val::Num(n)) => Val::Str({
+					let v: IStr = s
+						.chars()
 						.skip(n as usize)
 						.take(1)
 						.collect::<String>()
-						.into(),
-				),
+						.into();
+					if v.is_empty() {
+						let size = s.chars().count();
+						throw!(StringBoundsError(n as usize, size))
+					}
+					v
+				}),
 				(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
 					ValType::Str,
 					ValType::Num,

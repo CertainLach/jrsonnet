@@ -36,6 +36,8 @@ pub enum Error {
 
 	#[error("array out of bounds: {0} is not within [0,{1})")]
 	ArrayBoundsError(usize, usize),
+	#[error("string out of bounds: {0} is not within [0,{1})")]
+	StringBoundsError(usize, usize),
 
 	#[error("assert failed: {0}")]
 	AssertionFailed(IStr),
