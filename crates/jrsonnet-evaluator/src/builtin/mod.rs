@@ -1,3 +1,6 @@
+// All builtins should return results
+#![allow(clippy::unnecessary_wraps)]
+
 use std::collections::HashMap;
 
 use format::{format_arr, format_obj};
@@ -173,7 +176,7 @@ fn builtin_type(x: Any) -> Result<IStr> {
 fn builtin_make_array(s: State, sz: usize, func: FuncVal) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
-		out.push(func.evaluate_simple(s.clone(), &[i as f64].as_slice())?)
+		out.push(func.evaluate_simple(s.clone(), &[i as f64].as_slice())?);
 	}
 	Ok(VecVal(Cc::new(out)))
 }
@@ -420,7 +423,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 				match func.evaluate_simple(s.clone(), &[Any(el)].as_slice())? {
 					Val::Arr(o) => {
 						for oe in o.iter(s.clone()) {
-							out.push(oe?)
+							out.push(oe?);
 						}
 					}
 					_ => throw!(RuntimeError(
@@ -707,7 +710,7 @@ fn builtin_member(s: State, arr: IndexableVal, x: Any) -> Result<bool> {
 #[jrsonnet_macros::builtin]
 fn builtin_count(s: State, arr: Vec<Any>, v: Any) -> Result<usize> {
 	let mut count = 0;
-	for item in arr.iter() {
+	for item in &arr {
 		if equals(s.clone(), &item.0, &v.0)? {
 			count += 1;
 		}

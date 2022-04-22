@@ -53,10 +53,10 @@ fn get_sort_type<T>(
 		match (i, sort_type) {
 			(Val::Str(_), SortKeyType::Unknown) => sort_type = SortKeyType::String,
 			(Val::Num(_), SortKeyType::Unknown) => sort_type = SortKeyType::Number,
-			(Val::Str(_), SortKeyType::String) => {}
-			(Val::Str(_), _) => throw!(SortError::SortElementsShouldHaveEqualType),
-			(Val::Num(_), SortKeyType::Number) => {}
-			(Val::Num(_), _) => throw!(SortError::SortElementsShouldHaveEqualType),
+			(Val::Str(_), SortKeyType::String) | (Val::Num(_), SortKeyType::Number) => {}
+			(Val::Str(_) | Val::Num(_), _) => {
+				throw!(SortError::SortElementsShouldHaveEqualType)
+			}
 			_ => throw!(SortError::SortKeyShouldBeStringOrNumber),
 		}
 	}
@@ -91,19 +91,19 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: Option<&FuncVal>) -> Res
 		Ok(Cc::new(vk.into_iter().map(|v| v.0).collect()))
 	} else {
 		// Fast path, identity key getter
-		let mut mvalues = (*values).clone();
-		let sort_type = get_sort_type(&mut mvalues, |k| k)?;
+		let mut values = (*values).clone();
+		let sort_type = get_sort_type(&mut values, |k| k)?;
 		match sort_type {
-			SortKeyType::Number => mvalues.sort_unstable_by_key(|v| match v {
+			SortKeyType::Number => values.sort_unstable_by_key(|v| match v {
 				Val::Num(n) => NonNaNf64(*n),
 				_ => unreachable!(),
 			}),
-			SortKeyType::String => mvalues.sort_unstable_by_key(|v| match v {
+			SortKeyType::String => values.sort_unstable_by_key(|v| match v {
 				Val::Str(s) => s.clone(),
 				_ => unreachable!(),
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Cc::new(mvalues))
+		Ok(Cc::new(values))
 	}
 }

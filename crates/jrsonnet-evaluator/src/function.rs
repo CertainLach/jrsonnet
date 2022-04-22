@@ -145,7 +145,7 @@ impl ArgsLike for ArgsDesc {
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
 	) -> Result<()> {
-		for (name, arg) in self.named.iter() {
+		for (name, arg) in &self.named {
 			handler(
 				name,
 				if tailstrict {
@@ -162,8 +162,8 @@ impl ArgsLike for ArgsDesc {
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		for (name, _) in self.named.iter() {
-			handler(name)
+		for (name, _) in &self.named {
+			handler(name);
 		}
 	}
 }
@@ -231,7 +231,7 @@ impl<A: ArgLike> ArgsLike for [(IStr, A)] {
 	}
 }
 
-impl<A: ArgLike> ArgsLike for HashMap<IStr, A> {
+impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 	fn unnamed_len(&self) -> usize {
 		0
 	}
@@ -325,7 +325,7 @@ impl<A: ArgLike> ArgsLike for &[A] {
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		(*self).named_names(handler)
+		(*self).named_names(handler);
 	}
 }
 
@@ -381,18 +381,13 @@ pub fn parse_function_call(
 			if passed_args.contains_key(&param.0.clone()) {
 				continue;
 			}
-			LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
-				ctx: fctx.clone(),
-				name: param.0.clone(),
-				value: param.1.clone().unwrap(),
-			})));
 
 			defaults.insert(
 				param.0.clone(),
 				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
 					ctx: fctx.clone(),
 					name: param.0.clone(),
-					value: param.1.clone().unwrap(),
+					value: param.1.clone().expect("default exists"),
 				}))),
 			);
 			filled_args += 1;
@@ -447,7 +442,7 @@ where
 	// const INST: &'static Self;
 }
 
-/// You shouldn't probally use this function, use jrsonnet_macros::builtin instead
+/// You shouldn't probally use this function, use `jrsonnet_macros::builtin` instead
 ///
 /// ## Parameters
 /// * `ctx`: used for passed argument expressions' execution and for body execution (if `body_ctx` is not set)
@@ -518,10 +513,6 @@ pub fn parse_builtin_call(
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Context {
-	let fctx = Context::new_future();
-
-	let mut bindings = GcHashMap::new();
-
 	#[derive(Trace)]
 	struct DependsOnUnbound(IStr);
 	impl LazyValValue for DependsOnUnbound {
@@ -529,6 +520,10 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Co
 			Err(FunctionParameterNotBoundInCall(self.0.clone()).into())
 		}
 	}
+
+	let fctx = Context::new_future();
+
+	let mut bindings = GcHashMap::new();
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {

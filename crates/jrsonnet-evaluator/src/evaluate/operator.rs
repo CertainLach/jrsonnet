@@ -1,3 +1,5 @@
+use std::cmp::Ordering;
+
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
@@ -11,7 +13,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	Ok(match (op, b) {
 		(Not, Bool(v)) => Bool(!v),
 		(Minus, Num(n)) => Num(-*n),
-		(BitNot, Num(n)) => Num(!(*n as i32) as f64),
+		(BitNot, Num(n)) => Num(f64::from(!(*n as i32))),
 		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
@@ -22,8 +24,8 @@ pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 		(Str(v1), Str(v2)) => Str(((**v1).to_owned() + v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
-		(Num(n), Str(o)) => Str(format!("{}{}", n, o).into()),
-		(Str(o), Num(n)) => Str(format!("{}{}", o, n).into()),
+		(Num(a), Str(b)) => Str(format!("{a}{b}").into()),
+		(Str(a), Num(b)) => Str(format!("{a}{b}").into()),
 
 		(Str(a), o) => Str(format!("{}{}", a, o.clone().to_string(s)?).into()),
 		(o, Str(a)) => Str(format!("{}{}", o.clone().to_string(s)?, a).into()),
@@ -47,7 +49,12 @@ pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 pub fn evaluate_mod_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	match (a, b) {
-		(Num(a), Num(b)) => Ok(Num(a % b)),
+		(Num(a), Num(b)) => {
+			if *b == 0.0 {
+				throw!(DivisionByZero)
+			}
+			Ok(Num(a % b))
+		}
 		(Str(str), vals) => {
 			String::into_untyped(std_format(s.clone(), str.clone(), vals.clone())?, s)
 		}
@@ -75,6 +82,32 @@ pub fn evaluate_binary_op_special(
 	})
 }
 
+pub fn evaluate_compare_op(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Result<Ordering> {
+	use Val::*;
+	Ok(match (a, b) {
+		(Str(a), Str(b)) => a.cmp(b),
+		(Num(a), Num(b)) => a.partial_cmp(b).expect("jsonnet numbers are non NaN"),
+		(Arr(a), Arr(b)) => {
+			let ai = a.iter(s.clone());
+			let bi = b.iter(s.clone());
+
+			for (a, b) in ai.zip(bi) {
+				let ord = evaluate_compare_op(s.clone(), &a?, op, &b?)?;
+				if !ord.is_eq() {
+					return Ok(ord);
+				}
+			}
+
+			a.len().cmp(&b.len())
+		}
+		(_, _) => throw!(BinaryOperatorDoesNotOperateOnValues(
+			op,
+			a.value_type(),
+			b.value_type()
+		)),
+	})
+}
+
 pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
@@ -83,6 +116,11 @@ pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -
 
 		(a, Eq, b) => Bool(equals(s, a, b)?),
 		(a, Neq, b) => Bool(!equals(s, a, b)?),
+
+		(a, Lt, b) => Bool(evaluate_compare_op(s, a, Lt, b)?.is_lt()),
+		(a, Gt, b) => Bool(evaluate_compare_op(s, a, Gt, b)?.is_gt()),
+		(a, Lte, b) => Bool(evaluate_compare_op(s, a, Lte, b)?.is_le()),
+		(a, Gte, b) => Bool(evaluate_compare_op(s, a, Gte, b)?.is_ge()),
 
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
 		(a, Mod, b) => evaluate_mod_op(s, a, b)?,
@@ -93,16 +131,10 @@ pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -
 		(Bool(a), And, Bool(b)) => Bool(*a && *b),
 		(Bool(a), Or, Bool(b)) => Bool(*a || *b),
 
-		// Str X Str
-		(Str(v1), Lt, Str(v2)) => Bool(v1 < v2),
-		(Str(v1), Gt, Str(v2)) => Bool(v1 > v2),
-		(Str(v1), Lte, Str(v2)) => Bool(v1 <= v2),
-		(Str(v1), Gte, Str(v2)) => Bool(v1 >= v2),
-
 		// Num X Num
 		(Num(v1), Mul, Num(v2)) => Val::new_checked_num(v1 * v2)?,
 		(Num(v1), Div, Num(v2)) => {
-			if *v2 <= f64::EPSILON {
+			if *v2 == 0.0 {
 				throw!(DivisionByZero)
 			}
 			Val::new_checked_num(v1 / v2)?
@@ -110,25 +142,20 @@ pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -
 
 		(Num(v1), Sub, Num(v2)) => Val::new_checked_num(v1 - v2)?,
 
-		(Num(v1), Lt, Num(v2)) => Bool(v1 < v2),
-		(Num(v1), Gt, Num(v2)) => Bool(v1 > v2),
-		(Num(v1), Lte, Num(v2)) => Bool(v1 <= v2),
-		(Num(v1), Gte, Num(v2)) => Bool(v1 >= v2),
-
-		(Num(v1), BitAnd, Num(v2)) => Num(((*v1 as i32) & (*v2 as i32)) as f64),
-		(Num(v1), BitOr, Num(v2)) => Num(((*v1 as i32) | (*v2 as i32)) as f64),
-		(Num(v1), BitXor, Num(v2)) => Num(((*v1 as i32) ^ (*v2 as i32)) as f64),
+		(Num(v1), BitAnd, Num(v2)) => Num(f64::from((*v1 as i32) & (*v2 as i32))),
+		(Num(v1), BitOr, Num(v2)) => Num(f64::from((*v1 as i32) | (*v2 as i32))),
+		(Num(v1), BitXor, Num(v2)) => Num(f64::from((*v1 as i32) ^ (*v2 as i32))),
 		(Num(v1), Lhs, Num(v2)) => {
 			if *v2 < 0.0 {
 				throw!(RuntimeError("shift by negative exponent".into()))
 			}
-			Num(((*v1 as i32) << (*v2 as i32)) as f64)
+			Num(f64::from((*v1 as i32) << (*v2 as i32)))
 		}
 		(Num(v1), Rhs, Num(v2)) => {
 			if *v2 < 0.0 {
 				throw!(RuntimeError("shift by negative exponent".into()))
 			}
-			Num(((*v1 as i32) >> (*v2 as i32)) as f64)
+			Num(f64::from((*v1 as i32) >> (*v2 as i32)))
 		}
 
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(

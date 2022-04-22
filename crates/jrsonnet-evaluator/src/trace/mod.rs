@@ -19,14 +19,18 @@ pub enum PathResolver {
 impl PathResolver {
 	pub fn resolve(&self, from: &Path) -> String {
 		match self {
-			Self::FileName => from.file_name().unwrap().to_string_lossy().into_owned(),
+			Self::FileName => from
+				.file_name()
+				.expect("file name exists")
+				.to_string_lossy()
+				.into_owned(),
 			Self::Absolute => from.to_string_lossy().into_owned(),
 			Self::Relative(base) => {
 				if from.is_relative() {
 					return from.to_string_lossy().into_owned();
 				}
 				pathdiff::diff_paths(from, base)
-					.unwrap()
+					.expect("base is absolute")
 					.to_string_lossy()
 					.into_owned()
 			}
@@ -35,6 +39,7 @@ impl PathResolver {
 }
 
 /// Implements pretty-printing of traces
+#[allow(clippy::module_name_repetitions)]
 pub trait TraceFormat {
 	fn write_trace(
 		&self,
@@ -88,8 +93,9 @@ impl TraceFormat for CompactFormat {
 			error,
 		} = error.error()
 		{
-			writeln!(out)?;
 			use std::fmt::Write;
+
+			writeln!(out)?;
 			let mut n = self.resolver.resolve(path);
 			let mut offset = error.location.offset;
 			let is_eof = if offset >= source_code.len() {
@@ -134,7 +140,7 @@ impl TraceFormat for CompactFormat {
 		let align = file_names
 			.iter()
 			.flatten()
-			.map(|e| e.len())
+			.map(String::len)
 			.max()
 			.unwrap_or(0);
 		for (el, file) in error.trace().0.iter().zip(file_names) {
@@ -166,7 +172,7 @@ impl TraceFormat for JsFormat {
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		for item in error.trace().0.iter() {
+		for item in &error.trace().0 {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
@@ -227,7 +233,7 @@ impl TraceFormat for ExplainingFormat {
 			)?;
 		}
 		let trace = &error.trace();
-		for item in trace.0.iter() {
+		for item in &trace.0 {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
@@ -273,7 +279,7 @@ impl ExplainingFormat {
 		let snippet = Snippet {
 			opt: FormatOptions {
 				color: true,
-				..Default::default()
+				..FormatOptions::default()
 			},
 			title: None,
 			footer: vec![],

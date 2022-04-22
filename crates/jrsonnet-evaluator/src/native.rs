@@ -37,7 +37,7 @@ impl Builtin for NativeCallback {
 	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
 		let mut out_args = Vec::with_capacity(self.params.len());
-		for p in self.params.iter() {
+		for p in &self.params {
 			out_args.push(args[&p.name].evaluate(s.clone())?);
 		}
 		self.handler.call(s, loc.0.map(|l| l.0.clone()), &out_args)

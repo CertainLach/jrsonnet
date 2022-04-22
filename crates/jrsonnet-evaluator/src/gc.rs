@@ -1,6 +1,7 @@
 /// Macros to help deal with Gc
 use std::{
 	borrow::{Borrow, BorrowMut},
+	collections::{HashMap, HashSet},
 	hash::BuildHasherDefault,
 	ops::{Deref, DerefMut},
 };
@@ -14,7 +15,7 @@ pub struct TraceBox<T: ?Sized>(pub Box<T>);
 
 impl<T: ?Sized + Trace> Trace for TraceBox<T> {
 	fn trace(&self, tracer: &mut Tracer) {
-		self.0.trace(tracer)
+		self.0.trace(tracer);
 	}
 
 	fn is_type_tracked() -> bool {
@@ -70,7 +71,7 @@ impl<T: ?Sized> AsMut<T> for TraceBox<T> {
 pub struct GcHashSet<V>(pub FxHashSet<V>);
 impl<V> GcHashSet<V> {
 	pub fn new() -> Self {
-		Self(Default::default())
+		Self(HashSet::default())
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self(FxHashSet::with_capacity_and_hasher(
@@ -111,7 +112,7 @@ impl<V> Default for GcHashSet<V> {
 pub struct GcHashMap<K, V>(pub FxHashMap<K, V>);
 impl<K, V> GcHashMap<K, V> {
 	pub fn new() -> Self {
-		Self(Default::default())
+		Self(HashMap::default())
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self(FxHashMap::with_capacity_and_hasher(

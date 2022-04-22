@@ -2,6 +2,7 @@ use std::{
 	cell::RefCell,
 	fmt::Debug,
 	hash::{Hash, Hasher},
+	ptr::addr_of,
 };
 
 use gcmodule::{Cc, Trace, Weak};
@@ -20,6 +21,11 @@ use crate::{
 
 #[cfg(not(feature = "exp-preserve-order"))]
 mod ordering {
+	#![allow(
+		// This module works as stub for preserve-order feature
+		clippy::unused_self,
+	)]
+
 	use gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace)]
@@ -89,6 +95,7 @@ mod ordering {
 
 use ordering::*;
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Debug, Trace)]
 pub struct ObjMember {
 	pub add: bool,
@@ -113,6 +120,7 @@ enum CacheValue {
 	Errored(LocError),
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Trace)]
 #[force_tracking]
 pub struct ObjValueInternals {
@@ -136,10 +144,11 @@ impl PartialEq for WeakObjValue {
 impl Eq for WeakObjValue {}
 impl Hash for WeakObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(weak_raw(self.0.clone()) as usize)
+		hasher.write_usize(weak_raw(self.0.clone()) as usize);
 	}
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
 pub struct ObjValue(pub(crate) Cc<ObjValueInternals>);
 impl Debug for ObjValue {
@@ -178,6 +187,7 @@ impl ObjValue {
 	pub fn new_empty() -> Self {
 		Self::new(None, Cc::new(GcHashMap::new()), Cc::new(Vec::new()))
 	}
+	#[must_use]
 	pub fn extend_from(&self, super_obj: Self) -> Self {
 		match &self.0.super_obj {
 			None => Self::new(
@@ -200,6 +210,8 @@ impl ObjValue {
 	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder> {
 		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
 	}
+
+	#[must_use]
 	pub fn with_this(&self, this_obj: Self) -> Self {
 		Self(Cc::new(ObjValueInternals {
 			super_obj: self.0.super_obj.clone(),
@@ -222,11 +234,7 @@ impl ObjValue {
 		if !self.0.this_entries.is_empty() {
 			return false;
 		}
-		self.0
-			.super_obj
-			.as_ref()
-			.map(|s| s.is_empty())
-			.unwrap_or(true)
+		self.0.super_obj.as_ref().map_or(true, Self::is_empty)
 	}
 
 	/// Run callback for every field found in object
@@ -254,15 +262,15 @@ impl ObjValue {
 			let new_sort_key = FieldSortKey::new(depth, member.original_index);
 			match member.visibility {
 				Visibility::Normal => {
-					let entry = out.entry(name.to_owned());
+					let entry = out.entry(name.clone());
 					let v = entry.or_insert((true, new_sort_key));
 					v.1 = new_sort_key;
 				}
 				Visibility::Hidden => {
-					out.insert(name.to_owned(), (false, new_sort_key));
+					out.insert(name.clone(), (false, new_sort_key));
 				}
 				Visibility::Unhide => {
-					out.insert(name.to_owned(), (true, new_sort_key));
+					out.insert(name.clone(), (true, new_sort_key));
 				}
 			};
 			false
@@ -356,8 +364,7 @@ impl ObjValue {
 	}
 	pub fn has_field(&self, name: IStr) -> bool {
 		self.field_visibility(name)
-			.map(|v| v.is_visible())
-			.unwrap_or(false)
+			.map_or(false, |v| v.is_visible())
 	}
 
 	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
@@ -459,10 +466,11 @@ impl PartialEq for ObjValue {
 impl Eq for ObjValue {}
 impl Hash for ObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(&*self.0 as *const _ as usize)
+		hasher.write_usize(addr_of!(*self.0) as usize);
 	}
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
 	super_obj: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
@@ -510,6 +518,7 @@ impl Default for ObjValueBuilder {
 	}
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[must_use = "value not added unless binding() was called"]
 pub struct ObjMemberBuilder<Kind> {
 	kind: Kind,
@@ -583,7 +592,7 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 				CallLocation(location.as_ref()),
 				|| format!("field <{}> initializtion", name.clone()),
 				|| throw!(DuplicateFieldName(name.clone())),
-			)?
+			)?;
 		}
 		Ok(())
 	}
@@ -592,14 +601,14 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 pub struct ExtendBuilder<'v>(&'v mut ObjValue);
 impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
 	pub fn value(self, value: Val) {
-		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)))
+		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)));
 	}
 	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) {
-		self.binding(LazyBinding::Bindable(Cc::new(bindable)))
+		self.binding(LazyBinding::Bindable(Cc::new(bindable)));
 	}
 	pub fn binding(self, binding: LazyBinding) {
 		let (receiver, name, member) = self.build_member(binding);
 		let new = receiver.0.clone();
-		*receiver.0 = new.extend_with_raw_member(name, member)
+		*receiver.0 = new.extend_with_raw_member(name, member);
 	}
 }

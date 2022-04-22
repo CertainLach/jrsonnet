@@ -32,6 +32,7 @@ enum LazyValInternals {
 	Pending,
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
 pub struct LazyVal(Cc<RefCell<LazyValInternals>>);
 impl LazyVal {
@@ -50,7 +51,7 @@ impl LazyVal {
 			LazyValInternals::Computed(v) => return Ok(v.clone()),
 			LazyValInternals::Errored(e) => return Err(e.clone()),
 			LazyValInternals::Pending => return Err(InfiniteRecursionDetected.into()),
-			_ => (),
+			LazyValInternals::Waiting(..) => (),
 		};
 		let value = if let LazyValInternals::Waiting(value) =
 			std::mem::replace(&mut *self.0.borrow_mut(), LazyValInternals::Pending)
@@ -114,6 +115,7 @@ impl FuncDesc {
 	}
 }
 
+#[allow(clippy::module_name_repetitions)]
 #[derive(Trace, Clone)]
 pub enum FuncVal {
 	/// Plain function implemented in jsonnet
@@ -225,10 +227,10 @@ impl Slice {
 		let rem = diff % self.step();
 		let div = diff / self.step();
 
-		if rem != 0 {
-			div + 1
-		} else {
+		if rem == 0 {
 			div
+		} else {
+			div + 1
 		}
 	}
 }
@@ -248,11 +250,17 @@ impl ArrValue {
 	pub fn new_eager() -> Self {
 		Self::Eager(Cc::new(Vec::new()))
 	}
+
+	/// # Panics
+	/// If a > b
 	pub fn new_range(a: i32, b: i32) -> Self {
 		assert!(a <= b);
 		Self::Range(a, b)
 	}
 
+	/// # Panics
+	/// If passed numbers are incorrect
+	#[must_use]
 	pub fn slice(self, from: Option<usize>, to: Option<usize>, step: Option<usize>) -> Self {
 		let len = self.len();
 		let from = from.unwrap_or(0);
@@ -289,7 +297,7 @@ impl ArrValue {
 		match self {
 			Self::Bytes(i) => i
 				.get(index)
-				.map_or(Ok(None), |v| Ok(Some(Val::Num(*v as f64)))),
+				.map_or(Ok(None), |v| Ok(Some(Val::Num(f64::from(*v))))),
 			Self::Lazy(vec) => {
 				if let Some(v) = vec.get(index) {
 					Ok(Some(v.evaluate(s)?))
@@ -333,7 +341,7 @@ impl ArrValue {
 		match self {
 			Self::Bytes(i) => i
 				.get(index)
-				.map(|b| LazyVal::new_resolved(Val::Num(*b as f64))),
+				.map(|b| LazyVal::new_resolved(Val::Num(f64::from(*b)))),
 			Self::Lazy(vec) => vec.get(index).cloned(),
 			Self::Eager(vec) => vec.get(index).cloned().map(LazyVal::new_resolved),
 			Self::Extended(v) => {
@@ -374,7 +382,7 @@ impl ArrValue {
 			Self::Bytes(i) => {
 				let mut out = Vec::with_capacity(i.len());
 				for v in i.iter() {
-					out.push(Val::Num(*v as f64));
+					out.push(Val::Num(f64::from(*v)));
 				}
 				Cc::new(out)
 			}
@@ -396,7 +404,7 @@ impl ArrValue {
 			Self::Range(a, b) => {
 				let mut out = Vec::with_capacity(self.len());
 				for i in *a..*b {
-					out.push(Val::Num(i as f64));
+					out.push(Val::Num(f64::from(i)));
 				}
 				Cc::new(out)
 			}
@@ -414,7 +422,7 @@ impl ArrValue {
 					.take(v.to() - v.from())
 					.step_by(v.step())
 				{
-					out.push(v.evaluate(s.clone())?)
+					out.push(v.evaluate(s.clone())?);
 				}
 				Cc::new(out)
 			}
@@ -423,28 +431,27 @@ impl ArrValue {
 
 	pub fn iter(&self, s: State) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
-			Self::Bytes(b) => Ok(Val::Num(b[idx] as f64)),
+			Self::Bytes(b) => Ok(Val::Num(f64::from(b[idx]))),
 			Self::Lazy(l) => l[idx].evaluate(s.clone()),
 			Self::Eager(e) => Ok(e[idx].clone()),
-			Self::Extended(_) => self.get(s.clone(), idx).map(|e| e.unwrap()),
-			Self::Range(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
-			Self::Reversed(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
-			Self::Slice(..) => self.get(s.clone(), idx).map(|e| e.unwrap()),
+			Self::Extended(..) | Self::Range(..) | Self::Reversed(..) | Self::Slice(..) => {
+				self.get(s.clone(), idx).map(|e| e.expect("idx < len"))
+			}
 		})
 	}
 
 	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
 		(0..self.len()).map(move |idx| match self {
-			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(b[idx] as f64)),
+			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(f64::from(b[idx]))),
 			Self::Lazy(l) => l[idx].clone(),
 			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
-			Self::Extended(_) => self.get_lazy(idx).unwrap(),
-			Self::Range(..) => self.get_lazy(idx).unwrap(),
-			Self::Reversed(..) => self.get_lazy(idx).unwrap(),
-			Self::Slice(..) => self.get_lazy(idx).unwrap(),
+			Self::Slice(..) | Self::Extended(..) | Self::Range(..) | Self::Reversed(..) => {
+				self.get_lazy(idx).expect("idx < len")
+			}
 		})
 	}
 
+	#[must_use]
 	pub fn reversed(self) -> Self {
 		Self::Reversed(Box::new(self))
 	}
@@ -493,6 +500,7 @@ impl From<Vec<Val>> for ArrValue {
 	}
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub enum IndexableVal {
 	Str(IStr),
 	Arr(ArrValue),
@@ -708,7 +716,7 @@ impl Val {
 				preserve_order,
 			},
 		)
-		.map(|s| s.into())
+		.map(Into::into)
 	}
 
 	/// Calls `std.manifestJson`
@@ -730,7 +738,7 @@ impl Val {
 				preserve_order,
 			},
 		)
-		.map(|s| s.into())
+		.map(Into::into)
 	}
 
 	pub fn to_yaml(
@@ -751,7 +759,7 @@ impl Val {
 				preserve_order,
 			},
 		)
-		.map(|s| s.into())
+		.map(Into::into)
 	}
 	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {
@@ -824,8 +832,8 @@ pub fn equals(s: State, val_a: &Val, val_b: &Val) -> Result<bool> {
 			for field in fields {
 				if !equals(
 					s.clone(),
-					&a.get(s.clone(), field.clone())?.unwrap(),
-					&b.get(s.clone(), field)?.unwrap(),
+					&a.get(s.clone(), field.clone())?.expect("field exists"),
+					&b.get(s.clone(), field)?.expect("field exists"),
 				)? {
 					return Ok(false);
 				}

@@ -96,7 +96,8 @@ pub enum Error {
 	#[error(
 		"syntax error: expected {}, got {:?}",
 		.error.expected,
-		.source_code.chars().nth(error.location.offset).map(|c| c.to_string()).unwrap_or_else(|| "EOF".into())
+		.source_code.chars().nth(error.location.offset)
+		.map_or_else(|| "EOF".into(), |c| c.to_string())
 	)]
 	ImportSyntaxError {
 		#[skip_trace]
@@ -190,7 +191,7 @@ impl LocError {
 impl Debug for LocError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
-		for el in self.0 .1 .0.iter() {
+		for el in &self.0 .1 .0 {
 			writeln!(f, "\t{:?}", el)?;
 		}
 		Ok(())

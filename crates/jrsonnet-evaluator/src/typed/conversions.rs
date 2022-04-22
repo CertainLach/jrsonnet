@@ -38,6 +38,7 @@ macro_rules! impl_int {
 				<Self as Typed>::TYPE.check(s, &value)?;
 				match value {
 					Val::Num(n) => {
+						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
 							throw!(RuntimeError(
 								format!(
@@ -95,6 +96,7 @@ macro_rules! impl_bounded_int {
 				<Self as Typed>::TYPE.check(s, &value)?;
 				match value {
 					Val::Num(n) => {
+						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
 							throw!(RuntimeError(
 								format!(
@@ -160,7 +162,7 @@ impl Typed for PositiveF64 {
 impl Typed for usize {
 	// It is possible to store 54 bits of precision in f64, but leaving u32::MAX here for compatibility
 	const TYPE: &'static ComplexValType =
-		&ComplexValType::BoundedNumber(Some(0.0), Some(4294967295.0));
+		&ComplexValType::BoundedNumber(Some(0.0), Some(u32::MAX as f64));
 
 	fn into_untyped(value: Self, _: State) -> Result<Val> {
 		if value > u32::MAX as Self {
@@ -173,6 +175,7 @@ impl Typed for usize {
 		<Self as Typed>::TYPE.check(s, &value)?;
 		match value {
 			Val::Num(n) => {
+				#[allow(clippy::float_cmp)]
 				if n.trunc() != n {
 					throw!(RuntimeError(
 						"cannot convert number with fractional part to usize".into()
@@ -263,7 +266,7 @@ where
 }
 
 /// To be used in Vec<Any>
-/// Regular Val can't be used here, because it has wrong TryFrom::Error type
+/// Regular Val can't be used here, because it has wrong `TryFrom::Error` type
 #[derive(Clone)]
 pub struct Any(pub Val);
 
@@ -279,7 +282,7 @@ impl Typed for Any {
 	}
 }
 
-/// Specialization, provides faster TryFrom<VecVal> for Val
+/// Specialization, provides faster `TryFrom<VecVal>` for Val
 pub struct VecVal(pub Cc<Vec<Val>>);
 
 impl Typed for VecVal {
@@ -310,22 +313,20 @@ impl Typed for Bytes {
 	}
 
 	fn from_untyped(value: Val, s: State) -> Result<Self> {
+		if let Val::Arr(ArrValue::Bytes(bytes)) = value {
+			return Ok(Self(bytes));
+		}
+		<Self as Typed>::TYPE.check(s.clone(), &value)?;
 		match value {
-			Val::Arr(ArrValue::Bytes(bytes)) => Ok(Self(bytes)),
-			_ => {
-				<Self as Typed>::TYPE.check(s.clone(), &value)?;
-				match value {
-					Val::Arr(a) => {
-						let mut out = Vec::with_capacity(a.len());
-						for e in a.iter(s.clone()) {
-							let r = e?;
-							out.push(u8::from_untyped(r, s.clone())?);
-						}
-						Ok(Self(out.into()))
-					}
-					_ => unreachable!(),
+			Val::Arr(a) => {
+				let mut out = Vec::with_capacity(a.len());
+				for e in a.iter(s.clone()) {
+					let r = e?;
+					out.push(u8::from_untyped(r, s.clone())?);
 				}
+				Ok(Self(out.into()))
 			}
+			_ => unreachable!(),
 		}
 	}
 }

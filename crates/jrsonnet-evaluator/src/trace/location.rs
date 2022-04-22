@@ -1,3 +1,4 @@
+#[allow(clippy::module_name_repetitions)]
 #[derive(Clone, PartialEq, Debug)]
 pub struct CodeLocation {
 	pub offset: usize,
@@ -9,6 +10,7 @@ pub struct CodeLocation {
 	pub line_end_offset: usize,
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn location_to_offset(mut file: &str, mut line: usize, column: usize) -> Option<usize> {
 	let mut offset = 0;
 	while line > 1 {
@@ -21,13 +23,14 @@ pub fn location_to_offset(mut file: &str, mut line: usize, column: usize) -> Opt
 	Some(offset)
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 	if offsets.is_empty() {
 		return vec![];
 	}
 	let mut line = 1;
 	let mut column = 1;
-	let max_offset = *offsets.iter().max().unwrap();
+	let max_offset = *offsets.iter().max().expect("offsets is not empty");
 
 	let mut offset_map = offsets
 		.iter()

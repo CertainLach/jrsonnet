@@ -12,6 +12,15 @@ macro_rules! ensure_eq {
 }
 
 #[macro_export]
+macro_rules! ensure {
+	($v:expr $(,)?) => {
+		if !$v {
+			::jrsonnet_evaluator::throw_runtime!("assertion failed: {}", stringify!($v))
+		}
+	};
+}
+
+#[macro_export]
 macro_rules! ensure_val_eq {
 	($s:expr, $a:expr, $b:expr) => {{
 		if !::jrsonnet_evaluator::val::equals($s.clone(), &$a.clone(), &$b.clone())? {

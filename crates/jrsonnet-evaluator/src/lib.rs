@@ -1,7 +1,22 @@
-#![warn(clippy::all, clippy::nursery)]
+#![warn(clippy::all, clippy::nursery, clippy::pedantic)]
 #![allow(
 	macro_expanded_macro_exports_accessed_by_absolute_paths,
-	clippy::ptr_arg
+	clippy::ptr_arg,
+	// Too verbose
+	clippy::must_use_candidate,
+	// A lot of functions pass around errors thrown by code
+	clippy::missing_errors_doc,
+	// A lot of pointers have interior Rc
+	clippy::needless_pass_by_value,
+	// Its fine
+	clippy::wildcard_imports,
+	clippy::enum_glob_use,
+	clippy::module_name_repetitions,
+	// TODO: fix individual issues, however this works as intended almost everywhere
+	clippy::cast_precision_loss,
+	clippy::cast_possible_wrap,
+	clippy::cast_possible_truncation,
+	clippy::cast_sign_loss,
 )]
 
 // For jrsonnet-macros
@@ -105,10 +120,10 @@ impl Default for EvaluationSettings {
 		Self {
 			max_stack: 200,
 			max_trace: 20,
-			globals: Default::default(),
-			ext_vars: Default::default(),
-			ext_natives: Default::default(),
-			tla_vars: Default::default(),
+			globals: HashMap::default(),
+			ext_vars: HashMap::default(),
+			ext_natives: HashMap::default(),
+			tla_vars: HashMap::default(),
 			import_resolver: Box::new(DummyImportResolver),
 			manifest_format: ManifestFormat::Json {
 				padding: 4,
@@ -161,7 +176,7 @@ impl Breakpoints {
 		if self.0.is_empty() {
 			return result;
 		}
-		for item in self.0.iter() {
+		for item in &self.0 {
 			if item.loc.belongs_to(loc) {
 				let mut collected = item.collected.borrow_mut();
 				let (depth, vals) = collected.entry(stack_generation).or_default();
@@ -198,7 +213,7 @@ impl State {
 		)
 		.map_err(|error| ImportSyntaxError {
 			error: Box::new(error),
-			path: path.to_owned(),
+			path: path.clone(),
 			source_code: source_code.clone(),
 		})?;
 		self.add_parsed_file(path, source_code, parsed.clone())?;
@@ -210,7 +225,7 @@ impl State {
 		self.data_mut()
 			.files
 			.get_mut(name)
-			.unwrap()
+			.expect("file not found")
 			.evaluated
 			.take();
 	}
@@ -246,7 +261,11 @@ impl State {
 		line: usize,
 		column: usize,
 	) -> Option<usize> {
-		location_to_offset(&self.get_source(file).unwrap(), line, column)
+		location_to_offset(
+			&self.get_source(file).expect("file not found"),
+			line,
+			column,
+		)
 	}
 	pub fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
 		let file_path = self.resolve_file(from, path)?;
@@ -312,8 +331,10 @@ impl State {
 			STDLIB_STR.to_owned().into(),
 			builtin::get_parsed_stdlib(),
 		)
-		.unwrap();
-		let val = self.evaluate_loaded_file_raw(&std_path).unwrap();
+		.expect("stdlib is correct");
+		let val = self
+			.evaluate_loaded_file_raw(&std_path)
+			.expect("stdlib is correct");
 		self.settings_mut().globals.insert("std".into(), val);
 		self
 	}
@@ -342,9 +363,8 @@ impl State {
 				// Error creation uses data, so i drop guard here
 				drop(data);
 				throw!(StackOverflow);
-			} else {
-				*stack_depth += 1;
 			}
+			*stack_depth += 1;
 		}
 		let result = f();
 		{
@@ -376,9 +396,8 @@ impl State {
 				// Error creation uses data, so i drop guard here
 				drop(data);
 				throw!(StackOverflow);
-			} else {
-				*stack_depth += 1;
 			}
+			*stack_depth += 1;
 		}
 		let mut result = f();
 		{
@@ -411,9 +430,8 @@ impl State {
 				// Error creation uses data, so i drop guard here
 				drop(data);
 				throw!(StackOverflow);
-			} else {
-				*stack_depth += 1;
 			}
+			*stack_depth += 1;
 		}
 		let result = f();
 		{
@@ -431,6 +449,8 @@ impl State {
 		result
 	}
 
+	/// # Panics
+	/// In case of formatting failure
 	pub fn stringify_err(&self, e: &LocError) -> String {
 		let mut out = String::new();
 		self.settings()
@@ -1232,49 +1252,5 @@ pub mod tests {
 		assert_eval!(r#"std.assertEqual(std.count([], ""), 0)"#);
 		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "d"), 0)"#);
 		assert_eval!(r#"std.assertEqual(std.count(["a", "b", "a"], "a"), 2)"#);
-	}
-
-	mod derive_typed {
-		use std::path::PathBuf;
-
-		use crate::{typed::Typed, State};
-
-		#[derive(PartialEq, Debug, Typed)]
-		struct MyTyped {
-			a: u32,
-			#[typed(rename = "b")]
-			c: String,
-		}
-
-		#[test]
-		fn test() {
-			let es = State::default();
-			let val = eval!("{a: 14, b: 'Hello, world!'}");
-			let typed = MyTyped::try_from(val).unwrap();
-
-			assert_eq!(
-				typed,
-				MyTyped {
-					a: 14,
-					c: "Hello, world!".to_string()
-				}
-			);
-			es.settings_mut()
-				.globals
-				.insert("mytyped".into(), typed.try_into().unwrap());
-
-			let v = es
-				.evaluate_snippet_raw(
-					PathBuf::from("raw.jsonnet").into(),
-					"
-				mytyped == {a: 14, b: 'Hello, world!'}
-			"
-					.into(),
-				)
-				.unwrap()
-				.as_bool()
-				.unwrap();
-			assert!(v)
-		}
 	}
 }

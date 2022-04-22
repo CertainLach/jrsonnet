@@ -158,7 +158,7 @@ fn escape_string_json_buf(s: &str, buf: &mut String) {
 			'\r' => buf.push_str("\\r"),
 			'\t' => buf.push_str("\\t"),
 			c if c < 32 as char || (c >= 127 as char && c <= 159 as char) => {
-				write!(buf, "\\u{:04x}", c as u32).unwrap()
+				write!(buf, "\\u{:04x}", c as u32).unwrap();
 			}
 			c => buf.push(c),
 		}
@@ -194,7 +194,7 @@ pub struct ManifestYamlOptions<'s> {
 	pub preserve_order: bool,
 }
 
-/// From https://github.com/chyh1990/yaml-rust/blob/da52a68615f2ecdd6b7e4567019f280c433c1521/src/emitter.rs#L289
+/// From <https://github.com/chyh1990/yaml-rust/blob/da52a68615f2ecdd6b7e4567019f280c433c1521/src/emitter.rs#L289>
 /// With added date check
 fn yaml_needs_quotes(string: &str) -> bool {
 	fn need_quotes_spaces(string: &str) -> bool {
@@ -227,6 +227,8 @@ pub fn manifest_yaml_ex(s: State, val: &Val, options: &ManifestYamlOptions<'_>) 
 	manifest_yaml_ex_buf(s, val, &mut out, &mut String::new(), options)?;
 	Ok(out)
 }
+
+#[allow(clippy::too_many_lines)]
 fn manifest_yaml_ex_buf(
 	s: State,
 	val: &Val,
@@ -238,9 +240,9 @@ fn manifest_yaml_ex_buf(
 	match val {
 		Val::Bool(v) => {
 			if *v {
-				buf.push_str("true")
+				buf.push_str("true");
 			} else {
-				buf.push_str("false")
+				buf.push_str("false");
 			}
 		}
 		Val::Null => buf.push_str("null"),

@@ -71,11 +71,11 @@ impl Display for TypeLocErrorList {
 				if line.trim().is_empty() {
 					continue;
 				}
-				if i != 0 {
+				if i == 0 {
+					write!(f, "  - ")?;
+				} else {
 					writeln!(f)?;
 					write!(f, "    ")?;
-				} else {
-					write!(f, "  - ")?;
 				}
 				write!(f, "{}", line)?;
 			}
@@ -94,7 +94,7 @@ fn push_type_description(
 		Ok(_) => Ok(()),
 		Err(mut e) => {
 			if let Error::TypeError(e) = &mut e.error_mut() {
-				(e.1).0.push(path())
+				(e.1).0.push(path());
 			}
 			Err(e)
 		}
@@ -145,6 +145,7 @@ impl Display for ValuePathStack {
 }
 
 impl CheckType for ComplexValType {
+	#[allow(clippy::too_many_lines)]
 	fn check(&self, s: State, value: &Val) -> Result<()> {
 		match self {
 			Self::Any => Ok(()),
@@ -202,7 +203,7 @@ impl CheckType for ComplexValType {
 								|| format!("property {}", k),
 								|| ValuePathItem::Field((*k).into()),
 								|| v.check(s.clone(), &got_v),
-							)?
+							)?;
 						} else {
 							return Err(
 								TypeError::MissingProperty((*k).into(), self.clone()).into()
@@ -245,13 +246,13 @@ impl CheckType for ComplexValType {
 			}
 			Self::Sum(types) => {
 				for ty in types.iter() {
-					ty.check(s.clone(), value)?
+					ty.check(s.clone(), value)?;
 				}
 				Ok(())
 			}
 			Self::SumRef(types) => {
 				for ty in types.iter() {
-					ty.check(s.clone(), value)?
+					ty.check(s.clone(), value)?;
 				}
 				Ok(())
 			}

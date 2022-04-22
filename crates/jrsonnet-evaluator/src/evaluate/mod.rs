@@ -23,8 +23,6 @@ pub mod operator;
 pub fn evaluate_binding_in_future(b: &BindSpec, fctx: FutureWrapper<Context>) -> LazyVal {
 	let b = b.clone();
 	if let Some(params) = &b.params {
-		let params = params.clone();
-
 		#[derive(Trace)]
 		struct LazyMethodBinding {
 			fctx: FutureWrapper<Context>,
@@ -42,6 +40,8 @@ pub fn evaluate_binding_in_future(b: &BindSpec, fctx: FutureWrapper<Context>) ->
 				))
 			}
 		}
+
+		let params = params.clone();
 
 		LazyVal::new(TraceBox(Box::new(LazyMethodBinding {
 			fctx,
@@ -69,11 +69,10 @@ pub fn evaluate_binding_in_future(b: &BindSpec, fctx: FutureWrapper<Context>) ->
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn evaluate_binding(b: &BindSpec, cctx: ContextCreator) -> (IStr, LazyBinding) {
 	let b = b.clone();
 	if let Some(params) = &b.params {
-		let params = params.clone();
-
 		#[derive(Trace)]
 		struct BindableMethodLazyVal {
 			this: Option<ObjValue>,
@@ -120,6 +119,8 @@ pub fn evaluate_binding(b: &BindSpec, cctx: ContextCreator) -> (IStr, LazyBindin
 				}))))
 			}
 		}
+
+		let params = params.clone();
 
 		(
 			b.name.clone(),
@@ -227,7 +228,7 @@ pub fn evaluate_comp(
 		None => callback(ctx)?,
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
 			if bool::from_untyped(evaluate(s.clone(), ctx.clone(), cond)?, s.clone())? {
-				evaluate_comp(s, ctx, &specs[1..], callback)?
+				evaluate_comp(s, ctx, &specs[1..], callback)?;
 			}
 		}
 		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
@@ -239,7 +240,7 @@ pub fn evaluate_comp(
 							ctx.clone().with_var(var.clone(), item?.clone()),
 							&specs[1..],
 							callback,
-						)?
+						)?;
 					}
 				}
 				_ => throw!(InComprehensionCanOnlyIterateOverArray),
@@ -249,6 +250,7 @@ pub fn evaluate_comp(
 	Ok(())
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -> Result<ObjValue> {
 	let new_bindings = FutureWrapper::new();
 	let future_this = FutureWrapper::new();
@@ -278,12 +280,6 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				visibility,
 				value,
 			}) => {
-				let name = evaluate_field_name(s.clone(), ctx.clone(), name)?;
-				if name.is_none() {
-					continue;
-				}
-				let name = name.unwrap();
-
 				#[derive(Trace)]
 				struct ObjMemberBinding {
 					cctx: ContextCreator,
@@ -305,6 +301,14 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 						)?))
 					}
 				}
+
+				let name = evaluate_field_name(s.clone(), ctx.clone(), name)?;
+				let name = if let Some(name) = name {
+					name
+				} else {
+					continue;
+				};
+
 				builder
 					.member(name.clone())
 					.with_add(*plus)
@@ -325,11 +329,6 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				value,
 				..
 			}) => {
-				let name = evaluate_field_name(s.clone(), ctx.clone(), name)?;
-				if name.is_none() {
-					continue;
-				}
-				let name = name.unwrap();
 				#[derive(Trace)]
 				struct ObjMemberBinding {
 					cctx: ContextCreator,
@@ -352,6 +351,13 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 						)))
 					}
 				}
+
+				let name = if let Some(name) = evaluate_field_name(s.clone(), ctx.clone(), name)? {
+					name
+				} else {
+					continue;
+				};
+
 				builder
 					.member(name.clone())
 					.hide()
@@ -505,24 +511,24 @@ pub fn evaluate_assert(s: State, ctx: Context, assertion: &AssertStmt) -> Result
 					throw!(AssertionFailed(
 						evaluate(s.clone(), ctx, msg)?.to_string(s.clone())?
 					));
-				} else {
-					throw!(AssertionFailed(Val::Null.to_string(s.clone())?));
 				}
+				throw!(AssertionFailed(Val::Null.to_string(s.clone())?));
 			},
-		)?
+		)?;
 	}
 	Ok(())
 }
 
-pub fn evaluate_named(s: State, ctx: Context, lexpr: &LocExpr, name: IStr) -> Result<Val> {
+pub fn evaluate_named(s: State, ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 	use Expr::*;
-	let LocExpr(expr, _loc) = lexpr;
-	Ok(match &**expr {
+	let LocExpr(raw_expr, _loc) = expr;
+	Ok(match &**raw_expr {
 		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
-		_ => evaluate(s, ctx, lexpr)?,
+		_ => evaluate(s, ctx, expr)?,
 	})
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
@@ -532,10 +538,11 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			Val::Obj(ctx.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
 		}
 		Literal(LiteralType::Super) => Val::Obj(
-			ctx.super_obj()
-				.clone()
-				.ok_or(NoSuperFound)?
-				.with_this(ctx.this().clone().unwrap()),
+			ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
+				ctx.this()
+					.clone()
+					.expect("if super exists - then this should to"),
+			),
 		),
 		Literal(LiteralType::Dollar) => {
 			Val::Obj(ctx.dollar().clone().ok_or(NoTopLevelObjectFound)?)
@@ -699,9 +706,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		Slice(value, desc) => {
-			let indexable = evaluate(s.clone(), ctx.clone(), value)?;
-			let loc = CallLocation::new(loc);
-
 			fn parse_idx<T: Typed>(
 				loc: CallLocation,
 				s: State,
@@ -719,6 +723,9 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					Ok(None)
 				}
 			}
+
+			let indexable = evaluate(s.clone(), ctx.clone(), value)?;
+			let loc = CallLocation::new(loc);
 
 			let start = parse_idx(loc, s.clone(), &ctx, &desc.start, "start")?;
 			let end = parse_idx(loc, s.clone(), &ctx, &desc.end, "end")?;

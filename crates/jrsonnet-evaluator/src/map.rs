@@ -34,8 +34,7 @@ impl LayeredHashMap {
 				.0
 				.parent
 				.as_ref()
-				.map(|p| p.contains_key(key))
-				.unwrap_or(false)
+				.map_or(false, |p| p.contains_key(key))
 	}
 }
 

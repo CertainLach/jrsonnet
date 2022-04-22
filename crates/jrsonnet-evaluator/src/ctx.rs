@@ -79,6 +79,7 @@ impl Context {
 	pub fn contains_binding(&self, name: IStr) -> bool {
 		self.0.bindings.contains_key(&name)
 	}
+	#[must_use]
 	pub fn into_future(self, ctx: FutureWrapper<Self>) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
@@ -86,16 +87,19 @@ impl Context {
 		ctx.unwrap()
 	}
 
+	#[must_use]
 	pub fn with_var(self, name: IStr, value: Val) -> Self {
 		let mut new_bindings = GcHashMap::with_capacity(1);
 		new_bindings.insert(name, LazyVal::new_resolved(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
+	#[must_use]
 	pub fn with_this_super(self, new_this: ObjValue, new_super_obj: Option<ObjValue>) -> Self {
 		self.extend(GcHashMap::new(), None, Some(new_this), new_super_obj)
 	}
 
+	#[must_use]
 	pub fn extend(
 		self,
 		new_bindings: GcHashMap<IStr, LazyVal>,
@@ -119,6 +123,7 @@ impl Context {
 			bindings,
 		}))
 	}
+	#[must_use]
 	pub fn extend_bound(self, new_bindings: GcHashMap<IStr, LazyVal>) -> Self {
 		let new_this = self.0.this.clone();
 		let new_super_obj = self.0.super_obj.clone();
@@ -135,7 +140,7 @@ impl Context {
 		let this = new_this.or_else(|| self.0.this.clone());
 		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
 		let mut new = GcHashMap::with_capacity(new_bindings.len());
-		for (k, v) in new_bindings.0.into_iter() {
+		for (k, v) in new_bindings.0 {
 			new.insert(k, v.evaluate(s.clone(), this.clone(), super_obj.clone())?);
 		}
 		Ok(self.extend(new, new_dollar, this, super_obj))

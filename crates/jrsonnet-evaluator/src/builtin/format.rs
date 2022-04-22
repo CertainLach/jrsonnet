@@ -86,6 +86,7 @@ pub mod tests_key {
 	}
 }
 
+#[allow(clippy::struct_excessive_bools)]
 #[derive(Default, Debug)]
 pub struct CFlags {
 	pub alt: bool,
@@ -270,12 +271,12 @@ pub fn parse_codes(mut str: &str) -> Result<Vec<Element>> {
 			return Ok(out);
 		}
 		str = &str[offset + 1..];
-		let (code, nstr) = parse_code(str)?;
-		str = nstr;
+		let code;
+		(code, str) = parse_code(str)?;
 		bytes = str.as_bytes();
 		offset = 0;
 
-		out.push(Element::Code(code))
+		out.push(Element::Code(code));
 	}
 }
 
@@ -313,7 +314,7 @@ pub fn render_integer(
 		.saturating_sub(prefix.len() + digits.len());
 
 	if neg {
-		out.push('-')
+		out.push('-');
 	} else if sign {
 		out.push('+');
 	} else if blank {
@@ -340,7 +341,7 @@ pub fn render_decimal(
 	blank: bool,
 	sign: bool,
 ) {
-	render_integer(out, iv, padding, precision, blank, sign, 10, "", false)
+	render_integer(out, iv, padding, precision, blank, sign, 10, "", false);
 }
 pub fn render_octal(
 	out: &mut String,
@@ -361,8 +362,10 @@ pub fn render_octal(
 		8,
 		if alt && iv != 0 { "0" } else { "" },
 		false,
-	)
+	);
 }
+
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn render_hexadecimal(
 	out: &mut String,
 	iv: i64,
@@ -387,9 +390,10 @@ pub fn render_hexadecimal(
 			(false, _) => "",
 		},
 		caps,
-	)
+	);
 }
 
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn render_float(
 	out: &mut String,
 	n: f64,
@@ -431,6 +435,7 @@ pub fn render_float(
 	}
 }
 
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn render_float_sci(
 	out: &mut String,
 	n: f64,
@@ -461,6 +466,7 @@ pub fn render_float_sci(
 	out.push_str(&exponent_str);
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn format_code(
 	s: State,
 	out: &mut String,

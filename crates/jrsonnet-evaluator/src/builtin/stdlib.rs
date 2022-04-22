@@ -24,5 +24,5 @@ thread_local! {
 }
 
 pub fn get_parsed_stdlib() -> LocExpr {
-	PARSED_STDLIB.with(|t| t.clone())
+	PARSED_STDLIB.with(Clone::clone)
 }

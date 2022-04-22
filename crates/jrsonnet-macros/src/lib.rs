@@ -157,8 +157,8 @@ impl ArgInfo {
 			});
 		}
 
-		match &ty as &Type {
-			Type::Reference(r) if type_is_path(&r.elem, &name).is_some() => return Ok(Self::This),
+		match ty as &Type {
+			Type::Reference(r) if type_is_path(&r.elem, name).is_some() => return Ok(Self::This),
 			_ => {}
 		}
 
@@ -465,14 +465,13 @@ impl TypedField {
 					"strategy should be set when flattening Option",
 				));
 			}
-		} else {
-			if attr.flatten_ok {
-				return Err(Error::new(
-					field.span(),
-					"flatten(ok) is only useable on optional fields",
-				));
-			}
+		} else if attr.flatten_ok {
+			return Err(Error::new(
+				field.span(),
+				"flatten(ok) is only useable on optional fields",
+			));
 		}
+
 		Ok(Self {
 			attr,
 			ident,

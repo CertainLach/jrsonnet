@@ -79,7 +79,7 @@ impl ImportResolver for FileImportResolver {
 		if direct.exists() {
 			Ok(direct.into())
 		} else {
-			for library_path in self.library_paths.iter() {
+			for library_path in &self.library_paths {
 				let mut cloned = library_path.clone();
 				cloned.push(path);
 				if cloned.exists() {
