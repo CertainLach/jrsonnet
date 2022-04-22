@@ -410,6 +410,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 			for c in str.chars() {
 				match func.evaluate_simple(s.clone(), &[c.to_string()].as_slice())? {
 					Val::Str(o) => out.push_str(&o),
+					Val::Null => continue,
 					_ => throw!(RuntimeError(
 						"in std.join all items should be strings".into()
 					)),
@@ -427,6 +428,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 							out.push(oe?);
 						}
 					}
+					Val::Null => continue,
 					_ => throw!(RuntimeError(
 						"in std.join all items should be arrays".into()
 					)),
@@ -564,6 +566,8 @@ fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<IndexableV
 					for item in items.iter(s.clone()) {
 						out.push(item?);
 					}
+				} else if matches!(item, Val::Null) {
+					continue;
 				} else {
 					throw!(RuntimeError(
 						"in std.join all items should be arrays".into()
@@ -585,6 +589,8 @@ fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<IndexableV
 					}
 					first = false;
 					out += &item;
+				} else if matches!(item, Val::Null) {
+					continue;
 				} else {
 					throw!(RuntimeError(
 						"in std.join all items should be strings".into()
