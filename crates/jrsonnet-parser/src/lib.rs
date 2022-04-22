@@ -232,7 +232,7 @@ parser! {
 			/ keyword("error") _ expr:expr(s) { Expr::ErrorStmt(expr) }
 
 		rule slice_part(s: &ParserSettings) -> Option<LocExpr>
-			= e:(_ e:expr(s) _{e})? {e}
+			= _ e:(e:expr(s) _{e})? {e}
 		pub rule slice_desc(s: &ParserSettings) -> SliceDesc
 			= start:slice_part(s) ":" pair:(end:slice_part(s) step:(":" e:slice_part(s){e})? {(end, step.flatten())})? {
 				let (end, step) = if let Some((end, step)) = pair {
