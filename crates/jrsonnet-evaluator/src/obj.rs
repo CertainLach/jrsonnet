@@ -390,13 +390,25 @@ impl ObjValue {
 			.value_cache
 			.borrow_mut()
 			.insert(cache_key.clone(), CacheValue::Pending);
+		let fill_error = |e: LocError| {
+			self.0
+				.value_cache
+				.borrow_mut()
+				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
+			e
+		};
 		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
-			(Some(k), None) => Ok(Some(self.evaluate_this(s, k, real_this)?)),
+			(Some(k), None) => Ok(Some(
+				self.evaluate_this(s, k, real_this).map_err(fill_error)?,
+			)),
 			(Some(k), Some(super_obj)) => {
-				let our = self.evaluate_this(s.clone(), k, real_this)?;
+				let our = self
+					.evaluate_this(s.clone(), k, real_this)
+					.map_err(fill_error)?;
 				if k.add {
 					super_obj
-						.get_raw(s.clone(), key, Some(real_this))?
+						.get_raw(s.clone(), key, Some(real_this))
+						.map_err(fill_error)?
 						.map_or(Ok(Some(our.clone())), |v| {
 							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
 						})
@@ -406,17 +418,8 @@ impl ObjValue {
 			}
 			(None, Some(super_obj)) => super_obj.get_raw(s, key, Some(real_this)),
 			(None, None) => Ok(None),
-		};
-		let value = match value {
-			Ok(v) => v,
-			Err(e) => {
-				self.0
-					.value_cache
-					.borrow_mut()
-					.insert(cache_key, CacheValue::Errored(e.clone()));
-				return Err(e);
-			}
-		};
+		}
+		.map_err(fill_error)?;
 		self.0.value_cache.borrow_mut().insert(
 			cache_key,
 			match &value {
