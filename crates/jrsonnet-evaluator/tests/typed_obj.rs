@@ -51,7 +51,7 @@ fn renamed_field() -> Result<()> {
 	ensure_eq!(b, B { a: 1, b: 2 });
 	ensure_eq!(
 		&B::into_untyped(b.clone(), s.clone())?.to_string(s.clone())? as &str,
-		"{a: 1, c: 2}",
+		r#"{"a": 1, "c": 2}"#,
 	);
 	test_roundtrip(b.clone(), s.clone())?;
 	Ok(())

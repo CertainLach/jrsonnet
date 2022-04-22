@@ -741,21 +741,51 @@ pub mod test_format {
 
 	#[test]
 	fn octals() {
-		assert_eq!(format_arr("%#o", &[Val::Num(8.0)]).unwrap(), "010");
-		assert_eq!(format_arr("%#4o", &[Val::Num(8.0)]).unwrap(), " 010");
-		assert_eq!(format_arr("%4o", &[Val::Num(8.0)]).unwrap(), "  10");
-		assert_eq!(format_arr("%04o", &[Val::Num(8.0)]).unwrap(), "0010");
-		assert_eq!(format_arr("%+4o", &[Val::Num(8.0)]).unwrap(), " +10");
-		assert_eq!(format_arr("%+04o", &[Val::Num(8.0)]).unwrap(), "+010");
-		assert_eq!(format_arr("%-4o", &[Val::Num(8.0)]).unwrap(), "10  ");
-		assert_eq!(format_arr("%+-4o", &[Val::Num(8.0)]).unwrap(), "+10 ");
-		assert_eq!(format_arr("%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
+		let s = State::default();
+		assert_eq!(
+			format_arr(s.clone(), "%#o", &[Val::Num(8.0)]).unwrap(),
+			"010"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%#4o", &[Val::Num(8.0)]).unwrap(),
+			" 010"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%4o", &[Val::Num(8.0)]).unwrap(),
+			"  10"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%04o", &[Val::Num(8.0)]).unwrap(),
+			"0010"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%+4o", &[Val::Num(8.0)]).unwrap(),
+			" +10"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%+04o", &[Val::Num(8.0)]).unwrap(),
+			"+010"
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%-4o", &[Val::Num(8.0)]).unwrap(),
+			"10  "
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%+-4o", &[Val::Num(8.0)]).unwrap(),
+			"+10 "
+		);
+		assert_eq!(
+			format_arr(s.clone(), "%+-04o", &[Val::Num(8.0)]).unwrap(),
+			"+10 "
+		);
 	}
 
 	#[test]
 	fn percent_doesnt_consumes_values() {
+		let s = State::default();
 		assert_eq!(
 			format_arr(
+				s,
 				"How much error budget is left looking at our %.3f%% availability gurantees?",
 				&[Val::Num(4.0)]
 			)

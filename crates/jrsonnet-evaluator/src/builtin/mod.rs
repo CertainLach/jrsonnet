@@ -381,8 +381,9 @@ fn builtin_native(s: State, name: IStr) -> Result<Any> {
 		.ext_natives
 		.get(&name)
 		.cloned()
-		.map(|v| Val::Func(FuncVal::Builtin(v.clone())))
-		.unwrap_or(Val::Null)))
+		.map_or(Val::Null, |v| {
+			Val::Func(FuncVal::Builtin(v.clone()))
+		})))
 }
 
 #[jrsonnet_macros::builtin]

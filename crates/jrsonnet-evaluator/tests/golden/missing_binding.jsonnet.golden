@@ -1,0 +1,2 @@
+variable is not defined: a
+   missing_binding.jsonnet:1:1-3: variable <a> access

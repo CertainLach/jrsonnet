@@ -1,3 +1,8 @@
+use jrsonnet_evaluator::{
+	error::Result, function::builtin, throw_runtime, val::FuncVal, LazyVal, ObjValueBuilder, State,
+	Val,
+};
+
 #[macro_export]
 macro_rules! ensure_eq {
 	($a:expr, $b:expr $(,)?) => {{
@@ -31,4 +36,34 @@ macro_rules! ensure_val_eq {
 			)
 		}
 	}};
+}
+
+#[builtin]
+fn assert_throw(s: State, lazy: LazyVal, message: String) -> Result<bool> {
+	match lazy.evaluate(s) {
+		Ok(_) => {
+			throw_runtime!("expected argument to throw on evaluation, but it returned instead")
+		}
+		Err(e) => {
+			let error = format!("{}", e.error());
+			ensure_eq!(message, error);
+		}
+	}
+	Ok(true)
+}
+
+#[allow(dead_code)]
+pub fn with_test(s: &State) {
+	let mut bobj = ObjValueBuilder::new();
+	bobj.member("assertThrow".into())
+		.hide()
+		.value(
+			s.clone(),
+			Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)),
+		)
+		.expect("no error");
+
+	s.settings_mut()
+		.globals
+		.insert("test".into(), Val::Obj(bobj.build()));
 }
