@@ -45,7 +45,6 @@ impl LazyValValue for EvaluateNamedLazyVal {
 		evaluate_named(s, self.ctx.unwrap(), &self.value, self.name)
 	}
 }
-
 pub trait ArgLike {
 	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
 }
@@ -167,6 +166,34 @@ impl ArgsLike for ArgsDesc {
 			handler(name)
 		}
 	}
+}
+
+impl ArgsLike for [(); 0] {
+	fn unnamed_len(&self) -> usize {
+		0
+	}
+
+	fn unnamed_iter(
+		&self,
+		_s: State,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	fn named_iter(
+		&self,
+		_s: State,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+
+	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
 }
 
 impl<A: ArgLike> ArgsLike for [(IStr, A)] {

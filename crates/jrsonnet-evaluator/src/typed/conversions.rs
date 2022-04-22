@@ -14,11 +14,11 @@ use crate::{
 };
 
 pub trait TypedObj: Typed {
-	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
-	fn parse(obj: &ObjValue) -> Result<Self>;
-	fn into_object(self) -> Result<ObjValue> {
+	fn serialize(self, s: State, out: &mut ObjValueBuilder) -> Result<()>;
+	fn parse(obj: &ObjValue, s: State) -> Result<Self>;
+	fn into_object(self, s: State) -> Result<ObjValue> {
 		let mut builder = ObjValueBuilder::new();
-		self.serialize(&mut builder)?;
+		self.serialize(s, &mut builder)?;
 		Ok(builder.build())
 	}
 }

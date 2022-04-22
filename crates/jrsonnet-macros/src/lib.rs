@@ -6,7 +6,7 @@ use syn::{
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::Comma,
+	token::{self, Comma},
 	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
 	PathArguments, Result, ReturnType, Token, Type,
 };
@@ -90,6 +90,7 @@ mod kw {
 	syn::custom_keyword!(fields);
 	syn::custom_keyword!(rename);
 	syn::custom_keyword!(flatten);
+	syn::custom_keyword!(ok);
 }
 
 struct EmptyAttr;
@@ -135,7 +136,7 @@ enum ArgInfo {
 }
 
 impl ArgInfo {
-	fn parse(arg: &FnArg) -> Result<Self> {
+	fn parse(name: &str, arg: &FnArg) -> Result<Self> {
 		let arg = match arg {
 			FnArg::Receiver(_) => unreachable!(),
 			FnArg::Typed(a) => a,
@@ -149,13 +150,16 @@ impl ArgInfo {
 			return Ok(Self::State);
 		} else if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
-		} else if type_is_path(ty, "Self").is_some() {
-			return Ok(Self::This);
 		} else if type_is_path(ty, "LazyVal").is_some() {
 			return Ok(Self::Lazy {
 				is_option: false,
 				name: ident.to_string(),
 			});
+		}
+
+		match &ty as &Type {
+			Type::Reference(r) if type_is_path(&r.elem, &name).is_some() => return Ok(Self::This),
+			_ => {}
 		}
 
 		let (is_option, ty) = if let Some(ty) = extract_type_from_option(ty)? {
@@ -230,11 +234,12 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		return Err(Error::new(result.span(), "return value should be result"));
 	};
 
+	let name = fun.sig.ident.to_string();
 	let args = fun
 		.sig
 		.inputs
 		.iter()
-		.map(ArgInfo::parse)
+		.map(|arg| ArgInfo::parse(&name, arg))
 		.collect::<Result<Vec<_>>>()?;
 
 	let params_desc = args.iter().flat_map(|a| match a {
@@ -343,9 +348,9 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
-				State,
+				State, Val,
 				function::{Builtin, CallLocation, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
-				error::Result, Context,
+				error::Result, Context, typed::Typed,
 				parser::ExprLocation,
 			};
 			const PARAMS: &'static [BuiltinParam] = &[
@@ -379,6 +384,9 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 struct TypedAttr {
 	rename: Option<String>,
 	flatten: bool,
+	/// flatten(ok) strategy for flattened optionals
+	/// field would be None in case of any parsing error (as in serde)
+	flatten_ok: bool,
 }
 impl Parse for TypedAttr {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -399,6 +407,17 @@ impl Parse for TypedAttr {
 			} else if lookahead.peek(kw::flatten) {
 				input.parse::<kw::flatten>()?;
 				out.flatten = true;
+				if input.peek(token::Paren) {
+					let content;
+					parenthesized!(content in input);
+					let lookahead = content.lookahead1();
+					if lookahead.peek(kw::ok) {
+						content.parse::<kw::ok>()?;
+						out.flatten_ok = true;
+					} else {
+						return Err(lookahead.error());
+					}
+				}
 			} else if input.is_empty() {
 				break;
 			} else {
@@ -417,75 +436,101 @@ impl Parse for TypedAttr {
 	}
 }
 
-struct TypedField<'f>(&'f syn::Field, TypedAttr);
-impl<'f> TypedField<'f> {
-	fn try_new(field: &'f syn::Field) -> Result<Self> {
+struct TypedField {
+	attr: TypedAttr,
+	ident: Ident,
+	ty: Type,
+	is_option: bool,
+}
+impl TypedField {
+	fn parse(field: &syn::Field) -> Result<Self> {
 		let attr = parse_attr::<TypedAttr, _>(&field.attrs, "typed")?.unwrap_or_default();
-		if field.ident.is_none() {
+		let ident = if let Some(ident) = field.ident.clone() {
+			ident
+		} else {
 			return Err(Error::new(
 				field.span(),
 				"this field should appear in output object, but it has no visible name",
 			));
+		};
+		let (is_option, ty) = if let Some(ty) = extract_type_from_option(&field.ty)? {
+			(true, ty.clone())
+		} else {
+			(false, field.ty.clone())
+		};
+		if is_option && attr.flatten {
+			if !attr.flatten_ok {
+				return Err(Error::new(
+					field.span(),
+					"strategy should be set when flattening Option",
+				));
+			}
+		} else {
+			if attr.flatten_ok {
+				return Err(Error::new(
+					field.span(),
+					"flatten(ok) is only useable on optional fields",
+				));
+			}
 		}
-		Ok(Self(field, attr))
-	}
-	fn ident(&self) -> Ident {
-		self.0
-			.ident
-			.clone()
-			.expect("constructor disallows fields without name")
+		Ok(Self {
+			attr,
+			ident,
+			ty,
+			is_option,
+		})
 	}
 	/// None if this field is flattened in jsonnet output
 	fn name(&self) -> Option<String> {
-		if self.1.flatten {
+		if self.attr.flatten {
 			return None;
 		}
 		Some(
-			self.1
+			self.attr
 				.rename
 				.clone()
-				.unwrap_or_else(|| self.ident().to_string()),
+				.unwrap_or_else(|| self.ident.to_string()),
 		)
 	}
 
 	fn expand_field(&self) -> Option<TokenStream> {
-		if self.is_option() {
+		if self.is_option {
 			return None;
 		}
 		let name = self.name()?;
-		let ty = &self.0.ty;
+		let ty = &self.ty;
 		Some(quote! {
 			(#name, <#ty>::TYPE)
 		})
 	}
 	fn expand_parse(&self) -> TokenStream {
-		let ident = self.ident();
-		let ty = &self.0.ty;
-		if self.1.flatten {
+		let ident = &self.ident;
+		let ty = &self.ty;
+		if self.attr.flatten {
 			// optional flatten is handled in same way as serde
-			return if self.is_option() {
+			return if self.is_option {
 				quote! {
-					#ident: <#ty>::parse(&obj).ok(),
+					#ident: <#ty>::parse(&obj, s.clone()).ok(),
 				}
 			} else {
 				quote! {
-					#ident: <#ty>::parse(&obj)?,
+					#ident: <#ty>::parse(&obj, s.clone())?,
 				}
 			};
 		};
 
 		let name = self.name().unwrap();
-		let value = if let Some(ty) = self.as_option() {
+		let value = if self.is_option {
 			quote! {
-				if let Some(value) = obj.get(#name.into())? {
-					Some(<#ty>::try_from(vakue)?)
+				if let Some(value) = obj.get(s.clone(), #name.into())? {
+					Some(<#ty>::from_untyped(value, s.clone())?)
 				} else {
 					None
 				}
 			}
 		} else {
 			quote! {
-				<#ty>::try_from(obj.get(#name.into())?.ok_or_else(|| Error::NoSuchField(#name.into()))?)?
+				<#ty>::from_untyped(obj.get(s.clone(), #name.into())?.ok_or_else(|| Error::NoSuchField(#name.into()))?, s.clone())?
 			}
 		};
 
@@ -493,38 +538,32 @@ impl<'f> TypedField<'f> {
 			#ident: #value,
 		}
 	}
-	fn expand_serialize(&self) -> TokenStream {
-		let ident = self.ident();
-		if let Some(name) = self.name() {
-			if self.is_option() {
+	fn expand_serialize(&self) -> Result<TokenStream> {
+		let ident = &self.ident;
+		let ty = &self.ty;
+		Ok(if let Some(name) = self.name() {
+			if self.is_option {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into()).value(value.try_into()?)?;
+						out.member(#name.into()).value(s.clone(), <#ty>::into_untyped(value, s.clone())?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into()).value(self.#ident.try_into()?)?;
+					out.member(#name.into()).value(s.clone(), <#ty>::into_untyped(self.#ident, s.clone())?)?;
 				}
 			}
-		} else if self.is_option() {
+		} else if self.is_option {
 			quote! {
 				if let Some(value) = self.#ident {
-					value.serialize(out)?;
+					value.serialize(s.clone(), out)?;
 				}
 			}
 		} else {
 			quote! {
-				self.#ident.serialize(out)?;
+				self.#ident.serialize(s.clone(), out)?;
 			}
-		}
-	}
-
-	fn as_option(&self) -> Option<&Type> {
-		extract_type_from_option(&self.0.ty).unwrap()
-	}
-	fn is_option(&self) -> bool {
-		self.as_option().is_some()
+		})
 	}
 }
 
@@ -548,7 +587,7 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	let fields = data
 		.fields
 		.iter()
-		.map(TypedField::try_new)
+		.map(TypedField::parse)
 		.collect::<Result<Vec<_>>>()?;
 
 	let typed = {
@@ -566,12 +605,12 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 
 				fn from_untyped(value: Val, s: State) -> Result<Self> {
 					let obj = value.as_obj().expect("shape is correct");
-					Self::parse(&obj)
+					Self::parse(&obj, s)
 				}
 
 				fn into_untyped(value: Self, s: State) -> Result<Val> {
 					let mut out = ObjValueBuilder::new();
-					value.serialize(&mut out)?;
+					value.serialize(s, &mut out)?;
 					Ok(Val::Obj(out.build()))
 				}
 
@@ -580,26 +619,29 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	};
 
 	let fields_parse = fields.iter().map(TypedField::expand_parse);
-	let fields_serialize = fields.iter().map(TypedField::expand_serialize);
+	let fields_serialize = fields
+		.iter()
+		.map(TypedField::expand_serialize)
+		.collect::<Result<Vec<_>>>()?;
 
 	Ok(quote! {
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				typed::{ComplexValType, Typed, TypedObj, CheckType},
-				Val,
-				error::{LocError, Error},
+				Val, State,
+				error::{LocError, Error, Result},
 				ObjValueBuilder, ObjValue,
 			};
 
 			#typed
 
-			impl #ident {
-				fn serialize(self, out: &mut ObjValueBuilder) -> Result<(), LocError> {
+			impl TypedObj for #ident {
+				fn serialize(self, s: State, out: &mut ObjValueBuilder) -> Result<(), LocError> {
 					#(#fields_serialize)*
 
 					Ok(())
 				}
-				fn parse(obj: &ObjValue) -> Result<Self, LocError> {
+				fn parse(obj: &ObjValue, s: State) -> Result<Self, LocError> {
 					Ok(Self {
 						#(#fields_parse)*
 					})

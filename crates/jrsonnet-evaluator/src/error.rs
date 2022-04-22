@@ -1,4 +1,5 @@
 use std::{
+	fmt::Debug,
 	path::{Path, PathBuf},
 	rc::Rc,
 };
@@ -166,7 +167,7 @@ pub struct StackTraceElement {
 #[derive(Debug, Clone, Trace)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
-#[derive(Debug, Clone, Trace)]
+#[derive(Clone, Trace)]
 pub struct LocError(Box<(Error, StackTrace)>);
 impl LocError {
 	pub fn new(e: Error) -> Self {
@@ -184,6 +185,15 @@ impl LocError {
 	}
 	pub fn trace_mut(&mut self) -> &mut StackTrace {
 		&mut (self.0).1
+	}
+}
+impl Debug for LocError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		writeln!(f, "{}", self.0 .0)?;
+		for el in self.0 .1 .0.iter() {
+			writeln!(f, "\t{:?}", el)?;
+		}
+		Ok(())
 	}
 }
 
