@@ -106,6 +106,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v2
 
+      - name: Add experimental flags
+        if: ${{ endsWith(github.ref, '-test' )}}
+        run: echo 'EXPERIMENTAL_FLAGS=--features=experimental' >> $GITHUB_ENV
+
       - name: Linux x86 cross compiler
         if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
         run: sudo apt install gcc-multilib
@@ -128,7 +132,7 @@ jobs:
       - name: Run ARM build
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         shell: bash
-        run: cross build --bin=jrsonnet --release --target ${{ matrix.target }}
+        run: cross build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
 
       - name: Run ARM strip
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
@@ -140,7 +144,7 @@ jobs:
         uses: actions-rs/cargo@v1
         with:
           command: build
-          args: --bin=jrsonnet --release --target ${{ matrix.target }}
+          args: --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
 
       - name: Run strip
         if: ${{ !startsWith(matrix.target, 'aarch64-unknown-linux-') }}
