@@ -42,7 +42,11 @@ pub struct TraceOpts {
 }
 impl ConfigureState for TraceOpts {
 	fn configure(&self, s: &State) -> Result<()> {
-		let resolver = PathResolver::Absolute;
+		let resolver = if let Ok(dir) = std::env::current_dir() {
+			PathResolver::Relative(dir)
+		} else {
+			PathResolver::Absolute
+		};
 		match self
 			.trace_format
 			.as_ref()
