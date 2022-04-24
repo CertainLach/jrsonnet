@@ -298,6 +298,8 @@ pub enum Expr {
 	Function(ParamsDesc, LocExpr),
 	/// std.thisFile
 	IntrinsicThisFile,
+	/// std.id,
+	IntrinsicId,
 	/// std.primitiveEquals
 	Intrinsic(IStr),
 	/// if true == false then 1 else 2

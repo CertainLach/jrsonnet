@@ -11,7 +11,7 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	builtin::{format::FormatError, sort::SortError},
+	stdlib::{format::FormatError, sort::SortError},
 	typed::TypeLocError,
 };
 

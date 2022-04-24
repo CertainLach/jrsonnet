@@ -349,7 +349,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				State, Val,
-				function::{Builtin, CallLocation, StaticBuiltin, BuiltinParam, ArgsLike, parse_builtin_call},
+				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				error::Result, Context, typed::Typed,
 				parser::ExprLocation,
 			};

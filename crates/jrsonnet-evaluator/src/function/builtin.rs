@@ -1,15 +1,32 @@
-#![allow(clippy::type_complexity)]
-
-use std::{path::Path, rc::Rc};
+use std::{borrow::Cow, path::Path, rc::Rc};
 
 use gcmodule::Trace;
 
-use crate::{
-	error::Result,
-	function::{parse_builtin_call, ArgsLike, Builtin, BuiltinParam, CallLocation},
-	gc::TraceBox,
-	Context, State, Val,
-};
+use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
+use crate::{error::Result, gc::TraceBox, Context, State, Val};
+
+pub type BuiltinParamName = Cow<'static, str>;
+
+#[derive(Clone, Trace)]
+pub struct BuiltinParam {
+	pub name: BuiltinParamName,
+	pub has_default: bool,
+}
+
+/// Do not implement it directly, instead use #[builtin] macro
+pub trait Builtin: Trace {
+	fn name(&self) -> &str;
+	fn params(&self) -> &[BuiltinParam];
+	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
+}
+
+pub trait StaticBuiltin: Builtin + Send + Sync
+where
+	Self: 'static,
+{
+	// In impl, to make it object safe:
+	// const INST: &'static Self;
+}
 
 #[derive(Trace)]
 pub struct NativeCallback {

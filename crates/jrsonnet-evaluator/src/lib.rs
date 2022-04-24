@@ -22,7 +22,6 @@
 // For jrsonnet-macros
 extern crate self as jrsonnet_evaluator;
 
-mod builtin;
 mod ctx;
 mod dynamic;
 pub mod error;
@@ -32,8 +31,8 @@ pub mod gc;
 mod import;
 mod integrations;
 mod map;
-pub mod native;
 mod obj;
+mod stdlib;
 pub mod trace;
 pub mod typed;
 pub mod val;
@@ -41,7 +40,7 @@ pub mod val;
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
-	fmt::Debug,
+	fmt::{self, Debug},
 	path::{Path, PathBuf},
 	rc::Rc,
 };
@@ -50,7 +49,7 @@ pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
-use function::{Builtin, CallLocation, TlaArg};
+use function::{builtin::Builtin, CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace, Weak};
 pub use import::*;
@@ -77,7 +76,7 @@ pub enum LazyBinding {
 }
 
 impl Debug for LazyBinding {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "LazyBinding")
 	}
 }
@@ -329,7 +328,7 @@ impl State {
 		self.add_parsed_file(
 			std_path.clone(),
 			STDLIB_STR.to_owned().into(),
-			builtin::get_parsed_stdlib(),
+			stdlib::get_parsed_stdlib(),
 		)
 		.expect("stdlib is correct");
 		let val = self

@@ -1,17 +1,16 @@
 use jrsonnet_evaluator::{
-	error::Result, function::builtin, throw_runtime, val::FuncVal, LazyVal, ObjValueBuilder, State,
-	Val,
+	error::Result,
+	function::{builtin, FuncVal},
+	throw_runtime, LazyVal, ObjValueBuilder, State, Val,
 };
 
 #[macro_export]
 macro_rules! ensure_eq {
 	($a:expr, $b:expr $(,)?) => {{
-		if $a != $b {
-			::jrsonnet_evaluator::throw_runtime!(
-				"assertion failed: a != b\na={:#?}\nb={:#?}",
-				$a,
-				$b,
-			)
+		let a = &$a;
+		let b = &$b;
+		if a != b {
+			::jrsonnet_evaluator::throw_runtime!("assertion failed: a != b\na={:#?}\nb={:#?}", a, b)
 		}
 	}};
 }

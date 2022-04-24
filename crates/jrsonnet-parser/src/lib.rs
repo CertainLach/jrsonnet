@@ -211,6 +211,7 @@ parser! {
 			= literal(s)
 
 			/ quiet!{"$intrinsicThisFile" {Expr::IntrinsicThisFile}}
+			/ quiet!{"$intrinsicId" {Expr::IntrinsicId}}
 			/ quiet!{"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}}
 
 			/ string_expr(s) / number_expr(s)

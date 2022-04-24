@@ -7,14 +7,14 @@ use jrsonnet_parser::{
 use jrsonnet_types::ValType;
 
 use crate::{
-	builtin::{std_slice, BUILTINS},
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
-	function::CallLocation,
+	function::{CallLocation, FuncDesc, FuncVal},
 	gc::TraceBox,
+	stdlib::{std_slice, BUILTINS},
 	throw,
 	typed::Typed,
-	val::{ArrValue, FuncDesc, FuncVal, LazyValValue},
+	val::{ArrValue, LazyValValue},
 	Bindable, Context, ContextCreator, FutureWrapper, GcHashMap, LazyBinding, LazyVal, ObjValue,
 	ObjValueBuilder, ObjectAssertion, Result, State, Val,
 };
@@ -676,6 +676,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				.ok_or_else(|| IntrinsicNotFound(name.clone()))?,
 		)),
 		IntrinsicThisFile => return Err(MagicThisFileUsed.into()),
+		IntrinsicId => Val::Func(FuncVal::identity()),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(s.clone(), ctx.clone(), assert)?;
 			evaluate(s, ctx, returned)?

@@ -4,6 +4,7 @@
 
   # Magic legacy field
   thisFile:: $intrinsicThisFile,
+  id:: $intrinsicId,
 
   # Those functions aren't normally located in stdlib
   length:: $intrinsic(length),
@@ -24,7 +25,6 @@
   decodeUTF8:: $intrinsic(decodeUTF8),
   md5:: $intrinsic(md5),
   trace:: $intrinsic(trace),
-  id:: $intrinsic(id),
   parseJson:: $intrinsic(parseJson),
   parseYaml:: $intrinsic(parseYaml),
 

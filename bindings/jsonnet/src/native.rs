@@ -8,9 +8,8 @@ use std::{
 use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
-	function::BuiltinParam,
+	function::builtin::{BuiltinParam, NativeCallback, NativeCallbackHandler},
 	gc::TraceBox,
-	native::{NativeCallback, NativeCallbackHandler},
 	typed::Typed,
 	IStr, State, Val,
 };

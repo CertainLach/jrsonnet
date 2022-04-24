@@ -7,9 +7,10 @@ use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
 	error::{Error::*, Result},
+	function::{FuncDesc, FuncVal},
 	throw,
 	typed::CheckType,
-	val::{ArrValue, FuncDesc, FuncVal, IndexableVal},
+	val::{ArrValue, IndexableVal},
 	ObjValue, ObjValueBuilder, State, Val,
 };
 

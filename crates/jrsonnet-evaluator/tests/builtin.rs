@@ -5,10 +5,9 @@ use std::path::PathBuf;
 use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::Result,
-	function::{builtin, Builtin, CallLocation},
+	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
 	gc::TraceBox,
 	typed::Typed,
-	val::FuncVal,
 	State, Val,
 };
 
@@ -26,7 +25,7 @@ fn basic_function() -> Result<()> {
 			s.clone(),
 			s.create_default_context(),
 			CallLocation::native(),
-			&[],
+			&(),
 		)?,
 		s.clone(),
 	)?;

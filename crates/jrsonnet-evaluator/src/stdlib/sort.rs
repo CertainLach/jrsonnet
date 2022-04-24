@@ -2,9 +2,9 @@ use gcmodule::{Cc, Trace};
 
 use crate::{
 	error::{Error, LocError, Result},
+	function::FuncVal,
 	throw,
 	typed::Any,
-	val::FuncVal,
 	State, Val,
 };
 
@@ -63,17 +63,18 @@ fn get_sort_type<T>(
 	Ok(sort_type)
 }
 
-pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: Option<&FuncVal>) -> Result<Cc<Vec<Val>>> {
+/// * `key_getter` - None, if identity sort required
+pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Vec<Val>>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
-	if let Some(key_getter) = key_getter {
+	if !key_getter.is_identity() {
 		// Slow path, user provided key getter
 		let mut vk = Vec::with_capacity(values.len());
 		for value in values.iter() {
 			vk.push((
 				value.clone(),
-				key_getter.evaluate_simple(s.clone(), &[Any(value.clone())].as_slice())?,
+				key_getter.evaluate_simple(s.clone(), &(Any(value.clone()),))?,
 			));
 		}
 		let sort_type = get_sort_type(&mut vk, |v| &mut v.1)?;

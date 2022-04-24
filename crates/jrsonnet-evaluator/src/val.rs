@@ -2,22 +2,17 @@ use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{LocExpr, ParamsDesc};
 use jrsonnet_types::ValType;
 
 use crate::{
-	builtin::manifest::{
-		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
-	},
 	cc_ptr_eq,
 	error::{Error::*, LocError},
-	evaluate,
-	function::{
-		parse_default_function_call, parse_function_call, ArgsLike, Builtin, CallLocation,
-		StaticBuiltin,
-	},
+	function::FuncVal,
 	gc::TraceBox,
-	throw, Context, ObjValue, Result, State,
+	stdlib::manifest::{
+		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
+	},
+	throw, ObjValue, Result, State,
 };
 
 pub trait LazyValValue: Trace {
@@ -80,98 +75,6 @@ impl Debug for LazyVal {
 impl PartialEq for LazyVal {
 	fn eq(&self, other: &Self) -> bool {
 		cc_ptr_eq(&self.0, &other.0)
-	}
-}
-
-#[derive(Debug, PartialEq, Trace)]
-pub struct FuncDesc {
-	pub name: IStr,
-	pub ctx: Context,
-	pub params: ParamsDesc,
-	pub body: LocExpr,
-}
-impl FuncDesc {
-	/// Create body context, but fill arguments without defaults with lazy error
-	pub fn default_body_context(&self) -> Context {
-		parse_default_function_call(self.ctx.clone(), &self.params)
-	}
-
-	/// Create context, with which body code will run
-	pub fn call_body_context(
-		&self,
-		s: State,
-		call_ctx: Context,
-		args: &dyn ArgsLike,
-		tailstrict: bool,
-	) -> Result<Context> {
-		parse_function_call(
-			s,
-			call_ctx,
-			self.ctx.clone(),
-			&self.params,
-			args,
-			tailstrict,
-		)
-	}
-}
-
-#[allow(clippy::module_name_repetitions)]
-#[derive(Trace, Clone)]
-pub enum FuncVal {
-	/// Plain function implemented in jsonnet
-	Normal(Cc<FuncDesc>),
-	/// Standard library function
-	StaticBuiltin(#[skip_trace] &'static dyn StaticBuiltin),
-	/// User-provided function
-	Builtin(Cc<TraceBox<dyn Builtin>>),
-}
-
-impl Debug for FuncVal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
-			Self::StaticBuiltin(arg0) => {
-				f.debug_tuple("StaticBuiltin").field(&arg0.name()).finish()
-			}
-			Self::Builtin(arg0) => f.debug_tuple("Builtin").field(&arg0.name()).finish(),
-		}
-	}
-}
-
-impl FuncVal {
-	pub fn args_len(&self) -> usize {
-		match self {
-			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
-			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default).count(),
-			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default).count(),
-		}
-	}
-	pub fn name(&self) -> IStr {
-		match self {
-			Self::Normal(normal) => normal.name.clone(),
-			Self::StaticBuiltin(builtin) => builtin.name().into(),
-			Self::Builtin(builtin) => builtin.name().into(),
-		}
-	}
-	pub fn evaluate(
-		&self,
-		s: State,
-		call_ctx: Context,
-		loc: CallLocation,
-		args: &dyn ArgsLike,
-		tailstrict: bool,
-	) -> Result<Val> {
-		match self {
-			Self::Normal(func) => {
-				let body_ctx = func.call_body_context(s.clone(), call_ctx, args, tailstrict)?;
-				evaluate(s, body_ctx, &func.body)
-			}
-			Self::StaticBuiltin(b) => b.call(s, call_ctx, loc, args),
-			Self::Builtin(b) => b.call(s, call_ctx, loc, args),
-		}
-	}
-	pub fn evaluate_simple(&self, s: State, args: &dyn ArgsLike) -> Result<Val> {
-		self.evaluate(s, Context::default(), CallLocation::native(), args, true)
 	}
 }
 

@@ -10,18 +10,18 @@ use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
 
 use crate::{
-	builtin::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	error::{Error::*, Result},
-	function::{CallLocation, StaticBuiltin},
+	function::{builtin::StaticBuiltin, CallLocation, FuncVal},
 	operator::evaluate_mod_op,
+	stdlib::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	throw,
 	typed::{Any, BoundedUsize, Bytes, Either2, Either4, PositiveF64, Typed, VecVal, M1},
-	val::{equals, primitive_equals, ArrValue, FuncVal, IndexableVal, Slice},
+	val::{equals, primitive_equals, ArrValue, IndexableVal, Slice},
 	Either, ObjValue, State, Val,
 };
 
-pub mod stdlib;
-pub use stdlib::*;
+pub mod expr;
+pub use expr::*;
 
 use self::manifest::{escape_string_json, manifest_json_ex, ManifestJsonOptions, ManifestType};
 
@@ -141,7 +141,6 @@ thread_local! {
 			("manifestJsonEx".into(), builtin_manifest_json_ex::INST),
 			("manifestYamlDoc".into(), builtin_manifest_yaml_doc::INST),
 			("reverse".into(), builtin_reverse::INST),
-			("id".into(), builtin_id::INST),
 			("strReplace".into(), builtin_str_replace::INST),
 			("splitLimit".into(), builtin_splitlimit::INST),
 			("parseJson".into(), builtin_parse_json::INST),
@@ -163,7 +162,7 @@ fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> Result<usize
 		A(x) => x.chars().count(),
 		B(x) => x.len(),
 		C(x) => x.len(),
-		D(f) => f.args_len(),
+		D(f) => f.params_len(),
 	})
 }
 
@@ -176,7 +175,7 @@ fn builtin_type(x: Any) -> Result<IStr> {
 fn builtin_make_array(s: State, sz: usize, func: FuncVal) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
-		out.push(func.evaluate_simple(s.clone(), &[i as f64].as_slice())?);
+		out.push(func.evaluate_simple(s.clone(), &(i as f64,))?);
 	}
 	Ok(VecVal(Cc::new(out)))
 }
@@ -390,7 +389,7 @@ fn builtin_native(s: State, name: IStr) -> Result<Any> {
 fn builtin_filter(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 	arr.filter(s.clone(), |val| {
 		bool::from_untyped(
-			func.evaluate_simple(s.clone(), &[Any(val.clone())].as_slice())?,
+			func.evaluate_simple(s.clone(), &(Any(val.clone()),))?,
 			s.clone(),
 		)
 	})
@@ -399,7 +398,7 @@ fn builtin_filter(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 #[jrsonnet_macros::builtin]
 fn builtin_map(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 	arr.map(s.clone(), |val| {
-		func.evaluate_simple(s.clone(), &[Any(val)].as_slice())
+		func.evaluate_simple(s.clone(), &(Any(val),))
 	})
 }
 
@@ -409,7 +408,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 		IndexableVal::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
-				match func.evaluate_simple(s.clone(), &[c.to_string()].as_slice())? {
+				match func.evaluate_simple(s.clone(), &(c.to_string(),))? {
 					Val::Str(o) => out.push_str(&o),
 					Val::Null => continue,
 					_ => throw!(RuntimeError(
@@ -423,7 +422,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 			let mut out = Vec::new();
 			for el in a.iter(s.clone()) {
 				let el = el?;
-				match func.evaluate_simple(s.clone(), &[Any(el)].as_slice())? {
+				match func.evaluate_simple(s.clone(), &(Any(el),))? {
 					Val::Arr(o) => {
 						for oe in o.iter(s.clone()) {
 							out.push(oe?);
@@ -444,7 +443,7 @@ fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Indexab
 fn builtin_foldl(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter(s.clone()) {
-		acc = func.evaluate_simple(s.clone(), &[Any(acc), Any(i?)].as_slice())?;
+		acc = func.evaluate_simple(s.clone(), &(Any(acc), Any(i?)))?;
 	}
 	Ok(Any(acc))
 }
@@ -453,7 +452,7 @@ fn builtin_foldl(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<An
 fn builtin_foldr(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
 	for i in arr.iter(s.clone()).rev() {
-		acc = func.evaluate_simple(s.clone(), &[Any(i?), Any(acc)].as_slice())?;
+		acc = func.evaluate_simple(s.clone(), &(Any(i?), Any(acc)))?;
 	}
 	Ok(Any(acc))
 }
@@ -467,7 +466,7 @@ fn builtin_sort(s: State, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrVal
 	Ok(ArrValue::Eager(sort::sort(
 		s.clone(),
 		arr.evaluated(s)?,
-		keyF.as_ref(),
+		keyF.unwrap_or(FuncVal::identity()),
 	)?))
 }
 
@@ -662,11 +661,6 @@ fn builtin_manifest_yaml_doc(
 #[jrsonnet_macros::builtin]
 fn builtin_reverse(value: ArrValue) -> Result<ArrValue> {
 	Ok(value.reversed())
-}
-
-#[jrsonnet_macros::builtin]
-const fn builtin_id(v: Any) -> Result<Any> {
-	Ok(v)
 }
 
 #[jrsonnet_macros::builtin]
