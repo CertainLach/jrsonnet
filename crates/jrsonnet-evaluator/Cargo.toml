@@ -18,6 +18,8 @@ anyhow-error = ["anyhow"]
 # Allows to preserve field order in objects
 exp-preserve-order = []
 exp-serde-preserve-order = ["serde_json/preserve_order"]
+# Implements field destructuring
+exp-destruct = []
 
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }

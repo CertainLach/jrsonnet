@@ -179,10 +179,44 @@ impl ArgsDesc {
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Trace)]
-pub struct BindSpec {
-	pub name: IStr,
-	pub params: Option<ParamsDesc>,
-	pub value: LocExpr,
+pub enum DestructRest {
+	/// ...rest
+	Keep(IStr),
+	/// ...
+	Drop,
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Trace)]
+pub enum Destruct {
+	Full(IStr),
+	#[cfg(feature = "exp-destruct")]
+	Skip,
+	#[cfg(feature = "exp-destruct")]
+	Array {
+		start: Vec<Destruct>,
+		rest: Option<DestructRest>,
+		end: Vec<Destruct>,
+	},
+	#[cfg(feature = "exp-destruct")]
+	Object {
+		fields: Vec<(IStr, Option<Destruct>)>,
+		rest: Option<DestructRest>,
+	},
+}
+
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, Clone, PartialEq, Trace)]
+pub enum BindSpec {
+	Field {
+		into: Destruct,
+		value: LocExpr,
+	},
+	Function {
+		name: IStr,
+		params: ParamsDesc,
+		value: LocExpr,
+	},
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]

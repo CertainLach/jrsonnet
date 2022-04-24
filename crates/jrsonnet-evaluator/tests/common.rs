@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
-	throw_runtime, LazyVal, ObjValueBuilder, State, Val,
+	throw_runtime, ObjValueBuilder, State, Thunk, Val,
 };
 
 #[macro_export]
@@ -38,7 +38,7 @@ macro_rules! ensure_val_eq {
 }
 
 #[builtin]
-fn assert_throw(s: State, lazy: LazyVal, message: String) -> Result<bool> {
+fn assert_throw(s: State, lazy: Thunk<Val>, message: String) -> Result<bool> {
 	match lazy.evaluate(s) {
 		Ok(_) => {
 			throw_runtime!("expected argument to throw on evaluation, but it returned instead")

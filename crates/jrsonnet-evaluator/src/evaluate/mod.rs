@@ -1,189 +1,157 @@
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, ForSpecData, IfSpecData,
 	LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 
 use crate::{
+	destructure::evaluate_dest,
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
-	gc::TraceBox,
 	stdlib::{std_slice, BUILTINS},
-	throw,
+	tb, throw,
 	typed::Typed,
-	val::{ArrValue, LazyValValue},
-	Bindable, Context, ContextCreator, FutureWrapper, GcHashMap, LazyBinding, LazyVal, ObjValue,
-	ObjValueBuilder, ObjectAssertion, Result, State, Val,
+	val::{ArrValue, Thunk, ThunkValue},
+	Bindable, Context, ContextCreator, GcHashMap, LazyBinding, ObjValue, ObjValueBuilder,
+	ObjectAssertion, Pending, Result, State, Val,
 };
+pub mod destructure;
 pub mod operator;
 
-pub fn evaluate_binding_in_future(b: &BindSpec, fctx: FutureWrapper<Context>) -> LazyVal {
-	let b = b.clone();
-	if let Some(params) = &b.params {
-		#[derive(Trace)]
-		struct LazyMethodBinding {
-			fctx: FutureWrapper<Context>,
-			name: IStr,
-			params: ParamsDesc,
-			value: LocExpr,
-		}
-		impl LazyValValue for LazyMethodBinding {
-			fn get(self: Box<Self>, _: State) -> Result<Val> {
-				Ok(evaluate_method(
-					self.fctx.unwrap(),
-					self.name,
-					self.params,
-					self.value,
-				))
-			}
-		}
-
-		let params = params.clone();
-
-		LazyVal::new(TraceBox(Box::new(LazyMethodBinding {
-			fctx,
-			name: b.name.clone(),
-			params,
-			value: b.value.clone(),
-		})))
-	} else {
-		#[derive(Trace)]
-		struct LazyNamedBinding {
-			fctx: FutureWrapper<Context>,
-			name: IStr,
-			value: LocExpr,
-		}
-		impl LazyValValue for LazyNamedBinding {
-			fn get(self: Box<Self>, s: State) -> Result<Val> {
-				evaluate_named(s, self.fctx.unwrap(), &self.value, self.name)
-			}
-		}
-		LazyVal::new(TraceBox(Box::new(LazyNamedBinding {
-			fctx,
-			name: b.name.clone(),
-			value: b.value,
-		})))
-	}
-}
-
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_binding(b: &BindSpec, cctx: ContextCreator) -> (IStr, LazyBinding) {
-	let b = b.clone();
-	if let Some(params) = &b.params {
-		#[derive(Trace)]
-		struct BindableMethodLazyVal {
-			this: Option<ObjValue>,
-			super_obj: Option<ObjValue>,
-
-			cctx: ContextCreator,
-			name: IStr,
-			params: ParamsDesc,
-			value: LocExpr,
-		}
-		impl LazyValValue for BindableMethodLazyVal {
-			fn get(self: Box<Self>, s: State) -> Result<Val> {
-				Ok(evaluate_method(
-					self.cctx.create(s, self.this, self.super_obj)?,
-					self.name,
-					self.params,
-					self.value,
-				))
-			}
-		}
-
-		#[derive(Trace)]
-		struct BindableMethod {
-			cctx: ContextCreator,
-			name: IStr,
-			params: ParamsDesc,
-			value: LocExpr,
-		}
-		impl Bindable for BindableMethod {
-			fn bind(
-				&self,
-				_: State,
+pub fn evaluate_binding(b: BindSpec, cctx: ContextCreator) -> Result<(IStr, LazyBinding)> {
+	match b {
+		BindSpec::Field {
+			into: Destruct::Full(name),
+			value,
+		} => {
+			#[derive(Trace)]
+			struct BindableNamedThunk {
 				this: Option<ObjValue>,
 				super_obj: Option<ObjValue>,
-			) -> Result<LazyVal> {
-				Ok(LazyVal::new(TraceBox(Box::new(BindableMethodLazyVal {
-					this,
-					super_obj,
 
-					cctx: self.cctx.clone(),
-					name: self.name.clone(),
-					params: self.params.clone(),
-					value: self.value.clone(),
-				}))))
+				cctx: ContextCreator,
+				name: IStr,
+				value: LocExpr,
 			}
-		}
-
-		let params = params.clone();
-
-		(
-			b.name.clone(),
-			LazyBinding::Bindable(Cc::new(TraceBox(Box::new(BindableMethod {
-				cctx,
-				name: b.name.clone(),
-				params,
-				value: b.value.clone(),
-			})))),
-		)
-	} else {
-		#[derive(Trace)]
-		struct BindableNamedLazyVal {
-			this: Option<ObjValue>,
-			super_obj: Option<ObjValue>,
-
-			cctx: ContextCreator,
-			name: IStr,
-			value: LocExpr,
-		}
-		impl LazyValValue for BindableNamedLazyVal {
-			fn get(self: Box<Self>, s: State) -> Result<Val> {
-				evaluate_named(
-					s.clone(),
-					self.cctx.create(s, self.this, self.super_obj)?,
-					&self.value,
-					self.name,
-				)
+			impl ThunkValue for BindableNamedThunk {
+				type Output = Val;
+				fn get(self: Box<Self>, s: State) -> Result<Val> {
+					evaluate_named(
+						s.clone(),
+						self.cctx.create(s, self.this, self.super_obj)?,
+						&self.value,
+						self.name,
+					)
+				}
 			}
-		}
 
-		#[derive(Trace)]
-		struct BindableNamed {
-			cctx: ContextCreator,
-			name: IStr,
-			value: LocExpr,
+			#[derive(Trace)]
+			struct BindableNamed {
+				cctx: ContextCreator,
+				name: IStr,
+				value: LocExpr,
+			}
+			impl Bindable for BindableNamed {
+				fn bind(
+					&self,
+					_: State,
+					this: Option<ObjValue>,
+					super_obj: Option<ObjValue>,
+				) -> Result<Thunk<Val>> {
+					Ok(Thunk::new(tb!(BindableNamedThunk {
+						this,
+						super_obj,
+
+						cctx: self.cctx.clone(),
+						name: self.name.clone(),
+						value: self.value.clone(),
+					})))
+				}
+			}
+
+			Ok((
+				name.clone(),
+				LazyBinding::Bindable(Cc::new(tb!(BindableNamed {
+					cctx,
+					name: name.clone(),
+					value: value.clone(),
+				}))),
+			))
 		}
-		impl Bindable for BindableNamed {
-			fn bind(
-				&self,
-				_: State,
+		#[cfg(feature = "exp-destruct")]
+		BindSpec::Field { into: _, .. } => {
+			use crate::throw_runtime;
+			throw_runtime!("destructuring is not yet supported here")
+		}
+		BindSpec::Function {
+			name,
+			params,
+			value,
+		} => {
+			#[derive(Trace)]
+			struct BindableMethodThunk {
 				this: Option<ObjValue>,
 				super_obj: Option<ObjValue>,
-			) -> Result<LazyVal> {
-				Ok(LazyVal::new(TraceBox(Box::new(BindableNamedLazyVal {
-					this,
-					super_obj,
 
-					cctx: self.cctx.clone(),
-					name: self.name.clone(),
-					value: self.value.clone(),
-				}))))
+				cctx: ContextCreator,
+				name: IStr,
+				params: ParamsDesc,
+				value: LocExpr,
 			}
-		}
+			impl ThunkValue for BindableMethodThunk {
+				type Output = Val;
+				fn get(self: Box<Self>, s: State) -> Result<Val> {
+					Ok(evaluate_method(
+						self.cctx.create(s, self.this, self.super_obj)?,
+						self.name,
+						self.params,
+						self.value,
+					))
+				}
+			}
 
-		(
-			b.name.clone(),
-			LazyBinding::Bindable(Cc::new(TraceBox(Box::new(BindableNamed {
-				cctx,
-				name: b.name.clone(),
-				value: b.value.clone(),
-			})))),
-		)
+			#[derive(Trace)]
+			struct BindableMethod {
+				cctx: ContextCreator,
+				name: IStr,
+				params: ParamsDesc,
+				value: LocExpr,
+			}
+			impl Bindable for BindableMethod {
+				fn bind(
+					&self,
+					_: State,
+					this: Option<ObjValue>,
+					super_obj: Option<ObjValue>,
+				) -> Result<Thunk<Val>> {
+					Ok(Thunk::<Val>::new(tb!(BindableMethodThunk {
+						this,
+						super_obj,
+
+						cctx: self.cctx.clone(),
+						name: self.name.clone(),
+						params: self.params.clone(),
+						value: self.value.clone(),
+					})))
+				}
+			}
+
+			let params = params.clone();
+
+			Ok((
+				name.clone(),
+				LazyBinding::Bindable(Cc::new(tb!(BindableMethod {
+					cctx,
+					name: name.clone(),
+					params,
+					value,
+				}))),
+			))
+		}
 	}
 }
 
@@ -252,19 +220,20 @@ pub fn evaluate_comp(
 
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -> Result<ObjValue> {
-	let new_bindings = FutureWrapper::new();
-	let future_this = FutureWrapper::new();
+	let new_bindings = Pending::new();
+	let future_this = Pending::new();
 	let cctx = ContextCreator(ctx.clone(), new_bindings.clone());
 	{
 		let mut bindings: GcHashMap<IStr, LazyBinding> = GcHashMap::with_capacity(members.len());
-		for (n, b) in members
+		for r in members
 			.iter()
 			.filter_map(|m| match m {
 				Member::BindStmt(b) => Some(b.clone()),
 				_ => None,
 			})
-			.map(|b| evaluate_binding(&b, cctx.clone()))
+			.map(|b| evaluate_binding(b.clone(), cctx.clone()))
 		{
+			let (n, b) = r?;
 			bindings.insert(n, b);
 		}
 		new_bindings.fill(bindings);
@@ -292,8 +261,8 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 						s: State,
 						this: Option<ObjValue>,
 						super_obj: Option<ObjValue>,
-					) -> Result<LazyVal> {
-						Ok(LazyVal::new_resolved(evaluate_named(
+					) -> Result<Thunk<Val>> {
+						Ok(Thunk::evaluated(evaluate_named(
 							s.clone(),
 							self.cctx.create(s, this, super_obj)?,
 							&self.value,
@@ -316,11 +285,11 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.with_location(value.1.clone())
 					.bindable(
 						s.clone(),
-						TraceBox(Box::new(ObjMemberBinding {
+						tb!(ObjMemberBinding {
 							cctx: cctx.clone(),
 							value: value.clone(),
 							name,
-						})),
+						}),
 					)?;
 			}
 			Member::Field(FieldMember {
@@ -342,8 +311,8 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 						s: State,
 						this: Option<ObjValue>,
 						super_obj: Option<ObjValue>,
-					) -> Result<LazyVal> {
-						Ok(LazyVal::new_resolved(evaluate_method(
+					) -> Result<Thunk<Val>> {
+						Ok(Thunk::evaluated(evaluate_method(
 							self.cctx.create(s, this, super_obj)?,
 							self.name.clone(),
 							self.params.clone(),
@@ -364,12 +333,12 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.with_location(value.1.clone())
 					.bindable(
 						s.clone(),
-						TraceBox(Box::new(ObjMemberBinding {
+						tb!(ObjMemberBinding {
 							cctx: cctx.clone(),
 							value: value.clone(),
 							params: params.clone(),
 							name,
-						})),
+						}),
 					)?;
 			}
 			Member::BindStmt(_) => {}
@@ -390,10 +359,10 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 						evaluate_assert(s, ctx, &self.assert)
 					}
 				}
-				builder.assert(TraceBox(Box::new(ObjectAssert {
+				builder.assert(tb!(ObjectAssert {
 					cctx: cctx.clone(),
 					assert: stmt.clone(),
-				})));
+				}));
 			}
 		}
 	}
@@ -406,19 +375,20 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 	Ok(match object {
 		ObjBody::MemberList(members) => evaluate_member_list_object(s, ctx, members)?,
 		ObjBody::ObjComp(obj) => {
-			let future_this = FutureWrapper::new();
+			let future_this = Pending::new();
 			let mut builder = ObjValueBuilder::new();
 			evaluate_comp(s.clone(), ctx, &obj.compspecs, &mut |ctx| {
-				let new_bindings = FutureWrapper::new();
+				let new_bindings = Pending::new();
 				let cctx = ContextCreator(ctx.clone(), new_bindings.clone());
 				let mut bindings: GcHashMap<IStr, LazyBinding> =
 					GcHashMap::with_capacity(obj.pre_locals.len() + obj.post_locals.len());
-				for (n, b) in obj
+				for r in obj
 					.pre_locals
 					.iter()
 					.chain(obj.post_locals.iter())
-					.map(|b| evaluate_binding(b, cctx.clone()))
+					.map(|b| evaluate_binding(b.clone(), cctx.clone()))
 				{
+					let (n, b) = r?;
 					bindings.insert(n, b);
 				}
 				new_bindings.fill(bindings.clone());
@@ -439,8 +409,8 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 								s: State,
 								this: Option<ObjValue>,
 								_super_obj: Option<ObjValue>,
-							) -> Result<LazyVal> {
-								Ok(LazyVal::new_resolved(evaluate(
+							) -> Result<Thunk<Val>> {
+								Ok(Thunk::evaluated(evaluate(
 									s,
 									self.ctx.clone().extend(GcHashMap::new(), None, this, None),
 									&self.value,
@@ -453,10 +423,10 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 							.with_add(obj.plus)
 							.bindable(
 								s.clone(),
-								TraceBox(Box::new(ObjCompBinding {
+								tb!(ObjCompBinding {
 									ctx,
 									value: obj.value.clone(),
-								})),
+								}),
 							)?;
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
@@ -620,11 +590,11 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			}
 		}
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: GcHashMap<IStr, LazyVal> =
+			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
 				GcHashMap::with_capacity(bindings.len());
 			let fctx = Context::new_future();
 			for b in bindings {
-				new_bindings.insert(b.name.clone(), evaluate_binding_in_future(b, fctx.clone()));
+				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
 			let ctx = ctx.extend_bound(new_bindings).into_future(fctx);
 			evaluate(s, ctx, &returned.clone())?
@@ -638,15 +608,16 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					ctx: Context,
 					item: LocExpr,
 				}
-				impl LazyValValue for ArrayElement {
+				impl ThunkValue for ArrayElement {
+					type Output = Val;
 					fn get(self: Box<Self>, s: State) -> Result<Val> {
 						evaluate(s, self.ctx, &self.item)
 					}
 				}
-				out.push(LazyVal::new(TraceBox(Box::new(ArrayElement {
+				out.push(Thunk::new(tb!(ArrayElement {
 					ctx: ctx.clone(),
 					item: item.clone(),
-				}))));
+				})));
 			}
 			Val::Arr(out.into())
 		}

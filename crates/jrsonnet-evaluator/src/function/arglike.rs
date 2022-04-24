@@ -5,34 +5,34 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
 use crate::{
-	error::Result, evaluate, gc::TraceBox, typed::Typed, val::LazyValValue, Context, LazyVal,
-	State, Val,
+	error::Result, evaluate, tb, typed::Typed, val::ThunkValue, Context, State, Thunk, Val,
 };
 
 #[derive(Trace)]
-struct EvaluateLazyVal {
+struct EvaluateThunk {
 	ctx: Context,
 	expr: LocExpr,
 }
-impl LazyValValue for EvaluateLazyVal {
+impl ThunkValue for EvaluateThunk {
+	type Output = Val;
 	fn get(self: Box<Self>, s: State) -> Result<Val> {
 		evaluate(s, self.ctx, &self.expr)
 	}
 }
 
 pub trait ArgLike {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal>;
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
 }
 
 impl ArgLike for &LocExpr {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		Ok(if tailstrict {
-			LazyVal::new_resolved(evaluate(s, ctx, self)?)
+			Thunk::evaluated(evaluate(s, ctx, self)?)
 		} else {
-			LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+			Thunk::new(tb!(EvaluateThunk {
 				ctx,
 				expr: (*self).clone(),
-			})))
+			}))
 		})
 	}
 }
@@ -41,9 +41,9 @@ impl<T> ArgLike for T
 where
 	T: Typed + Clone,
 {
-	fn evaluate_arg(&self, s: State, _ctx: Context, _tailstrict: bool) -> Result<LazyVal> {
+	fn evaluate_arg(&self, s: State, _ctx: Context, _tailstrict: bool) -> Result<Thunk<Val>> {
 		let val = T::into_untyped(self.clone(), s)?;
-		Ok(LazyVal::new_resolved(val))
+		Ok(Thunk::evaluated(val))
 	}
 }
 
@@ -53,18 +53,18 @@ pub enum TlaArg {
 	Val(Val),
 }
 impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<LazyVal> {
+	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		match self {
-			TlaArg::String(s) => Ok(LazyVal::new_resolved(Val::Str(s.clone()))),
+			TlaArg::String(s) => Ok(Thunk::evaluated(Val::Str(s.clone()))),
 			TlaArg::Code(code) => Ok(if tailstrict {
-				LazyVal::new_resolved(evaluate(s, ctx, code)?)
+				Thunk::evaluated(evaluate(s, ctx, code)?)
 			} else {
-				LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+				Thunk::new(tb!(EvaluateThunk {
 					ctx,
 					expr: code.clone(),
-				})))
+				}))
 			}),
-			TlaArg::Val(val) => Ok(LazyVal::new_resolved(val.clone())),
+			TlaArg::Val(val) => Ok(Thunk::evaluated(val.clone())),
 		}
 	}
 }
@@ -83,14 +83,14 @@ pub trait ArgsLike {
 		s: State,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()>;
 	fn named_iter(
 		&self,
 		s: State,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()>;
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
 }
@@ -105,18 +105,18 @@ impl ArgsLike for ArgsDesc {
 		s: State,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		for (id, arg) in self.unnamed.iter().enumerate() {
 			handler(
 				id,
 				if tailstrict {
-					LazyVal::new_resolved(evaluate(s.clone(), ctx.clone(), arg)?)
+					Thunk::evaluated(evaluate(s.clone(), ctx.clone(), arg)?)
 				} else {
-					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+					Thunk::new(tb!(EvaluateThunk {
 						ctx: ctx.clone(),
 						expr: arg.clone(),
-					})))
+					}))
 				},
 			)?;
 		}
@@ -128,18 +128,18 @@ impl ArgsLike for ArgsDesc {
 		s: State,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		for (name, arg) in &self.named {
 			handler(
 				name,
 				if tailstrict {
-					LazyVal::new_resolved(evaluate(s.clone(), ctx.clone(), arg)?)
+					Thunk::evaluated(evaluate(s.clone(), ctx.clone(), arg)?)
 				} else {
-					LazyVal::new(TraceBox(Box::new(EvaluateLazyVal {
+					Thunk::new(tb!(EvaluateThunk {
 						ctx: ctx.clone(),
 						expr: arg.clone(),
-					})))
+					}))
 				},
 			)?;
 		}
@@ -164,7 +164,7 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
@@ -174,7 +174,7 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 		s: State,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		for (name, value) in self.iter() {
 			handler(
@@ -205,7 +205,7 @@ macro_rules! impl_args_like {
 				s: State,
 				ctx: Context,
 				tailstrict: bool,
-				handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+				handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				let mut i = 0usize;
 				let ($($gen,)*) = self;
@@ -220,7 +220,7 @@ macro_rules! impl_args_like {
 				_s: State,
 				_ctx: Context,
 				_tailstrict: bool,
-				_handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+				_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				Ok(())
 			}
@@ -236,7 +236,7 @@ macro_rules! impl_args_like {
 				_s: State,
 				_ctx: Context,
 				_tailstrict: bool,
-				_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+				_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				Ok(())
 			}
@@ -246,7 +246,7 @@ macro_rules! impl_args_like {
 				s: State,
 				ctx: Context,
 				tailstrict: bool,
-				handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+				handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				let ($($gen,)*) = self;
 				$(
@@ -285,7 +285,7 @@ impl ArgsLike for () {
 		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(usize, LazyVal) -> Result<()>,
+		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
@@ -295,7 +295,7 @@ impl ArgsLike for () {
 		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(&IStr, LazyVal) -> Result<()>,
+		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}

@@ -16,7 +16,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, LazyVal, Result, State, Val,
+	throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, Result, State, Thunk, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -581,7 +581,7 @@ impl<Kind> ObjMemberBuilder<Kind> {
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
 impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 	pub fn value(self, s: State, value: Val) -> Result<()> {
-		self.binding(s, LazyBinding::Bound(LazyVal::new_resolved(value)))
+		self.binding(s, LazyBinding::Bound(Thunk::evaluated(value)))
 	}
 	pub fn bindable(self, s: State, bindable: TraceBox<dyn Bindable>) -> Result<()> {
 		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
@@ -604,7 +604,7 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 pub struct ExtendBuilder<'v>(&'v mut ObjValue);
 impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
 	pub fn value(self, value: Val) {
-		self.binding(LazyBinding::Bound(LazyVal::new_resolved(value)));
+		self.binding(LazyBinding::Bound(Thunk::evaluated(value)));
 	}
 	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)));

@@ -7,6 +7,7 @@ use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
 	gc::TraceBox,
+	tb,
 	typed::Typed,
 	State, Val,
 };
@@ -70,9 +71,7 @@ fn curried_add(this: &curried_add, b: u32) -> Result<u32> {
 
 #[builtin]
 fn curry_add(a: u32) -> Result<FuncVal> {
-	Ok(FuncVal::Builtin(Cc::new(TraceBox(Box::new(curried_add {
-		a,
-	})))))
+	Ok(FuncVal::Builtin(Cc::new(tb!(curried_add { a }))))
 }
 
 #[test]

@@ -150,7 +150,7 @@ impl ArgInfo {
 			return Ok(Self::State);
 		} else if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
-		} else if type_is_path(ty, "LazyVal").is_some() {
+		} else if type_is_path(ty, "Thunk").is_some() {
 			return Ok(Self::Lazy {
 				is_option: false,
 				name: ident.to_string(),
@@ -163,7 +163,7 @@ impl ArgInfo {
 		}
 
 		let (is_option, ty) = if let Some(ty) = extract_type_from_option(ty)? {
-			if type_is_path(ty, "LazyVal").is_some() {
+			if type_is_path(ty, "Thunk").is_some() {
 				return Ok(Self::Lazy {
 					is_option: true,
 					name: ident.to_string(),

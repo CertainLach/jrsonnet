@@ -15,41 +15,45 @@ use crate::{
 	throw, ObjValue, Result, State,
 };
 
-pub trait LazyValValue: Trace {
-	fn get(self: Box<Self>, s: State) -> Result<Val>;
+pub trait ThunkValue: Trace {
+	type Output;
+	fn get(self: Box<Self>, s: State) -> Result<Self::Output>;
 }
 
 #[derive(Trace)]
-enum LazyValInternals {
-	Computed(Val),
+enum ThunkInner<T> {
+	Computed(T),
 	Errored(LocError),
-	Waiting(TraceBox<dyn LazyValValue>),
+	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
 	Pending,
 }
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
-pub struct LazyVal(Cc<RefCell<LazyValInternals>>);
-impl LazyVal {
-	pub fn new(f: TraceBox<dyn LazyValValue>) -> Self {
-		Self(Cc::new(RefCell::new(LazyValInternals::Waiting(f))))
+pub struct Thunk<T>(Cc<RefCell<ThunkInner<T>>>);
+impl<T> Thunk<T>
+where
+	T: Clone + Trace,
+{
+	pub fn new(f: TraceBox<dyn ThunkValue<Output = T>>) -> Self {
+		Self(Cc::new(RefCell::new(ThunkInner::Waiting(f))))
 	}
-	pub fn new_resolved(val: Val) -> Self {
-		Self(Cc::new(RefCell::new(LazyValInternals::Computed(val))))
+	pub fn evaluated(val: T) -> Self {
+		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
 	}
 	pub fn force(&self, s: State) -> Result<()> {
 		self.evaluate(s)?;
 		Ok(())
 	}
-	pub fn evaluate(&self, s: State) -> Result<Val> {
+	pub fn evaluate(&self, s: State) -> Result<T> {
 		match &*self.0.borrow() {
-			LazyValInternals::Computed(v) => return Ok(v.clone()),
-			LazyValInternals::Errored(e) => return Err(e.clone()),
-			LazyValInternals::Pending => return Err(InfiniteRecursionDetected.into()),
-			LazyValInternals::Waiting(..) => (),
+			ThunkInner::Computed(v) => return Ok(v.clone()),
+			ThunkInner::Errored(e) => return Err(e.clone()),
+			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
+			ThunkInner::Waiting(..) => (),
 		};
-		let value = if let LazyValInternals::Waiting(value) =
-			std::mem::replace(&mut *self.0.borrow_mut(), LazyValInternals::Pending)
+		let value = if let ThunkInner::Waiting(value) =
+			std::mem::replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)
 		{
 			value
 		} else {
@@ -58,21 +62,21 @@ impl LazyVal {
 		let new_value = match value.0.get(s) {
 			Ok(v) => v,
 			Err(e) => {
-				*self.0.borrow_mut() = LazyValInternals::Errored(e.clone());
+				*self.0.borrow_mut() = ThunkInner::Errored(e.clone());
 				return Err(e);
 			}
 		};
-		*self.0.borrow_mut() = LazyValInternals::Computed(new_value.clone());
+		*self.0.borrow_mut() = ThunkInner::Computed(new_value.clone());
 		Ok(new_value)
 	}
 }
 
-impl Debug for LazyVal {
+impl<T: Debug> Debug for Thunk<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Lazy")
 	}
 }
-impl PartialEq for LazyVal {
+impl<T> PartialEq for Thunk<T> {
 	fn eq(&self, other: &Self) -> bool {
 		cc_ptr_eq(&self.0, &other.0)
 	}
@@ -142,7 +146,7 @@ impl Slice {
 #[force_tracking]
 pub enum ArrValue {
 	Bytes(#[skip_trace] Rc<[u8]>),
-	Lazy(Cc<Vec<LazyVal>>),
+	Lazy(Cc<Vec<Thunk<Val>>>),
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
 	Range(i32, i32),
@@ -240,13 +244,13 @@ impl ArrValue {
 		}
 	}
 
-	pub fn get_lazy(&self, index: usize) -> Option<LazyVal> {
+	pub fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		match self {
 			Self::Bytes(i) => i
 				.get(index)
-				.map(|b| LazyVal::new_resolved(Val::Num(f64::from(*b)))),
+				.map(|b| Thunk::evaluated(Val::Num(f64::from(*b)))),
 			Self::Lazy(vec) => vec.get(index).cloned(),
-			Self::Eager(vec) => vec.get(index).cloned().map(LazyVal::new_resolved),
+			Self::Eager(vec) => vec.get(index).cloned().map(Thunk::evaluated),
 			Self::Extended(v) => {
 				let a_len = v.0.len();
 				if a_len > index {
@@ -259,7 +263,7 @@ impl ArrValue {
 				if index >= self.len() {
 					return None;
 				}
-				Some(LazyVal::new_resolved(Val::Num(
+				Some(Thunk::evaluated(Val::Num(
 					((*a as isize) + index as isize) as f64,
 				)))
 			}
@@ -343,11 +347,11 @@ impl ArrValue {
 		})
 	}
 
-	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = LazyVal> + '_ {
+	pub fn iter_lazy(&self) -> impl DoubleEndedIterator<Item = Thunk<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
-			Self::Bytes(b) => LazyVal::new_resolved(Val::Num(f64::from(b[idx]))),
+			Self::Bytes(b) => Thunk::evaluated(Val::Num(f64::from(b[idx]))),
 			Self::Lazy(l) => l[idx].clone(),
-			Self::Eager(e) => LazyVal::new_resolved(e[idx].clone()),
+			Self::Eager(e) => Thunk::evaluated(e[idx].clone()),
 			Self::Slice(..) | Self::Extended(..) | Self::Range(..) | Self::Reversed(..) => {
 				self.get_lazy(idx).expect("idx < len")
 			}
@@ -391,8 +395,8 @@ impl ArrValue {
 	}
 }
 
-impl From<Vec<LazyVal>> for ArrValue {
-	fn from(v: Vec<LazyVal>) -> Self {
+impl From<Vec<Thunk<Val>>> for ArrValue {
+	fn from(v: Vec<Thunk<Val>>) -> Self {
 		Self::Lazy(Cc::new(v))
 	}
 }

@@ -10,8 +10,15 @@ use gcmodule::{Trace, Tracer};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 /// Replacement for box, which assumes that the underlying type is [`Trace`]
+/// Used in places, where Cc<dyn Trait> should be used instead, but it can't, because CoerceUnsiced is not stable
 #[derive(Debug, Clone)]
 pub struct TraceBox<T: ?Sized>(pub Box<T>);
+#[macro_export]
+macro_rules! tb {
+	($v:expr) => {
+		$crate::gc::TraceBox(Box::new($v))
+	};
+}
 
 impl<T: ?Sized + Trace> Trace for TraceBox<T> {
 	fn trace(&self, tracer: &mut Tracer) {

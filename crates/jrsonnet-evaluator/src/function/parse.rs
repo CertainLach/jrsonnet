@@ -9,20 +9,21 @@ use super::{
 use crate::{
 	error::{Error::*, Result},
 	evaluate_named,
-	gc::{GcHashMap, TraceBox},
-	throw,
-	val::LazyValValue,
-	Context, FutureWrapper, LazyVal, State, Val,
+	gc::GcHashMap,
+	tb, throw,
+	val::ThunkValue,
+	Context, Pending, State, Thunk, Val,
 };
 
 #[derive(Trace)]
-struct EvaluateNamedLazyVal {
-	ctx: FutureWrapper<Context>,
+struct EvaluateNamedThunk {
+	ctx: Pending<Context>,
 	name: IStr,
 	value: LocExpr,
 }
 
-impl LazyValValue for EvaluateNamedLazyVal {
+impl ThunkValue for EvaluateNamedThunk {
+	type Output = Val;
 	fn get(self: Box<Self>, s: State) -> Result<Val> {
 		evaluate_named(s, self.ctx.unwrap(), &self.value, self.name)
 	}
@@ -83,11 +84,11 @@ pub fn parse_function_call(
 
 			defaults.insert(
 				param.0.clone(),
-				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
+				Thunk::new(tb!(EvaluateNamedThunk {
 					ctx: fctx.clone(),
 					name: param.0.clone(),
 					value: param.1.clone().expect("default exists"),
-				}))),
+				})),
 			);
 			filled_args += 1;
 		}
@@ -131,7 +132,7 @@ pub fn parse_builtin_call(
 	params: &[BuiltinParam],
 	args: &dyn ArgsLike,
 	tailstrict: bool,
-) -> Result<GcHashMap<BuiltinParamName, LazyVal>> {
+) -> Result<GcHashMap<BuiltinParamName, Thunk<Val>>> {
 	let mut passed_args = GcHashMap::with_capacity(params.len());
 	if args.unnamed_len() > params.len() {
 		throw!(TooManyArgsFunctionHas(params.len()))
@@ -191,7 +192,8 @@ pub fn parse_builtin_call(
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Context {
 	#[derive(Trace)]
 	struct DependsOnUnbound(IStr);
-	impl LazyValValue for DependsOnUnbound {
+	impl ThunkValue for DependsOnUnbound {
+		type Output = Val;
 		fn get(self: Box<Self>, _: State) -> Result<Val> {
 			Err(FunctionParameterNotBoundInCall(self.0.clone()).into())
 		}
@@ -205,16 +207,16 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Co
 		if let Some(v) = &param.1 {
 			bindings.insert(
 				param.0.clone(),
-				LazyVal::new(TraceBox(Box::new(EvaluateNamedLazyVal {
+				Thunk::new(tb!(EvaluateNamedThunk {
 					ctx: fctx.clone(),
 					name: param.0.clone(),
 					value: v.clone(),
-				}))),
+				})),
 			);
 		} else {
 			bindings.insert(
 				param.0.clone(),
-				LazyVal::new(TraceBox(Box::new(DependsOnUnbound(param.0.clone())))),
+				Thunk::new(tb!(DependsOnUnbound(param.0.clone()))),
 			);
 		}
 	}

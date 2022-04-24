@@ -4,12 +4,12 @@ use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, FutureWrapper, LazyBinding,
-	LazyVal, ObjValue, Result, State, Val,
+	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, LazyBinding, ObjValue, Pending,
+	Result, State, Thunk, Val,
 };
 
 #[derive(Clone, Trace)]
-pub struct ContextCreator(pub Context, pub FutureWrapper<GcHashMap<IStr, LazyBinding>>);
+pub struct ContextCreator(pub Context, pub Pending<GcHashMap<IStr, LazyBinding>>);
 impl ContextCreator {
 	pub fn create(
 		&self,
@@ -43,8 +43,8 @@ impl Debug for ContextInternals {
 #[derive(Debug, Clone, Trace)]
 pub struct Context(Cc<ContextInternals>);
 impl Context {
-	pub fn new_future() -> FutureWrapper<Self> {
-		FutureWrapper::new()
+	pub fn new_future() -> Pending<Self> {
+		Pending::new()
 	}
 
 	pub fn dollar(&self) -> &Option<ObjValue> {
@@ -68,7 +68,7 @@ impl Context {
 		}))
 	}
 
-	pub fn binding(&self, name: IStr) -> Result<LazyVal> {
+	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
 		Ok(self
 			.0
 			.bindings
@@ -80,7 +80,7 @@ impl Context {
 		self.0.bindings.contains_key(&name)
 	}
 	#[must_use]
-	pub fn into_future(self, ctx: FutureWrapper<Self>) -> Self {
+	pub fn into_future(self, ctx: Pending<Self>) -> Self {
 		{
 			ctx.0.borrow_mut().replace(self);
 		}
@@ -90,7 +90,7 @@ impl Context {
 	#[must_use]
 	pub fn with_var(self, name: IStr, value: Val) -> Self {
 		let mut new_bindings = GcHashMap::with_capacity(1);
-		new_bindings.insert(name, LazyVal::new_resolved(value));
+		new_bindings.insert(name, Thunk::evaluated(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
@@ -102,7 +102,7 @@ impl Context {
 	#[must_use]
 	pub fn extend(
 		self,
-		new_bindings: GcHashMap<IStr, LazyVal>,
+		new_bindings: GcHashMap<IStr, Thunk<Val>>,
 		new_dollar: Option<ObjValue>,
 		new_this: Option<ObjValue>,
 		new_super_obj: Option<ObjValue>,
@@ -124,7 +124,7 @@ impl Context {
 		}))
 	}
 	#[must_use]
-	pub fn extend_bound(self, new_bindings: GcHashMap<IStr, LazyVal>) -> Self {
+	pub fn extend_bound(self, new_bindings: GcHashMap<IStr, Thunk<Val>>) -> Self {
 		let new_this = self.0.this.clone();
 		let new_super_obj = self.0.super_obj.clone();
 		self.extend(new_bindings, None, new_this, new_super_obj)

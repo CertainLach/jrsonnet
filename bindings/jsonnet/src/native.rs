@@ -9,7 +9,7 @@ use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
 	function::builtin::{BuiltinParam, NativeCallback, NativeCallbackHandler},
-	gc::TraceBox,
+	tb,
 	typed::Typed,
 	IStr, State, Val,
 };
@@ -78,9 +78,9 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	vm.add_native(
 		name,
 		#[allow(deprecated)]
-		Cc::new(TraceBox(Box::new(NativeCallback::new(
+		Cc::new(tb!(NativeCallback::new(
 			params,
-			TraceBox(Box::new(JsonnetNativeCallbackHandler { ctx, cb })),
-		)))),
+			tb!(JsonnetNativeCallbackHandler { ctx, cb }),
+		))),
 	)
 }

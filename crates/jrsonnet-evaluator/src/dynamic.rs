@@ -3,8 +3,8 @@ use std::cell::RefCell;
 use gcmodule::{Cc, Trace};
 
 #[derive(Clone, Trace)]
-pub struct FutureWrapper<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
-impl<T: Trace + 'static> FutureWrapper<T> {
+pub struct Pending<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
+impl<T: Trace + 'static> Pending<T> {
 	pub fn new() -> Self {
 		Self(Cc::new(RefCell::new(None)))
 	}
@@ -15,7 +15,7 @@ impl<T: Trace + 'static> FutureWrapper<T> {
 		self.0.borrow_mut().replace(value);
 	}
 }
-impl<T: Clone + Trace + 'static> FutureWrapper<T> {
+impl<T: Clone + Trace + 'static> Pending<T> {
 	/// # Panics
 	/// If wrapper is not yet filled
 	pub fn unwrap(&self) -> T {
@@ -23,7 +23,7 @@ impl<T: Clone + Trace + 'static> FutureWrapper<T> {
 	}
 }
 
-impl<T: Trace + 'static> Default for FutureWrapper<T> {
+impl<T: Trace + 'static> Default for Pending<T> {
 	fn default() -> Self {
 		Self::new()
 	}

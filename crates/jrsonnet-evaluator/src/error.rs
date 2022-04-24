@@ -45,6 +45,9 @@ pub enum Error {
 
 	#[error("variable is not defined: {0}")]
 	VariableIsNotDefined(IStr),
+	#[error("duplicate local var: {0}")]
+	DuplicateLocalVar(IStr),
+
 	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {0}")]

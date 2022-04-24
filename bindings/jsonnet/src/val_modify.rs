@@ -5,7 +5,7 @@
 use std::{ffi::CStr, os::raw::c_char};
 
 use gcmodule::Cc;
-use jrsonnet_evaluator::{val::ArrValue, LazyVal, State, Val};
+use jrsonnet_evaluator::{val::ArrValue, State, Thunk, Val};
 
 /// # Safety
 ///
@@ -18,7 +18,8 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, v
 			for item in old.iter_lazy() {
 				new.push(item);
 			}
-			new.push(LazyVal::new_resolved(val.clone()));
+
+			new.push(Thunk::evaluated(val.clone()));
 			*arr = Val::Arr(ArrValue::Lazy(Cc::new(new)));
 		}
 		_ => panic!("should receive array"),

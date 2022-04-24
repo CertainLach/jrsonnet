@@ -55,18 +55,18 @@ parser! {
 
 		/// Reserved word followed by any non-alphanumberic
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "importbin" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
-		rule id() = quiet!{ !reserved() alpha() (alpha() / digit())*} / expected!("<identifier>")
+		rule id() -> IStr = v:$(quiet!{ !reserved() alpha() (alpha() / digit())*} / expected!("<identifier>")) { v.into() }
 
 		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
 
-		pub rule param(s: &ParserSettings) -> expr::Param = name:$(id()) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name.into(), expr) }
+		pub rule param(s: &ParserSettings) -> expr::Param = name:id() expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
 			= params:param(s) ** comma() comma()? { expr::ParamsDesc(Rc::new(params)) }
 			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
 
 		pub rule arg(s: &ParserSettings) -> (Option<IStr>, LocExpr)
-			= quiet! { name:(s:$(id()) _ "=" _ {s})? expr:expr(s) {(name.map(Into::into), expr)} }
+			= quiet! { name:(s:id() _ "=" _ {s})? expr:expr(s) {(name, expr)} }
 			/ expected!("<argument>")
 
 		pub rule args(s: &ParserSettings) -> expr::ArgsDesc
@@ -89,9 +89,52 @@ parser! {
 				Ok(expr::ArgsDesc::new(unnamed, named))
 			}
 
+		pub rule destruct_rest() -> expr::DestructRest
+			= "..." into:(_ into:id() {into})? {if let Some(into) = into {
+				expr::DestructRest::Keep(into)
+			} else {expr::DestructRest::Drop}}
+		pub rule destruct_array(s: &ParserSettings) -> expr::Destruct
+			= "[" _ start:destruct(s)**comma() rest:(
+				comma() _ rest:destruct_rest()? end:(
+					comma() end:destruct(s)**comma() (_ comma())? {end}
+					/ comma()? {Vec::new()}
+				) {(rest, end)}
+				/ comma()? {(None, Vec::new())}
+			) _ "]" {?
+				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Array {
+					start,
+					rest: rest.0,
+					end: rest.1,
+				});
+				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+			}
+		pub rule destruct_object(s: &ParserSettings) -> expr::Destruct
+			= "{" _
+				fields:(name:id() _ into:(":" _ into:destruct(s) {into})? {(name, into)})**comma()
+				rest:(
+					comma() rest:destruct_rest()? {rest}
+					/ comma()? {None}
+				)
+			_ "}" {?
+				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Object {
+					fields,
+					rest,
+				});
+				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+			}
+		pub rule destruct(s: &ParserSettings) -> expr::Destruct
+			= v:id() {expr::Destruct::Full(v)}
+			/ "?" {?
+				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Skip);
+				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+			}
+			/ arr:destruct_array(s) {arr}
+			/ obj:destruct_object(s) {obj}
+
 		pub rule bind(s: &ParserSettings) -> expr::BindSpec
-			= name:$(id()) _ "=" _ expr:expr(s) {expr::BindSpec{name:name.into(), params: None, value: expr}}
-			/ name:$(id()) _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec{name:name.into(), params: Some(params), value: expr}}
+			= into:destruct(s) _ "=" _ expr:expr(s) {expr::BindSpec::Field{into, value: expr}}
+			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec::Function{name, params, value: expr}}
+
 		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
 			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
 
@@ -122,7 +165,7 @@ parser! {
 			/ string_block() } / expected!("<string>")
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
-			= name:$(id()) {expr::FieldName::Fixed(name.into())}
+			= name:id() {expr::FieldName::Fixed(name.into())}
 			/ name:string() {expr::FieldName::Fixed(name.into())}
 			/ "[" _ expr:expr(s) _ "]" {expr::FieldName::Dyn(expr)}
 		pub rule visibility() -> expr::Visibility
@@ -167,7 +210,7 @@ parser! {
 		pub rule ifspec(s: &ParserSettings) -> IfSpecData
 			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
-			= keyword("for") _ id:$(id()) _ keyword("in") _ cond:expr(s) {ForSpecData(id.into(), cond)}
+			= keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
 			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
 		pub rule local_expr(s: &ParserSettings) -> Expr
@@ -187,9 +230,9 @@ parser! {
 		pub rule number_expr(s: &ParserSettings) -> Expr
 			= n:number() { expr::Expr::Num(n) }
 		pub rule var_expr(s: &ParserSettings) -> Expr
-			= n:$(id()) { expr::Expr::Var(n.into()) }
+			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr
-			= a:position!() n:$(id()) b:position!() { LocExpr(Rc::new(expr::Expr::Str(n.into())), ExprLocation(s.file_name.clone(), a,b)) }
+			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.file_name.clone(), a,b)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
 			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -212,7 +255,7 @@ parser! {
 
 			/ quiet!{"$intrinsicThisFile" {Expr::IntrinsicThisFile}}
 			/ quiet!{"$intrinsicId" {Expr::IntrinsicId}}
-			/ quiet!{"$intrinsic(" name:$(id()) ")" {Expr::Intrinsic(name.into())}}
+			/ quiet!{"$intrinsic(" name:id() ")" {Expr::Intrinsic(name)}}
 
 			/ string_expr(s) / number_expr(s)
 			/ array_expr(s)
@@ -693,9 +736,8 @@ pub mod tests {
 						ObjExtend(
 							el!(Obj(ObjBody::MemberList(vec![])), 0, 2),
 							ObjBody::MemberList(vec![
-								Member::BindStmt(BindSpec {
-									name: "x".into(),
-									params: None,
+								Member::BindStmt(BindSpec::Field {
+									into: Destruct::Full("x".into()),
 									value: el!(Num(1.0), 15, 16)
 								}),
 								Member::Field(FieldMember {

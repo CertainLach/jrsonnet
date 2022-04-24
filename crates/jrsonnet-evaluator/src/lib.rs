@@ -58,7 +58,7 @@ pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
 use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
-pub use val::{LazyVal, ManifestFormat, Val};
+pub use val::{ManifestFormat, Thunk, Val};
 
 pub trait Bindable: Trace + 'static {
 	fn bind(
@@ -66,13 +66,13 @@ pub trait Bindable: Trace + 'static {
 		s: State,
 		this: Option<ObjValue>,
 		super_obj: Option<ObjValue>,
-	) -> Result<LazyVal>;
+	) -> Result<Thunk<Val>>;
 }
 
 #[derive(Clone, Trace)]
 pub enum LazyBinding {
 	Bindable(Cc<TraceBox<dyn Bindable>>),
-	Bound(LazyVal),
+	Bound(Thunk<Val>),
 }
 
 impl Debug for LazyBinding {
@@ -86,7 +86,7 @@ impl LazyBinding {
 		s: State,
 		this: Option<ObjValue>,
 		super_obj: Option<ObjValue>,
-	) -> Result<LazyVal> {
+	) -> Result<Thunk<Val>> {
 		match self {
 			Self::Bindable(v) => v.bind(s, this, super_obj),
 			Self::Bound(v) => Ok(v.clone()),
@@ -343,7 +343,7 @@ impl State {
 		let globals = &self.settings().globals;
 		let mut new_bindings = GcHashMap::with_capacity(globals.len());
 		for (name, value) in globals.iter() {
-			new_bindings.insert(name.clone(), LazyVal::new_resolved(value.clone()));
+			new_bindings.insert(name.clone(), Thunk::evaluated(value.clone()));
 		}
 		Context::new().extend_bound(new_bindings)
 	}

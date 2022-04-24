@@ -1,27 +1,27 @@
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
-use crate::{GcHashMap, LazyVal};
+use crate::{GcHashMap, Thunk, Val};
 
 #[derive(Trace)]
 #[force_tracking]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
-	current: GcHashMap<IStr, LazyVal>,
+	current: GcHashMap<IStr, Thunk<Val>>,
 }
 
 #[derive(Trace)]
 pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
-	pub fn extend(self, new_layer: GcHashMap<IStr, LazyVal>) -> Self {
+	pub fn extend(self, new_layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: Some(self),
 			current: new_layer,
 		}))
 	}
 
-	pub fn get(&self, key: &IStr) -> Option<&LazyVal> {
+	pub fn get(&self, key: &IStr) -> Option<&Thunk<Val>> {
 		(self.0)
 			.current
 			.get(key)
