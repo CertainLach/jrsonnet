@@ -204,6 +204,15 @@ pub enum Destruct {
 		rest: Option<DestructRest>,
 	},
 }
+impl Destruct {
+	pub fn name(&self) -> Option<IStr> {
+		match self {
+			Self::Full(name) => Some(name.clone()),
+			#[cfg(feature = "exp-destruct")]
+			_ => None,
+		}
+	}
+}
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Trace)]

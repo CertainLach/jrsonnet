@@ -4,7 +4,7 @@ use jrsonnet_parser::{BindSpec, Destruct, LocExpr, ParamsDesc};
 
 use crate::{
 	error::{Error::*, Result},
-	evaluate, evaluate_method,
+	evaluate, evaluate_method, evaluate_named,
 	gc::GcHashMap,
 	tb, throw,
 	val::ThunkValue,
@@ -235,17 +235,22 @@ pub fn evaluate_dest(
 		BindSpec::Field { into, value } => {
 			#[derive(Trace)]
 			struct EvaluateThunkValue {
+				name: Option<IStr>,
 				fctx: Pending<Context>,
 				expr: LocExpr,
 			}
 			impl ThunkValue for EvaluateThunkValue {
 				type Output = Val;
 				fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-					evaluate(s, self.fctx.unwrap(), &self.expr)
+					if let Some(name) = self.name {
+						evaluate_named(s, self.fctx.unwrap(), &self.expr, name)
+					} else {
+						evaluate(s, self.fctx.unwrap(), &self.expr)
+					}
 				}
 			}
-			// TODO: Generate some name, as destructure spec may be used with plain functions
 			let data = Thunk::new(tb!(EvaluateThunkValue {
+				name: into.name(),
 				fctx,
 				expr: value.clone(),
 			}));
