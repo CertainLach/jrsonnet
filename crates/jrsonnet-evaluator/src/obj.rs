@@ -16,7 +16,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, weak_ptr_eq, weak_raw, Bindable, LazyBinding, Result, State, Thunk, Val,
+	throw, weak_ptr_eq, weak_raw, LazyBinding, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -589,7 +589,7 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 	pub fn bindable(
 		self,
 		s: State,
-		bindable: TraceBox<dyn Bindable<Bound = Thunk<Val>>>,
+		bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>,
 	) -> Result<()> {
 		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
 	}
@@ -613,7 +613,7 @@ impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
 	pub fn value(self, value: Val) {
 		self.binding(LazyBinding::Bound(Thunk::evaluated(value)));
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Bindable<Bound = Thunk<Val>>>) {
+	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)));
 	}
 	pub fn binding(self, binding: LazyBinding) {

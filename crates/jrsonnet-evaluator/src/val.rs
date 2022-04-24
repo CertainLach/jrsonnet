@@ -12,7 +12,7 @@ use crate::{
 	stdlib::manifest::{
 		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
 	},
-	throw, Bindable, ObjValue, Result, State, WeakObjValue,
+	throw, ObjValue, Result, State, Unbound, WeakObjValue,
 };
 
 pub trait ThunkValue: Trace {
@@ -74,14 +74,14 @@ where
 type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
 
 #[derive(Trace, Clone)]
-pub struct CachedBindable<I, T>
+pub struct CachedUnbound<I, T>
 where
-	I: Bindable<Bound = T>,
+	I: Unbound<Bound = T>,
 {
 	cache: Cc<RefCell<GcHashMap<CacheKey, T>>>,
 	value: I,
 }
-impl<I: Bindable<Bound = T>, T: Trace> CachedBindable<I, T> {
+impl<I: Unbound<Bound = T>, T: Trace> CachedUnbound<I, T> {
 	pub fn new(value: I) -> Self {
 		Self {
 			cache: Cc::new(RefCell::new(GcHashMap::new())),
@@ -89,7 +89,7 @@ impl<I: Bindable<Bound = T>, T: Trace> CachedBindable<I, T> {
 		}
 	}
 }
-impl<I: Bindable<Bound = T>, T: Clone + Trace> Bindable for CachedBindable<I, T> {
+impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 	type Bound = T;
 	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<T> {
 		let cache_key = (

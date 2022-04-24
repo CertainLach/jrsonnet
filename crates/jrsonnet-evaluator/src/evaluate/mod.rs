@@ -3,8 +3,8 @@ use std::rc::Rc;
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
-	LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
+	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 
@@ -16,9 +16,9 @@ use crate::{
 	stdlib::{std_slice, BUILTINS},
 	tb, throw,
 	typed::Typed,
-	val::{ArrValue, CachedBindable, Thunk, ThunkValue},
-	Bindable, Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	State, Val,
+	val::{ArrValue, CachedUnbound, Thunk, ThunkValue},
+	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
+	Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -32,14 +32,10 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocEx
 	})))
 }
 
-pub fn evaluate_field_name(
-	s: State,
-	ctx: Context,
-	field_name: &jrsonnet_parser::FieldName,
-) -> Result<Option<IStr>> {
+pub fn evaluate_field_name(s: State, ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
-		jrsonnet_parser::FieldName::Fixed(n) => Some(n.clone()),
-		jrsonnet_parser::FieldName::Dyn(expr) => s.push(
+		FieldName::Fixed(n) => Some(n.clone()),
+		FieldName::Dyn(expr) => s.push(
 			CallLocation::new(&expr.1),
 			|| "evaluating field name".to_string(),
 			|| {
@@ -86,19 +82,19 @@ pub fn evaluate_comp(
 	Ok(())
 }
 
-trait CloneableBindable<T>: Bindable<Bound = T> + Clone {}
+trait CloneableUnbound<T>: Unbound<Bound = T> + Clone {}
 
 fn evaluate_object_locals(
 	fctx: Pending<Context>,
 	locals: Rc<Vec<BindSpec>>,
-) -> impl CloneableBindable<Context> {
+) -> impl CloneableUnbound<Context> {
 	#[derive(Trace, Clone)]
-	struct WithObjectLocals {
+	struct UnboundLocals {
 		fctx: Pending<Context>,
 		locals: Rc<Vec<BindSpec>>,
 	}
-	impl CloneableBindable<Context> for WithObjectLocals {}
-	impl Bindable for WithObjectLocals {
+	impl CloneableUnbound<Context> for UnboundLocals {}
+	impl Unbound for UnboundLocals {
 		type Bound = Context;
 
 		fn bind(
@@ -124,7 +120,7 @@ fn evaluate_object_locals(
 		}
 	}
 
-	WithObjectLocals { fctx, locals }
+	UnboundLocals { fctx, locals }
 }
 
 #[allow(clippy::too_many_lines)]
@@ -143,7 +139,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 	let fctx = Context::new_future();
 
 	// We have single context for all fields, so we can cache binds
-	let uctx = CachedBindable::new(evaluate_object_locals(fctx.clone(), locals));
+	let uctx = CachedUnbound::new(evaluate_object_locals(fctx.clone(), locals));
 
 	for member in members.iter() {
 		match member {
@@ -155,12 +151,12 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				value,
 			}) => {
 				#[derive(Trace)]
-				struct ObjMemberBinding<B> {
+				struct UnboundValue<B> {
 					uctx: B,
 					value: LocExpr,
 					name: IStr,
 				}
-				impl<B: Bindable<Bound = Context>> Bindable for ObjMemberBinding<B> {
+				impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
 					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
@@ -191,7 +187,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.with_location(value.1.clone())
 					.bindable(
 						s.clone(),
-						tb!(ObjMemberBinding {
+						tb!(UnboundValue {
 							uctx: uctx.clone(),
 							value: value.clone(),
 							name: name.clone()
@@ -205,13 +201,13 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				..
 			}) => {
 				#[derive(Trace)]
-				struct ObjMemberBinding<B> {
+				struct UnboundMethod<B> {
 					uctx: B,
 					value: LocExpr,
 					params: ParamsDesc,
 					name: IStr,
 				}
-				impl<B: Bindable<Bound = Context>> Bindable for ObjMemberBinding<B> {
+				impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
 					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
@@ -240,7 +236,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.with_location(value.1.clone())
 					.bindable(
 						s.clone(),
-						tb!(ObjMemberBinding {
+						tb!(UnboundMethod {
 							uctx: uctx.clone(),
 							value: value.clone(),
 							params: params.clone(),
@@ -255,7 +251,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					uctx: B,
 					assert: AssertStmt,
 				}
-				impl<B: Bindable<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
+				impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
 					fn run(
 						&self,
 						s: State,
@@ -303,11 +299,11 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 					Val::Null => {}
 					Val::Str(n) => {
 						#[derive(Trace)]
-						struct ObjCompBinding<B> {
+						struct UnboundValue<B> {
 							uctx: B,
 							value: LocExpr,
 						}
-						impl<B: Bindable<Bound = Context>> Bindable for ObjCompBinding<B> {
+						impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
 							type Bound = Thunk<Val>;
 							fn bind(
 								&self,
@@ -333,7 +329,7 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 							.with_add(obj.plus)
 							.bindable(
 								s.clone(),
-								tb!(ObjCompBinding {
+								tb!(UnboundValue {
 									uctx,
 									value: obj.value.clone(),
 								}),

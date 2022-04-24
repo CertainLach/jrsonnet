@@ -60,14 +60,14 @@ pub use obj::*;
 use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
 pub use val::{ManifestFormat, Thunk, Val};
 
-pub trait Bindable: Trace + 'static {
+pub trait Unbound: Trace {
 	type Bound;
 	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
 }
 
 #[derive(Clone, Trace)]
 pub enum LazyBinding {
-	Bindable(Cc<TraceBox<dyn Bindable<Bound = Thunk<Val>>>>),
+	Bindable(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
 	Bound(Thunk<Val>),
 }
 
