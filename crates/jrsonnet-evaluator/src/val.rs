@@ -8,11 +8,11 @@ use crate::{
 	cc_ptr_eq,
 	error::{Error::*, LocError},
 	function::FuncVal,
-	gc::TraceBox,
+	gc::{GcHashMap, TraceBox},
 	stdlib::manifest::{
 		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
 	},
-	throw, ObjValue, Result, State,
+	throw, Bindable, ObjValue, Result, State, WeakObjValue,
 };
 
 pub trait ThunkValue: Trace {
@@ -68,6 +68,47 @@ where
 		};
 		*self.0.borrow_mut() = ThunkInner::Computed(new_value.clone());
 		Ok(new_value)
+	}
+}
+
+type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
+
+#[derive(Trace, Clone)]
+pub struct CachedBindable<I, T>
+where
+	I: Bindable<Bound = T>,
+{
+	cache: Cc<RefCell<GcHashMap<CacheKey, T>>>,
+	value: I,
+}
+impl<I: Bindable<Bound = T>, T: Trace> CachedBindable<I, T> {
+	pub fn new(value: I) -> Self {
+		Self {
+			cache: Cc::new(RefCell::new(GcHashMap::new())),
+			value,
+		}
+	}
+}
+impl<I: Bindable<Bound = T>, T: Clone + Trace> Bindable for CachedBindable<I, T> {
+	type Bound = T;
+	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<T> {
+		let cache_key = (
+			sup.as_ref().map(|s| s.clone().downgrade()),
+			this.as_ref().map(|t| t.clone().downgrade()),
+		);
+		{
+			if let Some(t) = self.cache.borrow().get(&cache_key) {
+				return Ok(t.clone());
+			}
+		}
+		let bound = self.value.bind(s, sup, this)?;
+
+		{
+			let mut cache = self.cache.borrow_mut();
+			cache.insert(cache_key, bound.clone());
+		}
+
+		Ok(bound)
 	}
 }
 

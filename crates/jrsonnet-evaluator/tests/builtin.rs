@@ -6,7 +6,6 @@ use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
-	gc::TraceBox,
 	tb,
 	typed::Typed,
 	State, Val,

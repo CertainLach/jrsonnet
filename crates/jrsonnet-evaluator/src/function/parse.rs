@@ -111,7 +111,7 @@ pub fn parse_function_call(
 
 		Ok(body_ctx
 			.extend(passed_args, None, None, None)
-			.extend_bound(defaults)
+			.extend(defaults, None, None, None)
 			.into_future(fctx))
 	} else {
 		let body_ctx = body_ctx.extend(passed_args, None, None, None);

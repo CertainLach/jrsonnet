@@ -4,34 +4,15 @@ use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, LazyBinding, ObjValue, Pending,
-	Result, State, Thunk, Val,
+	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result,
+	Thunk, Val,
 };
-
-#[derive(Clone, Trace)]
-pub struct ContextCreator(pub Context, pub Pending<GcHashMap<IStr, LazyBinding>>);
-impl ContextCreator {
-	pub fn create(
-		&self,
-		s: State,
-		this: Option<ObjValue>,
-		super_obj: Option<ObjValue>,
-	) -> Result<Context> {
-		self.0.clone().extend_unbound(
-			s,
-			self.1.clone().unwrap(),
-			self.0.dollar().clone().or_else(|| this.clone()),
-			this,
-			super_obj,
-		)
-	}
-}
 
 #[derive(Trace)]
 struct ContextInternals {
 	dollar: Option<ObjValue>,
+	sup: Option<ObjValue>,
 	this: Option<ObjValue>,
-	super_obj: Option<ObjValue>,
 	bindings: LayeredHashMap,
 }
 impl Debug for ContextInternals {
@@ -56,14 +37,14 @@ impl Context {
 	}
 
 	pub fn super_obj(&self) -> &Option<ObjValue> {
-		&self.0.super_obj
+		&self.0.sup
 	}
 
 	pub fn new() -> Self {
 		Self(Cc::new(ContextInternals {
 			dollar: None,
 			this: None,
-			super_obj: None,
+			sup: None,
 			bindings: LayeredHashMap::default(),
 		}))
 	}
@@ -95,22 +76,17 @@ impl Context {
 	}
 
 	#[must_use]
-	pub fn with_this_super(self, new_this: ObjValue, new_super_obj: Option<ObjValue>) -> Self {
-		self.extend(GcHashMap::new(), None, Some(new_this), new_super_obj)
-	}
-
-	#[must_use]
 	pub fn extend(
 		self,
 		new_bindings: GcHashMap<IStr, Thunk<Val>>,
 		new_dollar: Option<ObjValue>,
+		new_sup: Option<ObjValue>,
 		new_this: Option<ObjValue>,
-		new_super_obj: Option<ObjValue>,
 	) -> Self {
 		let ctx = &self.0;
 		let dollar = new_dollar.or_else(|| ctx.dollar.clone());
 		let this = new_this.or_else(|| ctx.this.clone());
-		let super_obj = new_super_obj.or_else(|| ctx.super_obj.clone());
+		let sup = new_sup.or_else(|| ctx.sup.clone());
 		let bindings = if new_bindings.is_empty() {
 			ctx.bindings.clone()
 		} else {
@@ -118,32 +94,10 @@ impl Context {
 		};
 		Self(Cc::new(ContextInternals {
 			dollar,
+			sup,
 			this,
-			super_obj,
 			bindings,
 		}))
-	}
-	#[must_use]
-	pub fn extend_bound(self, new_bindings: GcHashMap<IStr, Thunk<Val>>) -> Self {
-		let new_this = self.0.this.clone();
-		let new_super_obj = self.0.super_obj.clone();
-		self.extend(new_bindings, None, new_this, new_super_obj)
-	}
-	pub fn extend_unbound(
-		self,
-		s: State,
-		new_bindings: GcHashMap<IStr, LazyBinding>,
-		new_dollar: Option<ObjValue>,
-		new_this: Option<ObjValue>,
-		new_super_obj: Option<ObjValue>,
-	) -> Result<Self> {
-		let this = new_this.or_else(|| self.0.this.clone());
-		let super_obj = new_super_obj.or_else(|| self.0.super_obj.clone());
-		let mut new = GcHashMap::with_capacity(new_bindings.len());
-		for (k, v) in new_bindings.0 {
-			new.insert(k, v.evaluate(s.clone(), this.clone(), super_obj.clone())?);
-		}
-		Ok(self.extend(new, new_dollar, this, super_obj))
 	}
 }
 

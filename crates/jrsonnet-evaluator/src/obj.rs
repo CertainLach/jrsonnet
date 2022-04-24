@@ -106,7 +106,7 @@ pub struct ObjMember {
 }
 
 pub trait ObjectAssertion: Trace {
-	fn run(&self, s: State, this: Option<ObjValue>, super_obj: Option<ObjValue>) -> Result<()>;
+	fn run(&self, s: State, super_obj: Option<ObjValue>, this: Option<ObjValue>) -> Result<()>;
 }
 
 // Field => This
@@ -124,10 +124,11 @@ enum CacheValue {
 #[derive(Trace)]
 #[force_tracking]
 pub struct ObjValueInternals {
-	super_obj: Option<ObjValue>,
+	sup: Option<ObjValue>,
+	this: Option<ObjValue>,
+
 	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	assertions_ran: RefCell<GcHashSet<ObjValue>>,
-	this_obj: Option<ObjValue>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
 	value_cache: RefCell<GcHashMap<CacheKey, CacheValue>>,
 }
@@ -153,7 +154,7 @@ impl Hash for WeakObjValue {
 pub struct ObjValue(pub(crate) Cc<ObjValueInternals>);
 impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		if let Some(super_obj) = self.0.super_obj.as_ref() {
+		if let Some(super_obj) = self.0.sup.as_ref() {
 			if f.alternate() {
 				write!(f, "{:#?}", super_obj)?;
 			} else {
@@ -171,15 +172,15 @@ impl Debug for ObjValue {
 
 impl ObjValue {
 	pub fn new(
-		super_obj: Option<Self>,
+		sup: Option<Self>,
 		this_entries: Cc<GcHashMap<IStr, ObjMember>>,
 		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	) -> Self {
 		Self(Cc::new(ObjValueInternals {
-			super_obj,
+			sup,
+			this: None,
 			assertions,
 			assertions_ran: RefCell::new(GcHashSet::new()),
-			this_obj: None,
 			this_entries,
 			value_cache: RefCell::new(GcHashMap::new()),
 		}))
@@ -188,15 +189,15 @@ impl ObjValue {
 		Self::new(None, Cc::new(GcHashMap::new()), Cc::new(Vec::new()))
 	}
 	#[must_use]
-	pub fn extend_from(&self, super_obj: Self) -> Self {
-		match &self.0.super_obj {
+	pub fn extend_from(&self, sup: Self) -> Self {
+		match &self.0.sup {
 			None => Self::new(
-				Some(super_obj),
+				Some(sup),
 				self.0.this_entries.clone(),
 				self.0.assertions.clone(),
 			),
 			Some(v) => Self::new(
-				Some(v.extend_from(super_obj)),
+				Some(v.extend_from(sup)),
 				self.0.this_entries.clone(),
 				self.0.assertions.clone(),
 			),
@@ -212,12 +213,12 @@ impl ObjValue {
 	}
 
 	#[must_use]
-	pub fn with_this(&self, this_obj: Self) -> Self {
+	pub fn with_this(&self, this: Self) -> Self {
 		Self(Cc::new(ObjValueInternals {
-			super_obj: self.0.super_obj.clone(),
+			sup: self.0.sup.clone(),
 			assertions: self.0.assertions.clone(),
 			assertions_ran: RefCell::new(GcHashSet::new()),
-			this_obj: Some(this_obj),
+			this: Some(this),
 			this_entries: self.0.this_entries.clone(),
 			value_cache: RefCell::new(GcHashMap::new()),
 		}))
@@ -234,7 +235,7 @@ impl ObjValue {
 		if !self.0.this_entries.is_empty() {
 			return false;
 		}
-		self.0.super_obj.as_ref().map_or(true, Self::is_empty)
+		self.0.sup.as_ref().map_or(true, Self::is_empty)
 	}
 
 	/// Run callback for every field found in object
@@ -243,7 +244,7 @@ impl ObjValue {
 		depth: SuperDepth,
 		handler: &mut impl FnMut(SuperDepth, &IStr, &ObjMember) -> bool,
 	) -> bool {
-		if let Some(s) = &self.0.super_obj {
+		if let Some(s) = &self.0.sup {
 			if s.enum_fields(depth.deeper(), handler) {
 				return true;
 			}
@@ -332,13 +333,13 @@ impl ObjValue {
 			Some(match &m.visibility {
 				Visibility::Normal => self
 					.0
-					.super_obj
+					.sup
 					.as_ref()
 					.and_then(|super_obj| super_obj.field_visibility(name))
 					.unwrap_or(Visibility::Normal),
 				v => *v,
 			})
-		} else if let Some(super_obj) = &self.0.super_obj {
+		} else if let Some(super_obj) = &self.0.sup {
 			super_obj.field_visibility(name)
 		} else {
 			None
@@ -348,7 +349,7 @@ impl ObjValue {
 	fn has_field_include_hidden(&self, name: IStr) -> bool {
 		if self.0.this_entries.contains_key(&name) {
 			true
-		} else if let Some(super_obj) = &self.0.super_obj {
+		} else if let Some(super_obj) = &self.0.sup {
 			super_obj.has_field_include_hidden(name)
 		} else {
 			false
@@ -369,13 +370,12 @@ impl ObjValue {
 
 	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions(s.clone())?;
-		self.get_raw(s, key, self.0.this_obj.as_ref())
+		self.get_raw(s, key, self.0.this.clone().unwrap_or_else(|| self.clone()))
 	}
 
 	// pub fn extend_with(self, key: )
 
-	fn get_raw(&self, s: State, key: IStr, real_this: Option<&Self>) -> Result<Option<Val>> {
-		let real_this = real_this.unwrap_or(self);
+	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
 		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
 
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
@@ -397,17 +397,17 @@ impl ObjValue {
 				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
 			e
 		};
-		let value = match (self.0.this_entries.get(&key), &self.0.super_obj) {
+		let value = match (self.0.this_entries.get(&key), &self.0.sup) {
 			(Some(k), None) => Ok(Some(
 				self.evaluate_this(s, k, real_this).map_err(fill_error)?,
 			)),
 			(Some(k), Some(super_obj)) => {
 				let our = self
-					.evaluate_this(s.clone(), k, real_this)
+					.evaluate_this(s.clone(), k, real_this.clone())
 					.map_err(fill_error)?;
 				if k.add {
 					super_obj
-						.get_raw(s.clone(), key, Some(real_this))
+						.get_raw(s.clone(), key, real_this)
 						.map_err(fill_error)?
 						.map_or(Ok(Some(our.clone())), |v| {
 							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
@@ -416,7 +416,7 @@ impl ObjValue {
 					Ok(Some(our))
 				}
 			}
-			(None, Some(super_obj)) => super_obj.get_raw(s, key, Some(real_this)),
+			(None, Some(super_obj)) => super_obj.get_raw(s, key, real_this),
 			(None, None) => Ok(None),
 		}
 		.map_err(fill_error)?;
@@ -429,9 +429,9 @@ impl ObjValue {
 		);
 		Ok(value)
 	}
-	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: &Self) -> Result<Val> {
+	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: Self) -> Result<Val> {
 		v.invoke
-			.evaluate(s.clone(), Some(real_this.clone()), self.0.super_obj.clone())?
+			.evaluate(s.clone(), self.0.sup.clone(), Some(real_this))?
 			.evaluate(s)
 	}
 
@@ -439,13 +439,13 @@ impl ObjValue {
 		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
 				if let Err(e) =
-					assertion.run(s.clone(), Some(real_this.clone()), self.0.super_obj.clone())
+					assertion.run(s.clone(), self.0.sup.clone(), Some(real_this.clone()))
 				{
 					self.0.assertions_ran.borrow_mut().remove(real_this);
 					return Err(e);
 				}
 			}
-			if let Some(super_obj) = &self.0.super_obj {
+			if let Some(super_obj) = &self.0.sup {
 				super_obj.run_assertions_raw(s, real_this)?;
 			}
 		}
@@ -457,6 +457,9 @@ impl ObjValue {
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		cc_ptr_eq(&a.0, &b.0)
+	}
+	pub fn downgrade(self) -> WeakObjValue {
+		WeakObjValue(self.0.downgrade())
 	}
 }
 
@@ -475,7 +478,7 @@ impl Hash for ObjValue {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
-	super_obj: Option<ObjValue>,
+	sup: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
 	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
 	next_field_index: FieldIndex,
@@ -486,7 +489,7 @@ impl ObjValueBuilder {
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
-			super_obj: None,
+			sup: None,
 			map: GcHashMap::with_capacity(capacity),
 			assertions: Vec::new(),
 			next_field_index: FieldIndex::default(),
@@ -497,7 +500,7 @@ impl ObjValueBuilder {
 		self
 	}
 	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
-		self.super_obj = Some(super_obj);
+		self.sup = Some(super_obj);
 		self
 	}
 
@@ -512,7 +515,7 @@ impl ObjValueBuilder {
 	}
 
 	pub fn build(self) -> ObjValue {
-		ObjValue::new(self.super_obj, Cc::new(self.map), Cc::new(self.assertions))
+		ObjValue::new(self.sup, Cc::new(self.map), Cc::new(self.assertions))
 	}
 }
 impl Default for ObjValueBuilder {
@@ -583,7 +586,11 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 	pub fn value(self, s: State, value: Val) -> Result<()> {
 		self.binding(s, LazyBinding::Bound(Thunk::evaluated(value)))
 	}
-	pub fn bindable(self, s: State, bindable: TraceBox<dyn Bindable>) -> Result<()> {
+	pub fn bindable(
+		self,
+		s: State,
+		bindable: TraceBox<dyn Bindable<Bound = Thunk<Val>>>,
+	) -> Result<()> {
 		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
 	}
 	pub fn binding(self, s: State, binding: LazyBinding) -> Result<()> {
@@ -606,7 +613,7 @@ impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
 	pub fn value(self, value: Val) {
 		self.binding(LazyBinding::Bound(Thunk::evaluated(value)));
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Bindable>) {
+	pub fn bindable(self, bindable: TraceBox<dyn Bindable<Bound = Thunk<Val>>>) {
 		self.binding(LazyBinding::Bindable(Cc::new(bindable)));
 	}
 	pub fn binding(self, binding: LazyBinding) {

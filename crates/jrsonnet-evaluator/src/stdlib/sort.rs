@@ -68,7 +68,23 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Ve
 	if values.len() <= 1 {
 		return Ok(values);
 	}
-	if !key_getter.is_identity() {
+	if key_getter.is_identity() {
+		// Fast path, identity key getter
+		let mut values = (*values).clone();
+		let sort_type = get_sort_type(&mut values, |k| k)?;
+		match sort_type {
+			SortKeyType::Number => values.sort_unstable_by_key(|v| match v {
+				Val::Num(n) => NonNaNf64(*n),
+				_ => unreachable!(),
+			}),
+			SortKeyType::String => values.sort_unstable_by_key(|v| match v {
+				Val::Str(s) => s.clone(),
+				_ => unreachable!(),
+			}),
+			SortKeyType::Unknown => unreachable!(),
+		};
+		Ok(Cc::new(values))
+	} else {
 		// Slow path, user provided key getter
 		let mut vk = Vec::with_capacity(values.len());
 		for value in values.iter() {
@@ -90,21 +106,5 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Ve
 			SortKeyType::Unknown => unreachable!(),
 		};
 		Ok(Cc::new(vk.into_iter().map(|v| v.0).collect()))
-	} else {
-		// Fast path, identity key getter
-		let mut values = (*values).clone();
-		let sort_type = get_sort_type(&mut values, |k| k)?;
-		match sort_type {
-			SortKeyType::Number => values.sort_unstable_by_key(|v| match v {
-				Val::Num(n) => NonNaNf64(*n),
-				_ => unreachable!(),
-			}),
-			SortKeyType::String => values.sort_unstable_by_key(|v| match v {
-				Val::Str(s) => s.clone(),
-				_ => unreachable!(),
-			}),
-			SortKeyType::Unknown => unreachable!(),
-		};
-		Ok(Cc::new(values))
 	}
 }

@@ -1,7 +1,9 @@
+use std::rc::Rc;
+
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, ForSpecData, IfSpecData,
+	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, ForSpecData, IfSpecData,
 	LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
@@ -14,146 +16,12 @@ use crate::{
 	stdlib::{std_slice, BUILTINS},
 	tb, throw,
 	typed::Typed,
-	val::{ArrValue, Thunk, ThunkValue},
-	Bindable, Context, ContextCreator, GcHashMap, LazyBinding, ObjValue, ObjValueBuilder,
-	ObjectAssertion, Pending, Result, State, Val,
+	val::{ArrValue, CachedBindable, Thunk, ThunkValue},
+	Bindable, Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
+	State, Val,
 };
 pub mod destructure;
 pub mod operator;
-
-#[allow(clippy::too_many_lines)]
-pub fn evaluate_binding(b: BindSpec, cctx: ContextCreator) -> Result<(IStr, LazyBinding)> {
-	match b {
-		BindSpec::Field {
-			into: Destruct::Full(name),
-			value,
-		} => {
-			#[derive(Trace)]
-			struct BindableNamedThunk {
-				this: Option<ObjValue>,
-				super_obj: Option<ObjValue>,
-
-				cctx: ContextCreator,
-				name: IStr,
-				value: LocExpr,
-			}
-			impl ThunkValue for BindableNamedThunk {
-				type Output = Val;
-				fn get(self: Box<Self>, s: State) -> Result<Val> {
-					evaluate_named(
-						s.clone(),
-						self.cctx.create(s, self.this, self.super_obj)?,
-						&self.value,
-						self.name,
-					)
-				}
-			}
-
-			#[derive(Trace)]
-			struct BindableNamed {
-				cctx: ContextCreator,
-				name: IStr,
-				value: LocExpr,
-			}
-			impl Bindable for BindableNamed {
-				fn bind(
-					&self,
-					_: State,
-					this: Option<ObjValue>,
-					super_obj: Option<ObjValue>,
-				) -> Result<Thunk<Val>> {
-					Ok(Thunk::new(tb!(BindableNamedThunk {
-						this,
-						super_obj,
-
-						cctx: self.cctx.clone(),
-						name: self.name.clone(),
-						value: self.value.clone(),
-					})))
-				}
-			}
-
-			Ok((
-				name.clone(),
-				LazyBinding::Bindable(Cc::new(tb!(BindableNamed {
-					cctx,
-					name: name.clone(),
-					value: value.clone(),
-				}))),
-			))
-		}
-		#[cfg(feature = "exp-destruct")]
-		BindSpec::Field { into: _, .. } => {
-			use crate::throw_runtime;
-			throw_runtime!("destructuring is not yet supported here")
-		}
-		BindSpec::Function {
-			name,
-			params,
-			value,
-		} => {
-			#[derive(Trace)]
-			struct BindableMethodThunk {
-				this: Option<ObjValue>,
-				super_obj: Option<ObjValue>,
-
-				cctx: ContextCreator,
-				name: IStr,
-				params: ParamsDesc,
-				value: LocExpr,
-			}
-			impl ThunkValue for BindableMethodThunk {
-				type Output = Val;
-				fn get(self: Box<Self>, s: State) -> Result<Val> {
-					Ok(evaluate_method(
-						self.cctx.create(s, self.this, self.super_obj)?,
-						self.name,
-						self.params,
-						self.value,
-					))
-				}
-			}
-
-			#[derive(Trace)]
-			struct BindableMethod {
-				cctx: ContextCreator,
-				name: IStr,
-				params: ParamsDesc,
-				value: LocExpr,
-			}
-			impl Bindable for BindableMethod {
-				fn bind(
-					&self,
-					_: State,
-					this: Option<ObjValue>,
-					super_obj: Option<ObjValue>,
-				) -> Result<Thunk<Val>> {
-					Ok(Thunk::<Val>::new(tb!(BindableMethodThunk {
-						this,
-						super_obj,
-
-						cctx: self.cctx.clone(),
-						name: self.name.clone(),
-						params: self.params.clone(),
-						value: self.value.clone(),
-					})))
-				}
-			}
-
-			let params = params.clone();
-
-			Ok((
-				name.clone(),
-				LazyBinding::Bindable(Cc::new(tb!(BindableMethod {
-					cctx,
-					name: name.clone(),
-					params,
-					value,
-				}))),
-			))
-		}
-	}
-}
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
@@ -218,28 +86,65 @@ pub fn evaluate_comp(
 	Ok(())
 }
 
-#[allow(clippy::too_many_lines)]
-pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -> Result<ObjValue> {
-	let new_bindings = Pending::new();
-	let future_this = Pending::new();
-	let cctx = ContextCreator(ctx.clone(), new_bindings.clone());
-	{
-		let mut bindings: GcHashMap<IStr, LazyBinding> = GcHashMap::with_capacity(members.len());
-		for r in members
-			.iter()
-			.filter_map(|m| match m {
-				Member::BindStmt(b) => Some(b.clone()),
-				_ => None,
-			})
-			.map(|b| evaluate_binding(b.clone(), cctx.clone()))
-		{
-			let (n, b) = r?;
-			bindings.insert(n, b);
+trait CloneableBindable<T>: Bindable<Bound = T> + Clone {}
+
+fn evaluate_object_locals(
+	fctx: Pending<Context>,
+	locals: Rc<Vec<BindSpec>>,
+) -> impl CloneableBindable<Context> {
+	#[derive(Trace, Clone)]
+	struct WithObjectLocals {
+		fctx: Pending<Context>,
+		locals: Rc<Vec<BindSpec>>,
+	}
+	impl CloneableBindable<Context> for WithObjectLocals {}
+	impl Bindable for WithObjectLocals {
+		type Bound = Context;
+
+		fn bind(
+			&self,
+			_s: State,
+			sup: Option<ObjValue>,
+			this: Option<ObjValue>,
+		) -> Result<Context> {
+			let fctx = Context::new_future();
+			let mut new_bindings = GcHashMap::new();
+			for b in self.locals.iter() {
+				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
+			}
+
+			let ctx = self.fctx.unwrap();
+			let new_dollar = ctx.dollar().clone().or_else(|| this.clone());
+
+			let ctx = ctx
+				.extend(new_bindings, new_dollar, sup, this)
+				.into_future(fctx);
+
+			Ok(ctx)
 		}
-		new_bindings.fill(bindings);
 	}
 
+	WithObjectLocals { fctx, locals }
+}
+
+#[allow(clippy::too_many_lines)]
+pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -> Result<ObjValue> {
 	let mut builder = ObjValueBuilder::new();
+	let locals = Rc::new(
+		members
+			.iter()
+			.filter_map(|m| match m {
+				Member::BindStmt(bind) => Some(bind.clone()),
+				_ => None,
+			})
+			.collect::<Vec<_>>(),
+	);
+
+	let fctx = Context::new_future();
+
+	// We have single context for all fields, so we can cache binds
+	let uctx = CachedBindable::new(evaluate_object_locals(fctx.clone(), locals));
+
 	for member in members.iter() {
 		match member {
 			Member::Field(FieldMember {
@@ -250,21 +155,22 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				value,
 			}) => {
 				#[derive(Trace)]
-				struct ObjMemberBinding {
-					cctx: ContextCreator,
+				struct ObjMemberBinding<B> {
+					uctx: B,
 					value: LocExpr,
 					name: IStr,
 				}
-				impl Bindable for ObjMemberBinding {
+				impl<B: Bindable<Bound = Context>> Bindable for ObjMemberBinding<B> {
+					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
 						s: State,
+						sup: Option<ObjValue>,
 						this: Option<ObjValue>,
-						super_obj: Option<ObjValue>,
 					) -> Result<Thunk<Val>> {
 						Ok(Thunk::evaluated(evaluate_named(
 							s.clone(),
-							self.cctx.create(s, this, super_obj)?,
+							self.uctx.bind(s, sup, this)?,
 							&self.value,
 							self.name.clone(),
 						)?))
@@ -286,9 +192,9 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.bindable(
 						s.clone(),
 						tb!(ObjMemberBinding {
-							cctx: cctx.clone(),
+							uctx: uctx.clone(),
 							value: value.clone(),
-							name,
+							name: name.clone()
 						}),
 					)?;
 			}
@@ -299,21 +205,22 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				..
 			}) => {
 				#[derive(Trace)]
-				struct ObjMemberBinding {
-					cctx: ContextCreator,
+				struct ObjMemberBinding<B> {
+					uctx: B,
 					value: LocExpr,
 					params: ParamsDesc,
 					name: IStr,
 				}
-				impl Bindable for ObjMemberBinding {
+				impl<B: Bindable<Bound = Context>> Bindable for ObjMemberBinding<B> {
+					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
 						s: State,
+						sup: Option<ObjValue>,
 						this: Option<ObjValue>,
-						super_obj: Option<ObjValue>,
 					) -> Result<Thunk<Val>> {
 						Ok(Thunk::evaluated(evaluate_method(
-							self.cctx.create(s, this, super_obj)?,
+							self.uctx.bind(s, sup, this)?,
 							self.name.clone(),
 							self.params.clone(),
 							self.value.clone(),
@@ -334,40 +241,42 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.bindable(
 						s.clone(),
 						tb!(ObjMemberBinding {
-							cctx: cctx.clone(),
+							uctx: uctx.clone(),
 							value: value.clone(),
 							params: params.clone(),
-							name,
+							name: name.clone()
 						}),
 					)?;
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]
-				struct ObjectAssert {
-					cctx: ContextCreator,
+				struct ObjectAssert<B> {
+					uctx: B,
 					assert: AssertStmt,
 				}
-				impl ObjectAssertion for ObjectAssert {
+				impl<B: Bindable<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
 					fn run(
 						&self,
 						s: State,
+						sup: Option<ObjValue>,
 						this: Option<ObjValue>,
-						super_obj: Option<ObjValue>,
 					) -> Result<()> {
-						let ctx = self.cctx.create(s.clone(), this, super_obj)?;
+						let ctx = self.uctx.bind(s.clone(), sup, this)?;
 						evaluate_assert(s, ctx, &self.assert)
 					}
 				}
 				builder.assert(tb!(ObjectAssert {
-					cctx: cctx.clone(),
+					uctx: uctx.clone(),
 					assert: stmt.clone(),
 				}));
 			}
 		}
 	}
 	let this = builder.build();
-	future_this.fill(this.clone());
+	let _ctx = ctx
+		.extend(GcHashMap::new(), None, None, Some(this.clone()))
+		.into_future(fctx);
 	Ok(this)
 }
 
@@ -375,44 +284,45 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 	Ok(match object {
 		ObjBody::MemberList(members) => evaluate_member_list_object(s, ctx, members)?,
 		ObjBody::ObjComp(obj) => {
-			let future_this = Pending::new();
 			let mut builder = ObjValueBuilder::new();
-			evaluate_comp(s.clone(), ctx, &obj.compspecs, &mut |ctx| {
-				let new_bindings = Pending::new();
-				let cctx = ContextCreator(ctx.clone(), new_bindings.clone());
-				let mut bindings: GcHashMap<IStr, LazyBinding> =
-					GcHashMap::with_capacity(obj.pre_locals.len() + obj.post_locals.len());
-				for r in obj
-					.pre_locals
+			let locals = Rc::new(
+				obj.pre_locals
 					.iter()
 					.chain(obj.post_locals.iter())
-					.map(|b| evaluate_binding(b.clone(), cctx.clone()))
-				{
-					let (n, b) = r?;
-					bindings.insert(n, b);
-				}
-				new_bindings.fill(bindings.clone());
-				let ctx = ctx.extend_unbound(s.clone(), bindings, None, None, None)?;
+					.cloned()
+					.collect::<Vec<_>>(),
+			);
+			let mut ctxs = vec![];
+			evaluate_comp(s.clone(), ctx, &obj.compspecs, &mut |ctx| {
 				let key = evaluate(s.clone(), ctx.clone(), &obj.key)?;
+				let fctx = Context::new_future();
+				ctxs.push((ctx, fctx.clone()));
+				let uctx = evaluate_object_locals(fctx, locals.clone());
 
 				match key {
 					Val::Null => {}
 					Val::Str(n) => {
 						#[derive(Trace)]
-						struct ObjCompBinding {
-							ctx: Context,
+						struct ObjCompBinding<B> {
+							uctx: B,
 							value: LocExpr,
 						}
-						impl Bindable for ObjCompBinding {
+						impl<B: Bindable<Bound = Context>> Bindable for ObjCompBinding<B> {
+							type Bound = Thunk<Val>;
 							fn bind(
 								&self,
 								s: State,
+								sup: Option<ObjValue>,
 								this: Option<ObjValue>,
-								_super_obj: Option<ObjValue>,
 							) -> Result<Thunk<Val>> {
 								Ok(Thunk::evaluated(evaluate(
-									s,
-									self.ctx.clone().extend(GcHashMap::new(), None, this, None),
+									s.clone(),
+									self.uctx.bind(s, sup, this.clone())?.extend(
+										GcHashMap::new(),
+										None,
+										None,
+										this,
+									),
 									&self.value,
 								)?))
 							}
@@ -424,7 +334,7 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 							.bindable(
 								s.clone(),
 								tb!(ObjCompBinding {
-									ctx,
+									uctx,
 									value: obj.value.clone(),
 								}),
 							)?;
@@ -436,7 +346,11 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 			})?;
 
 			let this = builder.build();
-			future_this.fill(this.clone());
+			for (ctx, fctx) in ctxs {
+				let _ctx = ctx
+					.extend(GcHashMap::new(), None, None, Some(this.clone()))
+					.into_future(fctx);
+			}
 			this
 		}
 	})
@@ -596,7 +510,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			for b in bindings {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
-			let ctx = ctx.extend_bound(new_bindings).into_future(fctx);
+			let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
 			evaluate(s, ctx, &returned.clone())?
 		}
 		Arr(items) => {

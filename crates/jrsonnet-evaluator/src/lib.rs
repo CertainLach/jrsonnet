@@ -61,17 +61,13 @@ use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat,
 pub use val::{ManifestFormat, Thunk, Val};
 
 pub trait Bindable: Trace + 'static {
-	fn bind(
-		&self,
-		s: State,
-		this: Option<ObjValue>,
-		super_obj: Option<ObjValue>,
-	) -> Result<Thunk<Val>>;
+	type Bound;
+	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
 }
 
 #[derive(Clone, Trace)]
 pub enum LazyBinding {
-	Bindable(Cc<TraceBox<dyn Bindable>>),
+	Bindable(Cc<TraceBox<dyn Bindable<Bound = Thunk<Val>>>>),
 	Bound(Thunk<Val>),
 }
 
@@ -84,11 +80,11 @@ impl LazyBinding {
 	pub fn evaluate(
 		&self,
 		s: State,
+		sup: Option<ObjValue>,
 		this: Option<ObjValue>,
-		super_obj: Option<ObjValue>,
 	) -> Result<Thunk<Val>> {
 		match self {
-			Self::Bindable(v) => v.bind(s, this, super_obj),
+			Self::Bindable(v) => v.bind(s, sup, this),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
@@ -345,7 +341,7 @@ impl State {
 		for (name, value) in globals.iter() {
 			new_bindings.insert(name.clone(), Thunk::evaluated(value.clone()));
 		}
-		Context::new().extend_bound(new_bindings)
+		Context::new().extend(new_bindings, None, None, None)
 	}
 
 	/// Executes code creating a new stack frame

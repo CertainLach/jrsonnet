@@ -139,11 +139,12 @@ impl FuncVal {
 	) -> Result<Val> {
 		match self {
 			Self::Id => {
+				#[allow(clippy::unnecessary_wraps)]
 				#[builtin]
-				fn builtin_id(v: Any) -> Result<Any> {
+				const fn builtin_id(v: Any) -> Result<Any> {
 					Ok(v)
 				}
-				static ID: &'static builtin_id = &builtin_id {};
+				static ID: &builtin_id = &builtin_id {};
 
 				ID.call(s, call_ctx, loc, args)
 			}
@@ -159,10 +160,10 @@ impl FuncVal {
 		self.evaluate(s, Context::default(), CallLocation::native(), args, true)
 	}
 
-	pub fn is_identity(&self) -> bool {
+	pub const fn is_identity(&self) -> bool {
 		matches!(self, Self::Id)
 	}
-	pub fn identity() -> Self {
+	pub const fn identity() -> Self {
 		Self::Id
 	}
 }

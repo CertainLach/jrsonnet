@@ -24,7 +24,12 @@ fn run(root: &Path, file: &Path) -> String {
 		Ok(v) => v,
 		Err(e) => return s.stringify_err(&e),
 	};
-	match v.to_json(s.clone(), 3) {
+	match v.to_json(
+		s.clone(),
+		3,
+		#[cfg(feature = "exp-preserve-order")]
+		false,
+	) {
 		Ok(v) => v.to_string(),
 		Err(e) => s.stringify_err(&e),
 	}

@@ -466,7 +466,7 @@ fn builtin_sort(s: State, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrVal
 	Ok(ArrValue::Eager(sort::sort(
 		s.clone(),
 		arr.evaluated(s)?,
-		keyF.unwrap_or(FuncVal::identity()),
+		keyF.unwrap_or_else(FuncVal::identity),
 	)?))
 }
 

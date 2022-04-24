@@ -30,8 +30,18 @@ macro_rules! ensure_val_eq {
 		if !::jrsonnet_evaluator::val::equals($s.clone(), &$a.clone(), &$b.clone())? {
 			::jrsonnet_evaluator::throw_runtime!(
 				"assertion failed: a != b\na={:#?}\nb={:#?}",
-				$a.to_json($s.clone(), 2)?,
-				$b.to_json($s.clone(), 2)?,
+				$a.to_json(
+					$s.clone(),
+					2,
+					#[cfg(feature = "exp-preserve-order")]
+					false
+				)?,
+				$b.to_json(
+					$s.clone(),
+					2,
+					#[cfg(feature = "exp-preserve-order")]
+					false
+				)?,
 			)
 		}
 	}};

@@ -11,12 +11,13 @@ use crate::{
 	Context, Pending, State, Thunk, Val,
 };
 
+#[allow(clippy::too_many_lines)]
 fn destruct(
 	d: &Destruct,
 	parent: Thunk<Val>,
 	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
 ) -> Result<()> {
-	Ok(match d {
+	match d {
 		Destruct::Full(v) => {
 			let old = new_bindings.insert(v.clone(), parent);
 			if old.is_some() {
@@ -157,8 +158,6 @@ fn destruct(
 		}
 		#[cfg(feature = "exp-destruct")]
 		Destruct::Object { fields, rest } => {
-			use jrsonnet_parser::DestructRest;
-
 			use crate::{obj::ObjValue, throw_runtime};
 
 			#[derive(Trace)]
@@ -223,7 +222,8 @@ fn destruct(
 				}
 			}
 		}
-	})
+	}
+	Ok(())
 }
 
 pub fn evaluate_dest(

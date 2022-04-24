@@ -165,7 +165,7 @@ parser! {
 			/ string_block() } / expected!("<string>")
 
 		pub rule field_name(s: &ParserSettings) -> expr::FieldName
-			= name:id() {expr::FieldName::Fixed(name.into())}
+			= name:id() {expr::FieldName::Fixed(name)}
 			/ name:string() {expr::FieldName::Fixed(name.into())}
 			/ "[" _ expr:expr(s) _ "]" {expr::FieldName::Dyn(expr)}
 		pub rule visibility() -> expr::Visibility
