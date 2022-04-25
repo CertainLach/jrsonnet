@@ -66,7 +66,7 @@ parser! {
 			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
 
 		pub rule arg(s: &ParserSettings) -> (Option<IStr>, LocExpr)
-			= quiet! { name:(s:id() _ "=" _ {s})? expr:expr(s) {(name, expr)} }
+			= quiet! { name:(s:id() _ "=" !['='] _ {s})? expr:expr(s) {(name, expr)} }
 			/ expected!("<argument>")
 
 		pub rule args(s: &ParserSettings) -> expr::ArgsDesc
