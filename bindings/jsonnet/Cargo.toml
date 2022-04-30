@@ -17,5 +17,6 @@ crate-type = ["cdylib"]
 
 [features]
 interop = []
-experimental = ["exp-preserve-order"]
+experimental = ["exp-preserve-order", "exp-destruct"]
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
+exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
