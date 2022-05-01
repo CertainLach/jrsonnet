@@ -261,17 +261,15 @@ impl ObjValue {
 		let mut out = FxHashMap::default();
 		self.enum_fields(SuperDepth::default(), &mut |depth, name, member| {
 			let new_sort_key = FieldSortKey::new(depth, member.original_index);
+			let entry = out.entry(name.clone());
+			let (visible, _) = entry.or_insert((true, new_sort_key));
 			match member.visibility {
-				Visibility::Normal => {
-					let entry = out.entry(name.clone());
-					let v = entry.or_insert((true, new_sort_key));
-					v.1 = new_sort_key;
-				}
+				Visibility::Normal => {}
 				Visibility::Hidden => {
-					out.insert(name.clone(), (false, new_sort_key));
+					*visible = false;
 				}
 				Visibility::Unhide => {
-					out.insert(name.clone(), (true, new_sort_key));
+					*visible = true;
 				}
 			};
 			false
