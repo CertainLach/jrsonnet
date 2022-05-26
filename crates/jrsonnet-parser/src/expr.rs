@@ -1,7 +1,6 @@
 use std::{
-	fmt::{Debug, Display},
+	fmt::{self, Debug, Display},
 	ops::Deref,
-	path::{Path, PathBuf},
 	rc::Rc,
 };
 
@@ -9,6 +8,8 @@ use gcmodule::Trace;
 use jrsonnet_interner::IStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+
+use crate::source::Source;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
@@ -68,7 +69,7 @@ pub enum UnaryOpType {
 }
 
 impl Display for UnaryOpType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use UnaryOpType::*;
 		write!(
 			f,
@@ -118,7 +119,7 @@ pub enum BinaryOpType {
 }
 
 impl Display for BinaryOpType {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		use BinaryOpType::*;
 		write!(
 			f,
@@ -326,11 +327,11 @@ pub enum Expr {
 	LocalExpr(Vec<BindSpec>, LocExpr),
 
 	/// import "hello"
-	Import(PathBuf),
+	Import(IStr),
 	/// importStr "file.txt"
-	ImportStr(PathBuf),
+	ImportStr(IStr),
 	/// importBin "file.txt"
-	ImportBin(PathBuf),
+	ImportBin(IStr),
 	/// error "I'm broken"
 	ErrorStmt(LocExpr),
 	/// a(b, c)
@@ -358,15 +359,19 @@ pub enum Expr {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Trace)]
 #[skip_trace]
-pub struct ExprLocation(pub Rc<Path>, pub usize, pub usize);
+#[repr(C)]
+pub struct ExprLocation(pub Source, pub u32, pub u32);
 impl ExprLocation {
 	pub fn belongs_to(&self, other: &ExprLocation) -> bool {
 		other.0 == self.0 && other.1 <= self.1 && other.2 >= self.2
 	}
 }
 
+#[cfg(target_pointer_width = "64")]
+static_assertions::assert_eq_size!(ExprLocation, [u8; 16]);
+
 impl Debug for ExprLocation {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)
 	}
 }
@@ -376,8 +381,11 @@ impl Debug for ExprLocation {
 #[derive(Clone, PartialEq, Trace)]
 pub struct LocExpr(pub Rc<Expr>, pub ExprLocation);
 
+#[cfg(target_pointer_width = "64")]
+static_assertions::assert_eq_size!(LocExpr, [u8; 24]);
+
 impl Debug for LocExpr {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		if f.alternate() {
 			write!(f, "{:#?}", self.0)?;
 		} else {

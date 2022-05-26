@@ -1,19 +1,18 @@
 #![allow(clippy::redundant_closure_call)]
 
-use std::{
-	path::{Path, PathBuf},
-	rc::Rc,
-};
+use std::rc::Rc;
 
 use peg::parser;
 mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
 pub use peg;
+mod source;
 mod unescape;
+pub use source::Source;
 
 pub struct ParserSettings {
-	pub file_name: Rc<Path>,
+	pub file_name: Source,
 }
 
 macro_rules! expr_bin {
@@ -232,7 +231,7 @@ parser! {
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr
-			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.file_name.clone(), a,b)) }
+			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.file_name.clone(), a as u32,b as u32)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
 			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -263,9 +262,9 @@ parser! {
 			/ array_expr(s)
 			/ array_comp_expr(s)
 
-			/ keyword("importstr") _ path:string() {Expr::ImportStr(PathBuf::from(path))}
-			/ keyword("importbin") _ path:string() {Expr::ImportBin(PathBuf::from(path))}
-			/ keyword("import") _ path:string() {Expr::Import(PathBuf::from(path))}
+			/ keyword("importstr") _ path:string() {Expr::ImportStr(path.into())}
+			/ keyword("importbin") _ path:string() {Expr::ImportBin(path.into())}
+			/ keyword("import") _ path:string() {Expr::Import(path.into())}
 
 			/ var_expr(s)
 			/ local_expr(s)
@@ -299,7 +298,7 @@ parser! {
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= precedence! {
-				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.file_name.clone(), start, end)) }
+				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.file_name.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
@@ -357,7 +356,7 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 	let len = str.len();
 	LocExpr(
 		Rc::new(Expr::Str(str)),
-		ExprLocation(settings.file_name.clone(), 0, len),
+		ExprLocation(settings.file_name.clone(), 0, len as u32),
 	)
 }
 
@@ -368,14 +367,14 @@ pub mod tests {
 	use BinaryOpType::*;
 
 	use super::{expr::*, parse};
-	use crate::ParserSettings;
+	use crate::{source::Source, ParserSettings};
 
 	macro_rules! parse {
 		($s:expr) => {
 			parse(
 				$s,
 				&ParserSettings {
-					file_name: PathBuf::from("test.jsonnet").into(),
+					file_name: Source::new(PathBuf::from("test.jsonnet")).unwrap(),
 				},
 			)
 			.unwrap()
@@ -386,7 +385,11 @@ pub mod tests {
 		($expr:expr, $from:expr, $to:expr$(,)?) => {
 			LocExpr(
 				std::rc::Rc::new($expr),
-				ExprLocation(PathBuf::from("test.jsonnet").into(), $from, $to),
+				ExprLocation(
+					Source::new(PathBuf::from("test.jsonnet")).unwrap(),
+					$from,
+					$to,
+				),
 			)
 		};
 	}
@@ -453,11 +456,15 @@ pub mod tests {
 	fn imports() {
 		assert_eq!(
 			parse!("import \"hello\""),
-			el!(Expr::Import(PathBuf::from("hello")), 0, 14),
+			el!(Expr::Import("hello".into()), 0, 14),
 		);
 		assert_eq!(
 			parse!("importstr \"garnish.txt\""),
-			el!(Expr::ImportStr(PathBuf::from("garnish.txt")), 0, 23)
+			el!(Expr::ImportStr("garnish.txt".into()), 0, 23)
+		);
+		assert_eq!(
+			parse!("importbin \"garnish.bin\""),
+			el!(Expr::ImportBin("garnish.bin".into()), 0, 23)
 		);
 	}
 
@@ -720,7 +727,7 @@ pub mod tests {
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
-		let file_name: std::rc::Rc<std::path::Path> = PathBuf::from("test.jsonnet").into();
+		let file_name = Source::new(PathBuf::from("test.jsonnet")).unwrap();
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
 			&ParserSettings {
@@ -760,11 +767,4 @@ pub mod tests {
 			),
 		);
 	}
-	// From source code
-	/*
-	#[bench]
-	fn bench_parse_peg(b: &mut Bencher) {
-		b.iter(|| parse!(jrsonnet_stdlib::STDLIB_STR))
-	}
-	*/
 }

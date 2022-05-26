@@ -11,6 +11,7 @@ exp-destruct = []
 
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
+static_assertions = "1.1.0"
 
 peg = "0.8.0"
 
