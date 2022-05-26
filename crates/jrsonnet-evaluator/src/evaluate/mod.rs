@@ -649,15 +649,15 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					p
 				})
 				.unwrap_or_default();
-			let path = s.resolve_file(&import_location, path as &str)?;
+			let resolved_path = s.resolve_file(&import_location, path as &str)?;
 			match i {
 				Import(_) => s.push(
 					CallLocation::new(loc),
 					|| format!("import {:?}", path.clone()),
-					|| s.import(path.clone()),
+					|| s.import(resolved_path.clone()),
 				)?,
-				ImportStr(_) => Val::Str(s.import_str(path)?),
-				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(path)?)),
+				ImportStr(_) => Val::Str(s.import_str(resolved_path)?),
+				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}
 		}

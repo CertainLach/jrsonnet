@@ -1,2 +1,2 @@
 infinite recursion detected
-   issue23.jsonnet:1:1-26: import "/home/lach/build/jrsonnet/crates/jrsonnet-evaluator/tests/golden/issue23.jsonnet"
+   issue23.jsonnet:1:1-26: import "issue23.jsonnet"
