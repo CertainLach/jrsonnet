@@ -54,46 +54,55 @@ jobs:
     strategy:
       matrix:
         target:
+          # Linux build notes:
+          # While musl targets are not as supported as gnu, those are most relevant to users,
+          # which want to download binaries from github, as glibc has compatibility issues
+          # with older distros
+
           # Tier 1
-          - aarch64-unknown-linux-gnu
-          - i686-unknown-linux-gnu
-          - x86_64-unknown-linux-gnu
-          - x86_64-apple-darwin
           - i686-pc-windows-msvc
+          - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
 
-          # Other
+          # Tier 2
+          - aarch64-apple-darwin
+          - aarch64-unknown-linux-musl
+          - i686-unknown-linux-musl
           - x86_64-unknown-linux-musl
         include:
-          - target: aarch64-unknown-linux-gnu
+          # Linux
+          - target: aarch64-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
-            name: jrsonnet-linux-gnu-aarch64
-          - target: i686-pc-windows-msvc
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-msvc-i686.exe
-          - target: i686-unknown-linux-gnu
+            name: jrsonnet-linux-aarch64
+          - target: i686-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
             name: jrsonnet-linux-gnu-i686
-          - target: x86_64-apple-darwin
-            os: macOS-latest
-            bin: jrsonnet
-            name: jrsonnet-darwin-amd64
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-msvc-amd64.exe
-          - target: x86_64-unknown-linux-gnu
+          - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
             name: jrsonnet-linux-gnu-amd64
 
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
+          # Windows
+          - target: i686-pc-windows-msvc
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-i686.exe
+          - target: x86_64-pc-windows-msvc
+            os: windows-latest
+            bin: jrsonnet.exe
+            name: jrsonnet-windows-amd64.exe
+
+          # Apple
+          - target: aarch64-apple-darwin
+            os: macOS-latest
             bin: jrsonnet
-            name: jrsonnet-linux-static-amd64
+            name: jrsonnet-darwin-aarch64
+          - target: x86_64-apple-darwin
+            os: macOS-latest
+            bin: jrsonnet
+            name: jrsonnet-darwin-amd64
     runs-on: ${{ matrix.os }}
     steps:
       - name: Install stable toolchain
@@ -111,12 +120,8 @@ jobs:
         run: echo 'EXPERIMENTAL_FLAGS=--features=experimental' >> $GITHUB_ENV
 
       - name: Linux x86 cross compiler
-        if: ${{ matrix.target == 'i686-unknown-linux-gnu' }}
+        if: ${{ startsWith(matrix.target, 'i686-unknown-linux-') }}
         run: sudo apt install gcc-multilib
-
-      - name: Musl gcc
-        if: ${{ endsWith(matrix.target, '-musl') }}
-        run: sudo apt install musl musl-tools
 
       - name: ARM cross compiler
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
@@ -129,15 +134,14 @@ jobs:
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         run: sudo apt install gcc-aarch64-linux-gnu
 
-      - name: Run ARM build
+      - name: Musl gcc
+        if: ${{ endsWith(matrix.target, '-musl') }}
+        run: sudo apt install musl musl-tools
+
+      - name: Run cross build
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         shell: bash
         run: cross build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
-      - name: Run ARM strip
-        if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        shell: bash
-        run: aarch64-linux-gnu-strip target/${{ matrix.target }}/release/${{ matrix.bin }}
 
       - name: Run build
         if: ${{ !startsWith(matrix.target, 'aarch64-unknown-linux-') }}
@@ -145,11 +149,6 @@ jobs:
         with:
           command: build
           args: --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
-      - name: Run strip
-        if: ${{ !startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        shell: bash
-        run: strip target/${{ matrix.target }}/release/${{ matrix.bin }}
 
       - name: Package
         shell: bash
