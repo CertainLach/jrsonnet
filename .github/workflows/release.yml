@@ -78,11 +78,11 @@ jobs:
           - target: i686-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
-            name: jrsonnet-linux-gnu-i686
+            name: jrsonnet-linux-i686
           - target: x86_64-unknown-linux-musl
             os: ubuntu-latest
             bin: jrsonnet
-            name: jrsonnet-linux-gnu-amd64
+            name: jrsonnet-linux-amd64
 
           # Windows
           - target: i686-pc-windows-msvc
