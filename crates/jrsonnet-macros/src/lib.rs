@@ -529,7 +529,7 @@ impl TypedField {
 			}
 		} else {
 			quote! {
-				<#ty>::from_untyped(obj.get(s.clone(), #name.into())?.ok_or_else(|| Error::NoSuchField(#name.into()))?, s.clone())?
+				<#ty>::from_untyped(obj.get(s.clone(), #name.into())?.ok_or_else(|| Error::NoSuchField(#name.into(), vec![]))?, s.clone())?
 			}
 		};
 
