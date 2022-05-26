@@ -1,7 +1,5 @@
 mod common;
 
-use std::path::PathBuf;
-
 use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::Result,
@@ -27,7 +25,7 @@ fn basic_function() -> Result<()> {
 			CallLocation::native(),
 			&(),
 		)?,
-		s.clone(),
+		s,
 	)?;
 
 	ensure_eq!(v, 1);
@@ -48,8 +46,8 @@ fn call_from_code() -> Result<()> {
 		Val::Func(FuncVal::StaticBuiltin(native_add::INST)),
 	);
 
-	let v = s.evaluate_snippet_raw(
-		PathBuf::new().into(),
+	let v = s.evaluate_snippet(
+		"snip".to_owned(),
 		"
             assert nativeAdd(1, 2) == 3;
             assert nativeAdd(100, 200) == 300;
@@ -57,7 +55,7 @@ fn call_from_code() -> Result<()> {
         "
 		.into(),
 	)?;
-	ensure_val_eq!(s.clone(), v, Val::Null);
+	ensure_val_eq!(s, v, Val::Null);
 	Ok(())
 }
 
@@ -82,8 +80,8 @@ fn nonstatic_builtin() -> Result<()> {
 		Val::Func(FuncVal::StaticBuiltin(curry_add::INST)),
 	);
 
-	let v = s.evaluate_snippet_raw(
-		PathBuf::new().into(),
+	let v = s.evaluate_snippet(
+		"snip".to_owned(),
 		"
             local a = curryAdd(1);
             local b = curryAdd(4);
@@ -97,6 +95,6 @@ fn nonstatic_builtin() -> Result<()> {
         "
 		.into(),
 	)?;
-	ensure_val_eq!(s.clone(), v, Val::Null);
+	ensure_val_eq!(s, v, Val::Null);
 	Ok(())
 }

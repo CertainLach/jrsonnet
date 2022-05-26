@@ -1,4 +1,4 @@
-use std::{borrow::Cow, path::Path, rc::Rc};
+use std::borrow::Cow;
 
 use gcmodule::Trace;
 
@@ -51,16 +51,16 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+	fn call(&self, s: State, ctx: Context, _loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
 		let mut out_args = Vec::with_capacity(self.params.len());
 		for p in &self.params {
 			out_args.push(args[&p.name].evaluate(s.clone())?);
 		}
-		self.handler.call(s, loc.0.map(|l| l.0.clone()), &out_args)
+		self.handler.call(s, &out_args)
 	}
 }
 
 pub trait NativeCallbackHandler: Trace {
-	fn call(&self, s: State, from: Option<Rc<Path>>, args: &[Val]) -> Result<Val>;
+	fn call(&self, s: State, args: &[Val]) -> Result<Val>;
 }

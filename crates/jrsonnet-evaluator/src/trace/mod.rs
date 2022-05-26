@@ -2,6 +2,7 @@ mod location;
 
 use std::path::{Path, PathBuf};
 
+use jrsonnet_parser::Source;
 pub use location::*;
 
 use crate::{error::Error, LocError, State};
@@ -56,7 +57,7 @@ fn print_code_location(
 ) -> Result<(), std::fmt::Error> {
 	if start.line == end.line {
 		if start.column == end.column {
-			write!(out, "{}:{}", start.line, end.column - 1)?;
+			write!(out, "{}:{}", start.line, end.column.saturating_sub(1))?;
 		} else {
 			write!(out, "{}:{}-{}", start.line, start.column - 1, end.column)?;
 		}
@@ -96,7 +97,10 @@ impl TraceFormat for CompactFormat {
 			use std::fmt::Write;
 
 			writeln!(out)?;
-			let mut n = self.resolver.resolve(path);
+			let mut n = match path.repr() {
+				Ok(r) => self.resolver.resolve(r),
+				Err(v) => v.to_string(),
+			};
 			let mut offset = error.location.offset;
 			let is_eof = if offset >= source_code.len() {
 				offset = source_code.len().saturating_sub(1);
@@ -104,7 +108,7 @@ impl TraceFormat for CompactFormat {
 			} else {
 				false
 			};
-			let mut location = offset_to_location(source_code, &[offset])
+			let mut location = offset_to_location(source_code, &[offset as u32])
 				.into_iter()
 				.next()
 				.unwrap();
@@ -125,9 +129,13 @@ impl TraceFormat for CompactFormat {
 				use std::fmt::Write;
 				#[allow(clippy::option_if_let_else)]
 				if let Some(location) = location {
-					let mut resolved_path = self.resolver.resolve(&location.0);
+					let mut resolved_path = match location.0.repr() {
+						Ok(r) => self.resolver.resolve(r),
+						Err(v) => v.to_string(),
+					};
 					// TODO: Process all trace elements first
-					let location = s.map_source_locations(&location.0, &[location.1, location.2]);
+					let location =
+						s.map_source_locations(location.0.clone(), &[location.1, location.2]);
 					write!(resolved_path, ":").unwrap();
 					print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
 					write!(resolved_path, ":").unwrap();
@@ -176,15 +184,16 @@ impl TraceFormat for JsFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end = s.map_source_locations(&source.0, &[source.1, source.2]);
+				let start_end = s.map_source_locations(source.0.clone(), &[source.1, source.2]);
+				let resolved_path = match source.0.repr() {
+					Ok(r) => r.display().to_string(),
+					Err(v) => v.to_string(),
+				};
 
 				write!(
 					out,
 					"    at {} ({}:{}:{})",
-					desc,
-					source.0.to_str().unwrap(),
-					start_end[0].line,
-					start_end[0].column,
+					desc, resolved_path, start_end[0].line, start_end[0].column,
 				)?;
 			} else {
 				write!(out, "    during {}", desc)?;
@@ -216,7 +225,7 @@ impl TraceFormat for ExplainingFormat {
 		{
 			writeln!(out)?;
 			let offset = error.location.offset;
-			let location = offset_to_location(source_code, &[offset])
+			let location = offset_to_location(source_code, &[offset as u32])
 				.into_iter()
 				.next()
 				.unwrap();
@@ -237,10 +246,10 @@ impl TraceFormat for ExplainingFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end = s.map_source_locations(&source.0, &[source.1, source.2]);
+				let start_end = s.map_source_locations(source.0.clone(), &[source.1, source.2]);
 				self.print_snippet(
 					out,
-					&s.get_source(&source.0).unwrap(),
+					&s.get_source(source.0.clone()).unwrap(),
 					&source.0,
 					&start_end[0],
 					&start_end[1],
@@ -259,7 +268,7 @@ impl ExplainingFormat {
 		&self,
 		out: &mut dyn std::fmt::Write,
 		source: &str,
-		origin: &Path,
+		origin: &Source,
 		start: &CodeLocation,
 		end: &CodeLocation,
 		desc: &str,
@@ -275,7 +284,10 @@ impl ExplainingFormat {
 			.take(end.line_end_offset - end.line_start_offset)
 			.collect();
 
-		let origin = self.resolver.resolve(origin);
+		let origin = match origin.repr() {
+			Ok(r) => self.resolver.resolve(r),
+			Err(v) => v.to_string(),
+		};
 		let snippet = Snippet {
 			opt: FormatOptions {
 				color: true,

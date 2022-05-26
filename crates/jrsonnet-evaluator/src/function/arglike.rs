@@ -47,6 +47,7 @@ where
 	}
 }
 
+#[derive(Clone)]
 pub enum TlaArg {
 	String(IStr),
 	Code(LocExpr),

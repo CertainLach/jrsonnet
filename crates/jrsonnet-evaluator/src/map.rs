@@ -14,6 +14,15 @@ pub struct LayeredHashMapInternals {
 pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
+	pub fn iter_keys(self, mut handler: impl FnMut(IStr)) {
+		for (k, _) in self.0.current.iter() {
+			handler(k.clone());
+		}
+		if let Some(parent) = self.0.parent.clone() {
+			parent.iter_keys(handler);
+		}
+	}
+
 	pub fn extend(self, new_layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: Some(self),

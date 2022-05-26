@@ -20,7 +20,7 @@ fn run(root: &Path, file: &Path) {
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
 
-	match s.evaluate_file_raw(file) {
+	match s.import(file.to_owned()) {
 		Ok(Val::Bool(true)) => {}
 		Ok(Val::Bool(false)) => panic!("test {} returned false", file.display()),
 		Ok(_) => panic!("test {} returned wrong type as result", file.display()),

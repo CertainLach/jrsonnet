@@ -1,12 +1,8 @@
-use std::{
-	fmt::Debug,
-	path::{Path, PathBuf},
-	rc::Rc,
-};
+use std::{fmt::Debug, path::PathBuf};
 
 use gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, ExprLocation, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -85,7 +81,7 @@ pub enum Error {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(PathBuf, PathBuf),
+	ImportFileNotFound(PathBuf, String),
 	#[error("resolved file not found: {0}")]
 	ResolvedFileNotFound(PathBuf),
 	#[error("imported file is not valid utf-8: {0:?}")]
@@ -94,6 +90,8 @@ pub enum Error {
 	ImportIo(String),
 	#[error("tried to import {1} from {0}, but imports is not supported")]
 	ImportNotSupported(PathBuf, PathBuf),
+	#[error("can't import from virtual file")]
+	CantImportFromVirtualFile,
 	#[error(
 		"syntax error: expected {}, got {:?}",
 		.error.expected,
@@ -101,8 +99,7 @@ pub enum Error {
 		.map_or_else(|| "EOF".into(), |c| c.to_string())
 	)]
 	ImportSyntaxError {
-		#[skip_trace]
-		path: Rc<Path>,
+		path: Source,
 		source_code: IStr,
 		#[skip_trace]
 		error: Box<jrsonnet_parser::ParseError>,

@@ -1,5 +1,3 @@
-use std::path::PathBuf;
-
 use jrsonnet_evaluator::{error::Result, throw_runtime, State, Val};
 
 mod common;
@@ -9,10 +7,10 @@ fn assert_positive() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 
-	let v = s.evaluate_snippet_raw(PathBuf::new().into(), "assert 1 == 1: 'fail'; null".into())?;
-	ensure_val_eq!(s.clone(), v, Val::Null);
-	let v = s.evaluate_snippet_raw(PathBuf::new().into(), "std.assertEqual(1, 1)".into())?;
-	ensure_val_eq!(s.clone(), v, Val::Bool(true));
+	let v = s.evaluate_snippet("snip".to_owned(), "assert 1 == 1: 'fail'; null".into())?;
+	ensure_val_eq!(s, v, Val::Null);
+	let v = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 1)".into())?;
+	ensure_val_eq!(s, v, Val::Bool(true));
 
 	Ok(())
 }
@@ -23,9 +21,7 @@ fn assert_negative() -> Result<()> {
 	s.with_stdlib();
 
 	{
-		let e = match s
-			.evaluate_snippet_raw(PathBuf::new().into(), "assert 1 == 2: 'fail'; null".into())
-		{
+		let e = match s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null".into()) {
 			Ok(_) => throw_runtime!("assertion should fail"),
 			Err(e) => e,
 		};
@@ -33,8 +29,7 @@ fn assert_negative() -> Result<()> {
 		ensure!(e.starts_with("assert failed: fail\n"));
 	}
 	{
-		let e = match s.evaluate_snippet_raw(PathBuf::new().into(), "std.assertEqual(1, 2)".into())
-		{
+		let e = match s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)".into()) {
 			Ok(_) => throw_runtime!("assertion should fail"),
 			Err(e) => e,
 		};

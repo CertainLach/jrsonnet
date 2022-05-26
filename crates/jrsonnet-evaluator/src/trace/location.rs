@@ -24,7 +24,7 @@ pub fn location_to_offset(mut file: &str, mut line: usize, column: usize) -> Opt
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
+pub fn offset_to_location(file: &str, offsets: &[u32]) -> Vec<CodeLocation> {
 	if offsets.is_empty() {
 		return vec![];
 	}
@@ -59,7 +59,7 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 	{
 		column += 1;
 		match offset_map.last() {
-			Some(x) if x.0 == pos => {
+			Some(x) if x.0 == pos as u32 => {
 				let out_idx = x.1;
 				with_no_known_line_ending.push(out_idx);
 				out[out_idx].offset = pos;
@@ -79,7 +79,7 @@ pub fn offset_to_location(file: &str, offsets: &[usize]) -> Vec<CodeLocation> {
 			}
 			this_line_offset = pos + 1;
 
-			if pos == max_offset + 1 {
+			if pos == max_offset as usize + 1 {
 				break;
 			}
 		}

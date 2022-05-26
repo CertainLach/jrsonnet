@@ -127,6 +127,11 @@ impl IBytes {
 		unsafe { Inner::assume_utf8(&self.0) };
 		IStr(self.0.clone())
 	}
+
+	#[must_use]
+	pub fn as_slice(&self) -> &[u8] {
+		self.0.as_slice()
+	}
 }
 
 impl Deref for IBytes {

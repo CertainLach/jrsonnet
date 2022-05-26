@@ -5,17 +5,17 @@ use std::collections::HashMap;
 
 use format::{format_arr, format_obj};
 use gcmodule::Cc;
-use jrsonnet_interner::IStr;
+use jrsonnet_interner::{IBytes, IStr};
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;
 
 use crate::{
 	error::{Error::*, Result},
-	function::{builtin::StaticBuiltin, CallLocation, FuncVal},
+	function::{builtin::StaticBuiltin, ArgLike, CallLocation, FuncVal},
 	operator::evaluate_mod_op,
 	stdlib::manifest::{manifest_yaml_ex, ManifestYamlOptions},
 	throw,
-	typed::{Any, BoundedUsize, Bytes, Either2, Either4, PositiveF64, Typed, VecVal, M1},
+	typed::{Any, BoundedUsize, Either2, Either4, PositiveF64, Typed, VecVal, M1},
 	val::{equals, primitive_equals, ArrValue, IndexableVal, Slice},
 	Either, ObjValue, State, Val,
 };
@@ -365,12 +365,16 @@ fn builtin_exponent(x: f64) -> Result<i16> {
 
 #[jrsonnet_macros::builtin]
 fn builtin_ext_var(s: State, x: IStr) -> Result<Any> {
+	let ctx = s.create_default_context();
 	Ok(Any(s
+		.clone()
 		.settings()
 		.ext_vars
 		.get(&x)
 		.cloned()
-		.ok_or(UndefinedExternalVariable(x))?))
+		.ok_or(UndefinedExternalVariable(x))?
+		.evaluate_arg(s.clone(), ctx, true)?
+		.evaluate(s)?))
 }
 
 #[jrsonnet_macros::builtin]
@@ -489,15 +493,15 @@ fn builtin_char(n: u32) -> Result<char> {
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_encode_utf8(str: IStr) -> Result<Bytes> {
-	Ok(Bytes(str.bytes().collect::<Vec<u8>>().into()))
+fn builtin_encode_utf8(str: IStr) -> Result<IBytes> {
+	Ok(str.cast_bytes())
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_decode_utf8(arr: Bytes) -> Result<IStr> {
-	Ok(std::str::from_utf8(&arr.0)
-		.map_err(|_| RuntimeError("bad utf8".into()))?
-		.into())
+fn builtin_decode_utf8(arr: IBytes) -> Result<IStr> {
+	Ok(arr
+		.cast_str()
+		.ok_or_else(|| RuntimeError("bad utf8".into()))?)
 }
 
 #[jrsonnet_macros::builtin]
@@ -509,33 +513,28 @@ fn builtin_md5(str: IStr) -> Result<String> {
 fn builtin_trace(s: State, loc: CallLocation, str: IStr, rest: Any) -> Result<Any> {
 	eprint!("TRACE:");
 	if let Some(loc) = loc.0 {
-		let locs = s.map_source_locations(&loc.0, &[loc.1]);
-		eprint!(
-			" {}:{}",
-			loc.0.file_name().unwrap().to_str().unwrap(),
-			locs[0].line
-		);
+		let locs = s.map_source_locations(loc.0.clone(), &[loc.1]);
+		eprint!(" {}:{}", loc.0.short_display(), locs[0].line);
 	}
 	eprintln!(" {}", str);
 	Ok(rest) as Result<Any>
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_base64(input: Either![Bytes, IStr]) -> Result<String> {
+fn builtin_base64(input: Either![IBytes, IStr]) -> Result<String> {
 	use Either2::*;
 	Ok(match input {
-		A(a) => base64::encode(a.0),
+		A(a) => base64::encode(a.as_slice()),
 		B(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
 	})
 }
 
 #[jrsonnet_macros::builtin]
-fn builtin_base64_decode_bytes(input: IStr) -> Result<Bytes> {
-	Ok(Bytes(
-		base64::decode(&input.as_bytes())
-			.map_err(|_| RuntimeError("bad base64".into()))?
-			.into(),
-	))
+fn builtin_base64_decode_bytes(input: IStr) -> Result<IBytes> {
+	Ok(base64::decode(&input.as_bytes())
+		.map_err(|_| RuntimeError("bad base64".into()))?
+		.as_slice()
+		.into())
 }
 
 #[jrsonnet_macros::builtin]

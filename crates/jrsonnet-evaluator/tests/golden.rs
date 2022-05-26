@@ -20,7 +20,7 @@ fn run(root: &Path, file: &Path) -> String {
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
 
-	let v = match s.evaluate_file_raw(file) {
+	let v = match s.import(file.to_owned()) {
 		Ok(v) => v,
 		Err(e) => return s.stringify_err(&e),
 	};

@@ -362,7 +362,7 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 
 #[cfg(test)]
 pub mod tests {
-	use std::path::PathBuf;
+	use std::borrow::Cow;
 
 	use BinaryOpType::*;
 
@@ -374,7 +374,7 @@ pub mod tests {
 			parse(
 				$s,
 				&ParserSettings {
-					file_name: Source::new(PathBuf::from("test.jsonnet")).unwrap(),
+					file_name: Source::new_virtual(Cow::Borrowed("<test>")),
 				},
 			)
 			.unwrap()
@@ -385,11 +385,7 @@ pub mod tests {
 		($expr:expr, $from:expr, $to:expr$(,)?) => {
 			LocExpr(
 				std::rc::Rc::new($expr),
-				ExprLocation(
-					Source::new(PathBuf::from("test.jsonnet")).unwrap(),
-					$from,
-					$to,
-				),
+				ExprLocation(Source::new_virtual(Cow::Borrowed("<test>")), $from, $to),
 			)
 		};
 	}
@@ -727,12 +723,10 @@ pub mod tests {
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
-		let file_name = Source::new(PathBuf::from("test.jsonnet")).unwrap();
+		let file_name = Source::new_virtual(Cow::Borrowed("<test>"));
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
-			&ParserSettings {
-				file_name: file_name.clone(),
-			},
+			&ParserSettings { file_name },
 		)
 		.unwrap();
 		assert_eq!(

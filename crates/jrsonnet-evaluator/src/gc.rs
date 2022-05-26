@@ -1,13 +1,14 @@
 /// Macros to help deal with Gc
 use std::{
 	borrow::{Borrow, BorrowMut},
-	collections::{HashMap, HashSet},
+	collections::HashSet,
 	hash::BuildHasherDefault,
 	ops::{Deref, DerefMut},
 };
 
 use gcmodule::{Trace, Tracer};
-use rustc_hash::{FxHashMap, FxHashSet};
+use hashbrown::HashMap;
+use rustc_hash::{FxHashSet, FxHasher};
 
 /// Replacement for box, which assumes that the underlying type is [`Trace`]
 /// Used in places, where `Cc<dyn Trait>` should be used instead, but it can't, because `CoerceUnsiced` is not stable
@@ -115,14 +116,13 @@ impl<V> Default for GcHashSet<V> {
 	}
 }
 
-#[derive(Clone)]
-pub struct GcHashMap<K, V>(pub FxHashMap<K, V>);
+pub struct GcHashMap<K, V>(pub HashMap<K, V, BuildHasherDefault<FxHasher>>);
 impl<K, V> GcHashMap<K, V> {
 	pub fn new() -> Self {
 		Self(HashMap::default())
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
-		Self(FxHashMap::with_capacity_and_hasher(
+		Self(HashMap::with_capacity_and_hasher(
 			capacity,
 			BuildHasherDefault::default(),
 		))
@@ -141,7 +141,7 @@ where
 	}
 }
 impl<K, V> Deref for GcHashMap<K, V> {
-	type Target = FxHashMap<K, V>;
+	type Target = HashMap<K, V, BuildHasherDefault<FxHasher>>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0

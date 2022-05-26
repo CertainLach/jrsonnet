@@ -108,10 +108,10 @@ impl ConfigureState for ExtVarOpts {
 			s.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
 		for ext in self.ext_code.iter() {
-			s.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
+			s.add_ext_code(&ext.name as &str, (&ext.value as &str).into())?;
 		}
 		for ext in self.ext_code_file.iter() {
-			s.add_ext_code((&ext.name as &str).into(), (&ext.value as &str).into())?;
+			s.add_ext_code(&ext.name as &str, (&ext.value as &str).into())?;
 		}
 		Ok(())
 	}

@@ -1,7 +1,7 @@
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
 use gcmodule::{Cc, Trace};
-use jrsonnet_interner::IStr;
+use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_types::ValType;
 
 use crate::{
@@ -31,6 +31,7 @@ enum ThunkInner<T> {
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
 pub struct Thunk<T>(Cc<RefCell<ThunkInner<T>>>);
+
 impl<T> Thunk<T>
 where
 	T: Clone + Trace,
@@ -186,7 +187,7 @@ impl Slice {
 #[derive(Debug, Clone, Trace)]
 #[force_tracking]
 pub enum ArrValue {
-	Bytes(#[skip_trace] Rc<[u8]>),
+	Bytes(#[skip_trace] IBytes),
 	Lazy(Cc<Vec<Thunk<Val>>>),
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
@@ -194,6 +195,10 @@ pub enum ArrValue {
 	Slice(Box<Slice>),
 	Reversed(Box<Self>),
 }
+
+#[cfg(target_pointer_width = "64")]
+static_assertions::assert_eq_size!(ArrValue, [u8; 16]);
+
 impl ArrValue {
 	pub fn new_eager() -> Self {
 		Self::Eager(Cc::new(Vec::new()))
@@ -464,6 +469,9 @@ pub enum Val {
 	Obj(ObjValue),
 	Func(FuncVal),
 }
+
+#[cfg(target_pointer_width = "64")]
+static_assertions::assert_eq_size!(Val, [u8; 32]);
 
 impl Val {
 	pub const fn as_bool(&self) -> Option<bool> {

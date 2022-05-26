@@ -1,6 +1,6 @@
 mod common;
 
-use std::{fmt::Debug, path::PathBuf};
+use std::fmt::Debug;
 
 use jrsonnet_evaluator::{error::Result, typed::Typed, State};
 
@@ -25,11 +25,11 @@ fn simple_object() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let a = A::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{a: 1, b: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(a, A { a: 1, b: 2 });
-	test_roundtrip(a.clone(), s.clone())?;
+	test_roundtrip(a, s)?;
 	Ok(())
 }
 
@@ -45,7 +45,7 @@ fn renamed_field() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let b = B::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{a: 1, c: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(b, B { a: 1, b: 2 });
@@ -53,7 +53,7 @@ fn renamed_field() -> Result<()> {
 		&B::into_untyped(b.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"a": 1, "c": 2}"#,
 	);
-	test_roundtrip(b.clone(), s.clone())?;
+	test_roundtrip(b, s)?;
 	Ok(())
 }
 
@@ -77,8 +77,8 @@ fn flattened_object() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let obj = Object::from_untyped(
-		s.evaluate_snippet_raw(
-			PathBuf::new().into(),
+		s.evaluate_snippet(
+			"snip".to_owned(),
 			"{apiVersion: 'ver', kind: 'kind', b: 2}".into(),
 		)?,
 		s.clone(),
@@ -97,7 +97,7 @@ fn flattened_object() -> Result<()> {
 		&Object::into_untyped(obj.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"apiVersion": "ver", "b": 2, "kind": "kind"}"#,
 	);
-	test_roundtrip(obj.clone(), s.clone())?;
+	test_roundtrip(obj, s)?;
 	Ok(())
 }
 
@@ -112,7 +112,7 @@ fn optional_field_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let c = C::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{a: 1, b: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(c, C { a: Some(1), b: 2 });
@@ -120,7 +120,7 @@ fn optional_field_some() -> Result<()> {
 		&C::into_untyped(c.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"a": 1, "b": 2}"#,
 	);
-	test_roundtrip(c.clone(), s.clone())?;
+	test_roundtrip(c, s)?;
 	Ok(())
 }
 
@@ -129,7 +129,7 @@ fn optional_field_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let c = C::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{b: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{b: 2}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(c, C { a: None, b: 2 });
@@ -137,7 +137,7 @@ fn optional_field_none() -> Result<()> {
 		&C::into_untyped(c.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"b": 2}"#,
 	);
-	test_roundtrip(c.clone(), s.clone())?;
+	test_roundtrip(c, s)?;
 	Ok(())
 }
 
@@ -158,7 +158,7 @@ fn flatten_optional_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let d = D::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{b: 2, v:1}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(
@@ -172,7 +172,7 @@ fn flatten_optional_some() -> Result<()> {
 		&D::into_untyped(d.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"b": 2, "v": 1}"#,
 	);
-	test_roundtrip(d.clone(), s.clone())?;
+	test_roundtrip(d, s)?;
 	Ok(())
 }
 
@@ -181,7 +181,7 @@ fn flatten_optional_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let d = D::from_untyped(
-		s.evaluate_snippet_raw(PathBuf::new().into(), "{b: 2, v: '1'}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}".into())?,
 		s.clone(),
 	)?;
 	ensure_eq!(d, D { e: None, b: 2 });
@@ -189,6 +189,6 @@ fn flatten_optional_none() -> Result<()> {
 		&D::into_untyped(d.clone(), s.clone())?.to_string(s.clone())? as &str,
 		r#"{"b": 2}"#,
 	);
-	test_roundtrip(d.clone(), s.clone())?;
+	test_roundtrip(d, s)?;
 	Ok(())
 }

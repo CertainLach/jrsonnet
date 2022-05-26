@@ -1,2 +1,3 @@
-variable is not defined: a
+runtime error: variable is not defined: a
+There is variable(s) with similar names present: std, test
    missing_binding.jsonnet:1:1-3: variable <a> access

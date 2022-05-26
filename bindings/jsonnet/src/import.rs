@@ -10,7 +10,6 @@ use std::{
 	os::raw::{c_char, c_int},
 	path::{Path, PathBuf},
 	ptr::null_mut,
-	rc::Rc,
 };
 
 use jrsonnet_evaluator::{
@@ -33,7 +32,7 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<PathBuf, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<PathBuf> {
 		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
 		let rel = CString::new(path.to_str().unwrap()).unwrap().into_raw();
 		let found_here: *mut c_char = null_mut();
@@ -73,7 +72,7 @@ impl ImportResolver for CallbackImportResolver {
 			unsafe { CString::from_raw(result_ptr) };
 		}
 
-		Ok(found_here_buf.into())
+		Ok(found_here_buf)
 	}
 	fn load_file_contents(&self, resolved: &Path) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
@@ -109,7 +108,7 @@ impl NativeImportResolver {
 	}
 }
 impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
+	fn resolve_file(&self, from: &Path, path: &Path) -> Result<PathBuf> {
 		let mut new_path = from.to_owned();
 		new_path.push(path);
 		if new_path.exists() {

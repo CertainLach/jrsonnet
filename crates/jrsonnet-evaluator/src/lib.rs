@@ -38,6 +38,7 @@ pub mod typed;
 pub mod val;
 
 use std::{
+	borrow::Cow,
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::{self, Debug},
@@ -52,7 +53,9 @@ pub use evaluate::*;
 use function::{builtin::Builtin, CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use gcmodule::{Cc, Trace, Weak};
+use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
+use jrsonnet_interner::IBytes;
 pub use jrsonnet_interner::IStr;
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
@@ -96,7 +99,7 @@ pub struct EvaluationSettings {
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
 	/// Used for s`td.extVar`
-	pub ext_vars: HashMap<IStr, Val>,
+	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for ext.native
 	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
 	/// TLA vars
@@ -141,16 +144,39 @@ struct EvaluationData {
 	stack_generation: usize,
 
 	breakpoints: Breakpoints,
-	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: GcHashMap<Rc<Path>, FileData>,
-	str_files: GcHashMap<Rc<Path>, IStr>,
-	bin_files: GcHashMap<Rc<Path>, Rc<[u8]>>,
-}
 
-pub struct FileData {
-	source_code: IStr,
-	parsed: LocExpr,
+	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
+	files: GcHashMap<PathBuf, FileData>,
+	/// Contains tla arguments and others, which aren't needed to be obtained by name
+	volatile_files: GcHashMap<String, String>,
+}
+struct FileData {
+	string: Option<IStr>,
+	bytes: Option<IBytes>,
+	parsed: Option<LocExpr>,
 	evaluated: Option<Val>,
+
+	evaluating: bool,
+}
+impl FileData {
+	fn new_string(data: IStr) -> Self {
+		Self {
+			string: Some(data),
+			bytes: None,
+			parsed: None,
+			evaluated: None,
+			evaluating: false,
+		}
+	}
+	fn new_bytes(data: IBytes) -> Self {
+		Self {
+			string: None,
+			bytes: Some(data),
+			parsed: None,
+			evaluated: None,
+			evaluating: false,
+		}
+	}
 }
 
 #[allow(clippy::type_complexity)]
@@ -198,61 +224,159 @@ pub struct EvaluationStateInternals {
 pub struct State(Rc<EvaluationStateInternals>);
 
 impl State {
-	/// Parses and adds file as loaded
-	pub fn add_file(&self, path: Rc<Path>, source_code: IStr) -> Result<LocExpr> {
-		let parsed = parse(
-			&source_code,
-			&ParserSettings {
-				file_name: path.clone(),
-			},
-		)
-		.map_err(|error| ImportSyntaxError {
-			error: Box::new(error),
-			path: path.clone(),
-			source_code: source_code.clone(),
-		})?;
-		self.add_parsed_file(path, source_code, parsed.clone())?;
+	pub fn import_str(&self, path: PathBuf) -> Result<IStr> {
+		let mut data = self.data_mut();
+		let mut file = data.files.raw_entry_mut().from_key(&path);
 
-		Ok(parsed)
+		let file = match file {
+			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
+			RawEntryMut::Vacant(v) => {
+				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				v.insert(
+					path.clone(),
+					FileData::new_string(
+						std::str::from_utf8(&data)
+							.map_err(|_| ImportBadFileUtf8(path.clone()))?
+							.into(),
+					),
+				)
+				.1
+			}
+		};
+		if let Some(str) = &file.string {
+			return Ok(str.clone());
+		}
+		if file.string.is_none() {
+			file.string = Some(
+				file.bytes
+					.as_ref()
+					.expect("either string or bytes should be set")
+					.clone()
+					.cast_str()
+					.ok_or_else(|| ImportBadFileUtf8(path.clone()))?,
+			);
+		}
+		Ok(file.string.as_ref().expect("just set").clone())
+	}
+	pub fn import_bin(&self, path: PathBuf) -> Result<IBytes> {
+		let mut data = self.data_mut();
+		let mut file = data.files.raw_entry_mut().from_key(&path);
+
+		let file = match file {
+			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
+			RawEntryMut::Vacant(v) => {
+				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				v.insert(path.clone(), FileData::new_bytes(data.as_slice().into()))
+					.1
+			}
+		};
+		if let Some(str) = &file.bytes {
+			return Ok(str.clone());
+		}
+		if file.bytes.is_none() {
+			file.bytes = Some(
+				file.string
+					.as_ref()
+					.expect("either string or bytes should be set")
+					.clone()
+					.cast_bytes(),
+			);
+		}
+		Ok(file.bytes.as_ref().expect("just set").clone())
+	}
+	pub fn import(&self, path: PathBuf) -> Result<Val> {
+		let mut data = self.data_mut();
+		let mut file = data.files.raw_entry_mut().from_key(&path);
+
+		let file = match file {
+			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
+			RawEntryMut::Vacant(v) => {
+				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				v.insert(
+					path.clone(),
+					FileData::new_string(
+						std::str::from_utf8(&data)
+							.map_err(|_| ImportBadFileUtf8(path.clone()))?
+							.into(),
+					),
+				)
+				.1
+			}
+		};
+		if let Some(val) = &file.evaluated {
+			return Ok(val.clone());
+		}
+		if file.string.is_none() {
+			file.string = Some(
+				std::str::from_utf8(
+					file.bytes
+						.as_ref()
+						.expect("either string or bytes should be set"),
+				)
+				.map_err(|_| ImportBadFileUtf8(path.clone()))?
+				.into(),
+			);
+		}
+		let code = file.string.as_ref().expect("just set");
+		let file_name = Source::new(path.clone()).expect("resolver should return correct name");
+		if file.parsed.is_none() {
+			file.parsed = Some(
+				jrsonnet_parser::parse(
+					code,
+					&ParserSettings {
+						file_name: file_name.clone(),
+					},
+				)
+				.map_err(|e| ImportSyntaxError {
+					path: file_name,
+					source_code: code.clone(),
+					error: Box::new(e),
+				})?,
+			);
+		}
+		let parsed = file.parsed.as_ref().expect("just set").clone();
+		if file.evaluating {
+			throw!(InfiniteRecursionDetected)
+		}
+		file.evaluating = true;
+		// Dropping file here, as it borrows data, which may be used in evaluation
+		drop(data);
+		let res = evaluate(self.clone(), self.create_default_context(), &parsed);
+
+		let mut data = self.data_mut();
+		let mut file = data.files.raw_entry_mut().from_key(&path);
+
+		let file = match file {
+			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
+			RawEntryMut::Vacant(_) => unreachable!("this file was just here!"),
+		};
+		file.evaluating = false;
+		match res {
+			Ok(v) => {
+				file.evaluated = Some(v.clone());
+				Ok(v)
+			}
+			Err(e) => Err(e),
+		}
 	}
 
-	pub fn reset_evaluation_state(&self, name: &Path) {
-		self.data_mut()
-			.files
-			.get_mut(name)
-			.expect("file not found")
-			.evaluated
-			.take();
+	pub fn get_source(&self, name: Source) -> Option<String> {
+		let data = self.data();
+		match name.repr() {
+			Ok(real) => data
+				.files
+				.get(real)
+				.and_then(|f| f.string.as_ref())
+				.map(ToString::to_string),
+			Err(e) => data.volatile_files.get(e).map(ToOwned::to_owned),
+		}
 	}
-
-	/// Adds file by source code and parsed expr
-	pub fn add_parsed_file(
-		&self,
-		name: Rc<Path>,
-		source_code: IStr,
-		parsed: LocExpr,
-	) -> Result<()> {
-		self.data_mut().files.insert(
-			name,
-			FileData {
-				source_code,
-				parsed,
-				evaluated: None,
-			},
-		);
-
-		Ok(())
-	}
-	pub fn get_source(&self, name: &Path) -> Option<IStr> {
-		let ro_map = &self.data().files;
-		ro_map.get(name).map(|value| value.source_code.clone())
-	}
-	pub fn map_source_locations(&self, file: &Path, locs: &[usize]) -> Vec<CodeLocation> {
+	pub fn map_source_locations(&self, file: Source, locs: &[u32]) -> Vec<CodeLocation> {
 		offset_to_location(&self.get_source(file).unwrap_or_else(|| "".into()), locs)
 	}
 	pub fn map_from_source_location(
 		&self,
-		file: &Path,
+		file: Source,
 		line: usize,
 		column: usize,
 	) -> Option<usize> {
@@ -262,74 +386,14 @@ impl State {
 			column,
 		)
 	}
-	pub fn import_file(&self, from: &Path, path: &Path) -> Result<Val> {
-		let file_path = self.resolve_file(from, path)?;
-		{
-			let data = self.data();
-			let files = &data.files;
-			if files.contains_key(&file_path as &Path) {
-				drop(data);
-				return self.evaluate_loaded_file_raw(&file_path);
-			}
-		}
-		let contents = self.load_file_str(&file_path)?;
-		self.add_file(file_path.clone(), contents)?;
-		self.evaluate_loaded_file_raw(&file_path)
-	}
-	pub(crate) fn import_file_str(&self, from: &Path, path: &Path) -> Result<IStr> {
-		let path = self.resolve_file(from, path)?;
-		if !self.data().str_files.contains_key(&path) {
-			let file_str = self.load_file_str(&path)?;
-			self.data_mut().str_files.insert(path.clone(), file_str);
-		}
-		Ok(self.data().str_files.get(&path).cloned().unwrap())
-	}
-	pub(crate) fn import_file_bin(&self, from: &Path, path: &Path) -> Result<Rc<[u8]>> {
-		let path = self.resolve_file(from, path)?;
-		if !self.data().bin_files.contains_key(&path) {
-			let file_bin = self.load_file_bin(&path)?;
-			self.data_mut().bin_files.insert(path.clone(), file_bin);
-		}
-		Ok(self.data().bin_files.get(&path).cloned().unwrap())
-	}
-
-	fn evaluate_loaded_file_raw(&self, name: &Path) -> Result<Val> {
-		let expr: LocExpr = {
-			let ro_map = &self.data().files;
-			let value = ro_map
-				.get(name)
-				.unwrap_or_else(|| panic!("file not added: {:?}", name));
-			if let Some(ref evaluated) = value.evaluated {
-				return Ok(evaluated.clone());
-			}
-			value.parsed.clone()
-		};
-		let value = evaluate(self.clone(), self.create_default_context(), &expr)?;
-		{
-			self.data_mut()
-				.files
-				.get_mut(name)
-				.unwrap()
-				.evaluated
-				.replace(value.clone());
-		}
-		Ok(value)
-	}
-
 	/// Adds standard library global variable (std) to this evaluator
 	pub fn with_stdlib(&self) -> &Self {
-		use jrsonnet_stdlib::STDLIB_STR;
-		let std_path: Rc<Path> = PathBuf::from("std.jsonnet").into();
-
-		self.add_parsed_file(
-			std_path.clone(),
-			STDLIB_STR.to_owned().into(),
-			stdlib::get_parsed_stdlib(),
+		let val = evaluate(
+			self.clone(),
+			self.create_default_context(),
+			&stdlib::get_parsed_stdlib(),
 		)
-		.expect("stdlib is correct");
-		let val = self
-			.evaluate_loaded_file_raw(&std_path)
-			.expect("stdlib is correct");
+		.expect("std should not fail");
 		self.settings_mut().globals.insert("std".into(), val);
 		self
 	}
@@ -506,46 +570,55 @@ impl State {
 
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl State {
-	pub fn evaluate_file_raw(&self, name: &Path) -> Result<Val> {
-		self.import_file(&std::env::current_dir().expect("cwd"), name)
-	}
-	pub fn evaluate_file_raw_nocwd(&self, name: &Path) -> Result<Val> {
-		self.import_file(&PathBuf::from("."), name)
-	}
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet_raw(&self, source: Rc<Path>, code: IStr) -> Result<Val> {
-		let parsed = parse(
+	pub fn evaluate_snippet(&self, name: String, code: String) -> Result<Val> {
+		let source = Source::new_virtual(Cow::Owned(name.clone()));
+		let parsed = jrsonnet_parser::parse(
 			&code,
 			&ParserSettings {
 				file_name: source.clone(),
 			},
 		)
 		.map_err(|e| ImportSyntaxError {
-			path: source.clone(),
-			source_code: code.clone(),
+			path: source,
+			source_code: code.clone().into(),
 			error: Box::new(e),
 		})?;
-		self.add_parsed_file(source, code, parsed.clone())?;
-		self.evaluate_expr_raw(parsed)
-	}
-	/// Evaluates the parsed expression
-	pub fn evaluate_expr_raw(&self, code: LocExpr) -> Result<Val> {
-		evaluate(self.clone(), self.create_default_context(), &code)
+		self.data_mut().volatile_files.insert(name, code);
+		evaluate(self.clone(), self.create_default_context(), &parsed)
 	}
 }
 
 /// Settings utilities
 impl State {
 	pub fn add_ext_var(&self, name: IStr, value: Val) {
-		self.settings_mut().ext_vars.insert(name, value);
+		self.settings_mut()
+			.ext_vars
+			.insert(name, TlaArg::Val(value));
 	}
 	pub fn add_ext_str(&self, name: IStr, value: IStr) {
-		self.add_ext_var(name, Val::Str(value));
+		self.settings_mut()
+			.ext_vars
+			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_ext_code(&self, name: IStr, code: IStr) -> Result<()> {
-		let value =
-			self.evaluate_snippet_raw(PathBuf::from(format!("ext_code {}", name)).into(), code)?;
-		self.add_ext_var(name, value);
+	pub fn add_ext_code(&self, name: &str, code: String) -> Result<()> {
+		let source_name = format!("<extvar:{}>", name);
+		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
+		let parsed = jrsonnet_parser::parse(
+			&code,
+			&ParserSettings {
+				file_name: source.clone(),
+			},
+		)
+		.map_err(|e| ImportSyntaxError {
+			path: source,
+			source_code: code.clone().into(),
+			error: Box::new(e),
+		})?;
+		self.data_mut().volatile_files.insert(source_name, code);
+		self.settings_mut()
+			.ext_vars
+			.insert(name.into(), TlaArg::Code(parsed));
 		Ok(())
 	}
 
@@ -559,22 +632,33 @@ impl State {
 			.tla_vars
 			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_tla_code(&self, name: IStr, code: IStr) -> Result<()> {
-		let parsed = self.add_file(PathBuf::from(format!("tla_code {}", name)).into(), code)?;
+	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
+		let source_name = format!("<top-level-arg:{}>", name);
+		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
+		let parsed = jrsonnet_parser::parse(
+			code,
+			&ParserSettings {
+				file_name: source.clone(),
+			},
+		)
+		.map_err(|e| ImportSyntaxError {
+			path: source,
+			source_code: code.into(),
+			error: Box::new(e),
+		})?;
+		self.data_mut()
+			.volatile_files
+			.insert(source_name, code.to_owned());
 		self.settings_mut()
 			.tla_vars
 			.insert(name, TlaArg::Code(parsed));
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &Path, path: &Path) -> Result<Rc<Path>> {
-		self.settings().import_resolver.resolve_file(from, path)
-	}
-	pub fn load_file_str(&self, path: &Path) -> Result<IStr> {
-		self.settings().import_resolver.load_file_str(path)
-	}
-	pub fn load_file_bin(&self, path: &Path) -> Result<Rc<[u8]>> {
-		self.settings().import_resolver.load_file_bin(path)
+	pub fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
+		self.settings()
+			.import_resolver
+			.resolve_file(from, path.as_ref())
 	}
 
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {

@@ -1,7 +1,7 @@
-use std::{ops::Deref, rc::Rc};
+use std::ops::Deref;
 
 use gcmodule::Cc;
-use jrsonnet_interner::IStr;
+use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
@@ -303,19 +303,17 @@ impl Typed for VecVal {
 }
 
 /// Specialization
-pub struct Bytes(pub Rc<[u8]>);
-
-impl Typed for Bytes {
+impl Typed for IBytes {
 	const TYPE: &'static ComplexValType =
 		&ComplexValType::ArrayRef(&ComplexValType::BoundedNumber(Some(0.0), Some(255.0)));
 
 	fn into_untyped(value: Self, _: State) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::Bytes(value.0)))
+		Ok(Val::Arr(ArrValue::Bytes(value)))
 	}
 
 	fn from_untyped(value: Val, s: State) -> Result<Self> {
 		if let Val::Arr(ArrValue::Bytes(bytes)) = value {
-			return Ok(Self(bytes));
+			return Ok(bytes);
 		}
 		<Self as Typed>::TYPE.check(s.clone(), &value)?;
 		match value {
@@ -325,7 +323,7 @@ impl Typed for Bytes {
 					let r = e?;
 					out.push(u8::from_untyped(r, s.clone())?);
 				}
-				Ok(Self(out.into()))
+				Ok(out.as_slice().into())
 			}
 			_ => unreachable!(),
 		}

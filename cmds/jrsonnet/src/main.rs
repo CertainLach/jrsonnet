@@ -120,17 +120,14 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	opts.manifest.configure(s)?;
 
 	let val = if opts.input.exec {
-		s.evaluate_snippet_raw(
-			PathBuf::from("<cmdline>").into(),
-			(&opts.input.input as &str).into(),
-		)?
+		s.evaluate_snippet("<cmdline>".to_owned(), (&opts.input.input as &str).into())?
 	} else if opts.input.input == "-" {
 		let mut input = Vec::new();
 		std::io::stdin().read_to_end(&mut input)?;
 		let input_str = std::str::from_utf8(&input)?.into();
-		s.evaluate_snippet_raw(PathBuf::from("<stdin>").into(), input_str)?
+		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.evaluate_file_raw(&PathBuf::from(opts.input.input))?
+		s.import(s.resolve_file(&PathBuf::new(), &opts.input.input)?)?
 	};
 
 	let val = s.with_tla(val)?;

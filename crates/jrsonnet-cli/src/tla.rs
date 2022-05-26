@@ -55,10 +55,10 @@ impl ConfigureState for TLAOpts {
 			s.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into())
 		}
 		for tla in self.tla_code.iter() {
-			s.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
+			s.add_tla_code((&tla.name as &str).into(), &tla.value as &str)?;
 		}
 		for tla in self.tla_code_file.iter() {
-			s.add_tla_code((&tla.name as &str).into(), (&tla.value as &str).into())?;
+			s.add_tla_code((&tla.name as &str).into(), &tla.value as &str)?;
 		}
 		Ok(())
 	}

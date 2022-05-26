@@ -452,7 +452,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 						Ok(Some(v)) => Ok(v),
 						Ok(None) => throw!(NoSuchField(key.clone())),
 						Err(e) if matches!(e.error(), MagicThisFileUsed) => {
-							Ok(Val::Str(loc.0.to_string_lossy().into()))
+							Ok(Val::Str(loc.0.full_path().into()))
 						}
 						Err(e) => Err(e),
 					},
@@ -617,28 +617,27 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 
 			std_slice(indexable.into_indexable()?, start, end, step)?
 		}
-		Import(path) => {
+		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let tmp = loc.clone().0;
-			let mut import_location = tmp.to_path_buf();
-			import_location.pop();
-			s.push(
+			let import_location = tmp
+				.path()
+				.map(|p| {
+					let mut p = p.to_owned();
+					p.pop();
+					p
+				})
+				.unwrap_or_default();
+			let path = s.resolve_file(&import_location, path as &str)?;
+			match i {
+				Import(_) => s.push(
 				CallLocation::new(loc),
-				|| format!("import {:?}", path),
-				|| s.import_file(&import_location, path),
-			)?
+					|| format!("import {:?}", path.clone()),
+					|| s.import(path.clone()),
+				)?,
+				ImportStr(_) => Val::Str(s.import_str(path)?),
+				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(path)?)),
+				_ => unreachable!(),
 		}
-		ImportStr(path) => {
-			let tmp = loc.clone().0;
-			let mut import_location = tmp.to_path_buf();
-			import_location.pop();
-			Val::Str(s.import_file_str(&import_location, path)?)
-		}
-		ImportBin(path) => {
-			let tmp = loc.clone().0;
-			let mut import_location = tmp.to_path_buf();
-			import_location.pop();
-			let bytes = s.import_file_bin(&import_location, path)?;
-			Val::Arr(ArrValue::Bytes(bytes))
 		}
 	})
 }

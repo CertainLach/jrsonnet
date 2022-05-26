@@ -1,8 +1,6 @@
 use std::{
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
-	path::Path,
-	rc::Rc,
 };
 
 use gcmodule::Cc;
@@ -28,7 +26,7 @@ struct JsonnetNativeCallbackHandler {
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, s: State, _from: Option<Rc<Path>>, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, s: State, args: &[Val]) -> Result<Val, LocError> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));

@@ -1,6 +1,6 @@
-use std::path::PathBuf;
+use std::borrow::Cow;
 
-use jrsonnet_parser::{LocExpr, ParserSettings};
+use jrsonnet_parser::{LocExpr, ParserSettings, Source};
 
 thread_local! {
 	/// To avoid parsing again when issued from the same thread
@@ -16,7 +16,7 @@ thread_local! {
 		jrsonnet_parser::parse(
 			jrsonnet_stdlib::STDLIB_STR,
 			&ParserSettings {
-				file_name: PathBuf::from("std.jsonnet").into(),
+				file_name: Source::new_virtual(Cow::Borrowed("<std>")),
 			},
 		)
 		.unwrap()
