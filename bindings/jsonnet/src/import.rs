@@ -32,9 +32,9 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<PathBuf, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file(&self, from: &Path, path: &Path) -> Result<PathBuf> {
+	fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
 		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
-		let rel = CString::new(path.to_str().unwrap()).unwrap().into_raw();
+		let rel = CString::new(path).unwrap().into_raw();
 		let found_here: *mut c_char = null_mut();
 		let mut success: i32 = 0;
 		let result_ptr = unsafe {
@@ -108,17 +108,17 @@ impl NativeImportResolver {
 	}
 }
 impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &Path, path: &Path) -> Result<PathBuf> {
+	fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
 		let mut new_path = from.to_owned();
 		new_path.push(path);
 		if new_path.exists() {
-			Ok(new_path.into())
+			Ok(new_path)
 		} else {
 			for library_path in self.library_paths.borrow().iter() {
 				let mut cloned = library_path.clone();
 				cloned.push(path);
 				if cloned.exists() {
-					return Ok(cloned.into());
+					return Ok(cloned);
 				}
 			}
 			throw!(ImportFileNotFound(from.to_owned(), path.to_owned()))

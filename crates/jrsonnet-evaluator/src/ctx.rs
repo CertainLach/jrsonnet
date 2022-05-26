@@ -49,13 +49,40 @@ impl Context {
 		}))
 	}
 
+	#[cfg(not(feature = "friendly-errors"))]
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
 		Ok(self
 			.0
 			.bindings
 			.get(&name)
 			.cloned()
-			.ok_or(VariableIsNotDefined(name))?)
+			.ok_or(VariableIsNotDefined(name, vec![]))?)
+	}
+
+	#[cfg(feature = "friendly-errors")]
+	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
+		use std::cmp::Ordering;
+
+		use crate::throw;
+
+		if let Some(val) = self.0.bindings.get(&name).cloned() {
+			return Ok(val);
+		}
+
+		let mut heap = Vec::new();
+		self.0.bindings.clone().iter_keys(|k| {
+			let conf = strsim::jaro_winkler(&k as &str, &name as &str);
+			if conf < 0.8 {
+				return;
+			}
+			heap.push((conf, k));
+		});
+		heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+
+		throw!(VariableIsNotDefined(
+			name,
+			heap.into_iter().map(|(_, k)| k).collect()
+		))
 	}
 	pub fn contains_binding(&self, name: IStr) -> bool {
 		self.0.bindings.contains_key(&name)

@@ -11,6 +11,30 @@ use crate::{
 	typed::TypeLocError,
 };
 
+fn format_found(list: &[IStr], what: &str) -> String {
+	if list.is_empty() {
+		return String::new();
+	}
+	let mut out = String::new();
+	out.push_str("\nThere is ");
+	out.push_str(what);
+	if list.len() > 1 {
+		out.push('s');
+	}
+	out.push_str(" with similar name");
+	if list.len() > 1 {
+		out.push('s');
+	}
+	out.push_str(" present: ");
+	for (i, v) in list.iter().enumerate() {
+		if i != 0 {
+			out.push_str(", ");
+		}
+		out.push_str(v as &str);
+	}
+	out
+}
+
 #[derive(Error, Debug, Clone, Trace)]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
@@ -39,15 +63,15 @@ pub enum Error {
 	#[error("assert failed: {0}")]
 	AssertionFailed(IStr),
 
-	#[error("variable is not defined: {0}")]
-	VariableIsNotDefined(IStr),
+	#[error("variable is not defined: {0}{}", format_found(.1, "variable"))]
+	VariableIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),
 
 	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
-	#[error("no such field: {0}")]
-	NoSuchField(IStr),
+	#[error("no such field: {0}{}", format_found(.1, "field"))]
+	NoSuchField(IStr, Vec<IStr>),
 
 	#[error("only functions can be called, got {0}")]
 	OnlyFunctionsCanBeCalledGot(ValType),

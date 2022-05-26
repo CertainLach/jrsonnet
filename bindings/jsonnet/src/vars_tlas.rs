@@ -20,11 +20,8 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &State, name: *const c_char, value:
 pub unsafe extern "C" fn jsonnet_ext_code(vm: &State, name: *const c_char, value: *const c_char) {
 	let name = CStr::from_ptr(name);
 	let value = CStr::from_ptr(value);
-	vm.add_ext_code(
-		name.to_str().unwrap().into(),
-		value.to_str().unwrap().into(),
-	)
-	.unwrap()
+	vm.add_ext_code(name.to_str().unwrap(), value.to_str().unwrap().into())
+		.unwrap()
 }
 /// # Safety
 #[no_mangle]
@@ -41,9 +38,6 @@ pub unsafe extern "C" fn jsonnet_tla_var(vm: &State, name: *const c_char, value:
 pub unsafe extern "C" fn jsonnet_tla_code(vm: &State, name: *const c_char, value: *const c_char) {
 	let name = CStr::from_ptr(name);
 	let value = CStr::from_ptr(value);
-	vm.add_tla_code(
-		name.to_str().unwrap().into(),
-		value.to_str().unwrap().into(),
-	)
-	.unwrap()
+	vm.add_tla_code(name.to_str().unwrap().into(), value.to_str().unwrap())
+		.unwrap()
 }

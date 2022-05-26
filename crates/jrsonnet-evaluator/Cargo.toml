@@ -7,13 +7,16 @@ license = "MIT"
 edition = "2021"
 
 [features]
-default = ["serialized-stdlib", "explaining-traces"]
+default = ["serialized-stdlib", "explaining-traces", "friendly-errors"]
 # Serializes standard library AST instead of parsing them every run
 serialized-stdlib = ["bincode", "jrsonnet-parser/serde"]
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
+# Provides helpful explaintations to errors, at cost of adding
+# more dependencies and slowing down error path
+friendly-errors = ["strsim"]
 
 # Allows to preserve field order in objects
 exp-preserve-order = []
@@ -42,20 +45,13 @@ serde = "1.0"
 serde_json = "1.0"
 serde_yaml = { git = "https://github.com/CertainLach/serde-yaml", branch = "feature/old-octals-quirk" }
 
-[dependencies.anyhow]
-version = "1.0"
-optional = true
-
+anyhow = { version = "1.0", optional = true }
+# Friendly errors
+strsim = { version = "0.10.0", optional = true }
 # Serialized stdlib
-[dependencies.bincode]
-version = "1.3"
-optional = true
-
+bincode = { version = "1.3", optional = true }
 # Explaining traces
-[dependencies.annotate-snippets]
-version = "0.9.1"
-features = ["color"]
-optional = true
+annotate-snippets = { version = "0.9.1", features = ["color"], optional = true }
 
 [build-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }

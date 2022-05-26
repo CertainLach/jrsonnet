@@ -1,9 +1,5 @@
 [workspace]
-members = [
-	"crates/*",
-	"bindings/jsonnet",
-	"cmds/jrsonnet",
-]
+members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet"]
 
 [profile.test]
 opt-level = 1
@@ -14,3 +10,4 @@ lto = "fat"
 codegen-units = 1
 debug = 0
 panic = "abort"
+strip = true

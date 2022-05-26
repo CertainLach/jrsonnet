@@ -1,4 +1,4 @@
-use std::rc::Rc;
+use std::{cmp::Ordering, rc::Rc};
 
 use gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
@@ -450,7 +450,29 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					|| format!("field <{}> access", key),
 					|| match v.get(s.clone(), key.clone()) {
 						Ok(Some(v)) => Ok(v),
-						Ok(None) => throw!(NoSuchField(key.clone())),
+						#[cfg(not(feature = "friendly-errors"))]
+						Ok(None) => throw!(NoSuchField(key.clone(), vec![])),
+						#[cfg(feature = "friendly-errors")]
+						Ok(None) => {
+							let mut heap = Vec::new();
+							for field in v.fields_ex(
+								true,
+								#[cfg(feature = "exp-preserve-order")]
+								false,
+							) {
+								let conf = strsim::jaro_winkler(&field as &str, &key as &str);
+								if conf < 0.8 {
+									continue;
+								}
+								heap.push((conf, field));
+							}
+							heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+
+							throw!(NoSuchField(
+								key.clone(),
+								heap.into_iter().map(|(_, v)| v).collect()
+							))
+						}
 						Err(e) if matches!(e.error(), MagicThisFileUsed) => {
 							Ok(Val::Str(loc.0.full_path().into()))
 						}
@@ -630,14 +652,14 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let path = s.resolve_file(&import_location, path as &str)?;
 			match i {
 				Import(_) => s.push(
-				CallLocation::new(loc),
+					CallLocation::new(loc),
 					|| format!("import {:?}", path.clone()),
 					|| s.import(path.clone()),
 				)?,
 				ImportStr(_) => Val::Str(s.import_str(path)?),
 				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(path)?)),
 				_ => unreachable!(),
-		}
+			}
 		}
 	})
 }
