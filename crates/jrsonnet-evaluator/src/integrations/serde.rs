@@ -13,20 +13,20 @@ impl Typed for Value {
 
 	fn into_untyped(value: Self, s: State) -> Result<Val> {
 		Ok(match value {
-			Value::Null => Val::Null,
-			Value::Bool(v) => Val::Bool(v),
-			Value::Number(n) => Val::Num(n.as_f64().ok_or_else(|| {
+			Self::Null => Val::Null,
+			Self::Bool(v) => Val::Bool(v),
+			Self::Number(n) => Val::Num(n.as_f64().ok_or_else(|| {
 				RuntimeError(format!("json number can't be represented as jsonnet: {}", n).into())
 			})?),
-			Value::String(s) => Val::Str((&s as &str).into()),
-			Value::Array(a) => {
+			Self::String(s) => Val::Str((&s as &str).into()),
+			Self::Array(a) => {
 				let mut out: Vec<Val> = Vec::with_capacity(a.len());
 				for v in a {
 					out.push(Self::into_untyped(v, s.clone())?);
 				}
 				Val::Arr(out.into())
 			}
-			Value::Object(o) => {
+			Self::Object(o) => {
 				let mut builder = ObjValueBuilder::with_capacity(o.len());
 				for (k, v) in o {
 					builder

@@ -9,7 +9,7 @@ use jrsonnet_evaluator::{
 
 use crate::ConfigureState;
 
-#[derive(PartialEq)]
+#[derive(PartialEq, Eq)]
 pub enum TraceFormatName {
 	Compact,
 	Explaining,

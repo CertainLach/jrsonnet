@@ -120,7 +120,7 @@ pub fn try_parse_cflags(str: &str) -> ParseResult<CFlags> {
 	Ok((out, &str[i..]))
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum Width {
 	Star,
 	Fixed(usize),
@@ -174,7 +174,7 @@ pub fn try_parse_length_modifier(str: &str) -> ParseResult<()> {
 	Ok(((), &str[idx..]))
 }
 
-#[derive(Debug, PartialEq)]
+#[derive(Debug, PartialEq, Eq)]
 pub enum ConvTypeV {
 	Decimal,
 	Octal,

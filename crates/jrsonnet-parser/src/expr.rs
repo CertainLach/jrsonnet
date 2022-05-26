@@ -21,7 +21,7 @@ pub enum FieldName {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
 pub enum Visibility {
 	/// :
 	Normal,
@@ -60,7 +60,7 @@ pub enum Member {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
 pub enum UnaryOpType {
 	Plus,
 	Minus,
@@ -85,7 +85,7 @@ impl Display for UnaryOpType {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
 pub enum BinaryOpType {
 	Mul,
 	Div,
@@ -179,7 +179,7 @@ impl ArgsDesc {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Eq, Trace)]
 pub enum DestructRest {
 	/// ...rest
 	Keep(IStr),
@@ -188,7 +188,7 @@ pub enum DestructRest {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Eq, Trace)]
 pub enum Destruct {
 	Full(IStr),
 	#[cfg(feature = "exp-destruct")]
@@ -263,7 +263,7 @@ pub enum ObjBody {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Clone, Copy, Trace)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Trace)]
 pub enum LiteralType {
 	This,
 	Super,
@@ -357,7 +357,7 @@ pub enum Expr {
 
 /// file, begin offset, end offset
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, PartialEq, Trace)]
+#[derive(Clone, PartialEq, Eq, Trace)]
 #[skip_trace]
 #[repr(C)]
 pub struct ExprLocation(pub Source, pub u32, pub u32);

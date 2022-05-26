@@ -476,43 +476,43 @@ static_assertions::assert_eq_size!(Val, [u8; 32]);
 impl Val {
 	pub const fn as_bool(&self) -> Option<bool> {
 		match self {
-			Val::Bool(v) => Some(*v),
+			Self::Bool(v) => Some(*v),
 			_ => None,
 		}
 	}
 	pub const fn as_null(&self) -> Option<()> {
 		match self {
-			Val::Null => Some(()),
+			Self::Null => Some(()),
 			_ => None,
 		}
 	}
 	pub fn as_str(&self) -> Option<IStr> {
 		match self {
-			Val::Str(s) => Some(s.clone()),
+			Self::Str(s) => Some(s.clone()),
 			_ => None,
 		}
 	}
 	pub const fn as_num(&self) -> Option<f64> {
 		match self {
-			Val::Num(n) => Some(*n),
+			Self::Num(n) => Some(*n),
 			_ => None,
 		}
 	}
 	pub fn as_arr(&self) -> Option<ArrValue> {
 		match self {
-			Val::Arr(a) => Some(a.clone()),
+			Self::Arr(a) => Some(a.clone()),
 			_ => None,
 		}
 	}
 	pub fn as_obj(&self) -> Option<ObjValue> {
 		match self {
-			Val::Obj(o) => Some(o.clone()),
+			Self::Obj(o) => Some(o.clone()),
 			_ => None,
 		}
 	}
 	pub fn as_func(&self) -> Option<FuncVal> {
 		match self {
-			Val::Func(f) => Some(f.clone()),
+			Self::Func(f) => Some(f.clone()),
 			_ => None,
 		}
 	}

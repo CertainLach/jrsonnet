@@ -3,7 +3,7 @@ use crate::{
 	throw, State, Val,
 };
 
-#[derive(PartialEq, Clone, Copy)]
+#[derive(PartialEq, Eq, Clone, Copy)]
 pub enum ManifestType {
 	// Applied in manifestification
 	Manifest,

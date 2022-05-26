@@ -1,5 +1,5 @@
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, PartialEq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug)]
 pub struct CodeLocation {
 	pub offset: usize,
 

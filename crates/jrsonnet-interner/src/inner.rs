@@ -157,7 +157,7 @@ impl Inner {
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		a.0 == b.0
 	}
-	pub fn as_ptr(this: &Self) -> *const u8 {
+	pub const fn as_ptr(this: &Self) -> *const u8 {
 		// SAFETY: data is initialized
 		unsafe { this.0.as_ptr().add(mem::size_of::<InnerHeader>()) }
 	}
