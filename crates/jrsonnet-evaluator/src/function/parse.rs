@@ -7,6 +7,7 @@ use super::{
 	builtin::{BuiltinParam, BuiltinParamName},
 };
 use crate::{
+	destructure::destruct,
 	error::{Error::*, Result},
 	evaluate_named,
 	gc::GcHashMap,
@@ -50,60 +51,77 @@ pub fn parse_function_call(
 		throw!(TooManyArgsFunctionHas(params.len()))
 	}
 
-	let mut filled_args = 0;
+	let mut filled_named = 0;
+	let mut filled_positionals = 0;
 
 	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
-		passed_args.insert(name, arg);
-		filled_args += 1;
+		destruct(&name, arg, &mut passed_args)?;
+		filled_positionals += 1;
 		Ok(())
 	})?;
 
 	args.named_iter(s, ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
-		if !params.iter().any(|p| &p.0 == name) {
+		if !params.iter().any(|p| p.0.name().as_ref() == Some(name)) {
 			throw!(UnknownFunctionParameter((name as &str).to_owned()));
 		}
 		if passed_args.insert(name.clone(), value).is_some() {
 			throw!(BindingParameterASecondTime(name.clone()));
 		}
-		filled_args += 1;
+		filled_named += 1;
 		Ok(())
 	})?;
 
-	if filled_args < params.len() {
+	if filled_named + filled_positionals < params.len() {
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let fctx = Context::new_future();
-		let mut defaults = GcHashMap::with_capacity(params.len() - filled_args);
+		let mut defaults =
+			GcHashMap::with_capacity(params.len() - filled_named - filled_positionals);
 
-		for param in params.iter().filter(|p| p.1.is_some()) {
-			if passed_args.contains_key(&param.0.clone()) {
+		for (idx, param) in params.iter().enumerate().filter(|p| p.1 .1.is_some()) {
+			if let Some(name) = param.0.name() {
+				if passed_args.contains_key(&name) {
+					continue;
+				}
+			} else if idx < filled_positionals {
 				continue;
 			}
 
-			defaults.insert(
-				param.0.clone(),
+			destruct(
+				&param.0,
 				Thunk::new(tb!(EvaluateNamedThunk {
 					ctx: fctx.clone(),
-					name: param.0.clone(),
+					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: param.1.clone().expect("default exists"),
 				})),
-			);
-			filled_args += 1;
+				&mut defaults,
+			)?;
+			if param.0.name().is_some() {
+				filled_named += 1;
+			} else {
+				filled_positionals += 1;
+			}
 		}
 
-		// Some args still wasn't filled
-		if filled_args != params.len() {
+		// Some args still weren't filled
+		if filled_named + filled_positionals != params.len() {
 			for param in params.iter().skip(args.unnamed_len()) {
 				let mut found = false;
 				args.named_names(&mut |name| {
-					if name == &param.0 {
+					if Some(name) == param.0.name().as_ref() {
 						found = true;
 					}
 				});
 				if !found {
-					throw!(FunctionParameterNotBoundInCall(param.0.clone()));
+					throw!(FunctionParameterNotBoundInCall(
+						param
+							.0
+							.clone()
+							.name()
+							.unwrap_or_else(|| "<destruct>".into())
+					));
 				}
 			}
 			unreachable!();
@@ -189,7 +207,7 @@ pub fn parse_builtin_call(
 
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
-pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Context {
+pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
 	#[derive(Trace)]
 	struct DependsOnUnbound(IStr);
 	impl ThunkValue for DependsOnUnbound {
@@ -205,23 +223,27 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Co
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {
-			bindings.insert(
-				param.0.clone(),
+			destruct(
+				&param.0.clone(),
 				Thunk::new(tb!(EvaluateNamedThunk {
 					ctx: fctx.clone(),
-					name: param.0.clone(),
+					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: v.clone(),
 				})),
-			);
+				&mut bindings,
+			)?;
 		} else {
-			bindings.insert(
-				param.0.clone(),
-				Thunk::new(tb!(DependsOnUnbound(param.0.clone()))),
-			);
+			destruct(
+				&param.0,
+				Thunk::new(tb!(DependsOnUnbound(
+					param.0.name().unwrap_or_else(|| "<destruct>".into())
+				))),
+				&mut bindings,
+			)?;
 		}
 	}
 
-	body_ctx
+	Ok(body_ctx
 		.extend(bindings, None, None, None)
-		.into_future(fctx)
+		.into_future(fctx))
 }

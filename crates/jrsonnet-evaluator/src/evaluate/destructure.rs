@@ -12,7 +12,7 @@ use crate::{
 };
 
 #[allow(clippy::too_many_lines)]
-fn destruct(
+pub fn destruct(
 	d: &Destruct,
 	parent: Thunk<Val>,
 	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,

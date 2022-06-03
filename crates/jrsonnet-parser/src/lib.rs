@@ -59,7 +59,7 @@ parser! {
 		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
 
-		pub rule param(s: &ParserSettings) -> expr::Param = name:id() expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
+		pub rule param(s: &ParserSettings) -> expr::Param = name:destruct(s) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
 		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
 			= params:param(s) ** comma() comma()? { expr::ParamsDesc(Rc::new(params)) }
 			/ { expr::ParamsDesc(Rc::new(Vec::new())) }

@@ -152,7 +152,7 @@ impl Display for BinaryOpType {
 /// name, default value
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
-pub struct Param(pub IStr, pub Option<LocExpr>);
+pub struct Param(pub Destruct, pub Option<LocExpr>);
 
 /// Defined function parameters
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
@@ -206,6 +206,7 @@ pub enum Destruct {
 	},
 }
 impl Destruct {
+	/// Name of destructure, used for function parameter names
 	pub fn name(&self) -> Option<IStr> {
 		match self {
 			Self::Full(name) => Some(name.clone()),

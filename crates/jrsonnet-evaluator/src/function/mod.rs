@@ -59,7 +59,7 @@ pub struct FuncDesc {
 }
 impl FuncDesc {
 	/// Create body context, but fill arguments without defaults with lazy error
-	pub fn default_body_context(&self) -> Context {
+	pub fn default_body_context(&self) -> Result<Context> {
 		parse_default_function_call(self.ctx.clone(), &self.params)
 	}
 
