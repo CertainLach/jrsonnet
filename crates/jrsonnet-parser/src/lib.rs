@@ -1,4 +1,4 @@
-#![allow(clippy::redundant_closure_call)]
+#![allow(clippy::redundant_closure_call, clippy::derive_partial_eq_without_eq)]
 
 use std::rc::Rc;
 
@@ -109,7 +109,7 @@ parser! {
 			}
 		pub rule destruct_object(s: &ParserSettings) -> expr::Destruct
 			= "{" _
-				fields:(name:id() _ into:(":" _ into:destruct(s) {into})? {(name, into)})**comma()
+				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:expr(s) {v})? {(name, into, default)})**comma()
 				rest:(
 					comma() rest:destruct_rest()? {rest}
 					/ comma()? {None}

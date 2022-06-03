@@ -188,7 +188,7 @@ pub enum DestructRest {
 }
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, PartialEq, Trace)]
 pub enum Destruct {
 	Full(IStr),
 	#[cfg(feature = "exp-destruct")]
@@ -201,7 +201,7 @@ pub enum Destruct {
 	},
 	#[cfg(feature = "exp-destruct")]
 	Object {
-		fields: Vec<(IStr, Option<Destruct>)>,
+		fields: Vec<(IStr, Option<Destruct>, Option<LocExpr>)>,
 		rest: Option<DestructRest>,
 	},
 }

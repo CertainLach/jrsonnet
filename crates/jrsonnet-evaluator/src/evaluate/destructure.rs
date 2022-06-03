@@ -12,9 +12,11 @@ use crate::{
 };
 
 #[allow(clippy::too_many_lines)]
+#[allow(unused_variables)]
 pub fn destruct(
 	d: &Destruct,
 	parent: Thunk<Val>,
+	fctx: Pending<Context>,
 	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
 ) -> Result<()> {
 	match d {
@@ -89,6 +91,7 @@ pub fn destruct(
 							full: full.clone(),
 							index: i,
 						})),
+						fctx.clone(),
 						new_bindings,
 					)?;
 				}
@@ -119,6 +122,7 @@ pub fn destruct(
 							start: start.len(),
 							end: end.len(),
 						})),
+						fctx.clone(),
 						new_bindings,
 					)?;
 				}
@@ -151,6 +155,7 @@ pub fn destruct(
 							index: i,
 							end: end.len(),
 						})),
+						fctx.clone(),
 						new_bindings,
 					)?;
 				}
@@ -189,36 +194,51 @@ pub fn destruct(
 					Ok(obj)
 				}
 			}
-			let field_names: Vec<_> = fields.iter().map(|f| f.0.clone()).collect();
+			let field_names: Vec<_> = fields
+				.iter()
+				.filter(|f| f.2.is_none())
+				.map(|f| f.0.clone())
+				.collect();
 			let full = Thunk::new(tb!(DataThunk {
 				parent,
 				field_names: field_names.clone(),
 				has_rest: rest.is_some()
 			}));
 
-			for (field, d) in fields {
+			for (field, d, default) in fields {
 				#[derive(Trace)]
 				struct FieldThunk {
 					full: Thunk<ObjValue>,
 					field: IStr,
+					default: Option<(Pending<Context>, LocExpr)>,
 				}
 				impl ThunkValue for FieldThunk {
 					type Output = Val;
 
 					fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
 						let full = self.full.evaluate(s.clone())?;
-						let field = full.get(s, self.field)?.expect("shape is checked");
-						Ok(field)
+						if let Some(field) = full.get(s.clone(), self.field)? {
+							Ok(field)
+						} else {
+							let (fctx, expr) = self.default.as_ref().expect("shape is checked");
+							Ok(evaluate(s, fctx.clone().unwrap(), &expr)?)
+						}
 					}
 				}
 				let value = Thunk::new(tb!(FieldThunk {
 					full: full.clone(),
-					field: field.clone()
+					field: field.clone(),
+					default: default.clone().map(|e| (fctx.clone(), e)),
 				}));
 				if let Some(d) = d {
-					destruct(d, value, new_bindings)?;
+					destruct(d, value, fctx.clone(), new_bindings)?;
 				} else {
-					destruct(&Destruct::Full(field.clone()), value, new_bindings)?;
+					destruct(
+						&Destruct::Full(field.clone()),
+						value,
+						fctx.clone(),
+						new_bindings,
+					)?;
 				}
 			}
 		}
@@ -251,10 +271,10 @@ pub fn evaluate_dest(
 			}
 			let data = Thunk::new(tb!(EvaluateThunkValue {
 				name: into.name(),
-				fctx,
+				fctx: fctx.clone(),
 				expr: value.clone(),
 			}));
-			destruct(into, data, new_bindings)?;
+			destruct(into, data, fctx, new_bindings)?;
 		}
 		BindSpec::Function {
 			name,

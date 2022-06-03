@@ -8,6 +8,9 @@ impl<T: Trace + 'static> Pending<T> {
 	pub fn new() -> Self {
 		Self(Cc::new(RefCell::new(None)))
 	}
+	pub fn new_filled(v: T) -> Self {
+		Self(Cc::new(RefCell::new(Some(v))))
+	}
 	/// # Panics
 	/// If wrapper is filled already
 	pub fn fill(self, value: T) {

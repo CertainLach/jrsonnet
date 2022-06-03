@@ -56,7 +56,12 @@ pub fn parse_function_call(
 
 	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
-		destruct(&name, arg, &mut passed_args)?;
+		destruct(
+			&name,
+			arg,
+			Pending::new_filled(ctx.clone()),
+			&mut passed_args,
+		)?;
 		filled_positionals += 1;
 		Ok(())
 	})?;
@@ -96,6 +101,7 @@ pub fn parse_function_call(
 					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: param.1.clone().expect("default exists"),
 				})),
+				fctx.clone(),
 				&mut defaults,
 			)?;
 			if param.0.name().is_some() {
@@ -230,6 +236,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: v.clone(),
 				})),
+				fctx.clone(),
 				&mut bindings,
 			)?;
 		} else {
@@ -238,6 +245,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 				Thunk::new(tb!(DependsOnUnbound(
 					param.0.name().unwrap_or_else(|| "<destruct>".into())
 				))),
+				fctx.clone(),
 				&mut bindings,
 			)?;
 		}
