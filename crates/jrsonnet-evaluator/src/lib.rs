@@ -57,9 +57,9 @@ use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
 use function::{builtin::Builtin, CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
-use gcmodule::{Cc, Trace, Weak};
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
 pub use jrsonnet_interner::IStr;
 pub use jrsonnet_parser as parser;
@@ -704,32 +704,4 @@ impl State {
 	pub fn set_max_stack(&self, trace: usize) {
 		self.settings_mut().max_stack = trace;
 	}
-}
-
-pub fn cc_ptr_eq<T>(a: &Cc<T>, b: &Cc<T>) -> bool {
-	let a = a as &T;
-	let b = b as &T;
-	std::ptr::eq(a, b)
-}
-
-fn weak_raw<T>(a: Weak<T>) -> *const () {
-	unsafe { std::mem::transmute(a) }
-}
-fn weak_ptr_eq<T>(a: Weak<T>, b: Weak<T>) -> bool {
-	std::ptr::eq(weak_raw(a), weak_raw(b))
-}
-
-#[test]
-fn weak_unsafe() {
-	let a = Cc::new(1);
-	let b = Cc::new(2);
-
-	let aw1 = a.clone().downgrade();
-	let aw2 = a.clone().downgrade();
-	let aw3 = a.clone().downgrade();
-
-	let bw = b.clone().downgrade();
-
-	assert!(weak_ptr_eq(aw1, aw2));
-	assert!(!weak_ptr_eq(aw3, bw));
 }

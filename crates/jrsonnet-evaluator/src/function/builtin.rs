@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
 use crate::{error::Result, gc::TraceBox, Context, State, Val};

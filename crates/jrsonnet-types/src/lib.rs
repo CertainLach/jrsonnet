@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 
 #[macro_export]
 macro_rules! ty {
@@ -115,7 +115,7 @@ impl Display for ValType {
 }
 
 #[derive(Debug, Clone, PartialEq, Trace)]
-#[skip_trace]
+#[trace(skip)]
 pub enum ComplexValType {
 	Any,
 	Char,

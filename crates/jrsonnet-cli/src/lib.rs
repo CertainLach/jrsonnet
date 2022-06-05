@@ -8,6 +8,7 @@ use std::{env, path::PathBuf};
 use clap::Parser;
 pub use ext::*;
 use jrsonnet_evaluator::{error::Result, FileImportResolver, State};
+use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
 pub use tla::*;
 pub use trace::*;
@@ -111,15 +112,21 @@ pub struct GcOpts {
 	gc_collect_before_printing_stats: bool,
 }
 impl GcOpts {
-	pub fn configure_global(&self) {
-		if !self.gc_collect_on_exit {
-			gcmodule::set_thread_collect_on_drop(false)
-		}
+	pub fn stats_printer(&self) -> (Option<GcStatsPrinter>, Option<LeakSpace>) {
+		(
+			self.gc_print_stats.then(|| GcStatsPrinter {
+				collect_before_printing_stats: self.gc_collect_before_printing_stats,
+			}),
+			(!self.gc_collect_on_exit).then(|| LeakSpace {}),
+		)
 	}
-	pub fn stats_printer(&self) -> Option<GcStatsPrinter> {
-		self.gc_print_stats.then(|| GcStatsPrinter {
-			collect_before_printing_stats: self.gc_collect_before_printing_stats,
-		})
+}
+
+pub struct LeakSpace {}
+
+impl Drop for LeakSpace {
+	fn drop(&mut self) {
+		with_thread_object_space(|s| s.leak())
 	}
 }
 
@@ -130,9 +137,9 @@ impl Drop for GcStatsPrinter {
 	fn drop(&mut self) {
 		eprintln!("=== GC STATS ===");
 		if self.collect_before_printing_stats {
-			let collected = gcmodule::collect_thread_cycles();
+			let collected = jrsonnet_gcmodule::collect_thread_cycles();
 			eprintln!("Collected: {}", collected);
 		}
-		eprintln!("Tracked: {}", gcmodule::count_thread_tracked())
+		eprintln!("Tracked: {}", jrsonnet_gcmodule::count_thread_tracked())
 	}
 }

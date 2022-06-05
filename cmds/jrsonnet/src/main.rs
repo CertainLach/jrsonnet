@@ -115,7 +115,6 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	opts.gc.configure_global();
 	opts.general.configure(s)?;
 	opts.manifest.configure(s)?;
 

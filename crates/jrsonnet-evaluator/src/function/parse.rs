@@ -1,4 +1,4 @@
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{LocExpr, ParamsDesc};
 

@@ -1,6 +1,5 @@
 mod common;
 
-use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
@@ -8,6 +7,7 @@ use jrsonnet_evaluator::{
 	typed::Typed,
 	State, Val,
 };
+use jrsonnet_gcmodule::Cc;
 
 #[builtin]
 fn a() -> Result<u32> {

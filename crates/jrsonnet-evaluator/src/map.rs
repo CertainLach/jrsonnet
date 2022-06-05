@@ -1,10 +1,10 @@
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{GcHashMap, Thunk, Val};
 
 #[derive(Trace)]
-#[force_tracking]
+#[trace(tracking(force))]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
 	current: GcHashMap<IStr, Thunk<Val>>,

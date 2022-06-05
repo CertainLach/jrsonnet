@@ -4,7 +4,7 @@
 use std::collections::HashMap;
 
 use format::{format_arr, format_obj};
-use gcmodule::Cc;
+use jrsonnet_gcmodule::Cc;
 use jrsonnet_interner::{IBytes, IStr};
 use serde::Deserialize;
 use serde_yaml::DeserializingQuirks;

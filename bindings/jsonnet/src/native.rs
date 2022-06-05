@@ -3,7 +3,6 @@ use std::{
 	os::raw::{c_char, c_int},
 };
 
-use gcmodule::Cc;
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
 	function::builtin::{BuiltinParam, NativeCallback, NativeCallbackHandler},
@@ -11,6 +10,7 @@ use jrsonnet_evaluator::{
 	typed::Typed,
 	IStr, State, Val,
 };
+use jrsonnet_gcmodule::Cc;
 
 type JsonnetNativeCallback = unsafe extern "C" fn(
 	ctx: *const c_void,
@@ -18,11 +18,11 @@ type JsonnetNativeCallback = unsafe extern "C" fn(
 	success: *mut c_int,
 ) -> *mut Val;
 
-#[derive(gcmodule::Trace)]
+#[derive(jrsonnet_gcmodule::Trace)]
 struct JsonnetNativeCallbackHandler {
-	#[skip_trace]
+	#[trace(skip)]
 	ctx: *const c_void,
-	#[skip_trace]
+	#[trace(skip)]
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {

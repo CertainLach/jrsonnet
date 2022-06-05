@@ -7,5 +7,6 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
+jrsonnet-gcmodule = { version = "0.3.4" }
+
 peg = "0.8.0"
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }

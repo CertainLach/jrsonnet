@@ -5,18 +5,17 @@ use std::{
 	ptr::addr_of,
 };
 
-use gcmodule::{Cc, Trace, Weak};
+use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	cc_ptr_eq,
 	error::{Error::*, LocError},
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, weak_ptr_eq, weak_raw, LazyBinding, Result, State, Thunk, Unbound, Val,
+	throw, LazyBinding, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -26,7 +25,7 @@ mod ordering {
 		clippy::unused_self,
 	)]
 
-	use gcmodule::Trace;
+	use jrsonnet_gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace)]
 	pub struct FieldIndex;
@@ -57,7 +56,7 @@ mod ordering {
 mod ordering {
 	use std::cmp::Reverse;
 
-	use gcmodule::Trace;
+	use jrsonnet_gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
 	pub struct FieldIndex(u32);
@@ -122,7 +121,7 @@ enum CacheValue {
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Trace)]
-#[force_tracking]
+#[trace(tracking(force))]
 pub struct ObjValueInternals {
 	sup: Option<ObjValue>,
 	this: Option<ObjValue>,
@@ -134,18 +133,20 @@ pub struct ObjValueInternals {
 }
 
 #[derive(Clone, Trace)]
-pub struct WeakObjValue(#[skip_trace] pub(crate) Weak<ObjValueInternals>);
+pub struct WeakObjValue(#[trace(skip)] pub(crate) Weak<ObjValueInternals>);
 
 impl PartialEq for WeakObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		weak_ptr_eq(self.0.clone(), other.0.clone())
+		Weak::ptr_eq(&self.0, &other.0)
 	}
 }
 
 impl Eq for WeakObjValue {}
 impl Hash for WeakObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(weak_raw(self.0.clone()) as usize);
+		// Safety: usize is POD
+		let addr = unsafe { *std::ptr::addr_of!(self.0).cast() };
+		hasher.write_usize(addr);
 	}
 }
 
@@ -454,7 +455,7 @@ impl ObjValue {
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		cc_ptr_eq(&a.0, &b.0)
+		Cc::ptr_eq(&a.0, &b.0)
 	}
 	pub fn downgrade(self) -> WeakObjValue {
 		WeakObjValue(self.0.downgrade())
@@ -463,7 +464,7 @@ impl ObjValue {
 
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		cc_ptr_eq(&self.0, &other.0)
+		Cc::ptr_eq(&self.0, &other.0)
 	}
 }
 

@@ -1,4 +1,4 @@
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 
 use crate::{
 	error::{Error, LocError, Result},

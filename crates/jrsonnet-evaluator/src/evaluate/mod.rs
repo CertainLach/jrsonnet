@@ -1,6 +1,6 @@
 use std::{cmp::Ordering, rc::Rc};
 
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
@@ -151,7 +151,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				value,
 			}) => {
 				#[derive(Trace)]
-				struct UnboundValue<B> {
+				struct UnboundValue<B: Trace> {
 					uctx: B,
 					value: LocExpr,
 					name: IStr,
@@ -201,7 +201,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 				..
 			}) => {
 				#[derive(Trace)]
-				struct UnboundMethod<B> {
+				struct UnboundMethod<B: Trace> {
 					uctx: B,
 					value: LocExpr,
 					params: ParamsDesc,
@@ -247,7 +247,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]
-				struct ObjectAssert<B> {
+				struct ObjectAssert<B: Trace> {
 					uctx: B,
 					assert: AssertStmt,
 				}
@@ -299,7 +299,7 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 					Val::Null => {}
 					Val::Str(n) => {
 						#[derive(Trace)]
-						struct UnboundValue<B> {
+						struct UnboundValue<B: Trace> {
 							uctx: B,
 							value: LocExpr,
 						}

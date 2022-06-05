@@ -30,6 +30,8 @@ jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.2" }
 jrsonnet-macros = { path = "../jrsonnet-macros", version = "0.4.2" }
+jrsonnet-gcmodule = { version = "0.3.4" }
+
 pathdiff = "0.2.1"
 hashbrown = "0.12.1"
 static_assertions = "1.1.0"
@@ -39,7 +41,6 @@ base64 = "0.13.0"
 rustc-hash = "1.1"
 
 thiserror = "1.0"
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 
 serde = "1.0"
 serde_json = "1.0"

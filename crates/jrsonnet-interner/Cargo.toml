@@ -11,7 +11,8 @@ default = ["serde"]
 serde = ["dep:serde"]
 
 [dependencies]
+jrsonnet-gcmodule = { version = "0.3.4" }
+
 serde = { version = "1.0", optional = true }
 rustc-hash = "1.1"
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 hashbrown = { version = "0.12.1", features = ["inline-more"] }

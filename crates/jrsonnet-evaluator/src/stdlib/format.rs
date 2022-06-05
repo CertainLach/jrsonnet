@@ -1,7 +1,7 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;

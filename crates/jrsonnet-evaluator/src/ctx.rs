@@ -1,11 +1,10 @@
 use std::fmt::Debug;
 
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	cc_ptr_eq, error::Error::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result,
-	Thunk, Val,
+	error::Error::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, Thunk, Val,
 };
 
 #[derive(Trace)]
@@ -136,6 +135,6 @@ impl Default for Context {
 
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
-		cc_ptr_eq(&self.0, &other.0)
+		Cc::ptr_eq(&self.0, &other.0)
 	}
 }

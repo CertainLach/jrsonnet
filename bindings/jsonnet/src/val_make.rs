@@ -5,8 +5,8 @@ use std::{
 	os::raw::{c_char, c_double, c_int},
 };
 
-use gcmodule::Cc;
 use jrsonnet_evaluator::{val::ArrValue, ObjValue, State, Val};
+use jrsonnet_gcmodule::Cc;
 
 /// # Safety
 ///

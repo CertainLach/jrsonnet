@@ -1,7 +1,7 @@
 use std::fmt::Debug;
 
 pub use arglike::{ArgLike, ArgsLike, TlaArg};
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{ExprLocation, LocExpr, ParamsDesc};
@@ -91,7 +91,7 @@ pub enum FuncVal {
 	/// Plain function implemented in jsonnet
 	Normal(Cc<FuncDesc>),
 	/// Standard library function
-	StaticBuiltin(#[skip_trace] &'static dyn StaticBuiltin),
+	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
 	/// User-provided function
 	Builtin(Cc<TraceBox<dyn Builtin>>),
 }

@@ -1,6 +1,6 @@
 use std::{fmt::Debug, path::PathBuf};
 
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, UnaryOpType};
 use jrsonnet_types::ValType;
@@ -125,7 +125,7 @@ pub enum Error {
 	ImportSyntaxError {
 		path: Source,
 		source_code: IStr,
-		#[skip_trace]
+		#[trace(skip)]
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 

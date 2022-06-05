@@ -5,7 +5,7 @@ use std::{
 	rc::Rc,
 };
 
-use gcmodule::{Trace, Tracer};
+use jrsonnet_gcmodule::{Trace, Tracer};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 

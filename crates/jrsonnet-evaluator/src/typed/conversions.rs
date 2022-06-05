@@ -1,6 +1,6 @@
 use std::ops::Deref;
 
-use gcmodule::Cc;
+use jrsonnet_gcmodule::Cc;
 use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};

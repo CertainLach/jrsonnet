@@ -6,8 +6,8 @@ use std::{
 	ops::{Deref, DerefMut},
 };
 
-use gcmodule::{Trace, Tracer};
 use hashbrown::HashMap;
+use jrsonnet_gcmodule::{Trace, Tracer};
 use rustc_hash::{FxHashSet, FxHasher};
 
 /// Replacement for box, which assumes that the underlying type is [`Trace`]
@@ -92,7 +92,7 @@ impl<V> Trace for GcHashSet<V>
 where
 	V: Trace,
 {
-	fn trace(&self, tracer: &mut gcmodule::Tracer) {
+	fn trace(&self, tracer: &mut jrsonnet_gcmodule::Tracer) {
 		for v in &self.0 {
 			v.trace(tracer);
 		}
@@ -133,7 +133,7 @@ where
 	K: Trace,
 	V: Trace,
 {
-	fn trace(&self, tracer: &mut gcmodule::Tracer) {
+	fn trace(&self, tracer: &mut jrsonnet_gcmodule::Tracer) {
 		for (k, v) in &self.0 {
 			k.trace(tracer);
 			v.trace(tracer);

@@ -13,8 +13,8 @@ use std::{
 	str,
 };
 
-use gcmodule::Trace;
 use hashbrown::HashMap;
+use jrsonnet_gcmodule::Trace;
 use rustc_hash::FxHasher;
 
 mod inner;

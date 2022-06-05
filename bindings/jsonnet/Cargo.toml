@@ -10,7 +10,7 @@ publish = false
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
+jrsonnet-gcmodule = { version = "0.3.4" }
 
 [lib]
 crate-type = ["cdylib"]

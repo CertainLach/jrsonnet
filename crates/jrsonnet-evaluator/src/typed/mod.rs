@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 mod conversions;
 pub use conversions::*;
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 pub use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
 
@@ -16,7 +16,7 @@ pub enum TypeError {
 	#[error("expected {0}, got {1}")]
 	ExpectedGot(ComplexValType, ValType),
 	#[error("missing property {0} from {1}")]
-	MissingProperty(#[skip_trace] Rc<str>, ComplexValType),
+	MissingProperty(#[trace(skip)] Rc<str>, ComplexValType),
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
@@ -119,7 +119,7 @@ impl CheckType for ValType {
 
 #[derive(Clone, Debug, Trace)]
 enum ValuePathItem {
-	Field(#[skip_trace] Rc<str>),
+	Field(#[trace(skip)] Rc<str>),
 	Index(u64),
 }
 impl Display for ValuePathItem {

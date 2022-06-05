@@ -11,12 +11,13 @@ exp-destruct = []
 
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
+jrsonnet-gcmodule = { version = "0.3.4" }
+
 static_assertions = "1.1.0"
 
 peg = "0.8.0"
 
 serde = { version = "1.0", features = ["derive", "rc"], optional = true }
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 
 [dev-dependencies]
 jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }

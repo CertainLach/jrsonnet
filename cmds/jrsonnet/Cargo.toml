@@ -23,8 +23,9 @@ exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
 jrsonnet-cli = { path = "../../crates/jrsonnet-cli", version = "0.4.2" }
+jrsonnet-gcmodule = { version = "0.3.4" }
+
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
-gcmodule = { git = "https://github.com/CertainLach/gcmodule", branch = "jrsonnet" }
 clap = { version = "3.1", features = ["derive"] }
 clap_complete = { version = "3.1" }

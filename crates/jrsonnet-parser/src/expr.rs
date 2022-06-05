@@ -4,7 +4,7 @@ use std::{
 	rc::Rc,
 };
 
-use gcmodule::Trace;
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -359,7 +359,7 @@ pub enum Expr {
 /// file, begin offset, end offset
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Trace)]
-#[skip_trace]
+#[trace(skip)]
 #[repr(C)]
 pub struct ExprLocation(pub Source, pub u32, pub u32);
 impl ExprLocation {

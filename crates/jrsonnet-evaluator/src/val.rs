@@ -1,11 +1,10 @@
 use std::{cell::RefCell, fmt::Debug, rc::Rc};
 
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_types::ValType;
 
 use crate::{
-	cc_ptr_eq,
 	error::{Error::*, LocError},
 	function::FuncVal,
 	gc::{GcHashMap, TraceBox},
@@ -21,7 +20,7 @@ pub trait ThunkValue: Trace {
 }
 
 #[derive(Trace)]
-enum ThunkInner<T> {
+enum ThunkInner<T: Trace> {
 	Computed(T),
 	Errored(LocError),
 	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
@@ -30,7 +29,7 @@ enum ThunkInner<T> {
 
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
-pub struct Thunk<T>(Cc<RefCell<ThunkInner<T>>>);
+pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<T>>>);
 
 impl<T> Thunk<T>
 where
@@ -78,6 +77,7 @@ type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
 pub struct CachedUnbound<I, T>
 where
 	I: Unbound<Bound = T>,
+	T: Trace,
 {
 	cache: Cc<RefCell<GcHashMap<CacheKey, T>>>,
 	value: I,
@@ -113,14 +113,14 @@ impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 	}
 }
 
-impl<T: Debug> Debug for Thunk<T> {
+impl<T: Debug + Trace> Debug for Thunk<T> {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "Lazy")
 	}
 }
-impl<T> PartialEq for Thunk<T> {
+impl<T: Trace> PartialEq for Thunk<T> {
 	fn eq(&self, other: &Self) -> bool {
-		cc_ptr_eq(&self.0, &other.0)
+		Cc::ptr_eq(&self.0, &other.0)
 	}
 }
 
@@ -185,9 +185,10 @@ impl Slice {
 }
 
 #[derive(Debug, Clone, Trace)]
-#[force_tracking]
+// may contrain other ArrValue
+#[trace(tracking(force))]
 pub enum ArrValue {
-	Bytes(#[skip_trace] IBytes),
+	Bytes(#[trace(skip)] IBytes),
 	Lazy(Cc<Vec<Thunk<Val>>>),
 	Eager(Cc<Vec<Val>>),
 	Extended(Box<(Self, Self)>),
@@ -434,8 +435,8 @@ impl ArrValue {
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		match (a, b) {
-			(Self::Lazy(a), Self::Lazy(b)) => cc_ptr_eq(a, b),
-			(Self::Eager(a), Self::Eager(b)) => cc_ptr_eq(a, b),
+			(Self::Lazy(a), Self::Lazy(b)) => Cc::ptr_eq(a, b),
+			(Self::Eager(a), Self::Eager(b)) => Cc::ptr_eq(a, b),
 			_ => false,
 		}
 	}

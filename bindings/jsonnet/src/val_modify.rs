@@ -4,8 +4,8 @@
 
 use std::{ffi::CStr, os::raw::c_char};
 
-use gcmodule::Cc;
 use jrsonnet_evaluator::{val::ArrValue, State, Thunk, Val};
+use jrsonnet_gcmodule::Cc;
 
 /// # Safety
 ///

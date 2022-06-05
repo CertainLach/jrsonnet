@@ -342,7 +342,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 		#fun
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
-		#[derive(Clone, gcmodule::Trace #static_derive_copy)]
+		#[derive(Clone, jrsonnet_gcmodule::Trace #static_derive_copy)]
 		#vis struct #name {
 			#(#fields)*
 		}

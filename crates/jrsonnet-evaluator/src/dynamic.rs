@@ -1,6 +1,6 @@
 use std::cell::RefCell;
 
-use gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace};
 
 #[derive(Clone, Trace)]
 pub struct Pending<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
