@@ -35,6 +35,14 @@ fn format_found(list: &[IStr], what: &str) -> String {
 	out
 }
 
+const fn format_empty_str(str: &str) -> &str {
+	if str.is_empty() {
+		"\"\" (empty string)"
+	} else {
+		str
+	}
+}
+
 #[derive(Error, Debug, Clone, Trace)]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
@@ -60,7 +68,7 @@ pub enum Error {
 	#[error("string out of bounds: {0} is not within [0,{1})")]
 	StringBoundsError(usize, usize),
 
-	#[error("assert failed: {0}")]
+	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
 	#[error("variable is not defined: {0}{}", format_found(.1, "variable"))]
@@ -70,7 +78,7 @@ pub enum Error {
 
 	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
-	#[error("no such field: {0}{}", format_found(.1, "field"))]
+	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
 
 	#[error("only functions can be called, got {0}")]
@@ -89,10 +97,10 @@ pub enum Error {
 
 	#[error("field name should be string, got {0}")]
 	FieldMustBeStringGot(ValType),
-	#[error("duplicate field name: {0}")]
+	#[error("duplicate field name: {}", format_empty_str(.0))]
 	DuplicateFieldName(IStr),
 
-	#[error("attempted to index array with string {0}")]
+	#[error("attempted to index array with string {}", format_empty_str(.0))]
 	AttemptedIndexAnArrayWithString(IStr),
 	#[error("{0} index type should be {1}, got {2}")]
 	ValueIndexMustBeTypeGot(ValType, ValType, ValType),
@@ -129,7 +137,7 @@ pub enum Error {
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 
-	#[error("runtime error: {0}")]
+	#[error("runtime error: {}", format_empty_str(.0))]
 	RuntimeError(IStr),
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
@@ -152,7 +160,7 @@ pub enum Error {
 	#[error("stream manifest output cannot consist of raw strings")]
 	StreamManifestCannotNestString,
 
-	#[error("{0}")]
+	#[error("{}", format_empty_str(.0))]
 	ImportCallbackError(String),
 	#[error("invalid unicode codepoint: {0}")]
 	InvalidUnicodeCodepointGot(u32),
