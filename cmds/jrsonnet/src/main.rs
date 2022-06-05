@@ -1,12 +1,12 @@
 use std::{
+	env::current_dir,
 	fs::{create_dir_all, File},
 	io::{Read, Write},
-	path::PathBuf,
 };
 
 use clap::{AppSettings, IntoApp, Parser};
 use clap_complete::Shell;
-use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, InputOpts, ManifestOpts, OutputOpts};
+use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, State};
 
 #[cfg(feature = "mimalloc")]
@@ -32,9 +32,20 @@ struct DebugOpts {
 }
 
 #[derive(Parser)]
+#[clap(next_help_heading = "INPUT")]
+struct InputOpts {
+	/// Treat input as code, evaluate them instead of reading file
+	#[clap(long, short = 'e')]
+	pub exec: bool,
+
+	/// Path to the file to be compiled if `--evaluate` is unset, otherwise code itself
+	pub input: Option<String>,
+}
+
+#[derive(Parser)]
 #[clap(
 	global_setting = AppSettings::DeriveDisplayOrder,
-	// args_conflicts_with_subcommands = true,
+	args_conflicts_with_subcommands = true,
 )]
 struct Opts {
 	#[clap(subcommand)]
@@ -93,6 +104,8 @@ enum Error {
 	Io(#[from] std::io::Error),
 	#[error("input is not utf8 encoded")]
 	Utf8(#[from] std::str::Utf8Error),
+	#[error("missing input argument")]
+	MissingInputArgument,
 }
 impl From<LocError> for Error {
 	fn from(e: LocError) -> Self {
@@ -118,15 +131,16 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	opts.general.configure(s)?;
 	opts.manifest.configure(s)?;
 
+	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
-		s.evaluate_snippet("<cmdline>".to_owned(), (&opts.input.input as &str).into())?
-	} else if opts.input.input == "-" {
+		s.evaluate_snippet("<cmdline>".to_owned(), (&input as &str).into())?
+	} else if input == "-" {
 		let mut input = Vec::new();
 		std::io::stdin().read_to_end(&mut input)?;
 		let input_str = std::str::from_utf8(&input)?.into();
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(s.resolve_file(&PathBuf::new(), &opts.input.input)?)?
+		s.import(s.resolve_file(&current_dir().expect("cwd"), &input)?)?
 	};
 
 	let val = s.with_tla(val)?;
