@@ -7,7 +7,7 @@ use format::{format_arr, format_obj};
 use jrsonnet_gcmodule::Cc;
 use jrsonnet_interner::{IBytes, IStr};
 use serde::Deserialize;
-use serde_yaml::DeserializingQuirks;
+use serde_yaml_with_quirks::DeserializingQuirks;
 
 use crate::{
 	error::{Error::*, Result},
@@ -219,7 +219,7 @@ fn builtin_parse_json(st: State, s: IStr) -> Result<Any> {
 #[jrsonnet_macros::builtin]
 fn builtin_parse_yaml(st: State, s: IStr) -> Result<Any> {
 	use serde_json::Value;
-	let value = serde_yaml::Deserializer::from_str_with_quirks(
+	let value = serde_yaml_with_quirks::Deserializer::from_str_with_quirks(
 		&s,
 		DeserializingQuirks { old_octals: true },
 	);

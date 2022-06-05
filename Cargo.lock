@@ -143,12 +143,6 @@ dependencies = [
 ]
 
 [[package]]
-name = "dtoa"
-version = "0.4.8"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "56899898ce76aaf4a0f24d914c97ea6ed976d42fec6ad33fcbb0a1103e07b2b0"
-
-[[package]]
 name = "getrandom"
 version = "0.2.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -249,7 +243,7 @@ dependencies = [
  "rustc-hash",
  "serde",
  "serde_json",
- "serde_yaml",
+ "serde_yaml_with_quirks",
  "static_assertions",
  "strsim",
  "thiserror",
@@ -548,12 +542,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "serde_yaml"
-version = "0.8.21"
-source = "git+https://github.com/CertainLach/serde-yaml?branch=feature/old-octals-quirk#4bf0e325243539fdeb419e8d727ed1c161cbe445"
+name = "serde_yaml_with_quirks"
+version = "0.8.24"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47c5983eba86eae2d0058c35fb1065ccffb23af7f8965871069269088098321a"
 dependencies = [
- "dtoa",
  "indexmap",
+ "ryu",
  "serde",
  "yaml-rust",
 ]
