@@ -1,7 +1,5 @@
 name: CI
-
 on: [push]
-
 jobs:
   test:
     name: Test Suite
