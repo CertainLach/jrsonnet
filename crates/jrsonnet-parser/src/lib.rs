@@ -213,7 +213,7 @@ parser! {
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
 			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
 		pub rule local_expr(s: &ParserSettings) -> Expr
-			= keyword("local") _ binds:bind(s) ** comma() _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }
+			= keyword("local") _ binds:bind(s) ** comma() (_ ",")? _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }
 		pub rule string_expr(s: &ParserSettings) -> Expr
 			= s:string() {Expr::Str(s.into())}
 		pub rule obj_expr(s: &ParserSettings) -> Expr
