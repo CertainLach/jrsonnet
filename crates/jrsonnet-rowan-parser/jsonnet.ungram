@@ -1,0 +1,334 @@
+SourceFile = Expr
+
+ExprBinary =
+    lhs:Expr
+    BinaryOperator
+    rhs:Expr
+ExprUnary =
+    UnaryOperator
+    rhs:Expr
+ExprSlice =
+    Expr
+    '['
+    SliceDesc
+    ']'
+ExprIndex =
+    Expr
+    '.'
+    index:Name
+ExprIndexExpr =
+    base:Expr
+    '['
+    index:Expr
+    ']'
+ExprApply =
+    Expr
+    '('
+    ArgsDesc
+    ')'
+    'tailstrict'?
+ExprObjExtend =
+    Expr
+    '{'
+    ObjBody
+    '}'
+ExprParened =
+    '('
+    Expr
+    ')'
+
+ExprLiteral =
+    Literal
+ExprIntrinsicThisFile =
+    '$intrinsicThisFile'
+ExprIntrinsicId =
+    '$intrinsicId'
+ExprIntrinsic =
+    '$intrinsic'
+    '('
+    name:Name
+    ')'
+ExprString =
+    String
+ExprNumber =
+    Number
+ExprArray =
+    '['
+    (Expr (',' Expr)* ','?)?
+    ']'
+ExprObject =
+    '{'
+    ObjBody
+    '}'
+ExprArrayComp =
+    '['
+    Expr
+    ','?
+    ForSpec
+    CompSpec*
+    ']'
+ExprImport =
+    'importstr' String
+|   'importbin' String
+|   'import' String
+
+ExprVar =
+    name:Name
+ExprLocal =
+    'local'
+    (Bind (',' Bind)* ','?)
+    ';'
+ExprIfThenElse =
+    'if'
+    cond:Expr
+    'then'
+    then:Expr
+    ('else' else_:Expr)?
+ExprFunction =
+    'function'
+    '('
+    ParamsDesc
+    ')'
+    Expr
+ExprAssert =
+    Assertion
+    ';'
+    Expr
+ExprError =
+    'error'
+    Expr
+
+Expr =
+    ExprBinary
+|   ExprUnary
+|   ExprSlice
+|   ExprIndex
+|   ExprIndexExpr
+|   ExprApply
+|   ExprObjExtend
+|   ExprParened
+|   ExprIntrinsicThisFile
+|   ExprIntrinsicId
+|   ExprIntrinsic
+|   ExprString
+|   ExprNumber
+|   ExprArray
+|   ExprObject
+|   ExprArrayComp
+|   ExprImport
+|   ExprVar
+|   ExprLocal
+|   ExprIfThenElse
+|   ExprFunction
+|   ExprAssert
+|   ExprError
+
+BinaryOperator =
+    '||' | '&&'
+|   '|' | '^' | '&'
+|   '==' | '!=' | '<' | '>' | '<=' | '>=' | 'in'
+|   '<<' | '>>'
+|   '+' | '-'
+|   '*' | '/' | '%'
+
+UnaryOperator =
+    '-' | '!' | '~'
+
+SliceDesc =
+    from:Expr?
+    ':'
+    (
+        end:Expr?
+        (
+            ':'
+            step:Expr?
+        )?
+    )?
+
+Name =
+    'ident'
+
+ArgsDesc =
+    (Arg (',' Arg)* ','?)?
+Arg =
+    (name:Name '=')? Expr
+
+ObjBodyComp =
+    pre:ObjLocalPostComma*
+    '['
+    key:Expr
+    ']'
+    '+'?
+    ':'
+    value:Expr
+    post:ObjLocalPreComma*
+    ForSpec
+    CompSpec*
+ObjBodyMemberList =
+    (Member (',' Member) ','?)?
+ObjBody =
+    ObjBodyComp
+|   ObjBodyMemberList
+
+ObjLocalPostComma =
+    ObjLocal
+    ','
+ObjLocalPreComma =
+    ','
+    ObjLocal
+
+MemberBindStmt = ObjLocal
+MemberAssertStmt = Assertion
+MemberField = Field
+Member =
+    MemberBindStmt
+|   MemberAssertStmt
+|   MemberField
+
+ObjLocal =
+    'local'
+    Bind
+
+FieldNormal =
+    FieldName
+    '+'?
+    Visibility
+    Expr
+FieldMethod =
+    FieldName
+    '('
+    ParamsDesc
+    ')'
+    Visibility
+    Expr
+Field =
+    FieldNormal
+|   FieldMethod
+
+FieldNameFixed =
+    id:Name
+|   String
+FieldNameDynamic =
+    '['
+    Expr
+    ']'
+FieldName =
+    FieldNameFixed
+|   FieldNameDynamic
+
+Visibility =
+    ':::'
+|   '::'
+|   ':'
+
+Literal =
+    'null'
+|   'true'
+|   'false'
+|   'self'
+|   '$'
+|   'super'
+
+String =
+    'string_double'
+|   'string_single'
+|   'string_double_verbatim'
+|   'string_single_verbatim'
+|   'string_block'
+
+Number =
+    'number'
+
+ForSpec =
+    'for'
+    bind:Name
+    'in'
+    Expr
+IfSpec =
+    'if'
+    Expr
+CompSpec =
+    ForSpec
+|   IfSpec
+
+BindDestruct =
+    into:Destruct
+    '='
+    value:Expr
+BindFunction =
+    name:Name
+    '('
+    params:ParamsDesc
+    ')'
+    '='
+    value:Expr
+Bind =
+    BindDestruct
+|   BindFunction
+
+ParamsDesc =
+    (Param (',' Param)* ','?)?
+Param =
+    Destruct
+    (
+        '='
+        Expr
+    )?
+
+Assertion =
+    'assert'
+    condition:Expr
+    (
+        ':'
+        Expr
+    )?
+
+DestructFull =
+    into:Name
+DestructSkip =
+    '?'
+DestructArray =
+    '['
+    start:(
+        Destruct
+        (',' Destruct)*
+        ','?
+    )?
+    DestructRest?
+    ','?
+    end:(
+        Destruct
+        (',' Destruct)*
+        ','?
+    )
+    ']'
+DestructObject =
+    '{'
+    (
+        DestructObjectField
+        (',' DestructObjectField)*
+        ','?
+    )?
+    DestructRest?
+    ','?
+    '}'
+Destruct =
+    DestructFull
+    DestructSkip
+    DestructArray
+    DestructObject
+
+DestructRest =
+    '...'
+    into:Name?
+
+DestructObjectField =
+    field:Name
+    (
+        ':'
+        Destruct
+    )?
+    (
+        '='
+        Expr
+    )?

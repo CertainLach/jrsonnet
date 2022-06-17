@@ -3,8 +3,9 @@ use std::mem;
 use rowan::{GreenNode, GreenNodeBuilder, Language};
 
 use crate::{
-	lex::{Lang, Lexeme, SyntaxKind},
+	lex::Lexeme,
 	parser::{Parse, SyntaxError},
+	JsonnetLanguage, SyntaxKind,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -69,7 +70,7 @@ impl<'i> Sink<'i> {
 					}
 
 					for kind in kinds.into_iter().rev() {
-						self.builder.start_node(Lang::kind_to_raw(kind));
+						self.builder.start_node(JsonnetLanguage::kind_to_raw(kind));
 					}
 				}
 				Event::Token => self.token(),
@@ -92,7 +93,7 @@ impl<'i> Sink<'i> {
 	fn token(&mut self) {
 		let lexeme = self.lexemes[self.offset];
 		self.builder
-			.token(Lang::kind_to_raw(lexeme.kind), lexeme.text);
+			.token(JsonnetLanguage::kind_to_raw(lexeme.kind), lexeme.text);
 		self.offset += 1;
 	}
 	fn skip_whitespace(&mut self) {
