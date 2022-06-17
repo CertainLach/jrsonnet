@@ -11,7 +11,7 @@ use std::ops::Range;
 
 use StringBlockToken::*;
 
-use crate::lex::SyntaxKind;
+use crate::SyntaxKind;
 
 pub fn lex_str_block_test<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) {
 	lex_str_block(lex);

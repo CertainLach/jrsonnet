@@ -1,7 +1,7 @@
 use drop_bomb::DropBomb;
 use rowan::TextRange;
 
-use crate::{event::Event, lex::SyntaxKind, parser::Parser};
+use crate::{event::Event, parser::Parser, SyntaxKind};
 
 pub struct Ranger {
 	pub pos: usize,

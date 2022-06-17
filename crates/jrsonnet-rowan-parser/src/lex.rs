@@ -1,249 +1,41 @@
-use crate::string_block::lex_str_block_test;
 use core::ops::Range;
+use std::convert::TryFrom;
+
 use logos::Logos;
-use rowan::{Checkpoint, TextRange, TextSize};
-use std::{convert::TryFrom, iter::Peekable};
+use rowan::{TextRange, TextSize};
 
-#[derive(Logos, Debug, PartialEq, Hash, Eq, PartialOrd, Ord, Clone, Copy)]
-#[repr(u16)]
-pub enum SyntaxKind {
-	#[token("assert")]
-	KeywordAssert = 0,
-
-	#[token("else")]
-	KeywordElse,
-
-	#[token("error")]
-	KeywordError,
-
-	#[token("false")]
-	KeywordFalse,
-
-	#[token("for")]
-	KeywordFor,
-
-	#[token("function")]
-	KeywordFunction,
-
-	#[token("if")]
-	KeywordIf,
-
-	#[token("import")]
-	KeywordImport,
-
-	#[token("importstr")]
-	KeywordImportStr,
-
-	#[token("local")]
-	KeywordLocal,
-
-	#[token("null")]
-	KeywordNull,
-
-	#[token("tailstrict")]
-	KeywordTailStrict,
-
-	#[token("then")]
-	KeywordThen,
-
-	#[token("self")]
-	KeywordSelf,
-
-	#[token("super")]
-	KeywordSuper,
-
-	#[token("true")]
-	KeywordTrue,
-
-	#[regex(r"[_a-zA-Z][_a-zA-Z0-9]*")]
-	Ident,
-
-	#[regex(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")]
-	Number,
-
-	#[regex(r"(?:0|[1-9][0-9]*)\.[^0-9]")]
-	ErrorNumJunkAfterDecimalPoint,
-
-	#[regex(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[eE][^+\-0-9]")]
-	ErrorNumJunkAfterExponent,
-
-	#[regex(r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[eE][+-][^0-9]")]
-	ErrorNumJunkAfterExponentSign,
-
-	#[token("{")]
-	SymbolLeftBrace,
-
-	#[token("}")]
-	SymbolRightBrace,
-
-	#[token("[")]
-	SymbolLeftBracket,
-
-	#[token("]")]
-	SymbolRightBracket,
-
-	#[token(",")]
-	SymbolComma,
-
-	#[token(".")]
-	SymbolDot,
-
-	#[token("(")]
-	LParen,
-
-	#[token(")")]
-	RParen,
-
-	#[token(";")]
-	SymbolSemi,
-	#[token(":")]
-	SymbolColon,
-
-	#[token("$")]
-	SymbolDollar,
-
-	#[token("*")]
-	OpMul,
-	#[token("/")]
-	OpDiv,
-	#[token("%")]
-	OpMod,
-	#[token("+")]
-	OpPlus,
-	#[token("-")]
-	OpMinus,
-	#[token("<<")]
-	OpShiftLeft,
-	#[token(">>")]
-	OpShiftRight,
-	#[token("<")]
-	OpLessThan,
-	#[token(">")]
-	OpGreaterThan,
-	#[token("<=")]
-	OpLessThanOrEqual,
-	#[token(">=")]
-	OpGreaterThanOrEqual,
-	#[token("==")]
-	OpEqual,
-	#[token("!=")]
-	OpNotEqual,
-	#[token("&")]
-	OpBitAnd,
-	#[token("^")]
-	OpBitXor,
-	#[token("|")]
-	OpBitOr,
-	#[token("&&")]
-	OpAnd,
-	#[token("||")]
-	OpOr,
-	#[token("in")]
-	OpIn,
-	#[token("!")]
-	OpNot,
-	#[token("~")]
-	OpBitNegate,
-	#[token("=")]
-	SymbolAssign,
-
-	#[regex("\"(?s:[^\"\\\\]|\\\\.)*\"")]
-	StringDoubleQuoted,
-
-	#[regex("'(?s:[^'\\\\]|\\\\.)*'")]
-	StringSingleQuoted,
-
-	#[regex("@\"(?:[^\"]|\"\")*\"")]
-	StringDoubleVerbatim,
-
-	#[regex("@'(?:[^']|'')*'")]
-	StringSingleVerbatim,
-
-	#[regex(r"\|\|\|", lex_str_block_test)]
-	StringBlock, //(StringBlockToken),
-
-	#[regex("\"(?s:[^\"\\\\]|\\\\.)*")]
-	ErrorStringDoubleQuotedUnterminated,
-
-	#[regex("'(?s:[^'\\\\]|\\\\.)*")]
-	ErrorStringSingleQuotedUnterminated,
-
-	#[regex("@\"(?:[^\"]|\"\")*")]
-	ErrorStringDoubleVerbatimUnterminated,
-
-	#[regex("@'(?:[^']|'')*")]
-	ErrorStringSingleVerbatimUnterminated,
-
-	#[regex("@[^\"'\\s]\\S+")]
-	ErrorStringMissingQuotes,
-
-	#[token("/*/")]
-	ErrorCommentTooShort,
-
-	#[regex(r"/\*([^*]|\*[^/])+")]
-	ErrorCommentUnterminated,
-
-	#[regex(r"[ \t\n\r]+")]
-	Whitespace,
-
-	#[regex(r"//[^\r\n]*(\r\n|\n)?")]
-	SingelLineSlashComment,
-
-	#[regex(r"#[^\r\n]*(\r\n|\n)?")]
-	SingleLineHashComment,
-
-	#[regex(r"/\*([^*]|\*[^/])*\*/")]
-	MultiLineComment,
-
-	#[error]
-	Error,
-
-	ErrorPositionalAfterNamed,
-
-	Literal,
-	Expr,
-	Array,
-	ArrayElem,
-	Object,
-	Field,
-
-	CompspecFor,
-	CompspecIf,
-
-	Slice,
-	FieldAccess,
-	ObjectApply,
-	FunctionCall,
-	FunctionDef,
-	BodyDef,
-
-	BinOp,
-	UnaryOp,
-	Local,
-	ExprError,
-	ExprAssert,
-	ExprImport,
-
-	DefParam,
-	DefParams,
-
-	DefArgs,
-	DefNamedArg,
-	DefPositionalArg,
-
-	Parened,
-
-	Root,
-}
+use crate::SyntaxKind;
 
 impl SyntaxKind {
 	pub fn is_trivia(self) -> bool {
 		matches!(
 			self,
-			Self::Whitespace
-				| Self::MultiLineComment
-				| Self::SingelLineSlashComment
-				| Self::SingleLineHashComment
+			Self::WHITESPACE
+				| Self::MULTI_LINE_COMMENT
+				| Self::SINGLE_LINE_HASH_COMMENT
+				| Self::SINGLE_LINE_SLASH_COMMENT
+		)
+	}
+	pub fn is_string(self) -> bool {
+		matches!(
+			self,
+			Self::STRING_SINGLE
+				| Self::STRING_DOUBLE
+				| Self::STRING_SINGLE_VERBATIM
+				| Self::STRING_DOUBLE_VERBATIM
+				| Self::STRING_BLOCK
+		)
+	}
+	pub fn is_number(self) -> bool {
+		matches!(self, Self::NUMBER)
+	}
+	pub fn is_literal(self) -> bool {
+		matches!(
+			self,
+			Self::NULL_KW
+				| Self::TRUE_KW | Self::FALSE_KW
+				| Self::SELF_KW | Self::DOLLAR
+				| Self::SUPER_KW
 		)
 	}
 }
@@ -291,25 +83,4 @@ pub struct Lexeme<'i> {
 
 pub fn lex(input: &str) -> Vec<Lexeme<'_>> {
 	Lexer::new(input).collect()
-}
-
-impl From<SyntaxKind> for rowan::SyntaxKind {
-	fn from(kind: SyntaxKind) -> Self {
-		Self(kind as u16)
-	}
-}
-
-use SyntaxKind::*;
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash)]
-pub enum Lang {}
-impl rowan::Language for Lang {
-	type Kind = SyntaxKind;
-	fn kind_from_raw(raw: rowan::SyntaxKind) -> Self::Kind {
-		assert!(raw.0 <= Root as u16);
-		unsafe { std::mem::transmute::<u16, SyntaxKind>(raw.0) }
-	}
-	fn kind_to_raw(kind: Self::Kind) -> rowan::SyntaxKind {
-		kind.into()
-	}
 }
