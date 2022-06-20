@@ -255,7 +255,7 @@ pub struct ExprString {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ExprString {
-	pub fn string(&self) -> Option<String> {
+	pub fn text(&self) -> Option<Text> {
 		support::token_child(&self.syntax)
 	}
 }
@@ -332,7 +332,7 @@ impl ExprImport {
 	pub fn import_kind(&self) -> Option<ImportKind> {
 		support::token_child(&self.syntax)
 	}
-	pub fn string(&self) -> Option<String> {
+	pub fn text(&self) -> Option<Text> {
 		support::token_child(&self.syntax)
 	}
 }
@@ -692,7 +692,7 @@ impl FieldNameFixed {
 	pub fn id(&self) -> Option<Name> {
 		support::child(&self.syntax)
 	}
-	pub fn string(&self) -> Option<String> {
+	pub fn text(&self) -> Option<Text> {
 		support::token_child(&self.syntax)
 	}
 }
@@ -1038,18 +1038,27 @@ pub enum LiteralKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct String {
+pub struct Text {
 	syntax: SyntaxToken,
-	kind: StringKind,
+	kind: TextKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum StringKind {
+pub enum TextKind {
 	StringDouble,
+	ErrorStringDoubleUnterminated,
 	StringSingle,
+	ErrorStringSingleUnterminated,
 	StringDoubleVerbatim,
+	ErrorStringDoubleVerbatimUnterminated,
 	StringSingleVerbatim,
+	ErrorStringSingleVerbatimUnterminated,
+	ErrorStringVerbatimMissingQuotes,
 	StringBlock,
+	ErrorStringBlockUnexpectedEnd,
+	ErrorStringBlockMissingNewLine,
+	ErrorStringBlockMissingTermination,
+	ErrorStringBlockMissingIndent,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1061,7 +1070,9 @@ pub struct Number {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum NumberKind {
 	Float,
-	MetaForceEnum,
+	ErrorFloatJunkAfterPoint,
+	ErrorFloatJunkAfterExponent,
+	ErrorFloatJunkAfterExponentSign,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1088,6 +1099,22 @@ pub enum VisibilityKind {
 	Coloncoloncolon,
 	Coloncolon,
 	Colon,
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Trivia {
+	syntax: SyntaxToken,
+	kind: TriviaKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum TriviaKind {
+	Whitespace,
+	MultiLineComment,
+	ErrorCommentTooShort,
+	ErrorCommentUnterminated,
+	SingleLineHashComment,
+	SingleLineSlashComment,
 }
 impl AstNode for SourceFile {
 	fn can_cast(kind: SyntaxKind) -> bool {
@@ -2677,38 +2704,83 @@ impl std::fmt::Display for Literal {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl AstToken for String {
+impl AstToken for Text {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			STRING_DOUBLE
+			| ERROR_STRING_DOUBLE_UNTERMINATED
 			| STRING_SINGLE
+			| ERROR_STRING_SINGLE_UNTERMINATED
 			| STRING_DOUBLE_VERBATIM
+			| ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED
 			| STRING_SINGLE_VERBATIM
-			| STRING_BLOCK => true,
+			| ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED
+			| ERROR_STRING_VERBATIM_MISSING_QUOTES
+			| STRING_BLOCK
+			| ERROR_STRING_BLOCK_UNEXPECTED_END
+			| ERROR_STRING_BLOCK_MISSING_NEW_LINE
+			| ERROR_STRING_BLOCK_MISSING_TERMINATION
+			| ERROR_STRING_BLOCK_MISSING_INDENT => true,
 			_ => false,
 		}
 	}
 	fn cast(syntax: SyntaxToken) -> Option<Self> {
 		let res = match syntax.kind() {
-			STRING_DOUBLE => String {
+			STRING_DOUBLE => Text {
 				syntax,
-				kind: StringKind::StringDouble,
+				kind: TextKind::StringDouble,
 			},
-			STRING_SINGLE => String {
+			ERROR_STRING_DOUBLE_UNTERMINATED => Text {
 				syntax,
-				kind: StringKind::StringSingle,
+				kind: TextKind::ErrorStringDoubleUnterminated,
 			},
-			STRING_DOUBLE_VERBATIM => String {
+			STRING_SINGLE => Text {
 				syntax,
-				kind: StringKind::StringDoubleVerbatim,
+				kind: TextKind::StringSingle,
 			},
-			STRING_SINGLE_VERBATIM => String {
+			ERROR_STRING_SINGLE_UNTERMINATED => Text {
 				syntax,
-				kind: StringKind::StringSingleVerbatim,
+				kind: TextKind::ErrorStringSingleUnterminated,
 			},
-			STRING_BLOCK => String {
+			STRING_DOUBLE_VERBATIM => Text {
 				syntax,
-				kind: StringKind::StringBlock,
+				kind: TextKind::StringDoubleVerbatim,
+			},
+			ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED => Text {
+				syntax,
+				kind: TextKind::ErrorStringDoubleVerbatimUnterminated,
+			},
+			STRING_SINGLE_VERBATIM => Text {
+				syntax,
+				kind: TextKind::StringSingleVerbatim,
+			},
+			ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED => Text {
+				syntax,
+				kind: TextKind::ErrorStringSingleVerbatimUnterminated,
+			},
+			ERROR_STRING_VERBATIM_MISSING_QUOTES => Text {
+				syntax,
+				kind: TextKind::ErrorStringVerbatimMissingQuotes,
+			},
+			STRING_BLOCK => Text {
+				syntax,
+				kind: TextKind::StringBlock,
+			},
+			ERROR_STRING_BLOCK_UNEXPECTED_END => Text {
+				syntax,
+				kind: TextKind::ErrorStringBlockUnexpectedEnd,
+			},
+			ERROR_STRING_BLOCK_MISSING_NEW_LINE => Text {
+				syntax,
+				kind: TextKind::ErrorStringBlockMissingNewLine,
+			},
+			ERROR_STRING_BLOCK_MISSING_TERMINATION => Text {
+				syntax,
+				kind: TextKind::ErrorStringBlockMissingTermination,
+			},
+			ERROR_STRING_BLOCK_MISSING_INDENT => Text {
+				syntax,
+				kind: TextKind::ErrorStringBlockMissingIndent,
 			},
 			_ => return None,
 		};
@@ -2718,12 +2790,12 @@ impl AstToken for String {
 		&self.syntax
 	}
 }
-impl String {
-	pub fn kind(&self) -> StringKind {
+impl Text {
+	pub fn kind(&self) -> TextKind {
 		self.kind
 	}
 }
-impl std::fmt::Display for String {
+impl std::fmt::Display for Text {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2731,7 +2803,10 @@ impl std::fmt::Display for String {
 impl AstToken for Number {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			FLOAT | META_FORCE_ENUM => true,
+			FLOAT
+			| ERROR_FLOAT_JUNK_AFTER_POINT
+			| ERROR_FLOAT_JUNK_AFTER_EXPONENT
+			| ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => true,
 			_ => false,
 		}
 	}
@@ -2741,9 +2816,17 @@ impl AstToken for Number {
 				syntax,
 				kind: NumberKind::Float,
 			},
-			META_FORCE_ENUM => Number {
+			ERROR_FLOAT_JUNK_AFTER_POINT => Number {
 				syntax,
-				kind: NumberKind::MetaForceEnum,
+				kind: NumberKind::ErrorFloatJunkAfterPoint,
+			},
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT => Number {
+				syntax,
+				kind: NumberKind::ErrorFloatJunkAfterExponent,
+			},
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => Number {
+				syntax,
+				kind: NumberKind::ErrorFloatJunkAfterExponentSign,
 			},
 			_ => return None,
 		};
@@ -2837,6 +2920,62 @@ impl Visibility {
 	}
 }
 impl std::fmt::Display for Visibility {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl AstToken for Trivia {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			WHITESPACE
+			| MULTI_LINE_COMMENT
+			| ERROR_COMMENT_TOO_SHORT
+			| ERROR_COMMENT_UNTERMINATED
+			| SINGLE_LINE_HASH_COMMENT
+			| SINGLE_LINE_SLASH_COMMENT => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let res = match syntax.kind() {
+			WHITESPACE => Trivia {
+				syntax,
+				kind: TriviaKind::Whitespace,
+			},
+			MULTI_LINE_COMMENT => Trivia {
+				syntax,
+				kind: TriviaKind::MultiLineComment,
+			},
+			ERROR_COMMENT_TOO_SHORT => Trivia {
+				syntax,
+				kind: TriviaKind::ErrorCommentTooShort,
+			},
+			ERROR_COMMENT_UNTERMINATED => Trivia {
+				syntax,
+				kind: TriviaKind::ErrorCommentUnterminated,
+			},
+			SINGLE_LINE_HASH_COMMENT => Trivia {
+				syntax,
+				kind: TriviaKind::SingleLineHashComment,
+			},
+			SINGLE_LINE_SLASH_COMMENT => Trivia {
+				syntax,
+				kind: TriviaKind::SingleLineSlashComment,
+			},
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl Trivia {
+	pub fn kind(&self) -> TriviaKind {
+		self.kind
+	}
+}
+impl std::fmt::Display for Trivia {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

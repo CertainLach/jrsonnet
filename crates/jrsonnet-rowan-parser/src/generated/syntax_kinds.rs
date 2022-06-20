@@ -174,7 +174,6 @@ pub enum SyntaxKind {
 	SELF_KW,
 	#[token("super")]
 	SUPER_KW,
-	META_FORCE_ENUM,
 	#[token("for")]
 	FOR_KW,
 	#[token("assert")]
@@ -253,10 +252,11 @@ pub enum SyntaxKind {
 	BINARY_OPERATOR,
 	UNARY_OPERATOR,
 	LITERAL,
-	STRING,
+	TEXT,
 	NUMBER,
 	IMPORT_KIND,
 	VISIBILITY,
+	TRIVIA,
 	#[doc(hidden)]
 	__LAST,
 }
@@ -277,8 +277,8 @@ impl SyntaxKind {
 	pub fn is_enum(self) -> bool {
 		match self {
 			EXPR | OBJ_BODY | COMP_SPEC | BIND | MEMBER | FIELD | FIELD_NAME | DESTRUCT
-			| DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR | LITERAL | STRING
-			| NUMBER | IMPORT_KIND | VISIBILITY => true,
+			| DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR | LITERAL | TEXT | NUMBER
+			| IMPORT_KIND | VISIBILITY | TRIVIA => true,
 			_ => false,
 		}
 	}

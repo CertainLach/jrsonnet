@@ -2,7 +2,6 @@
 
 mod ast;
 mod binary;
-mod classify;
 mod event;
 mod generated;
 mod language;

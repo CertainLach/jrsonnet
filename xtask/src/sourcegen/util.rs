@@ -13,10 +13,7 @@ pub fn ensure_file_contents(file: &Path, contents: &str) -> Result<()> {
 		}
 	}
 
-	eprintln!(" {} was not up-to-date, updating\n", file.display());
-	if std::env::var("CI").is_ok() {
-		eprintln!("NOTE: run `cargo xtask` locally and commit the updated files\n");
-	}
+	eprintln!("{} was not up-to-date, updating", file.display());
 	if let Some(parent) = file.parent() {
 		let _ = fs::create_dir_all(parent);
 	}
