@@ -4,13 +4,11 @@ use miette::{LabeledSpan, SourceOffset, SourceSpan};
 use rowan::{GreenNode, TextRange, TextSize};
 
 use crate::{
-	binary::BinaryOperator,
 	event::Event,
 	lex::Lexeme,
 	marker::{AsRange, CompletedMarker, Marker, Ranger},
-	nodes::{Literal, Number, Text, Trivia},
+	nodes::{BinaryOperatorKind, Literal, Number, Text, Trivia, UnaryOperatorKind},
 	token_set::SyntaxKindSet,
-	unary::UnaryOperator,
 	AstToken, SyntaxKind,
 	SyntaxKind::*,
 	SyntaxNode, T, TS,
@@ -398,18 +396,6 @@ enum ExpectedSyntaxTrackingState {
 	Named,
 	Unnamed,
 }
-macro_rules! at_match {
-	($p:ident {
-		$($r:expr => $e:expr,)*
-		_ => $else:expr $(,)?
-	}) => {{
-		$(
-			if $p.at($r) {$e} else
-		)* {
-			$else
-		}
-	}}
-}
 
 fn expr(p: &mut Parser) -> Option<CompletedMarker> {
 	expr_binding_power(p, 0)
@@ -417,37 +403,16 @@ fn expr(p: &mut Parser) -> Option<CompletedMarker> {
 fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<CompletedMarker> {
 	let mut lhs = lhs(p)?;
 
-	loop {
-		let op = at_match!(p {
-			T![*] => BinaryOperator::Mul,
-			T![/] => BinaryOperator::Div,
-			T![%] => BinaryOperator::Mod,
-			T![+] => BinaryOperator::Plus,
-			T![-] => BinaryOperator::Minus,
-			T![<<] => BinaryOperator::ShiftLeft,
-			T![>>] => BinaryOperator::ShiftRight,
-			T![<] => BinaryOperator::LessThan,
-			T![>] => BinaryOperator::GreaterThan,
-			T![<=] => BinaryOperator::LessThanOrEqual,
-			T![>=] => BinaryOperator::GreaterThanOrEqual,
-			T![==] => BinaryOperator::Equal,
-			T![!=] => BinaryOperator::NotEqual,
-			T![&] => BinaryOperator::BitAnd,
-			T![^] => BinaryOperator::BitXor,
-			T![|] => BinaryOperator::BitOr,
-			T![&&] => BinaryOperator::And,
-			T![||] => BinaryOperator::Or,
-			T![in] => BinaryOperator::In,
-			T!['{'] => BinaryOperator::ObjectApply,
-			_ => break,
-		});
+	while let Some(op) = BinaryOperatorKind::cast(p.current())
+		.or_else(|| p.at(T!['{']).then(|| BinaryOperatorKind::MetaObjectApply))
+	{
 		let (left_binding_power, right_binding_power) = op.binding_power();
 		if left_binding_power < minimum_binding_power {
 			break;
 		}
 
 		// Object apply is not a real operator, we dont have something to bump
-		if op != BinaryOperator::ObjectApply {
+		if op != BinaryOperatorKind::MetaObjectApply {
 			p.bump();
 		}
 
@@ -455,7 +420,7 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 		let parsed_rhs = expr_binding_power(p, right_binding_power).is_some();
 		lhs = m.complete(
 			p,
-			if op == BinaryOperator::ObjectApply {
+			if op == BinaryOperatorKind::MetaObjectApply {
 				EXPR_OBJ_EXTEND
 			} else {
 				EXPR_BINARY
@@ -998,13 +963,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		p.bump();
 		text(p);
 		m.complete(p, EXPR_IMPORT)
-	} else if p.at(T![-]) || p.at(T![!]) || p.at(T![~]) {
-		let op = match p.current() {
-			T![-] => UnaryOperator::Minus,
-			T![!] => UnaryOperator::Not,
-			T![~] => UnaryOperator::BitNegate,
-			_ => unreachable!(),
-		};
+	} else if let Some(op) = UnaryOperatorKind::cast(p.current()) {
 		let ((), right_binding_power) = op.binding_power();
 
 		let m = p.start();

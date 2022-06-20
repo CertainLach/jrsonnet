@@ -1,17 +1,16 @@
 #![deny(unused_must_use)]
 
 mod ast;
-mod binary;
 mod event;
 mod generated;
 mod language;
 mod lex;
 mod marker;
 mod parser;
+mod precedence;
 mod string_block;
 mod tests;
 mod token_set;
-mod unary;
 
 pub use ast::{AstChildren, AstNode, AstToken};
 use event::Sink;

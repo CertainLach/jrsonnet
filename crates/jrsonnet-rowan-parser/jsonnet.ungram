@@ -136,6 +136,7 @@ BinaryOperator =
 |   '<<' | '>>'
 |   '+' | '-'
 |   '*' | '/' | '%'
+|   'META_OBJECT_APPLY!'
 |   'ERROR_NO_OPERATOR!'
 
 UnaryOperator =
