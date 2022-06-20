@@ -353,22 +353,30 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 			let ast_node = quote! {
 				impl AstToken for #name {
 					fn can_cast(kind: SyntaxKind) -> bool {
+						#kind_name::can_cast(kind)
+					}
+					fn cast(syntax: SyntaxToken) -> Option<Self> {
+						let kind = #kind_name::cast(syntax.kind())?;
+						Some(#name { syntax, kind })
+					}
+					fn syntax(&self) -> &SyntaxToken {
+						&self.syntax
+					}
+				}
+
+				impl #kind_name {
+					fn can_cast(kind: SyntaxKind) -> bool {
 						match kind {
 							#(#kinds)|* => true,
 							_ => false,
 						}
 					}
-					fn cast(syntax: SyntaxToken) -> Option<Self> {
-						let res = match syntax.kind() {
-							#(
-							#kinds => #name { syntax, kind: #kind_name::#variants },
-							)*
+					pub fn cast(kind: SyntaxKind) -> Option<Self> {
+						let res = match kind {
+							#(#kinds => Self::#variants,)*
 							_ => return None,
 						};
 						Some(res)
-					}
-					fn syntax(&self) -> &SyntaxToken {
-						&self.syntax
 					}
 				}
 			};

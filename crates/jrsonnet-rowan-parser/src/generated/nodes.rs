@@ -1005,6 +1005,7 @@ pub enum BinaryOperatorKind {
 	Mul,
 	Div,
 	Modulo,
+	MetaObjectApply,
 	ErrorNoOperator,
 }
 
@@ -2508,100 +2509,50 @@ impl AstNode for DestructArrayPart {
 }
 impl AstToken for BinaryOperator {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		match kind {
-			OR | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE | IN_KW | LHS
-			| RHS | PLUS | MINUS | MUL | DIV | MODULO | ERROR_NO_OPERATOR => true,
-			_ => false,
-		}
+		BinaryOperatorKind::can_cast(kind)
 	}
 	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			OR => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Or,
-			},
-			AND => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::And,
-			},
-			BIT_OR => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::BitOr,
-			},
-			BIT_XOR => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::BitXor,
-			},
-			BIT_AND => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::BitAnd,
-			},
-			EQ => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Eq,
-			},
-			NE => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Ne,
-			},
-			LT => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Lt,
-			},
-			GT => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Gt,
-			},
-			LE => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Le,
-			},
-			GE => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Ge,
-			},
-			IN_KW => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::InKw,
-			},
-			LHS => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Lhs,
-			},
-			RHS => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Rhs,
-			},
-			PLUS => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Plus,
-			},
-			MINUS => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Minus,
-			},
-			MUL => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Mul,
-			},
-			DIV => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Div,
-			},
-			MODULO => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::Modulo,
-			},
-			ERROR_NO_OPERATOR => BinaryOperator {
-				syntax,
-				kind: BinaryOperatorKind::ErrorNoOperator,
-			},
-			_ => return None,
-		};
-		Some(res)
+		let kind = BinaryOperatorKind::cast(syntax.kind())?;
+		Some(BinaryOperator { syntax, kind })
 	}
 	fn syntax(&self) -> &SyntaxToken {
 		&self.syntax
+	}
+}
+impl BinaryOperatorKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			OR | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE | IN_KW | LHS
+			| RHS | PLUS | MINUS | MUL | DIV | MODULO | META_OBJECT_APPLY | ERROR_NO_OPERATOR => true,
+			_ => false,
+		}
+	}
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			OR => Self::Or,
+			AND => Self::And,
+			BIT_OR => Self::BitOr,
+			BIT_XOR => Self::BitXor,
+			BIT_AND => Self::BitAnd,
+			EQ => Self::Eq,
+			NE => Self::Ne,
+			LT => Self::Lt,
+			GT => Self::Gt,
+			LE => Self::Le,
+			GE => Self::Ge,
+			IN_KW => Self::InKw,
+			LHS => Self::Lhs,
+			RHS => Self::Rhs,
+			PLUS => Self::Plus,
+			MINUS => Self::Minus,
+			MUL => Self::Mul,
+			DIV => Self::Div,
+			MODULO => Self::Modulo,
+			META_OBJECT_APPLY => Self::MetaObjectApply,
+			ERROR_NO_OPERATOR => Self::ErrorNoOperator,
+			_ => return None,
+		};
+		Some(res)
 	}
 }
 impl BinaryOperator {
@@ -2616,31 +2567,31 @@ impl std::fmt::Display for BinaryOperator {
 }
 impl AstToken for UnaryOperator {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		UnaryOperatorKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = UnaryOperatorKind::cast(syntax.kind())?;
+		Some(UnaryOperator { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl UnaryOperatorKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			MINUS | NOT | BIT_NOT => true,
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			MINUS => UnaryOperator {
-				syntax,
-				kind: UnaryOperatorKind::Minus,
-			},
-			NOT => UnaryOperator {
-				syntax,
-				kind: UnaryOperatorKind::Not,
-			},
-			BIT_NOT => UnaryOperator {
-				syntax,
-				kind: UnaryOperatorKind::BitNot,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			MINUS => Self::Minus,
+			NOT => Self::Not,
+			BIT_NOT => Self::BitNot,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl UnaryOperator {
@@ -2655,43 +2606,34 @@ impl std::fmt::Display for UnaryOperator {
 }
 impl AstToken for Literal {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		LiteralKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = LiteralKind::cast(syntax.kind())?;
+		Some(Literal { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl LiteralKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			NULL_KW | TRUE_KW | FALSE_KW | SELF_KW | DOLLAR | SUPER_KW => true,
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			NULL_KW => Literal {
-				syntax,
-				kind: LiteralKind::NullKw,
-			},
-			TRUE_KW => Literal {
-				syntax,
-				kind: LiteralKind::TrueKw,
-			},
-			FALSE_KW => Literal {
-				syntax,
-				kind: LiteralKind::FalseKw,
-			},
-			SELF_KW => Literal {
-				syntax,
-				kind: LiteralKind::SelfKw,
-			},
-			DOLLAR => Literal {
-				syntax,
-				kind: LiteralKind::Dollar,
-			},
-			SUPER_KW => Literal {
-				syntax,
-				kind: LiteralKind::SuperKw,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			NULL_KW => Self::NullKw,
+			TRUE_KW => Self::TrueKw,
+			FALSE_KW => Self::FalseKw,
+			SELF_KW => Self::SelfKw,
+			DOLLAR => Self::Dollar,
+			SUPER_KW => Self::SuperKw,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl Literal {
@@ -2705,6 +2647,18 @@ impl std::fmt::Display for Literal {
 	}
 }
 impl AstToken for Text {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		TextKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = TextKind::cast(syntax.kind())?;
+		Some(Text { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl TextKind {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			STRING_DOUBLE
@@ -2724,70 +2678,29 @@ impl AstToken for Text {
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			STRING_DOUBLE => Text {
-				syntax,
-				kind: TextKind::StringDouble,
-			},
-			ERROR_STRING_DOUBLE_UNTERMINATED => Text {
-				syntax,
-				kind: TextKind::ErrorStringDoubleUnterminated,
-			},
-			STRING_SINGLE => Text {
-				syntax,
-				kind: TextKind::StringSingle,
-			},
-			ERROR_STRING_SINGLE_UNTERMINATED => Text {
-				syntax,
-				kind: TextKind::ErrorStringSingleUnterminated,
-			},
-			STRING_DOUBLE_VERBATIM => Text {
-				syntax,
-				kind: TextKind::StringDoubleVerbatim,
-			},
-			ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED => Text {
-				syntax,
-				kind: TextKind::ErrorStringDoubleVerbatimUnterminated,
-			},
-			STRING_SINGLE_VERBATIM => Text {
-				syntax,
-				kind: TextKind::StringSingleVerbatim,
-			},
-			ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED => Text {
-				syntax,
-				kind: TextKind::ErrorStringSingleVerbatimUnterminated,
-			},
-			ERROR_STRING_VERBATIM_MISSING_QUOTES => Text {
-				syntax,
-				kind: TextKind::ErrorStringVerbatimMissingQuotes,
-			},
-			STRING_BLOCK => Text {
-				syntax,
-				kind: TextKind::StringBlock,
-			},
-			ERROR_STRING_BLOCK_UNEXPECTED_END => Text {
-				syntax,
-				kind: TextKind::ErrorStringBlockUnexpectedEnd,
-			},
-			ERROR_STRING_BLOCK_MISSING_NEW_LINE => Text {
-				syntax,
-				kind: TextKind::ErrorStringBlockMissingNewLine,
-			},
-			ERROR_STRING_BLOCK_MISSING_TERMINATION => Text {
-				syntax,
-				kind: TextKind::ErrorStringBlockMissingTermination,
-			},
-			ERROR_STRING_BLOCK_MISSING_INDENT => Text {
-				syntax,
-				kind: TextKind::ErrorStringBlockMissingIndent,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			STRING_DOUBLE => Self::StringDouble,
+			ERROR_STRING_DOUBLE_UNTERMINATED => Self::ErrorStringDoubleUnterminated,
+			STRING_SINGLE => Self::StringSingle,
+			ERROR_STRING_SINGLE_UNTERMINATED => Self::ErrorStringSingleUnterminated,
+			STRING_DOUBLE_VERBATIM => Self::StringDoubleVerbatim,
+			ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED => {
+				Self::ErrorStringDoubleVerbatimUnterminated
+			}
+			STRING_SINGLE_VERBATIM => Self::StringSingleVerbatim,
+			ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED => {
+				Self::ErrorStringSingleVerbatimUnterminated
+			}
+			ERROR_STRING_VERBATIM_MISSING_QUOTES => Self::ErrorStringVerbatimMissingQuotes,
+			STRING_BLOCK => Self::StringBlock,
+			ERROR_STRING_BLOCK_UNEXPECTED_END => Self::ErrorStringBlockUnexpectedEnd,
+			ERROR_STRING_BLOCK_MISSING_NEW_LINE => Self::ErrorStringBlockMissingNewLine,
+			ERROR_STRING_BLOCK_MISSING_TERMINATION => Self::ErrorStringBlockMissingTermination,
+			ERROR_STRING_BLOCK_MISSING_INDENT => Self::ErrorStringBlockMissingIndent,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl Text {
@@ -2802,6 +2715,18 @@ impl std::fmt::Display for Text {
 }
 impl AstToken for Number {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		NumberKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = NumberKind::cast(syntax.kind())?;
+		Some(Number { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl NumberKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			FLOAT
 			| ERROR_FLOAT_JUNK_AFTER_POINT
@@ -2810,30 +2735,15 @@ impl AstToken for Number {
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			FLOAT => Number {
-				syntax,
-				kind: NumberKind::Float,
-			},
-			ERROR_FLOAT_JUNK_AFTER_POINT => Number {
-				syntax,
-				kind: NumberKind::ErrorFloatJunkAfterPoint,
-			},
-			ERROR_FLOAT_JUNK_AFTER_EXPONENT => Number {
-				syntax,
-				kind: NumberKind::ErrorFloatJunkAfterExponent,
-			},
-			ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => Number {
-				syntax,
-				kind: NumberKind::ErrorFloatJunkAfterExponentSign,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			FLOAT => Self::Float,
+			ERROR_FLOAT_JUNK_AFTER_POINT => Self::ErrorFloatJunkAfterPoint,
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT => Self::ErrorFloatJunkAfterExponent,
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => Self::ErrorFloatJunkAfterExponentSign,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl Number {
@@ -2848,31 +2758,31 @@ impl std::fmt::Display for Number {
 }
 impl AstToken for ImportKind {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		ImportKindKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = ImportKindKind::cast(syntax.kind())?;
+		Some(ImportKind { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl ImportKindKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			IMPORTSTR_KW | IMPORTBIN_KW | IMPORT_KW => true,
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			IMPORTSTR_KW => ImportKind {
-				syntax,
-				kind: ImportKindKind::ImportstrKw,
-			},
-			IMPORTBIN_KW => ImportKind {
-				syntax,
-				kind: ImportKindKind::ImportbinKw,
-			},
-			IMPORT_KW => ImportKind {
-				syntax,
-				kind: ImportKindKind::ImportKw,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			IMPORTSTR_KW => Self::ImportstrKw,
+			IMPORTBIN_KW => Self::ImportbinKw,
+			IMPORT_KW => Self::ImportKw,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl ImportKind {
@@ -2887,31 +2797,31 @@ impl std::fmt::Display for ImportKind {
 }
 impl AstToken for Visibility {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		VisibilityKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = VisibilityKind::cast(syntax.kind())?;
+		Some(Visibility { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl VisibilityKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			COLONCOLONCOLON | COLONCOLON | COLON => true,
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			COLONCOLONCOLON => Visibility {
-				syntax,
-				kind: VisibilityKind::Coloncoloncolon,
-			},
-			COLONCOLON => Visibility {
-				syntax,
-				kind: VisibilityKind::Coloncolon,
-			},
-			COLON => Visibility {
-				syntax,
-				kind: VisibilityKind::Colon,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			COLONCOLONCOLON => Self::Coloncoloncolon,
+			COLONCOLON => Self::Coloncolon,
+			COLON => Self::Colon,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl Visibility {
@@ -2926,6 +2836,18 @@ impl std::fmt::Display for Visibility {
 }
 impl AstToken for Trivia {
 	fn can_cast(kind: SyntaxKind) -> bool {
+		TriviaKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = TriviaKind::cast(syntax.kind())?;
+		Some(Trivia { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl TriviaKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			WHITESPACE
 			| MULTI_LINE_COMMENT
@@ -2936,38 +2858,17 @@ impl AstToken for Trivia {
 			_ => false,
 		}
 	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let res = match syntax.kind() {
-			WHITESPACE => Trivia {
-				syntax,
-				kind: TriviaKind::Whitespace,
-			},
-			MULTI_LINE_COMMENT => Trivia {
-				syntax,
-				kind: TriviaKind::MultiLineComment,
-			},
-			ERROR_COMMENT_TOO_SHORT => Trivia {
-				syntax,
-				kind: TriviaKind::ErrorCommentTooShort,
-			},
-			ERROR_COMMENT_UNTERMINATED => Trivia {
-				syntax,
-				kind: TriviaKind::ErrorCommentUnterminated,
-			},
-			SINGLE_LINE_HASH_COMMENT => Trivia {
-				syntax,
-				kind: TriviaKind::SingleLineHashComment,
-			},
-			SINGLE_LINE_SLASH_COMMENT => Trivia {
-				syntax,
-				kind: TriviaKind::SingleLineSlashComment,
-			},
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			WHITESPACE => Self::Whitespace,
+			MULTI_LINE_COMMENT => Self::MultiLineComment,
+			ERROR_COMMENT_TOO_SHORT => Self::ErrorCommentTooShort,
+			ERROR_COMMENT_UNTERMINATED => Self::ErrorCommentUnterminated,
+			SINGLE_LINE_HASH_COMMENT => Self::SingleLineHashComment,
+			SINGLE_LINE_SLASH_COMMENT => Self::SingleLineSlashComment,
 			_ => return None,
 		};
 		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
 	}
 }
 impl Trivia {

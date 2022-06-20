@@ -163,6 +163,7 @@ pub enum SyntaxKind {
 	ERROR_KW,
 	#[token("in")]
 	IN_KW,
+	META_OBJECT_APPLY,
 	ERROR_NO_OPERATOR,
 	#[token("null")]
 	NULL_KW,
