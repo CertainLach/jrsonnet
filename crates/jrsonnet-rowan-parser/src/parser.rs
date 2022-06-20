@@ -8,10 +8,10 @@ use crate::{
 	event::Event,
 	lex::Lexeme,
 	marker::{AsRange, CompletedMarker, Marker, Ranger},
-	string_block::{lex_str_block, StringBlockError},
+	nodes::{Literal, Number, Text, Trivia},
 	token_set::SyntaxKindSet,
 	unary::UnaryOperator,
-	SyntaxKind,
+	AstToken, SyntaxKind,
 	SyntaxKind::*,
 	SyntaxNode, T, TS,
 };
@@ -36,6 +36,7 @@ impl Display for ExpectedSyntax {
 }
 
 pub struct Parser<'i> {
+	// TODO: remove all trivia before feeding to parser?
 	lexemes: &'i [Lexeme<'i>],
 	pub offset: usize,
 	pub events: Vec<Event>,
@@ -191,7 +192,7 @@ impl<'i> Parser<'i> {
 		while self
 			.lexemes
 			.get(previous_token_idx)
-			.map_or(false, |l| l.kind.is_trivia())
+			.map_or(false, |l| Trivia::can_cast(l.kind))
 			&& previous_token_idx != 0
 		{
 			previous_token_idx -= 1;
@@ -200,13 +201,13 @@ impl<'i> Parser<'i> {
 		Some(self.lexemes[previous_token_idx])
 	}
 	pub fn start_of_token(&self, mut idx: usize) -> TextSize {
-		while self.lexemes[idx].kind.is_trivia() {
+		while Trivia::can_cast(self.lexemes[idx].kind) {
 			idx += 1;
 		}
 		self.lexemes[idx].range.start()
 	}
 	pub fn end_of_token(&self, mut idx: usize) -> TextSize {
-		while self.lexemes[idx].kind.is_trivia() {
+		while Trivia::can_cast(self.lexemes[idx].kind) {
 			idx -= 1;
 		}
 		self.lexemes[idx].range.end()
@@ -267,7 +268,11 @@ impl<'i> Parser<'i> {
 		self.bump();
 		Some(m.complete(self, SyntaxKind::ERROR))
 	}
-
+	fn bump_assert(&mut self, kind: SyntaxKind) {
+		self.skip_trivia();
+		assert!(self.at(kind), "expected {:?}", kind);
+		self.bump_remap(self.current());
+	}
 	fn bump(&mut self) {
 		self.skip_trivia();
 		self.bump_remap(self.current());
@@ -314,7 +319,7 @@ impl<'i> Parser<'i> {
 			while self
 				.lexemes
 				.get(offset)
-				.map(|l| l.kind.is_trivia())
+				.map(|l| Trivia::can_cast(l.kind))
 				.unwrap_or(false)
 			{
 				offset += 1;
@@ -324,7 +329,7 @@ impl<'i> Parser<'i> {
 		while self
 			.lexemes
 			.get(offset)
-			.map(|l| l.kind.is_trivia())
+			.map(|l| Trivia::can_cast(l.kind))
 			.unwrap_or(false)
 		{
 			offset += 1;
@@ -335,13 +340,9 @@ impl<'i> Parser<'i> {
 		self.nth(0)
 	}
 	fn skip_trivia(&mut self) {
-		while self.peek_raw().is_trivia() {
+		while Trivia::can_cast(self.peek_raw()) {
 			self.offset += 1;
 		}
-	}
-	fn current_lexeme(&mut self) -> Option<&Lexeme> {
-		self.skip_trivia();
-		self.lexemes.get(self.offset)
 	}
 	fn peek_raw(&mut self) -> SyntaxKind {
 		self.lexemes
@@ -516,8 +517,8 @@ fn field_name(p: &mut Parser) {
 	} else if p.at(IDENT) {
 		name(p);
 		m.complete(p, FIELD_NAME_FIXED);
-	} else if p.current().is_string() {
-		string(p);
+	} else if Text::can_cast(p.current()) {
+		text(p);
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		p.error_with_recovery_set(TS![;]);
@@ -564,9 +565,8 @@ fn field(p: &mut Parser) {
 	};
 }
 fn assertion(p: &mut Parser) {
-	assert!(p.at(T![assert]));
 	let m = p.start();
-	p.bump();
+	p.bump_assert(T![assert]);
 	expr(p).map(|c| c.wrap(p, LHS_EXPR));
 	if p.at(T![:]) {
 		p.bump();
@@ -575,10 +575,9 @@ fn assertion(p: &mut Parser) {
 	m.complete(p, ASSERTION);
 }
 fn object(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!['{']));
 	let m_t = p.start();
 	let m = p.start();
-	p.bump();
+	p.bump_assert(T!['{']);
 
 	loop {
 		if p.at(T!['}']) {
@@ -619,9 +618,8 @@ fn param(p: &mut Parser) {
 	m.complete(p, PARAM);
 }
 fn params_desc(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!['(']));
 	let m = p.start();
-	p.bump();
+	p.bump_assert(T!['(']);
 
 	loop {
 		if p.at(T![')']) {
@@ -640,8 +638,7 @@ fn params_desc(p: &mut Parser) -> CompletedMarker {
 }
 fn args_desc(p: &mut Parser) {
 	let m = p.start();
-	assert!(p.at(T!['(']));
-	p.bump();
+	p.bump_assert(T!['(']);
 
 	let started_named = Cell::new(false);
 
@@ -674,10 +671,9 @@ fn args_desc(p: &mut Parser) {
 }
 
 fn array(p: &mut Parser) -> CompletedMarker {
-	assert!(p.at(T!['[']));
 	// Start the list node
 	let m = p.start();
-	p.bump(); // '['
+	p.bump_assert(T!['[']);
 
 	// This vec will have at most one element in case of correct input
 	let mut compspecs = Vec::with_capacity(1);
@@ -795,9 +791,8 @@ fn name(p: &mut Parser) {
 	m.complete(p, NAME);
 }
 fn destruct_rest(p: &mut Parser) {
-	assert!(p.at(T![...]));
-	p.bump();
 	let m = p.start();
+	p.bump_assert(T![...]);
 	if p.at(IDENT) {
 		p.bump()
 	}
@@ -817,9 +812,8 @@ fn destruct_object_field(p: &mut Parser) {
 	m.complete(p, DESTRUCT_OBJECT_FIELD);
 }
 fn obj_local(p: &mut Parser) {
-	assert!(p.at(T![local]));
 	let m = p.start();
-	p.bump();
+	p.bump_assert(T![local]);
 	bind(p);
 	m.complete(p, OBJ_LOCAL);
 }
@@ -903,52 +897,29 @@ fn bind(p: &mut Parser) {
 		m.complete(p, BIND_DESTRUCT)
 	};
 }
-fn string(p: &mut Parser) {
-	assert!(p.current().is_string());
-	if p.at(STRING_BLOCK) {
-		// We use custom lexer, which skips enough bytes, but not returns error
-		// Instead we should call lexer again to verify if there is something wrong with string block
-		let mut lexer = logos::Lexer::<SyntaxKind>::new(dbg!(
-			&p.current_lexeme().expect("parser is at string block").text
-		));
-		// In kinds, string blocks is parsed at least as `|||`
-		lexer.bump(3);
-		let res = lex_str_block(&mut lexer);
-		debug_assert!(lexer.next().is_none(), "str_block is lexed");
-		match res {
-			Ok(_) => {
-				p.bump();
-			}
-			Err(e) => p.bump_remap(match e {
-				StringBlockError::UnexpectedEnd => ERROR_STRING_BLOCK_UNEXPECTED_END,
-				StringBlockError::MissingNewLine => ERROR_STRING_BLOCK_MISSING_NEW_LINE,
-				StringBlockError::MissingTermination => ERROR_STRING_BLOCK_MISSING_TERMINATION,
-				StringBlockError::MissingIndent => ERROR_STRING_BLOCK_MISSING_INDENT,
-			}),
-		}
-	} else {
-		p.bump();
-	}
+fn text(p: &mut Parser) {
+	assert!(Text::can_cast(p.current()));
+	p.bump();
 }
 fn number(p: &mut Parser) {
-	assert!(p.current().is_number());
+	assert!(Number::can_cast(p.current()));
 	p.bump();
 }
 fn literal(p: &mut Parser) {
-	assert!(p.current().is_literal());
+	assert!(Literal::can_cast(p.current()));
 	p.bump();
 }
 fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 	let _e = p.expected_syntax_name("value");
-	Some(if p.current().is_literal() {
+	Some(if Literal::can_cast(p.current()) {
 		let m = p.start();
 		literal(p);
 		m.complete(p, EXPR_LITERAL)
-	} else if p.current().is_string() {
+	} else if Text::can_cast(p.current()) {
 		let m = p.start();
-		string(p);
+		text(p);
 		m.complete(p, EXPR_STRING)
-	} else if p.current().is_number() {
+	} else if Number::can_cast(p.current()) {
 		let m = p.start();
 		number(p);
 		m.complete(p, EXPR_NUMBER)
@@ -1025,7 +996,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 	} else if p.at(T![import]) || p.at(T![importstr]) || p.at(T![importbin]) {
 		let m = p.start();
 		p.bump();
-		string(p);
+		text(p);
 		m.complete(p, EXPR_IMPORT)
 	} else if p.at(T![-]) || p.at(T![!]) || p.at(T![~]) {
 		let op = match p.current() {
@@ -1044,8 +1015,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		let m = p.start();
 		p.bump();
 		expr(p);
-		assert!(p.at(T![')']));
-		p.bump();
+		p.expect(T![')']);
 		m.complete(p, EXPR_PARENED)
 	} else {
 		p.error_with_recovery_set(TS![]);

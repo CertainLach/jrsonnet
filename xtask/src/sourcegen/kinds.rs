@@ -10,10 +10,12 @@ pub struct KindsSrc {
 pub enum TokenKind {
 	/// May exist in token tree, but never in source code
 	Meta { grammar_name: String, name: String },
-	/// Specific parsing errors may be emitted as this type of kind
+	/// Specific parsing/lexing errors may be emitted as this type of kind
 	Error {
 		grammar_name: String,
 		name: String,
+		/// Is this error returned by lexer directly, or from lex.rs
+		is_lexer_error: bool,
 		regex: Option<String>,
 		priority: Option<u32>,
 	},
@@ -133,13 +135,18 @@ macro_rules! define_kinds {
 		});
 		$(define_kinds!($into = $($rest)*))?
 	}};
-	($into:ident = error($name:literal$(, priority = $priority:literal)?) $(=> $regex:literal)? $(; $($rest:tt)*)?) => {{
-		$into.define_token(TokenKind::Error {
-			grammar_name: format!("ERROR_{}!", $name),
-			name: format!("ERROR_{}", $name),
-			regex: None$(.or(Some($regex.to_owned())))?,
-			priority: None$(.or(Some($priority)))?,
-		});
+	($into:ident = error($name:literal$(, priority = $priority:literal)? $(, lexer = $lexer:literal)?) $(=> $regex:literal)? $(; $($rest:tt)*)?) => {{
+		{
+			let regex = None$(.or(Some($regex.to_owned())))?;
+			let priority = None$(.or(Some($priority)))?;
+			$into.define_token(TokenKind::Error {
+				grammar_name: format!("ERROR_{}!", $name),
+				name: format!("ERROR_{}", $name),
+				is_lexer_error: false $(|| $lexer)? || regex.is_some() || priority.is_some(),
+				regex,
+				priority,
+			});
+		}
 		$(define_kinds!($into = $($rest)*))?
 	}};
 	($into:ident = $tok:literal => $name:literal $(; $($rest:tt)*)?) => {{
@@ -258,10 +265,10 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		error("STRING_SINGLE_VERBATIM_UNTERMINATED") => "@'(?:[^']|'')*";
 		error("STRING_VERBATIM_MISSING_QUOTES") => "@[^\"'\\s]\\S+";
 		lit("STRING_BLOCK") => r"\|\|\|", "crate::string_block::lex_str_block_test";
-		error("STRING_BLOCK_UNEXPECTED_END");
-		error("STRING_BLOCK_MISSING_NEW_LINE");
-		error("STRING_BLOCK_MISSING_TERMINATION");
-		error("STRING_BLOCK_MISSING_INDENT");
+		error("STRING_BLOCK_UNEXPECTED_END", lexer = true);
+		error("STRING_BLOCK_MISSING_NEW_LINE", lexer = true);
+		error("STRING_BLOCK_MISSING_TERMINATION", lexer = true);
+		error("STRING_BLOCK_MISSING_INDENT", lexer = true);
 		lit("IDENT") => r"[_a-zA-Z][_a-zA-Z0-9]*";
 		lit("WHITESPACE") => r"[ \t\n\r]+";
 		lit("SINGLE_LINE_SLASH_COMMENT") => r"//[^\r\n]*(\r\n|\n)?";

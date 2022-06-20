@@ -48,7 +48,7 @@ ExprIntrinsic =
     name:Name
     ')'
 ExprString =
-    String
+    Text
 ExprNumber =
     Number
 ExprArray =
@@ -67,7 +67,7 @@ ExprArrayComp =
     ']'
 
 ExprImport =
-    ImportKind String
+    ImportKind Text
 
 ImportKind =
     'importstr'
@@ -217,7 +217,7 @@ Field =
 
 FieldNameFixed =
     id:Name
-|   String
+|   Text
 FieldNameDynamic =
     '['
     Expr
@@ -239,16 +239,27 @@ Literal =
 |   '$'
 |   'super'
 
-String =
+Text =
     'LIT_STRING_DOUBLE!'
+|   'ERROR_STRING_DOUBLE_UNTERMINATED!'
 |   'LIT_STRING_SINGLE!'
+|   'ERROR_STRING_SINGLE_UNTERMINATED!'
 |   'LIT_STRING_DOUBLE_VERBATIM!'
+|   'ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED!'
 |   'LIT_STRING_SINGLE_VERBATIM!'
+|   'ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED!'
+|   'ERROR_STRING_VERBATIM_MISSING_QUOTES!'
 |   'LIT_STRING_BLOCK!'
+|   'ERROR_STRING_BLOCK_UNEXPECTED_END!'
+|   'ERROR_STRING_BLOCK_MISSING_NEW_LINE!'
+|   'ERROR_STRING_BLOCK_MISSING_TERMINATION!'
+|   'ERROR_STRING_BLOCK_MISSING_INDENT!'
 
 Number =
     'LIT_FLOAT!'
-|   'META_FORCE_ENUM!'
+|   'ERROR_FLOAT_JUNK_AFTER_POINT!'
+|   'ERROR_FLOAT_JUNK_AFTER_EXPONENT!'
+|   'ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN!'
 
 ForSpec =
     'for'
@@ -347,3 +358,12 @@ DestructObjectField =
 TrueExpr=Expr
 FalseExpr=Expr
 LhsExpr=Expr
+
+// Trivia - tokens which will be implicitly skipped for parser
+Trivia =
+    'LIT_WHITESPACE!'
+|   'LIT_MULTI_LINE_COMMENT!'
+|   'ERROR_COMMENT_TOO_SHORT!'
+|   'ERROR_COMMENT_UNTERMINATED!'
+|   'LIT_SINGLE_LINE_HASH_COMMENT!'
+|   'LIT_SINGLE_LINE_SLASH_COMMENT!'

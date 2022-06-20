@@ -48,20 +48,28 @@ pub fn generate_ungrammar() -> Result<()> {
 			if let Some((special, name)) = classify_special(token) {
 				match special {
 					SpecialName::Literal => panic!("literal is not defined: {name}"),
-					SpecialName::Meta => kinds.define_token(TokenKind::Meta {
-						grammar_name: token.to_owned(),
-						name: format!("META_{}", name),
-					}),
-					SpecialName::Error => kinds.define_token(TokenKind::Error {
-						grammar_name: token.to_owned(),
-						name: format!("ERROR_{}", name),
-						regex: None,
-						priority: None,
-					}),
+					SpecialName::Meta => {
+						eprintln!("implicit meta: {}", name);
+						kinds.define_token(TokenKind::Meta {
+							grammar_name: token.to_owned(),
+							name: format!("META_{}", name),
+						})
+					}
+					SpecialName::Error => {
+						eprintln!("implicit error: {}", name);
+						kinds.define_token(TokenKind::Error {
+							grammar_name: token.to_owned(),
+							name: format!("ERROR_{}", name),
+							regex: None,
+							priority: None,
+							is_lexer_error: true,
+						})
+					}
 				};
 				continue;
 			};
 			let name = to_upper_snake_case(token);
+			eprintln!("implicit kw: {}", token);
 			kinds.define_token(TokenKind::Keyword {
 				code: token.to_owned(),
 				name: format!("{name}_KW"),

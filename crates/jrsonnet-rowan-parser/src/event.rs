@@ -4,8 +4,9 @@ use rowan::{GreenNodeBuilder, Language};
 
 use crate::{
 	lex::Lexeme,
+	nodes::Trivia,
 	parser::{Parse, SyntaxError},
-	JsonnetLanguage, SyntaxKind,
+	AstToken, JsonnetLanguage, SyntaxKind,
 };
 
 #[derive(Clone, Debug, PartialEq, Eq)]
@@ -144,7 +145,7 @@ impl<'i> Sink<'i> {
 	}
 	fn skip_whitespace(&mut self) {
 		while let Some(lexeme) = self.lexemes.get(self.offset) {
-			if !lexeme.kind.is_trivia() {
+			if !Trivia::can_cast(lexeme.kind) {
 				break;
 			}
 

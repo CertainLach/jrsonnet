@@ -5,7 +5,7 @@ use jrsonnet_rowan_parser::{
 	nodes::{
 		ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, Field, FieldName, ForSpec, IfSpec, ImportKind, LhsExpr, Literal,
-		Member, Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, String,
+		Member, Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Text,
 		UnaryOperator,
 	},
 	AstToken, SyntaxToken,
@@ -91,7 +91,7 @@ impl Printable for SyntaxToken {
 	}
 }
 
-impl Printable for String {
+impl Printable for Text {
 	fn print(&self) -> PrintItems {
 		p!(new: str(&format!("{}", self)))
 	}
@@ -168,7 +168,7 @@ impl Printable for FieldName {
 			FieldName::FieldNameFixed(f) => {
 				if let Some(id) = f.id() {
 					p!(new: {id})
-				} else if let Some(str) = f.string() {
+				} else if let Some(str) = f.text() {
 					p!(new: {str})
 				} else {
 					p!(new: str("/*missing FieldName*/"))
@@ -371,7 +371,7 @@ impl Printable for Expr {
 			Expr::ExprIntrinsicThisFile(_) => p!(new: str("$intrinsicThisFile")),
 			Expr::ExprIntrinsicId(_) => p!(new: str("$intrinsicId")),
 			Expr::ExprIntrinsic(i) => p!(new: str("$intrinsic(") {i.name()} str(")")),
-			Expr::ExprString(s) => p!(new: {s.string()}),
+			Expr::ExprString(s) => p!(new: {s.text()}),
 			Expr::ExprNumber(n) => p!(new: {n.number()}),
 			Expr::ExprArray(a) => {
 				let mut pi = p!(new: str("[") >i nl);
@@ -393,7 +393,7 @@ impl Printable for Expr {
 				pi
 			}
 			Expr::ExprImport(v) => {
-				p!(new: {v.import_kind()} str(" ") {v.string()})
+				p!(new: {v.import_kind()} str(" ") {v.text()})
 			}
 			Expr::ExprVar(n) => p!(new: {n.name()}),
 			Expr::ExprLocal(l) => {

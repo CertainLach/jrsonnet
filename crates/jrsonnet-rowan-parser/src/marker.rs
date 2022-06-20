@@ -44,10 +44,10 @@ impl Marker {
 			!kind.is_enum(),
 			"{kind:?} is a enum kind, you should use variant kinds instead"
 		);
-		// TODO: is_parser should return true if enum variant has #[regex]/#[token] over it
+		// TODO: is_lexer should return true if enum variant has #[regex]/#[token] over it, or it is defined as lexer error explicitly
 		// debug_assert!(
-		// 	!kind.is_parser(),
-		// 	"{kind:?} should be only emitted by parser, not used directly"
+		// 	!kind.is_lexer(),
+		// 	"{kind:?} should be only emitted by lexer, not used directly"
 		// );
 		let event_at_pos = &mut p.events[self.start_event_idx];
 		assert_eq!(*event_at_pos, Event::Pending);
