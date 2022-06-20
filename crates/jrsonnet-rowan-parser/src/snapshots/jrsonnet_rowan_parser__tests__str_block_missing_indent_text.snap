@@ -1,0 +1,8 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "|||\nhello\n"
+---
+SOURCE_FILE@0..10
+  EXPR_STRING@0..10
+    ERROR_STRING_BLOCK_MISSING_INDENT@0..10 "|||\nhello\n"
+

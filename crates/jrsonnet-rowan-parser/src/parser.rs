@@ -5,9 +5,10 @@ use rowan::{GreenNode, TextRange, TextSize};
 
 use crate::{
 	binary::BinaryOperator,
-	event::{Event, Sink},
-	lex::{lex, Lexeme},
+	event::Event,
+	lex::Lexeme,
 	marker::{AsRange, CompletedMarker, Marker, Ranger},
+	string_block::{lex_str_block, StringBlockError},
 	token_set::SyntaxKindSet,
 	unary::UnaryOperator,
 	SyntaxKind,
@@ -43,9 +44,10 @@ pub struct Parser<'i> {
 	pub last_error_token: usize,
 	expected_syntax: Option<ExpectedSyntax>,
 	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntaxTrackingState>>,
+	steps: Cell<u64>,
 }
 
-const DEFAULT_RECOVERY_SET: SyntaxKindSet = TS![; ')' ']' '}' local];
+const DEFAULT_RECOVERY_SET: SyntaxKindSet = TS![];
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum SyntaxError {
@@ -68,9 +70,9 @@ pub enum SyntaxError {
 	},
 }
 
-impl Into<LabeledSpan> for SyntaxError {
-	fn into(self) -> LabeledSpan {
-		match self {
+impl From<SyntaxError> for LabeledSpan {
+	fn from(val: SyntaxError) -> Self {
+		match val {
 			SyntaxError::Unexpected {
 				expected,
 				found,
@@ -91,7 +93,7 @@ impl Into<LabeledSpan> for SyntaxError {
 			),
 			SyntaxError::Custom { error, range } | SyntaxError::Hint { error, range } => {
 				LabeledSpan::new_with_span(
-					Some(format!("{}", error)),
+					Some(error),
 					SourceSpan::new(
 						SourceOffset::from(usize::from(range.start())),
 						SourceOffset::from(usize::from(range.end() - range.start())),
@@ -103,7 +105,7 @@ impl Into<LabeledSpan> for SyntaxError {
 }
 
 impl<'i> Parser<'i> {
-	fn new(lexemes: &'i [Lexeme<'i>]) -> Self {
+	pub fn new(lexemes: &'i [Lexeme<'i>]) -> Self {
 		Self {
 			lexemes,
 			offset: 0,
@@ -115,6 +117,7 @@ impl<'i> Parser<'i> {
 			expected_syntax_tracking_state: Rc::new(Cell::new(
 				ExpectedSyntaxTrackingState::Unnamed,
 			)),
+			steps: Cell::new(0),
 		}
 	}
 	pub fn clear_outdated_hints(&mut self) {
@@ -132,27 +135,21 @@ impl<'i> Parser<'i> {
 			.set(ExpectedSyntaxTrackingState::Unnamed);
 	}
 	pub fn start(&mut self) -> Marker {
+		self.skip_trivia();
 		let start_event_idx = self.events.len();
-		self.events.push(Event::Placeholder);
+		self.events.push(Event::Pending);
 		self.entered += 1;
-		Marker::new(start_event_idx, self.offset)
+		Marker::new(start_event_idx)
 	}
 	pub fn start_ranger(&mut self) -> Ranger {
+		self.skip_trivia();
 		let pos = self.offset;
 		Ranger { pos }
 	}
-	fn parse(mut self) -> Vec<Event> {
+	pub fn parse(mut self) -> Vec<Event> {
 		let m = self.start();
 		expr(&mut self);
-		if !self.at_end() {
-			let ranger = self.start_ranger();
-
-			while self.peek().is_some() {
-				self.bump()
-			}
-			let end = ranger.finish(&self);
-			self.custom_error(end, "unexpected input after expression");
-		}
+		self.expect(EOF);
 		m.complete(&mut self, SOURCE_FILE);
 
 		self.events
@@ -168,7 +165,9 @@ impl<'i> Parser<'i> {
 		recovery_set: SyntaxKindSet,
 	) {
 		if self.at(kind) {
-			self.bump();
+			if kind != EOF {
+				self.bump();
+			}
 		} else {
 			self.error_with_recovery_set(recovery_set);
 		}
@@ -180,9 +179,6 @@ impl<'i> Parser<'i> {
 		} else {
 			self.error_with_no_skip();
 		}
-	}
-	pub(crate) fn last_token_range(&self) -> Option<TextRange> {
-		self.lexemes.last().map(|Lexeme { range, .. }| *range)
 	}
 	fn current_token(&self) -> Lexeme<'i> {
 		self.lexemes[self.offset]
@@ -236,15 +232,19 @@ impl<'i> Parser<'i> {
 		&mut self,
 		recovery_set: SyntaxKindSet,
 	) -> Option<CompletedMarker> {
-		let expected_syntax = self.expected_syntax.take().unwrap();
+		let expected_syntax = self
+			.expected_syntax
+			.take()
+			.unwrap_or(ExpectedSyntax::Named("unknown"));
 		self.expected_syntax_tracking_state
 			.set(ExpectedSyntaxTrackingState::Unnamed);
 
-		if self.at_end() || self.at_set(recovery_set) {
+		self.skip_trivia();
+		if self.at_end() || self.at_ts(recovery_set) {
 			let range = self
 				.previous_token()
 				.map(|t| t.range)
-				.unwrap_or(TextRange::at(TextSize::from(0), TextSize::from(0)));
+				.unwrap_or_else(|| TextRange::at(TextSize::from(0), TextSize::from(0)));
 
 			self.events.push(Event::Error(SyntaxError::Missing {
 				expected: expected_syntax,
@@ -256,7 +256,7 @@ impl<'i> Parser<'i> {
 		let current_token = self.current_token();
 
 		self.events.push(Event::Error(SyntaxError::Unexpected {
-			expected: expected_syntax.clone(),
+			expected: expected_syntax,
 			found: current_token.kind,
 			range: current_token.range,
 		}));
@@ -270,29 +270,84 @@ impl<'i> Parser<'i> {
 
 	fn bump(&mut self) {
 		self.skip_trivia();
+		self.bump_remap(self.current());
+	}
+	fn bump_remap(&mut self, kind: SyntaxKind) {
+		self.skip_trivia();
 		assert_ne!(self.offset, self.lexemes.len(), "already at end");
-		self.events.push(Event::Token);
+		self.events.push(Event::Token { kind });
 		self.offset += 1;
 		self.clear_expected_syntaxes();
 	}
-	fn peek(&mut self) -> Option<SyntaxKind> {
-		self.skip_trivia();
-		self.peek_raw()
+	fn step(&self) {
+		use std::fmt::Write;
+		let steps = self.steps.get();
+		if steps >= 15000000 {
+			let mut out = "seems like parsing is stuck".to_owned();
+			{
+				let last = 20;
+				write!(out, "\n\nLast {} events:", last).unwrap();
+				for (i, event) in self
+					.events
+					.iter()
+					.skip(self.events.len().saturating_sub(last))
+					.enumerate()
+				{
+					write!(out, "\n{i}. {event:?}").unwrap();
+				}
+			}
+			{
+				let next = 20;
+				write!(out, "\n\nNext {next} tokens:").unwrap();
+				for (i, tok) in self.lexemes.iter().skip(self.offset).take(next).enumerate() {
+					write!(out, "\n{i}. {tok:?}").unwrap();
+				}
+			}
+			panic!("{out}")
+		}
+		self.steps.set(steps + 1);
 	}
-	pub fn peek_token(&mut self) -> Option<&Lexeme<'i>> {
-		self.skip_trivia();
-		self.peek_token_raw()
+	fn nth(&self, i: usize) -> SyntaxKind {
+		self.step();
+		let mut offset = self.offset;
+		for _ in 0..i {
+			while self
+				.lexemes
+				.get(offset)
+				.map(|l| l.kind.is_trivia())
+				.unwrap_or(false)
+			{
+				offset += 1;
+			}
+			offset += 1;
+		}
+		while self
+			.lexemes
+			.get(offset)
+			.map(|l| l.kind.is_trivia())
+			.unwrap_or(false)
+		{
+			offset += 1;
+		}
+		self.lexemes.get(offset).map(|l| l.kind).unwrap_or(EOF)
+	}
+	fn current(&self) -> SyntaxKind {
+		self.nth(0)
 	}
 	fn skip_trivia(&mut self) {
-		while self.peek_raw().map(|c| c.is_trivia()).unwrap_or(false) {
+		while self.peek_raw().is_trivia() {
 			self.offset += 1;
 		}
 	}
-	fn peek_raw(&mut self) -> Option<SyntaxKind> {
-		self.lexemes.get(self.offset).map(|l| l.kind)
-	}
-	fn peek_token_raw(&mut self) -> Option<&Lexeme<'i>> {
+	fn current_lexeme(&mut self) -> Option<&Lexeme> {
+		self.skip_trivia();
 		self.lexemes.get(self.offset)
+	}
+	fn peek_raw(&mut self) -> SyntaxKind {
+		self.lexemes
+			.get(self.offset)
+			.map(|l| l.kind)
+			.unwrap_or(SyntaxKind::EOF)
 	}
 	#[must_use]
 	pub(crate) fn expected_syntax_name(&mut self, name: &'static str) -> ExpectedSyntaxGuard {
@@ -303,16 +358,19 @@ impl<'i> Parser<'i> {
 		ExpectedSyntaxGuard::new(Rc::clone(&self.expected_syntax_tracking_state))
 	}
 	pub fn at(&mut self, kind: SyntaxKind) -> bool {
+		self.nth_at(0, kind)
+	}
+	pub fn nth_at(&mut self, n: usize, kind: SyntaxKind) -> bool {
 		if let ExpectedSyntaxTrackingState::Unnamed = self.expected_syntax_tracking_state.get() {
 			self.expected_syntax = Some(ExpectedSyntax::Unnamed(kind));
 		}
-		self.peek() == Some(kind)
+		self.nth(n) == kind
 	}
-	pub fn at_set(&mut self, set: SyntaxKindSet) -> bool {
-		self.peek().map_or(false, |k| set.contains(k))
+	pub fn at_ts(&mut self, set: SyntaxKindSet) -> bool {
+		set.contains(self.current())
 	}
 	pub fn at_end(&mut self) -> bool {
-		self.peek().is_none()
+		self.at(EOF)
 	}
 }
 pub(crate) struct ExpectedSyntaxGuard {
@@ -352,8 +410,8 @@ macro_rules! at_match {
 	}}
 }
 
-fn expr(p: &mut Parser) {
-	expr_binding_power(p, 0);
+fn expr(p: &mut Parser) -> Option<CompletedMarker> {
+	expr_binding_power(p, 0)
 }
 fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<CompletedMarker> {
 	let mut lhs = lhs(p)?;
@@ -392,7 +450,7 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 			p.bump();
 		}
 
-		let m = lhs.precede(p);
+		let m = lhs.wrap(p, LHS_EXPR).precede(p);
 		let parsed_rhs = expr_binding_power(p, right_binding_power).is_some();
 		lhs = m.complete(
 			p,
@@ -414,11 +472,11 @@ fn compspec(p: &mut Parser) {
 	if p.at(T![for]) {
 		let m = p.start();
 		p.bump();
-		p.expect(IDENT);
+		name(p);
 		p.expect(T![in]);
 		expr(p);
 		m.complete(p, FOR_SPEC);
-	} else if p.at(T![in]) {
+	} else if p.at(T![if]) {
 		let m = p.start();
 		p.bump();
 		expr(p);
@@ -439,7 +497,7 @@ fn comma_with_alternatives(p: &mut Parser, set: SyntaxKindSet) -> bool {
 	if p.at(T![,]) {
 		p.bump();
 		true
-	} else if p.at_set(set) {
+	} else if p.at_ts(set) {
 		p.expect_with_no_skip(T![,]);
 		p.bump();
 		true
@@ -449,18 +507,76 @@ fn comma_with_alternatives(p: &mut Parser, set: SyntaxKindSet) -> bool {
 }
 fn field_name(p: &mut Parser) {
 	let _e = p.expected_syntax_name("field name");
+	let m = p.start();
 	if p.at(T!['[']) {
 		p.bump();
 		expr(p);
 		p.expect(T![']']);
+		m.complete(p, FIELD_NAME_DYNAMIC);
 	} else if p.at(IDENT) {
-		p.bump()
+		name(p);
+		m.complete(p, FIELD_NAME_FIXED);
+	} else if p.current().is_string() {
+		string(p);
+		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		p.error_with_recovery_set(TS![;]);
 	}
 }
+fn visibility(p: &mut Parser) {
+	if p.at_ts(TS![: :: :::]) {
+		p.bump()
+	} else {
+		p.error_with_recovery_set(TS![]);
+	}
+}
+fn field(p: &mut Parser) {
+	let m = p.start();
+	field_name(p);
+	let plus = if p.at(T![+]) {
+		let r = p.start_ranger();
+		p.bump();
+		Some(r.finish(p))
+	} else {
+		None
+	};
+	let params = if p.at(T!['(']) {
+		if let Some(plus) = plus {
+			p.custom_error(plus, "can't extend with method");
+		}
+		params_desc(p);
+		if p.at(T![+]) {
+			let r = p.start_ranger();
+			p.bump();
+			p.custom_error(r.finish(p), "can't extend with method");
+		}
+		true
+	} else {
+		false
+	};
+	visibility(p);
+	expr(p);
+
+	if params {
+		m.complete(p, FIELD_METHOD)
+	} else {
+		m.complete(p, FIELD_NORMAL)
+	};
+}
+fn assertion(p: &mut Parser) {
+	assert!(p.at(T![assert]));
+	let m = p.start();
+	p.bump();
+	expr(p).map(|c| c.wrap(p, LHS_EXPR));
+	if p.at(T![:]) {
+		p.bump();
+		expr(p);
+	}
+	m.complete(p, ASSERTION);
+}
 fn object(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(T!['{']));
+	let m_t = p.start();
 	let m = p.start();
 	p.bump();
 
@@ -470,13 +586,19 @@ fn object(p: &mut Parser) -> CompletedMarker {
 			break;
 		}
 		let m = p.start();
-		field_name(p);
-		p.expect(T![,]);
-		expr(p);
-		while p.at(T![for]) || p.at(T![if]) {
-			compspec(p)
-		}
-		m.complete(p, MEMBER);
+		if p.at(T![local]) {
+			obj_local(p);
+			m.complete(p, MEMBER_BIND_STMT)
+		} else if p.at(T![assert]) {
+			assertion(p);
+			m.complete(p, MEMBER_ASSERT_STMT)
+		} else {
+			field(p);
+			while p.at(T![for]) || p.at(T![if]) {
+				compspec(p)
+			}
+			m.complete(p, MEMBER_FIELD)
+		};
 		if comma_with_alternatives(p, SyntaxKindSet::new(&[T![=]])) {
 			continue;
 		}
@@ -484,10 +606,19 @@ fn object(p: &mut Parser) -> CompletedMarker {
 		break;
 	}
 
-	m.complete(p, OBJ_BODY)
+	m.complete(p, OBJ_BODY_MEMBER_LIST);
+	m_t.complete(p, EXPR_OBJECT)
 }
-
-fn params(p: &mut Parser) -> CompletedMarker {
+fn param(p: &mut Parser) {
+	let m = p.start();
+	destruct(p);
+	if p.at(T![=]) {
+		p.bump();
+		expr(p);
+	}
+	m.complete(p, PARAM);
+}
+fn params_desc(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at(T!['(']));
 	let m = p.start();
 	p.bump();
@@ -497,13 +628,7 @@ fn params(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 			break;
 		}
-		let m = p.start();
-		p.expect(IDENT);
-		if p.at(T![=]) {
-			p.bump();
-			expr(p);
-		}
-		m.complete(p, PARAM);
+		param(p);
 		if comma(p) {
 			continue;
 		}
@@ -513,48 +638,39 @@ fn params(p: &mut Parser) -> CompletedMarker {
 
 	m.complete(p, PARAMS_DESC)
 }
-fn args(p: &mut Parser) {
+fn args_desc(p: &mut Parser) {
+	let m = p.start();
 	assert!(p.at(T!['(']));
 	p.bump();
 
-	let mut error_positional_start = None::<Marker>;
-	let mut started_named = Cell::new(false);
-	let mut on_positional = |p: &mut Parser, m: Marker| {
-		let c = m.complete(p, ARG);
-		if started_named.get() && error_positional_start.is_none() {
-			error_positional_start = Some(c.precede(p));
-		}
-	};
+	let started_named = Cell::new(false);
+
 	loop {
 		if p.at(T![')']) {
 			break;
 		}
 
 		let m = p.start();
-		if p.at(IDENT) {
+		if p.at(IDENT) && p.nth_at(1, T![=]) {
+			name(p);
 			p.bump();
-			if p.at(T![=]) {
-				p.bump();
-				expr(p);
-				m.complete(p, ARG);
-				started_named.set(true);
-			} else {
-				on_positional(p, m);
-			}
+			expr(p);
+			m.complete(p, ARG);
+			started_named.set(true);
 		} else {
 			expr(p);
-			on_positional(p, m);
+			m.complete(p, ARG);
 		}
 		if comma(p) {
 			continue;
 		}
 		break;
 	}
-	if let Some(error_positional_start) = error_positional_start {
-		let c = error_positional_start.complete(p, ERROR);
-		p.custom_error(c, "positional arguments can't be placed after named")
-	}
 	p.expect(T![')']);
+	if p.at(T![tailstrict]) {
+		p.bump()
+	}
+	m.complete(p, ARGS_DESC);
 }
 
 fn array(p: &mut Parser) -> CompletedMarker {
@@ -605,7 +721,45 @@ fn array(p: &mut Parser) -> CompletedMarker {
 		m.complete(p, EXPR_ARRAY)
 	}
 }
-
+/// Returns true if it was slice, false if just index
+#[must_use]
+fn slice_desc_or_index(p: &mut Parser) -> bool {
+	let m = p.start();
+	p.bump();
+	// TODO: do not treat :, ::, ::: as full tokens?
+	// Start
+	if !p.at(T![:]) && !p.at(T![::]) {
+		expr(p);
+	}
+	if p.at(T![:]) {
+		p.bump();
+		// End
+		if !p.at(T![']']) {
+			expr(p).map(|c| c.wrap(p, SLICE_DESC_END));
+		}
+		if p.at(T![:]) {
+			p.bump();
+			// Step
+			if !p.at(T![']']) {
+				expr(p).map(|c| c.wrap(p, SLICE_DESC_STEP));
+			}
+		}
+	} else if p.at(T![::]) {
+		p.bump();
+		// End
+		if !p.at(T![']']) {
+			expr(p).map(|c| c.wrap(p, SLICE_DESC_END));
+		}
+	} else {
+		// It was not a slice
+		p.expect(T![']']);
+		m.forget(p);
+		return false;
+	}
+	p.expect(T![']']);
+	m.complete(p, SLICE_DESC);
+	true
+}
 fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 	let mut lhs = lhs_basic(p)?;
 
@@ -613,34 +767,20 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 		if p.at(T![.]) {
 			let m = lhs.precede(p);
 			p.bump();
-			p.expect(IDENT);
+			name(p);
 			lhs = m.complete(p, EXPR_INDEX);
 		} else if p.at(T!['[']) {
-			let m = lhs.precede(p);
-			p.bump();
-			// Start
-			if !p.at(T![:]) {
-				expr(p);
+			if slice_desc_or_index(p) {
+				lhs = lhs.precede(p).complete(p, EXPR_SLICE);
+			} else {
+				lhs = lhs
+					.wrap(p, LHS_EXPR)
+					.precede(p)
+					.complete(p, EXPR_INDEX_EXPR);
 			}
-			if p.at(T![:]) {
-				p.bump();
-				// End
-				if !p.at(T![']']) && !p.at(T![:]) {
-					expr(p);
-				}
-				if p.at(T![:]) {
-					p.bump();
-					// Step
-					if !p.at(T![']']) {
-						expr(p);
-					}
-				}
-			}
-			p.expect(T![']']);
-			lhs = m.complete(p, EXPR_SLICE);
 		} else if p.at(T!['(']) {
 			let m = lhs.precede(p);
-			args(p);
+			args_desc(p);
 			lhs = m.complete(p, EXPR_APPLY);
 		} else {
 			break;
@@ -649,25 +789,199 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 
 	Some(lhs)
 }
-
+fn name(p: &mut Parser) {
+	let m = p.start();
+	p.expect(IDENT);
+	m.complete(p, NAME);
+}
+fn destruct_rest(p: &mut Parser) {
+	assert!(p.at(T![...]));
+	p.bump();
+	let m = p.start();
+	if p.at(IDENT) {
+		p.bump()
+	}
+	m.complete(p, DESTRUCT_REST);
+}
+fn destruct_object_field(p: &mut Parser) {
+	let m = p.start();
+	name(p);
+	if p.at(T![:]) {
+		p.bump();
+		destruct(p);
+	};
+	if p.at(T![=]) {
+		p.bump();
+		expr(p);
+	}
+	m.complete(p, DESTRUCT_OBJECT_FIELD);
+}
+fn obj_local(p: &mut Parser) {
+	assert!(p.at(T![local]));
+	let m = p.start();
+	p.bump();
+	bind(p);
+	m.complete(p, OBJ_LOCAL);
+}
+fn destruct(p: &mut Parser) -> CompletedMarker {
+	let m = p.start();
+	if p.at(T![?]) {
+		p.bump();
+		m.complete(p, DESTRUCT_SKIP)
+	} else if p.at(T!['[']) {
+		p.bump();
+		let mut had_rest = false;
+		loop {
+			if p.at(T![']']) {
+				p.bump();
+				break;
+			} else if p.at(T![...]) {
+				let m_err = p.start_ranger();
+				destruct_rest(p);
+				if had_rest {
+					p.custom_error(m_err.finish(p), "only one rest can be present in array");
+				}
+				had_rest = true;
+			} else {
+				destruct(p);
+			}
+			if p.at(T![,]) {
+				p.bump();
+				continue;
+			}
+			p.expect(T![']']);
+			break;
+		}
+		m.complete(p, DESTRUCT_ARRAY)
+	} else if p.at(T!['{']) {
+		p.bump();
+		let mut had_rest = false;
+		loop {
+			if p.at(T!['}']) {
+				p.bump();
+				break;
+			} else if p.at(T![...]) {
+				let m_err = p.start_ranger();
+				destruct_rest(p);
+				if had_rest {
+					p.custom_error(m_err.finish(p), "only one rest can be present in object");
+				}
+				had_rest = true;
+			} else {
+				if had_rest {
+					p.error_with_recovery_set(TS![]);
+				}
+				destruct_object_field(p);
+			}
+			if p.at(T![,]) {
+				p.bump();
+				continue;
+			}
+			p.expect(T!['}']);
+			break;
+		}
+		m.complete(p, DESTRUCT_OBJECT)
+	} else if p.at(IDENT) {
+		name(p);
+		m.complete(p, DESTRUCT_FULL)
+	} else {
+		m.complete(p, ERROR)
+	}
+}
+fn bind(p: &mut Parser) {
+	let m = p.start();
+	if p.at(IDENT) && p.nth_at(1, T!['(']) {
+		name(p);
+		params_desc(p);
+		p.expect(T![=]);
+		expr(p);
+		m.complete(p, BIND_FUNCTION)
+	} else {
+		destruct(p);
+		p.expect(T![=]);
+		expr(p);
+		m.complete(p, BIND_DESTRUCT)
+	};
+}
+fn string(p: &mut Parser) {
+	assert!(p.current().is_string());
+	if p.at(STRING_BLOCK) {
+		// We use custom lexer, which skips enough bytes, but not returns error
+		// Instead we should call lexer again to verify if there is something wrong with string block
+		let mut lexer = logos::Lexer::<SyntaxKind>::new(dbg!(
+			&p.current_lexeme().expect("parser is at string block").text
+		));
+		// In kinds, string blocks is parsed at least as `|||`
+		lexer.bump(3);
+		let res = lex_str_block(&mut lexer);
+		debug_assert!(lexer.next().is_none(), "str_block is lexed");
+		match res {
+			Ok(_) => {
+				p.bump();
+			}
+			Err(e) => p.bump_remap(match e {
+				StringBlockError::UnexpectedEnd => ERROR_STRING_BLOCK_UNEXPECTED_END,
+				StringBlockError::MissingNewLine => ERROR_STRING_BLOCK_MISSING_NEW_LINE,
+				StringBlockError::MissingTermination => ERROR_STRING_BLOCK_MISSING_TERMINATION,
+				StringBlockError::MissingIndent => ERROR_STRING_BLOCK_MISSING_INDENT,
+			}),
+		}
+	} else {
+		p.bump();
+	}
+}
+fn number(p: &mut Parser) {
+	assert!(p.current().is_number());
+	p.bump();
+}
+fn literal(p: &mut Parser) {
+	assert!(p.current().is_literal());
+	p.bump();
+}
 fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 	let _e = p.expected_syntax_name("value");
-	Some(if p.peek().map(|l| l.is_literal()).unwrap_or(false) {
+	Some(if p.current().is_literal() {
 		let m = p.start();
-		p.bump();
+		literal(p);
 		m.complete(p, EXPR_LITERAL)
-	} else if p.peek().map(|l| l.is_string()).unwrap_or(false) {
+	} else if p.current().is_string() {
 		let m = p.start();
-		p.bump();
+		string(p);
 		m.complete(p, EXPR_STRING)
-	} else if p.peek().map(|l| l.is_number()).unwrap_or(false) {
+	} else if p.current().is_number() {
 		let m = p.start();
-		p.bump();
+		number(p);
 		m.complete(p, EXPR_NUMBER)
 	} else if p.at(IDENT) {
 		let m = p.start();
-		p.bump();
+		name(p);
 		m.complete(p, EXPR_VAR)
+	} else if p.at(INTRINSIC_THIS_FILE) {
+		let m = p.start();
+		p.bump();
+		m.complete(p, EXPR_INTRINSIC_THIS_FILE)
+	} else if p.at(INTRINSIC_ID) {
+		let m = p.start();
+		p.bump();
+		m.complete(p, EXPR_INTRINSIC_ID)
+	} else if p.at(INTRINSIC) {
+		let m = p.start();
+		p.bump();
+		p.expect(T!['(']);
+		name(p);
+		p.expect(T![')']);
+		m.complete(p, EXPR_INTRINSIC)
+	} else if p.at(T![if]) {
+		let m = p.start();
+		p.bump();
+		expr(p);
+		p.expect(T![then]);
+		expr(p).map(|c| c.wrap(p, TRUE_EXPR));
+		if p.at(T![else]) {
+			p.bump();
+			expr(p).map(|c| c.wrap(p, FALSE_EXPR));
+		}
+		m.complete(p, EXPR_IF_THEN_ELSE)
 	} else if p.at(T!['[']) {
 		array(p)
 	} else if p.at(T!['{']) {
@@ -675,35 +989,26 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 	} else if p.at(T![local]) {
 		let m = p.start();
 		p.bump();
-		let mut sus_local = None;
 		loop {
-			p.expect_with_recovery_set(IDENT, TS![= ; local]);
-			if p.at(T!['(']) {
-				params(p);
-			}
-
-			let sus_local_candidate = p.start_ranger();
-			p.expect_with_recovery_set(T![=], TS![; local]);
-
-			sus_local = p.at(T![local]).then(|| sus_local_candidate.finish(p));
-			expr(p);
-
-			if !comma(p) {
+			if p.at(T![;]) {
+				p.bump();
 				break;
 			}
-		}
-		p.expect(T![;]);
-		if let Some(sus_local) = sus_local {
-			if sus_local.had_error_since(p) {
-				p.custom_error(sus_local, "unusal local placement, missing ';' ?")
+			bind(p);
+
+			if p.at(T![,]) {
+				p.bump();
+				continue;
 			}
+			p.expect(T![;]);
+			break;
 		}
 		expr(p);
-		m.complete(p, T![local])
+		m.complete(p, EXPR_LOCAL)
 	} else if p.at(T![function]) {
 		let m = p.start();
 		p.bump();
-		args(p);
+		params_desc(p);
 		expr(p);
 		m.complete(p, EXPR_FUNCTION)
 	} else if p.at(T![error]) {
@@ -713,20 +1018,17 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		m.complete(p, EXPR_ERROR)
 	} else if p.at(T![assert]) {
 		let m = p.start();
-		p.bump();
+		assertion(p);
+		p.expect(T![;]);
 		expr(p);
-		if p.at(T![:]) {
-			p.bump();
-			expr(p);
-		}
 		m.complete(p, EXPR_ASSERT)
 	} else if p.at(T![import]) || p.at(T![importstr]) || p.at(T![importbin]) {
 		let m = p.start();
 		p.bump();
-		expr(p);
+		string(p);
 		m.complete(p, EXPR_IMPORT)
 	} else if p.at(T![-]) || p.at(T![!]) || p.at(T![~]) {
-		let op = match p.peek().unwrap() {
+		let op = match p.current() {
 			T![-] => UnaryOperator::Minus,
 			T![!] => UnaryOperator::Not,
 			T![~] => UnaryOperator::BitNegate,
@@ -746,7 +1048,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		p.bump();
 		m.complete(p, EXPR_PARENED)
 	} else {
-		p.error_with_no_skip();
+		p.error_with_recovery_set(TS![]);
 		return None;
 	})
 }
@@ -755,14 +1057,4 @@ impl Parse {
 	pub fn syntax(&self) -> SyntaxNode {
 		SyntaxNode::new_root(self.green_node.clone())
 	}
-}
-
-pub fn parse(input: &str) -> Parse {
-	let lexemes = lex(input);
-	let parser = Parser::new(&lexemes);
-	let events = parser.parse();
-	dbg!(&events);
-	let sink = Sink::new(events, &lexemes);
-
-	sink.finish()
 }

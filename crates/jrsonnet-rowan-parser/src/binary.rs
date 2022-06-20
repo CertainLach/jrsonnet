@@ -20,6 +20,7 @@ pub enum BinaryOperator {
 	Or,
 	In,
 	ObjectApply,
+	#[allow(dead_code)]
 	Invalid,
 }
 

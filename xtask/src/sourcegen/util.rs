@@ -1,6 +1,6 @@
 use std::{fs, path::Path};
 
-use anyhow::{bail, Result};
+use anyhow::Result;
 use xshell::{cmd, Shell};
 
 /// Checks that the `file` has the specified `contents`. If that is not the
@@ -15,13 +15,13 @@ pub fn ensure_file_contents(file: &Path, contents: &str) -> Result<()> {
 
 	eprintln!(" {} was not up-to-date, updating\n", file.display());
 	if std::env::var("CI").is_ok() {
-		eprintln!("NOTE: run `cargo test` locally and commit the updated files\n");
+		eprintln!("NOTE: run `cargo xtask` locally and commit the updated files\n");
 	}
 	if let Some(parent) = file.parent() {
 		let _ = fs::create_dir_all(parent);
 	}
 	fs::write(file, contents).unwrap();
-	bail!("some file was not up to date and has been updated, simply re-run the tests");
+	Ok(())
 }
 
 // Eww, someone configured git to use crlf?
@@ -80,9 +80,7 @@ pub fn reformat(text: &str) -> Result<String> {
 	// let _e = pushenv("RUSTUP_TOOLCHAIN", "stable");
 	// rustfmt()?;
 	let sh = Shell::new()?;
-	let stdout = cmd!(sh, "rustfmt --config fn_single_line=true")
-		.stdin(text)
-		.read()?;
+	let stdout = cmd!(sh, "rustfmt").stdin(text).read()?;
 	Ok(format!(
 		"{}\n\n{}\n",
 		"//! This is a generated file, please do not edit manually. Changes can be

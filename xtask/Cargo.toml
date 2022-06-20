@@ -5,6 +5,7 @@ edition = "2021"
 
 [dependencies]
 anyhow = "1.0.57"
+indexmap = "1.9.0"
 itertools = "0.10.3"
 proc-macro2 = "1.0.39"
 quote = "1.0.18"

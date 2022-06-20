@@ -1,18 +1,14 @@
 ---
-source: crates/jrsonnet-rowan-parser/src/lib.rs
-assertion_line: 88
+source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: " "
-
 ---
-Root@0..1
-  Whitespace@0..1 " "
+SOURCE_FILE@0..1
+  WHITESPACE@0..1 " "
 ===
 Missing { expected: Named("value"), offset: 1 }
 ===
-  [38;2;255;30;30m×[0m syntax error
-   ╭────
- [2m1[0m │  
-   · [38;2;246;87;248m ▲[0m
-   ·  [38;2;246;87;248m╰── [38;2;246;87;248mmissing value[0m[0m
-   ╰────
+  x syntax error
+   ,----
+ 1 |  
+   `----
 

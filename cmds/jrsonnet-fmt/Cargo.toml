@@ -1,0 +1,8 @@
+[package]
+name = "jrsonnet-fmt"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+dprint-core = "0.58.2"
+jrsonnet-rowan-parser = { path = "../../crates/jrsonnet-rowan-parser" }

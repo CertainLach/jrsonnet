@@ -1,7 +1,12 @@
+// This file describes structure of jsonnet source code
+// It is also used to generate files in src/generated
+
+// Token names ending with `!` are considered meta, and handled specifically
+
 SourceFile = Expr
 
 ExprBinary =
-    lhs:Expr
+    lhs:LhsExpr
     BinaryOperator
     rhs:Expr
 ExprUnary =
@@ -9,29 +14,23 @@ ExprUnary =
     rhs:Expr
 ExprSlice =
     Expr
-    '['
     SliceDesc
-    ']'
 ExprIndex =
     Expr
     '.'
     index:Name
 ExprIndexExpr =
-    base:Expr
+    base:LhsExpr
     '['
     index:Expr
     ']'
 ExprApply =
     Expr
-    '('
     ArgsDesc
-    ')'
     'tailstrict'?
 ExprObjExtend =
+    LhsExpr
     Expr
-    '{'
-    ObjBody
-    '}'
 ExprParened =
     '('
     Expr
@@ -64,13 +63,16 @@ ExprArrayComp =
     '['
     Expr
     ','?
-    ForSpec
     CompSpec*
     ']'
+
 ExprImport =
-    'importstr' String
-|   'importbin' String
-|   'import' String
+    ImportKind String
+
+ImportKind =
+    'importstr'
+|   'importbin'
+|   'import'
 
 ExprVar =
     name:Name
@@ -78,12 +80,15 @@ ExprLocal =
     'local'
     (Bind (',' Bind)* ','?)
     ';'
+    Expr
+
 ExprIfThenElse =
     'if'
     cond:Expr
     'then'
-    then:Expr
-    ('else' else_:Expr)?
+    then:TrueExpr
+    ('else' else_:FalseExpr)?
+
 ExprFunction =
     'function'
     '('
@@ -112,6 +117,7 @@ Expr =
 |   ExprIntrinsic
 |   ExprString
 |   ExprNumber
+|   ExprLiteral
 |   ExprArray
 |   ExprObject
 |   ExprArrayComp
@@ -130,42 +136,48 @@ BinaryOperator =
 |   '<<' | '>>'
 |   '+' | '-'
 |   '*' | '/' | '%'
+|   'ERROR_NO_OPERATOR!'
 
 UnaryOperator =
     '-' | '!' | '~'
 
+SliceDescEnd=Expr
+SliceDescStep=Expr
 SliceDesc =
+    '['
     from:Expr?
     ':'
     (
-        end:Expr?
+        end:SliceDescEnd?
         (
             ':'
-            step:Expr?
+            step:SliceDescStep?
         )?
     )?
+    ']'
 
 Name =
-    'ident'
+    'LIT_IDENT!'
 
 ArgsDesc =
+    '('
     (Arg (',' Arg)* ','?)?
+    ')'
 Arg =
     (name:Name '=')? Expr
 
 ObjBodyComp =
     pre:ObjLocalPostComma*
     '['
-    key:Expr
+    key:LhsExpr
     ']'
     '+'?
     ':'
     value:Expr
     post:ObjLocalPreComma*
-    ForSpec
     CompSpec*
 ObjBodyMemberList =
-    (Member (',' Member) ','?)?
+    (Member (',' Member)* ','?)?
 ObjBody =
     ObjBodyComp
 |   ObjBodyMemberList
@@ -196,9 +208,7 @@ FieldNormal =
     Expr
 FieldMethod =
     FieldName
-    '('
     ParamsDesc
-    ')'
     Visibility
     Expr
 Field =
@@ -230,14 +240,15 @@ Literal =
 |   'super'
 
 String =
-    'string_double'
-|   'string_single'
-|   'string_double_verbatim'
-|   'string_single_verbatim'
-|   'string_block'
+    'LIT_STRING_DOUBLE!'
+|   'LIT_STRING_SINGLE!'
+|   'LIT_STRING_DOUBLE_VERBATIM!'
+|   'LIT_STRING_SINGLE_VERBATIM!'
+|   'LIT_STRING_BLOCK!'
 
 Number =
-    'number'
+    'LIT_FLOAT!'
+|   'META_FORCE_ENUM!'
 
 ForSpec =
     'for'
@@ -257,9 +268,7 @@ BindDestruct =
     value:Expr
 BindFunction =
     name:Name
-    '('
     params:ParamsDesc
-    ')'
     '='
     value:Expr
 Bind =
@@ -267,7 +276,9 @@ Bind =
 |   BindFunction
 
 ParamsDesc =
+    '('
     (Param (',' Param)* ','?)?
+    ')'
 Param =
     Destruct
     (
@@ -277,30 +288,23 @@ Param =
 
 Assertion =
     'assert'
-    condition:Expr
+    condition:LhsExpr
     (
         ':'
-        Expr
+        message:Expr
     )?
 
 DestructFull =
-    into:Name
+    Name
 DestructSkip =
     '?'
 DestructArray =
     '['
-    start:(
-        Destruct
-        (',' Destruct)*
+    (
+        DestructArrayPart
+        (',' DestructArrayPart)*
         ','?
     )?
-    DestructRest?
-    ','?
-    end:(
-        Destruct
-        (',' Destruct)*
-        ','?
-    )
     ']'
 DestructObject =
     '{'
@@ -314,9 +318,15 @@ DestructObject =
     '}'
 Destruct =
     DestructFull
-    DestructSkip
-    DestructArray
-    DestructObject
+|   DestructSkip
+|   DestructArray
+|   DestructObject
+
+DestructArrayElement =
+    Destruct
+DestructArrayPart =
+    DestructArrayElement
+|   DestructRest
 
 DestructRest =
     '...'
@@ -332,3 +342,8 @@ DestructObjectField =
         '='
         Expr
     )?
+
+// Aliases used to resolve node type conflicts
+TrueExpr=Expr
+FalseExpr=Expr
+LhsExpr=Expr

@@ -6,40 +6,6 @@ use rowan::{TextRange, TextSize};
 
 use crate::SyntaxKind;
 
-impl SyntaxKind {
-	pub fn is_trivia(self) -> bool {
-		matches!(
-			self,
-			Self::WHITESPACE
-				| Self::MULTI_LINE_COMMENT
-				| Self::SINGLE_LINE_HASH_COMMENT
-				| Self::SINGLE_LINE_SLASH_COMMENT
-		)
-	}
-	pub fn is_string(self) -> bool {
-		matches!(
-			self,
-			Self::STRING_SINGLE
-				| Self::STRING_DOUBLE
-				| Self::STRING_SINGLE_VERBATIM
-				| Self::STRING_DOUBLE_VERBATIM
-				| Self::STRING_BLOCK
-		)
-	}
-	pub fn is_number(self) -> bool {
-		matches!(self, Self::NUMBER)
-	}
-	pub fn is_literal(self) -> bool {
-		matches!(
-			self,
-			Self::NULL_KW
-				| Self::TRUE_KW | Self::FALSE_KW
-				| Self::SELF_KW | Self::DOLLAR
-				| Self::SUPER_KW
-		)
-	}
-}
-
 pub struct Lexer<'a> {
 	inner: logos::Lexer<'a, SyntaxKind>,
 }
@@ -74,7 +40,7 @@ impl<'a> Iterator for Lexer<'a> {
 	}
 }
 
-#[derive(Clone, Copy)]
+#[derive(Clone, Copy, Debug)]
 pub struct Lexeme<'i> {
 	pub kind: SyntaxKind,
 	pub text: &'i str,

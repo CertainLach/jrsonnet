@@ -1,22 +1,20 @@
 ---
-source: crates/jrsonnet-rowan-parser/src/lib.rs
-assertion_line: 88
+source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "2 2\n"
-
 ---
-Root@0..4
-  Literal@0..2
-    Number@0..1 "2"
-    Whitespace@1..2 " "
-  Number@2..3 "2"
-  Whitespace@3..4 "\n"
+SOURCE_FILE@0..3
+  EXPR_NUMBER@0..1
+    FLOAT@0..1 "2"
+  WHITESPACE@1..2 " "
+  ERROR@2..3
+    FLOAT@2..3 "2"
 ===
-Custom { error: "unexpected input after expression", range: 2..3 }
+Unexpected { expected: Unnamed(EOF), found: FLOAT, range: 2..3 }
 ===
-  [38;2;255;30;30m×[0m syntax error
-   ╭────
- [2m1[0m │ 2 2
-   · [38;2;246;87;248m  ┬[0m
-   ·   [38;2;246;87;248m╰── [38;2;246;87;248munexpected input after expression[0m[0m
-   ╰────
+  x syntax error
+   ,----
+ 1 | 2 2
+   :   |
+   :   `-- expected EOF, found FLOAT
+   `----
 
