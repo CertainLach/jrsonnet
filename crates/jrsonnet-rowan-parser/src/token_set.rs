@@ -1,14 +1,15 @@
 use crate::SyntaxKind;
 
 #[derive(Clone, Copy, Default)]
-pub struct SyntaxKindSet(u64);
+pub struct SyntaxKindSet(u128);
 
 impl SyntaxKindSet {
+	#[allow(dead_code)]
 	pub const EMPTY: Self = Self(0);
-	pub const ALL: Self = Self(u64::MAX);
+	pub const ALL: Self = Self(u128::MAX);
 
 	pub const fn new(kinds: &[SyntaxKind]) -> SyntaxKindSet {
-		let mut res = 0u64;
+		let mut res = 0u128;
 		let mut i = 0;
 		while i < kinds.len() {
 			res |= mask(kinds[i]);
@@ -26,8 +27,8 @@ impl SyntaxKindSet {
 	}
 }
 
-const fn mask(kind: SyntaxKind) -> u64 {
-	1u64 << (kind as usize)
+const fn mask(kind: SyntaxKind) -> u128 {
+	1u128 << (kind as u128)
 }
 
 #[macro_export]
@@ -39,4 +40,12 @@ macro_rules! TS {
 			),*
 		])
 	};
+}
+
+#[test]
+fn sanity() {
+	assert!(
+		(SyntaxKind::ERROR as u32) < 127,
+		"can't keep KindSet as bitset"
+	);
 }

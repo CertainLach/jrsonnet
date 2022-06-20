@@ -1,9 +1,11 @@
 #![cfg(test)]
 
-use miette::{Diagnostic, GraphicalReportHandler, LabeledSpan};
+use miette::{
+	Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ThemeCharacters, ThemeStyles,
+};
 use thiserror::Error;
 
-use crate::parser::parse;
+use crate::{parse, AstNode};
 
 #[derive(Debug, Error)]
 #[error("syntax error")]
@@ -44,19 +46,22 @@ impl Diagnostic for MyDiagnostic {
 fn process(text: &str) -> String {
 	use std::fmt::Write;
 	let mut out = String::new();
-	let node = parse(text);
+	let (node, errors) = parse(text);
 	write!(out, "{:#?}", node.syntax()).unwrap();
-	if !node.errors.is_empty() && !text.is_empty() {
+	if !errors.is_empty() && !text.is_empty() {
 		writeln!(out, "===").unwrap();
-		for err in &node.errors {
+		for err in &errors {
 			writeln!(out, "{:?}", err).unwrap();
 		}
 		let diag = MyDiagnostic {
 			code: text.to_string(),
-			spans: node.errors.into_iter().map(|e| e.into()).collect(),
+			spans: errors.into_iter().map(|e| e.into()).collect(),
 		};
 
-		let handler = GraphicalReportHandler::new();
+		let handler = GraphicalReportHandler::new_themed(GraphicalTheme {
+			characters: ThemeCharacters::ascii(),
+			styles: ThemeStyles::none(),
+		});
 
 		write!(out, "===").unwrap();
 		handler.render_report(&mut out, &diag).unwrap();
@@ -77,51 +82,94 @@ macro_rules! mk_test {
 mk_test!(
 	empty => r#" "#
 	function => r#"
-			function(a, b = 1) a + b
-		"#
+		function(a, b = 1) a + b
+	"#
 	function_error_no_value => r#"
-			function(a, b = ) a + b
-		"#
+		function(a, b = ) a + b
+	"#
 	function_error_rparen => r#"
-			function(a, b
-		"#
+		function(a, b
+	"#
 	function_error_body => r#"
-			function(a, b)
-		"#
+		function(a, b)
+	"#
 	local_novalue => r#"
-			local a =
-		"#
+		local a =
+	"#
 	local_no_value_recovery => r#"
-			local a =
-			local b = 3;
-			1
-		"#
+		local a =
+		local b = 3;
+		1
+	"#
 
 	array_comp => r#"
-			[a for a in [1, 2, 3]]
-		"#
+		[a for a in [1, 2, 3]]
+	"#
 	array_comp_incompatible_with_multiple_elems => r#"
-			[a for a in [1, 2, 3], b]
-		"#
+		[a for a in [1, 2, 3], b]
+	"#
 
 	no_rhs => r#"
-			a +
-		"#
+		a +
+	"#
 	no_lhs => r#"
-			+ 2
-		"#
+		+ 2
+	"#
 	no_operator => "
-			2 2
-		"
+		2 2
+	"
 
 	named_before_positional => "
-			a(1, 2, b=4, 3, 5, k = 12, 6)
-		"
+		a(1, 2, b=4, 3, 5, k = 12, 6)
+	"
 
 	wrong_field_end => "
-			{
-				a: 1;
-				b: 2;
-			}
-		"
+		{
+			a: 1;
+			b: 2;
+		}
+	"
+
+
+	plain_call => "
+		std.substr(a, 0, std.length(b)) == b
+	"
+
+	destruct => "
+		local [a, b, c] = arr;
+		local [a, ...] = arr_rest;
+		local [..., a] = rest_arr;
+		local [...] = rest_in_arr;
+		local [a, ...n] = arr_rest_n;
+		local [...n, a] = rest_arr_n;
+		local [...n] = rest_in_arr_n;
+
+		local {a, b, c} = obj;
+		local {a, b, c, ...} = obj_rest;
+		local {a, b, c, ...n} = obj_rest_n;
+
+		null
+	"
+
+	str_block_missing_indent => "
+		|||
+	"
+	str_block_missing_termination => "
+		|||
+			hello
+	"
+	str_block_missing_newline => "
+		|||hello
+	"
+	str_block_missing_indent_text => "
+		|||
+		hello
+	"
 );
+
+#[test]
+fn stdlib() {
+	let src = jrsonnet_stdlib::STDLIB_STR;
+	let result = process(src);
+	insta::assert_snapshot!("stdlib", result, src);
+}

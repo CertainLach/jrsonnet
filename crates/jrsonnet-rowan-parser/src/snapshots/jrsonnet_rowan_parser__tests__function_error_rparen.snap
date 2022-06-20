@@ -1,30 +1,31 @@
 ---
-source: crates/jrsonnet-rowan-parser/src/lib.rs
-assertion_line: 88
+source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b\n"
-
 ---
-Root@0..14
-  FunctionDef@0..14
-    KeywordFunction@0..8 "function"
-    LParen@8..9 "("
-    DefPositionalArg@9..10
-      Ident@9..10 "a"
-    SymbolComma@10..11 ","
-    Whitespace@11..12 " "
-    DefPositionalArg@12..14
-      Ident@12..13 "b"
-      Whitespace@13..14 "\n"
-    BodyDef@14..14
+SOURCE_FILE@0..13
+  EXPR_FUNCTION@0..13
+    FUNCTION_KW@0..8 "function"
+    PARAMS_DESC@8..13
+      L_PAREN@8..9 "("
+      PARAM@9..10
+        DESTRUCT_FULL@9..10
+          NAME@9..10
+            IDENT@9..10 "a"
+      COMMA@10..11 ","
+      WHITESPACE@11..12 " "
+      PARAM@12..13
+        DESTRUCT_FULL@12..13
+          NAME@12..13
+            IDENT@12..13 "b"
 ===
-Missing { expected: Unnamed(RParen), offset: 13 }
+Missing { expected: Unnamed(R_PAREN), offset: 13 }
 Missing { expected: Named("value"), offset: 13 }
 ===
-  [38;2;255;30;30m×[0m syntax error
-   ╭────
- [2m1[0m │ function(a, b
-   · [38;2;246;87;248m             ▲[0m
-   ·              [38;2;246;87;248m│[0m[38;2;30;201;212m╰── [38;2;30;201;212mmissing value[0m[0m
-   ·              [38;2;246;87;248m╰── [38;2;246;87;248mmissing RParen[0m[0m
-   ╰────
+  x syntax error
+   ,----
+ 1 | function(a, b
+   :              ^
+   :              |`-- missing value
+   :              `-- missing R_PAREN
+   `----
 

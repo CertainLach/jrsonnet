@@ -1,0 +1,52 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "std.substr(a, 0, std.length(b)) == b\n"
+---
+SOURCE_FILE@0..36
+  EXPR_BINARY@0..36
+    LHS_EXPR@0..31
+      EXPR_APPLY@0..31
+        EXPR_INDEX@0..10
+          EXPR_VAR@0..3
+            NAME@0..3
+              IDENT@0..3 "std"
+          DOT@3..4 "."
+          NAME@4..10
+            IDENT@4..10 "substr"
+        ARGS_DESC@10..31
+          L_PAREN@10..11 "("
+          ARG@11..12
+            EXPR_VAR@11..12
+              NAME@11..12
+                IDENT@11..12 "a"
+          COMMA@12..13 ","
+          WHITESPACE@13..14 " "
+          ARG@14..15
+            EXPR_NUMBER@14..15
+              FLOAT@14..15 "0"
+          COMMA@15..16 ","
+          WHITESPACE@16..17 " "
+          ARG@17..30
+            EXPR_APPLY@17..30
+              EXPR_INDEX@17..27
+                EXPR_VAR@17..20
+                  NAME@17..20
+                    IDENT@17..20 "std"
+                DOT@20..21 "."
+                NAME@21..27
+                  IDENT@21..27 "length"
+              ARGS_DESC@27..30
+                L_PAREN@27..28 "("
+                ARG@28..29
+                  EXPR_VAR@28..29
+                    NAME@28..29
+                      IDENT@28..29 "b"
+                R_PAREN@29..30 ")"
+          R_PAREN@30..31 ")"
+    WHITESPACE@31..32 " "
+    EQ@32..34 "=="
+    WHITESPACE@34..35 " "
+    EXPR_VAR@35..36
+      NAME@35..36
+        IDENT@35..36 "b"
+

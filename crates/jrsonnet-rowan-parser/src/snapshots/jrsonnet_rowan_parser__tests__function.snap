@@ -1,34 +1,38 @@
 ---
-source: crates/jrsonnet-rowan-parser/src/lib.rs
-assertion_line: 88
+source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b = 1) a + b\n"
-
 ---
-Root@0..25
-  FunctionDef@0..25
-    KeywordFunction@0..8 "function"
-    LParen@8..9 "("
-    DefPositionalArg@9..10
-      Ident@9..10 "a"
-    SymbolComma@10..11 ","
-    Whitespace@11..12 " "
-    DefNamedArg@12..17
-      Ident@12..13 "b"
-      Whitespace@13..14 " "
-      SymbolAssign@14..15 "="
-      Whitespace@15..16 " "
-      Literal@16..17
-        Number@16..17 "1"
-    RParen@17..18 ")"
-    Whitespace@18..19 " "
-    BodyDef@19..25
-      BinOp@19..25
-        Ident@19..21
-          Ident@19..20 "a"
-          Whitespace@20..21 " "
-        OpPlus@21..22 "+"
-        Whitespace@22..23 " "
-        Ident@23..25
-          Ident@23..24 "b"
-          Whitespace@24..25 "\n"
+SOURCE_FILE@0..24
+  EXPR_FUNCTION@0..24
+    FUNCTION_KW@0..8 "function"
+    PARAMS_DESC@8..18
+      L_PAREN@8..9 "("
+      PARAM@9..10
+        DESTRUCT_FULL@9..10
+          NAME@9..10
+            IDENT@9..10 "a"
+      COMMA@10..11 ","
+      WHITESPACE@11..12 " "
+      PARAM@12..17
+        DESTRUCT_FULL@12..13
+          NAME@12..13
+            IDENT@12..13 "b"
+        WHITESPACE@13..14 " "
+        ASSIGN@14..15 "="
+        WHITESPACE@15..16 " "
+        EXPR_NUMBER@16..17
+          FLOAT@16..17 "1"
+      R_PAREN@17..18 ")"
+    WHITESPACE@18..19 " "
+    EXPR_BINARY@19..24
+      LHS_EXPR@19..20
+        EXPR_VAR@19..20
+          NAME@19..20
+            IDENT@19..20 "a"
+      WHITESPACE@20..21 " "
+      PLUS@21..22 "+"
+      WHITESPACE@22..23 " "
+      EXPR_VAR@23..24
+        NAME@23..24
+          IDENT@23..24 "b"
 

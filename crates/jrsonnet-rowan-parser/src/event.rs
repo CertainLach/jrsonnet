@@ -1,6 +1,6 @@
 use std::mem;
 
-use rowan::{GreenNode, GreenNodeBuilder, Language};
+use rowan::{GreenNodeBuilder, Language};
 
 use crate::{
 	lex::Lexeme,
@@ -10,14 +10,27 @@ use crate::{
 
 #[derive(Clone, Debug, PartialEq, Eq)]
 pub enum Event {
+	/// Used for unfinished markers
+	Pending,
+	/// After marker is completed, Pending event is replaced with Start
 	Start {
 		kind: SyntaxKind,
+		/// If marker is preceded or wrapped - instead of reordering events, we
+		/// insert start event in the end of events Vec instead, and store relative offset to this event here
 		forward_parent: Option<usize>,
 	},
-	Token,
-	Finish,
-	Placeholder,
+	/// Eat token
+	Token {
+		kind: SyntaxKind,
+	},
+	/// Position of finished node
+	Finish {
+		/// Same as forward_parent of Start, but for wrapping
+		wrapper: Option<usize>,
+	},
 	Error(SyntaxError),
+	/// Used for dropped markers and other things
+	Noop,
 }
 
 pub(super) struct Sink<'i> {
@@ -40,12 +53,17 @@ impl<'i> Sink<'i> {
 	}
 
 	pub(super) fn finish(mut self) -> Parse {
+		let mut eat_start_whitespace = false;
+		let mut depth = 0;
 		for idx in 0..self.events.len() {
-			match mem::replace(&mut self.events[idx], Event::Placeholder) {
+			match mem::replace(&mut self.events[idx], Event::Noop) {
 				Event::Start {
 					kind,
 					forward_parent,
 				} => {
+					if depth != 0 {
+						self.skip_whitespace();
+					}
 					let mut kinds = vec![kind];
 
 					let mut idx = idx;
@@ -60,7 +78,7 @@ impl<'i> Sink<'i> {
 						forward_parent = if let Event::Start {
 							kind,
 							forward_parent,
-						} = mem::replace(&mut self.events[idx], Event::Placeholder)
+						} = mem::replace(&mut self.events[idx], Event::Noop)
 						{
 							kinds.push(kind);
 							forward_parent
@@ -71,18 +89,46 @@ impl<'i> Sink<'i> {
 
 					for kind in kinds.into_iter().rev() {
 						self.builder.start_node(JsonnetLanguage::kind_to_raw(kind));
+						depth += 1;
+						if depth == 1 {
+							self.skip_whitespace();
+						}
 					}
+
+					eat_start_whitespace = false;
 				}
-				Event::Token => self.token(),
-				Event::Finish => {
+				Event::Token { kind } => {
+					if eat_start_whitespace {
+						self.skip_whitespace();
+					}
+					self.token(kind);
+					eat_start_whitespace = true;
+				}
+				Event::Finish { wrapper } => {
 					self.builder.finish_node();
+					depth -= 1;
+					let mut idx = idx;
+					let mut wrapper = wrapper;
+					while let Some(w) = wrapper {
+						idx += w;
+						wrapper = if let Event::Finish { wrapper } =
+							mem::replace(&mut self.events[idx], Event::Noop)
+						{
+							self.builder.finish_node();
+							depth -= 1;
+							wrapper
+						} else {
+							unreachable!()
+						}
+					}
+					eat_start_whitespace = true;
 				}
-				Event::Placeholder => {}
+				Event::Pending => panic!("placeholder should not end in events"),
+				Event::Noop => {}
 				Event::Error(e) => {
 					self.errors.push(e);
 				}
 			}
-			self.skip_whitespace();
 		}
 
 		Parse {
@@ -90,10 +136,10 @@ impl<'i> Sink<'i> {
 			errors: self.errors,
 		}
 	}
-	fn token(&mut self) {
+	fn token(&mut self, kind: SyntaxKind) {
 		let lexeme = self.lexemes[self.offset];
 		self.builder
-			.token(JsonnetLanguage::kind_to_raw(lexeme.kind), lexeme.text);
+			.token(JsonnetLanguage::kind_to_raw(kind), lexeme.text);
 		self.offset += 1;
 	}
 	fn skip_whitespace(&mut self) {
@@ -102,7 +148,7 @@ impl<'i> Sink<'i> {
 				break;
 			}
 
-			self.token();
+			self.token(lexeme.kind);
 		}
 	}
 }

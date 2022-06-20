@@ -1,63 +1,61 @@
 ---
-source: crates/jrsonnet-rowan-parser/src/lib.rs
-assertion_line: 88
+source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "a(1, 2, b=4, 3, 5, k = 12, 6)\n"
-
 ---
-Root@0..30
-  FunctionCall@0..30
-    Ident@0..1
-      Ident@0..1 "a"
-    LParen@1..2 "("
-    DefPositionalArg@2..3
-      Literal@2..3
-        Number@2..3 "1"
-    SymbolComma@3..4 ","
-    Whitespace@4..5 " "
-    DefPositionalArg@5..6
-      Literal@5..6
-        Number@5..6 "2"
-    SymbolComma@6..7 ","
-    Whitespace@7..8 " "
-    DefNamedArg@8..11
-      Ident@8..9 "b"
-      SymbolAssign@9..10 "="
-      Literal@10..11
-        Number@10..11 "4"
-    SymbolComma@11..12 ","
-    Whitespace@12..13 " "
-    ErrorPositionalAfterNamed@13..28
-      DefPositionalArg@13..14
-        Literal@13..14
-          Number@13..14 "3"
-      SymbolComma@14..15 ","
-      Whitespace@15..16 " "
-      DefPositionalArg@16..17
-        Literal@16..17
-          Number@16..17 "5"
-      SymbolComma@17..18 ","
-      Whitespace@18..19 " "
-      DefNamedArg@19..25
-        Ident@19..20 "k"
-        Whitespace@20..21 " "
-        SymbolAssign@21..22 "="
-        Whitespace@22..23 " "
-        Literal@23..25
-          Number@23..25 "12"
-      SymbolComma@25..26 ","
-      Whitespace@26..27 " "
-      DefPositionalArg@27..28
-        Literal@27..28
-          Number@27..28 "6"
-    RParen@28..29 ")"
-    Whitespace@29..30 "\n"
+SOURCE_FILE@0..30
+  EXPR_APPLY@0..30
+    EXPR_VAR@0..1
+      IDENT@0..1 "a"
+    L_PAREN@1..2 "("
+    ARG@2..3
+      EXPR_NUMBER@2..3
+        NUMBER@2..3 "1"
+    COMMA@3..4 ","
+    WHITESPACE@4..5 " "
+    ARG@5..6
+      EXPR_NUMBER@5..6
+        NUMBER@5..6 "2"
+    COMMA@6..7 ","
+    WHITESPACE@7..8 " "
+    ARG@8..11
+      IDENT@8..9 "b"
+      ASSIGN@9..10 "="
+      EXPR_NUMBER@10..11
+        NUMBER@10..11 "4"
+    COMMA@11..12 ","
+    WHITESPACE@12..13 " "
+    ERROR@13..28
+      ARG@13..14
+        EXPR_NUMBER@13..14
+          NUMBER@13..14 "3"
+      COMMA@14..15 ","
+      WHITESPACE@15..16 " "
+      ARG@16..17
+        EXPR_NUMBER@16..17
+          NUMBER@16..17 "5"
+      COMMA@17..18 ","
+      WHITESPACE@18..19 " "
+      ARG@19..25
+        IDENT@19..20 "k"
+        WHITESPACE@20..21 " "
+        ASSIGN@21..22 "="
+        WHITESPACE@22..23 " "
+        EXPR_NUMBER@23..25
+          NUMBER@23..25 "12"
+      COMMA@25..26 ","
+      WHITESPACE@26..27 " "
+      ARG@27..28
+        EXPR_NUMBER@27..28
+          NUMBER@27..28 "6"
+    R_PAREN@28..29 ")"
+    WHITESPACE@29..30 "\n"
 ===
 Custom { error: "positional arguments can't be placed after named", range: 13..28 }
 ===
-  [38;2;255;30;30m×[0m syntax error
-   ╭────
- [2m1[0m │ a(1, 2, b=4, 3, 5, k = 12, 6)
-   · [38;2;246;87;248m             ───────┬───────[0m
-   ·                     [38;2;246;87;248m╰── [38;2;246;87;248mpositional arguments can't be placed after named[0m[0m
-   ╰────
+  x syntax error
+   ,----
+ 1 | a(1, 2, b=4, 3, 5, k = 12, 6)
+   :              ^^^^^^^|^^^^^^^
+   :                     `-- positional arguments can't be placed after named
+   `----
 

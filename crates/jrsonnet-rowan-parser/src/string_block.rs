@@ -1,23 +1,23 @@
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
-pub enum StringBlockToken {
-	Valid,
-	UnexpectedEndOfString,
-	MissingTextBlockNewLine,
-	MissingTextBlockTermination,
-	MissingTextBlockIndent,
+pub enum StringBlockError {
+	UnexpectedEnd,
+	MissingNewLine,
+	MissingTermination,
+	MissingIndent,
 }
 
 use std::ops::Range;
 
-use StringBlockToken::*;
+use logos::Lexer;
+use StringBlockError::*;
 
 use crate::SyntaxKind;
 
-pub fn lex_str_block_test<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) {
-	lex_str_block(lex);
+pub fn lex_str_block_test(lex: &mut Lexer<SyntaxKind>) {
+	let _ = lex_str_block(lex);
 }
 
-fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken {
+pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError> {
 	struct Context<'a> {
 		source: &'a str,
 		index: usize,
@@ -116,7 +116,7 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 		a.len()
 	}
 
-	fn guess_token_end_and_bump<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>, ctx: &Context<'a>) {
+	fn guess_token_end_and_bump<'a>(lex: &mut Lexer<'a, SyntaxKind>, ctx: &Context<'a>) {
 		let end_index = ctx
 			.rest()
 			.find("|||")
@@ -140,12 +140,12 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 		Some('\n') => (),
 		None => {
 			guess_token_end_and_bump(lex, &ctx);
-			return UnexpectedEndOfString;
+			return Err(UnexpectedEnd);
 		}
 		// Text block requires new line after |||.
 		Some(_) => {
 			guess_token_end_and_bump(lex, &ctx);
-			return MissingTextBlockNewLine;
+			return Err(MissingNewLine);
 		}
 	}
 
@@ -160,7 +160,7 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 	if num_whitespace == 0 {
 		// Text block's first line must start with whitespace
 		guess_token_end_and_bump(lex, &ctx);
-		return MissingTextBlockIndent;
+		return Err(MissingIndent);
 	}
 
 	loop {
@@ -171,7 +171,7 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 			match ctx.next() {
 				None => {
 					guess_token_end_and_bump(lex, &ctx);
-					return UnexpectedEndOfString;
+					return Err(UnexpectedEnd);
 				}
 				Some('\n') => break,
 				Some(_) => (),
@@ -188,26 +188,21 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 		if num_whitespace == 0 {
 			// End of the text block
 			let mut term_indent = String::with_capacity(num_whitespace);
-			loop {
-				match ctx.peek() {
-					Some(' ') | Some('\t') => {
-						term_indent.push(ctx.next().unwrap());
-					}
-					_ => break,
-				}
+			while let Some(' ' | '\t') = ctx.peek() {
+				term_indent.push(ctx.next().unwrap());
 			}
 
 			if !ctx.rest().starts_with("|||") {
 				// Text block not terminated with |||
 				let pos = ctx.pos();
-				if pos.len() == 0 {
+				if pos.is_empty() {
 					// eof
 					lex.bump(ctx.index);
-					return UnexpectedEndOfString;
+					return Err(UnexpectedEnd);
 				}
 
 				guess_token_end_and_bump(lex, &ctx);
-				return MissingTextBlockTermination;
+				return Err(MissingTermination);
 			}
 
 			// Skip '|||'
@@ -217,5 +212,5 @@ fn lex_str_block<'a>(lex: &mut logos::Lexer<'a, SyntaxKind>) -> StringBlockToken
 	}
 
 	lex.bump(ctx.index);
-	Valid
+	Ok(())
 }

@@ -19,3 +19,4 @@ backtrace = "0.3.63"
 indoc = "1.0.3"
 insta = "1.10.0"
 anyhow = "1.0.57"
+jrsonnet-stdlib = { path = "../jrsonnet-stdlib" }

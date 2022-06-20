@@ -1,0 +1,8 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "|||hello\n"
+---
+SOURCE_FILE@0..9
+  EXPR_STRING@0..9
+    ERROR_STRING_BLOCK_MISSING_NEW_LINE@0..9 "|||hello\n"
+
