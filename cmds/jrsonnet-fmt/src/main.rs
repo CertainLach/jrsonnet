@@ -1,6 +1,6 @@
 use std::any::type_name;
 
-use children::children_between;
+use children::{children_between, trivia_before};
 use dprint_core::formatting::{PrintItems, PrintOptions};
 use jrsonnet_rowan_parser::{
 	nodes::{
@@ -13,7 +13,7 @@ use jrsonnet_rowan_parser::{
 };
 
 use crate::{
-	children::should_start_with_newline,
+	children::{should_start_with_newline, trivia_after},
 	comments::{format_comments, CommentLocation},
 };
 
@@ -463,8 +463,25 @@ impl Printable for Expr {
 
 impl Printable for SourceFile {
 	fn print(&self) -> PrintItems {
-		assert!(self.expr().is_some());
-		self.expr().print()
+		let mut pi = p!(new:);
+		let before = trivia_before(
+			self.syntax().clone(),
+			self.expr()
+				.map(|e| e.syntax().clone())
+				.map(Into::into)
+				.as_ref(),
+		);
+		let after = trivia_after(
+			self.syntax().clone(),
+			self.expr()
+				.map(|e| e.syntax().clone())
+				.map(Into::into)
+				.as_ref(),
+		);
+		p!(pi: items(format_comments(&before, CommentLocation::AboveItem)));
+		p!(pi: {self.expr()} nl);
+		p!(pi: items(format_comments(&after, CommentLocation::EndOfItems)));
+		pi
 	}
 }
 
@@ -574,6 +591,7 @@ fn main() {
 		} + Template
 
 
+		// Comment after everything
 "#,
 	);
 

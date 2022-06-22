@@ -117,6 +117,9 @@ impl<'i> Sink<'i> {
 					eat_start_whitespace = false;
 				}
 				Event::Finish { wrapper } => {
+					if depth == 1 {
+						self.skip_whitespace();
+					}
 					self.builder.finish_node();
 					depth -= 1;
 					let mut idx = idx;
@@ -126,6 +129,9 @@ impl<'i> Sink<'i> {
 						wrapper = if let Event::Finish { wrapper } =
 							mem::replace(&mut self.events[idx], Event::Noop)
 						{
+							if depth == 1 {
+								self.skip_whitespace();
+							}
 							self.builder.finish_node();
 							depth -= 1;
 							wrapper

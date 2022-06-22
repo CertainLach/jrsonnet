@@ -1,3 +1,5 @@
+// TODO: Return errors as trivia
+
 use std::{fmt::Debug, marker::PhantomData, mem};
 
 use jrsonnet_rowan_parser::{
@@ -9,9 +11,52 @@ use jrsonnet_rowan_parser::{
 
 pub type ChildTrivia = Vec<Trivia>;
 
-pub struct ChildIterator<I, T> {
-	inner: I,
-	_marker: PhantomData<T>,
+/// Node should have no non-trivia tokens before element
+pub fn trivia_before(node: SyntaxNode, end: Option<&SyntaxElement>) -> ChildTrivia {
+	let mut out = Vec::new();
+	for item in node.children_with_tokens() {
+		if Some(&item) == end {
+			break;
+		}
+
+		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
+			out.push(trivia);
+		} else if end.is_none() {
+			break;
+		} else {
+			assert!(
+				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				"silently eaten token: {:?}",
+				item.kind()
+			)
+		}
+	}
+	out
+}
+/// Node should have no non-trivia tokens after element
+pub fn trivia_after(node: SyntaxNode, start: Option<&SyntaxElement>) -> ChildTrivia {
+	if start.is_none() {
+		return Vec::new();
+	}
+	let mut iter = node.children_with_tokens().peekable();
+	while iter.peek() != start {
+		// println!("Skipped {}");
+		dbg!(&iter.next());
+	}
+	dbg!(&iter.next());
+	let mut out = Vec::new();
+	for item in iter {
+		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
+			out.push(trivia);
+		} else {
+			assert!(
+				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				"silently eaten token: {:?}",
+				item.kind()
+			)
+		}
+	}
+	out
 }
 
 pub fn children_between<T: AstNode + Debug>(
@@ -20,9 +65,10 @@ pub fn children_between<T: AstNode + Debug>(
 	end: Option<&SyntaxElement>,
 ) -> (Vec<Child<T>>, ChildTrivia) {
 	let mut iter = node.children_with_tokens().peekable();
-	while iter.peek() == start {
+	while iter.peek() != start {
 		iter.next();
 	}
+	iter.next();
 	children(
 		iter.take_while(|i| Some(i) != end),
 		start.is_none() || end.is_none(),
@@ -31,7 +77,7 @@ pub fn children_between<T: AstNode + Debug>(
 
 pub fn should_start_with_newline(tt: &ChildTrivia) -> bool {
 	// First for previous item end
-	count_newlines_before(&tt) >= 2
+	count_newlines_before(tt) >= 2
 }
 
 fn count_newlines_before(tt: &ChildTrivia) -> usize {
