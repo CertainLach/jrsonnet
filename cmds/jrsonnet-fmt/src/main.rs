@@ -13,7 +13,7 @@ use jrsonnet_rowan_parser::{
 };
 
 use crate::{
-	children::{should_start_with_newline, trivia_after},
+	children::{should_start_with_newline, trivia_after, trivia_between},
 	comments::{format_comments, CommentLocation},
 };
 
@@ -436,11 +436,45 @@ impl Printable for Expr {
 			}
 			Expr::ExprVar(n) => p!(new: {n.name()}),
 			Expr::ExprLocal(l) => {
-				let mut pi = p!(new: str("local") >i nl);
-				for bind in l.binds() {
-					p!(pi: {bind} str(",") nl);
+				let mut pi = p!(new:);
+				let (binds, end_comments) = children_between::<Bind>(
+					l.syntax().clone(),
+					l.local_kw_token().map(Into::into).as_ref(),
+					l.semi_token().map(Into::into).as_ref(),
+				);
+				if binds.len() == 1 {
+					let bind = &binds[0];
+					p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
+					p!(pi: str("local ") {bind.value});
+				// TODO: keep end_comments, child.inline_trivia somehow, force multiple locals formatting in case of presence?
+				} else {
+					p!(pi: str("local") >i nl);
+					for bind in binds {
+						if bind.needs_newline_above() {
+							p!(pi: nl);
+						}
+						p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
+						p!(pi: {bind.value} str(";"));
+						p!(pi: items(format_comments(&bind.inline_trivia, CommentLocation::ItemInline)) nl);
+					}
+					// TODO: needs_newline_above end_comments
+					p!(pi: items(format_comments(&end_comments, CommentLocation::EndOfItems)));
+					p!(pi: <i);
 				}
-				p!(pi: <i str(";") nl {l.expr()});
+				p!(pi: str(";") nl);
+
+				let expr_comments = trivia_between(
+					l.syntax().clone(),
+					l.semi_token().map(Into::into).as_ref(),
+					l.expr()
+						.map(|e| e.syntax().clone())
+						.map(Into::into)
+						.as_ref(),
+				);
+				p!(pi: items(format_comments(&expr_comments, CommentLocation::AboveItem)));
+
+				// TODO: needs_newline_above expr
+				p!(pi: {l.expr()});
 				pi
 			}
 			Expr::ExprIfThenElse(ite) => {
@@ -514,6 +548,25 @@ fn main() {
 		local ie = a[expr];
 
 		local unary = !a;
+
+		local
+			//   I am comment
+			singleLocalWithItemComment = 1,
+		;
+
+		// Comment between local and expression
+
+		local
+			a = 1, //   Inline
+			// Comment above b
+			b = 4,
+
+			// c needs some space
+			c = 5,
+
+			// Comment after everything
+		;
+
 
 		local Template = {z: "foo"};
 
