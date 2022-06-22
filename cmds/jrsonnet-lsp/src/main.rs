@@ -1,23 +1,13 @@
-use std::{
-	collections::HashMap,
-	fs::File,
-	path::{Path, PathBuf},
-	str::FromStr,
-};
+use std::{fs::File, io::Write, path::PathBuf, str::FromStr};
 
-use jrsonnet_evaluator::{EvaluationState, FileImportResolver, Val};
-use jrsonnet_parser::{ExprLocation, ParserSettings};
 use lsp_server::{Connection, ErrorCode, Message, Request, RequestId, Response};
 use lsp_types::{
 	notification::{DidChangeTextDocument, DidOpenTextDocument, Notification},
 	request::{DocumentLinkRequest, HoverRequest},
 	CompletionOptions, DidChangeTextDocumentParams, DidOpenTextDocumentParams, DocumentLink,
-	DocumentLinkOptions, Hover, HoverContents, MarkupContent, MarkupKind, ServerCapabilities,
-	TextDocumentSyncCapability, TextDocumentSyncKind, TextDocumentSyncOptions, Url,
-	WorkDoneProgressOptions,
+	DocumentLinkOptions, ServerCapabilities, TextDocumentSyncCapability, TextDocumentSyncKind,
+	TextDocumentSyncOptions, Url, WorkDoneProgressOptions,
 };
-
-use std::io::Write;
 
 fn main() {
 	let mut log = File::create("test").unwrap();
@@ -53,8 +43,8 @@ fn main() {
 	io_threads.join().expect("failed to join io_threads");
 }
 fn main_loop(log: &mut File, connection: &Connection) -> anyhow::Result<()> {
-	let mut es = EvaluationState::default();
-	es.set_import_resolver(Box::new(FileImportResolver::default()));
+	// let mut es = EvaluationState::default();
+	// es.set_import_resolver(Box::new(FileImportResolver::default()));
 
 	let reply = |response: Response| {
 		connection
@@ -79,15 +69,15 @@ fn main_loop(log: &mut File, connection: &Connection) -> anyhow::Result<()> {
 						.uri
 						.path();
 					let buf = PathBuf::from_str(pos).unwrap();
-					let pos = es
-						.map_from_source_location(
-							&buf,
-							params.text_document_position_params.position.line as usize + 1,
-							params.text_document_position_params.position.character as usize + 1,
-						)
-						.unwrap();
-					let el = ExprLocation(buf.clone().into(), pos as usize, pos as usize);
-					let es2 = es.clone();
+				// let pos = es
+				// 	.map_from_source_location(
+				// 		&buf,
+				// 		params.text_document_position_params.position.line as usize + 1,
+				// 		params.text_document_position_params.position.character as usize + 1,
+				// 	)
+				// 	.unwrap();
+				// let el = ExprLocation(buf.clone().into(), pos as usize, pos as usize);
+				// let es2 = es.clone();
 				// reply(Response::new_ok(
 				// 	id,
 				// 	Some(Hover {
@@ -108,7 +98,13 @@ fn main_loop(log: &mut File, connection: &Connection) -> anyhow::Result<()> {
 				// 		}),
 				// 	}),
 				// ));
-				} else
+				} else {
+					reply(Response::new_err(
+						req.id,
+						ErrorCode::MethodNotFound as i32,
+						format!("unrecognized request {}", req.method),
+					))
+				}
 				/*
 				if let Some((id, params)) = cast::<DocumentLinkRequest>(&req) {
 					 let links = handle_links(&files, params).unwrap_or_default();
@@ -143,13 +139,6 @@ fn main_loop(log: &mut File, connection: &Connection) -> anyhow::Result<()> {
 					 reply(Response::new_ok(id, completions));
 				} else
 				*/
-				{
-					reply(Response::new_err(
-						req.id,
-						ErrorCode::MethodNotFound as i32,
-						format!("unrecognized request {}", req.method),
-					))
-				}
 			}
 			Message::Notification(req) => {
 				let mut handle = |text: String, uri: Url| {
@@ -158,21 +147,9 @@ fn main_loop(log: &mut File, connection: &Connection) -> anyhow::Result<()> {
 						Ok(x) => x,
 						Err(_) => return,
 					};
-					let parsed = match jrsonnet_parser::parse(
-						&text,
-						&ParserSettings {
-							file_name: path.clone().into(),
-						},
-					) {
-						Ok(v) => v,
-						Err(e) => {
-							writeln!(log, "fuck D: {:?}", e).unwrap();
-							return;
-							// connection.sender.send(Message::Notification(Notification::new_err(req.id, ErrorCode::ParseError as i32, format!("Fuck D: {:?}", e))))
-						}
-					};
-					es.add_parsed_file(path.into(), text.into(), parsed)
-						.unwrap();
+					let (ast, errors) = jrsonnet_rowan_parser::parse(&text);
+					// es.add_parsed_file(path.into(), text.into(), parsed)
+					// 	.unwrap();
 					writeln!(log, "parsed: {:?}", uri).unwrap();
 				};
 

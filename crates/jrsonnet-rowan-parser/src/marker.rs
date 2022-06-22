@@ -113,21 +113,3 @@ impl CompletedMarker {
 		completed
 	}
 }
-
-pub trait AsRange {
-	fn as_range(&self, p: &Parser) -> TextRange;
-	fn end_token(&self) -> usize;
-}
-
-impl AsRange for FinishedRanger {
-	fn as_range(&self, p: &Parser) -> TextRange {
-		TextRange::new(
-			p.start_of_token(self.start_token),
-			p.end_of_token(self.end_token),
-		)
-	}
-
-	fn end_token(&self) -> usize {
-		self.end_token
-	}
-}

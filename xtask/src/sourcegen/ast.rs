@@ -151,6 +151,19 @@ pub fn lower(kinds: &KindsSrc, grammar: &Grammar) -> AstSrc {
 						if let Some(old) = types.insert(field.ty(), field.method_name(kinds)) {
 							panic!("{name}.{} has same type as {name}.{}, resolve conflict by wrapping one field: {}", old, field.method_name(kinds), field.ty());
 						}
+						// TODO: check for assignable field types, i.e you can have
+						// ```
+						// SomeEnum =
+						//     SomeItem
+						// |   SomeOtherItem
+						// ```
+						// And check above will fail to detect conflict in
+						// ```
+						// SomeStruct =
+						//     SomeEnum
+						//     SomeItem
+						// ```
+						// Despite generating getters, which will both return SomeEnum
 					}
 					res.nodes.push(AstNodeSrc {
 						doc: Vec::new(),

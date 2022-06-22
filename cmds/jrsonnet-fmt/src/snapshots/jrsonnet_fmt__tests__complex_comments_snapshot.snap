@@ -1,0 +1,53 @@
+---
+source: cmds/jrsonnet-fmt/src/tests.rs
+expression: "reformat(indoc!(\"{\n\t\t  comments: {\n\t\t\t_: '',\n\t\t\t//     Plain comment\n\t\t\ta: '',\n\n\t\t\t#    Plain comment with empty line before\n\t\t\tb: '',\n\t\t\t/*Single-line multiline comment\n\n\t\t\t*/\n\t\t\tc: '',\n\n\t\t\t/**Single-line multiline doc comment\n\n\t\t\t*/\n\t\t\tc: '',\n\n\t\t\t/**Multiline doc\n\t\t\tComment\n\t\t\t*/\n\t\t\tc: '',\n\n\t\t\t/*\n\n\tMulti-line\n\n\tcomment\n\t\t\t*/\n\t\t\td: '',\n\n\t\t\te: '', // Inline comment\n\n\t\t\tk: '',\n\n\t\t\t// Text after everything\n\t\t  },\n\t\t  comments2: {\n\t\t\tk: '',\n\t\t\t// Text after everything, but no newline above\n\t\t  },\n          spacing: {\n            a: '',\n\n            b: '',\n          },\n          noSpacing: {\n            a: '',\n            b: '',\n          },\n        }\"))"
+---
+{
+  comments: {
+    _: '',
+    // Plain comment
+    a: '',
+
+    # Plain comment with empty line before
+    b: '',
+    /* Single-line multiline comment */
+    c: '',
+
+    /**
+     * Single-line multiline doc comment
+     */
+    c: '',
+
+    /**
+     * Multiline doc
+     * Comment
+     */
+    c: '',
+
+    /*
+    Multi-line
+
+    comment
+    */
+    d: '',
+
+    e: '', // Inline comment
+
+    k: '',
+
+    // Text after everything
+  },
+  comments2: {
+    k: '',
+    // Text after everything, but no newline above
+  },
+  spacing: {
+    a: '',
+
+    b: '',
+  },
+  noSpacing: {
+    a: '',
+    b: '',
+  },
+}

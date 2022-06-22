@@ -34,9 +34,9 @@ const fn mask(kind: SyntaxKind) -> u128 {
 #[macro_export]
 macro_rules! TS {
 	($($tt:tt)*) => {
-		SyntaxKindSet::new(&[
+		$crate::SyntaxKindSet::new(&[
 			$(
-				T![$tt]
+				$crate::T![$tt]
 			),*
 		])
 	};

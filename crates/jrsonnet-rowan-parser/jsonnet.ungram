@@ -56,9 +56,7 @@ ExprArray =
     (Expr (',' Expr)* ','?)?
     ']'
 ExprObject =
-    '{'
     ObjBody
-    '}'
 ExprArrayComp =
     '['
     Expr
@@ -168,6 +166,7 @@ Arg =
     (name:Name '=')? Expr
 
 ObjBodyComp =
+    '{'
     pre:ObjLocalPostComma*
     '['
     key:LhsExpr
@@ -177,8 +176,11 @@ ObjBodyComp =
     value:Expr
     post:ObjLocalPreComma*
     CompSpec*
+    '}'
 ObjBodyMemberList =
+    '{'
     (Member (',' Member)* ','?)?
+    '}'
 ObjBody =
     ObjBodyComp
 |   ObjBodyMemberList

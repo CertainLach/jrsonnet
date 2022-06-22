@@ -6,7 +6,7 @@ use rowan::{GreenNode, TextRange, TextSize};
 use crate::{
 	event::Event,
 	lex::Lexeme,
-	marker::{AsRange, CompletedMarker, Marker, Ranger},
+	marker::{CompletedMarker, Marker, Ranger},
 	nodes::{BinaryOperatorKind, Literal, Number, Text, Trivia, UnaryOperatorKind},
 	token_set::SyntaxKindSet,
 	AstToken, SyntaxKind,
@@ -33,9 +33,9 @@ impl Display for ExpectedSyntax {
 	}
 }
 
-pub struct Parser<'i> {
+pub struct Parser {
 	// TODO: remove all trivia before feeding to parser?
-	lexemes: &'i [Lexeme<'i>],
+	kinds: Vec<SyntaxKind>,
 	pub offset: usize,
 	pub events: Vec<Event>,
 	pub entered: u32,
@@ -103,10 +103,10 @@ impl From<SyntaxError> for LabeledSpan {
 	}
 }
 
-impl<'i> Parser<'i> {
-	pub fn new(lexemes: &'i [Lexeme<'i>]) -> Self {
+impl Parser {
+	pub fn new(kinds: Vec<SyntaxKind>) -> Self {
 		Self {
-			lexemes,
+			kinds,
 			offset: 0,
 			events: vec![],
 			entered: 0,
@@ -134,14 +134,12 @@ impl<'i> Parser<'i> {
 			.set(ExpectedSyntaxTrackingState::Unnamed);
 	}
 	pub fn start(&mut self) -> Marker {
-		self.skip_trivia();
 		let start_event_idx = self.events.len();
 		self.events.push(Event::Pending);
 		self.entered += 1;
 		Marker::new(start_event_idx)
 	}
 	pub fn start_ranger(&mut self) -> Ranger {
-		self.skip_trivia();
 		let pos = self.offset;
 		Ranger { pos }
 	}
@@ -179,44 +177,6 @@ impl<'i> Parser<'i> {
 			self.error_with_no_skip();
 		}
 	}
-	fn current_token(&self) -> Lexeme<'i> {
-		self.lexemes[self.offset]
-	}
-	fn previous_token(&mut self) -> Option<Lexeme<'i>> {
-		if self.offset == 0 {
-			return None;
-		}
-		let mut previous_token_idx = self.offset - 1;
-		while self
-			.lexemes
-			.get(previous_token_idx)
-			.map_or(false, |l| Trivia::can_cast(l.kind))
-			&& previous_token_idx != 0
-		{
-			previous_token_idx -= 1;
-		}
-
-		Some(self.lexemes[previous_token_idx])
-	}
-	pub fn start_of_token(&self, mut idx: usize) -> TextSize {
-		while Trivia::can_cast(self.lexemes[idx].kind) {
-			idx += 1;
-		}
-		self.lexemes[idx].range.start()
-	}
-	pub fn end_of_token(&self, mut idx: usize) -> TextSize {
-		while Trivia::can_cast(self.lexemes[idx].kind) {
-			idx -= 1;
-		}
-		self.lexemes[idx].range.end()
-	}
-	pub(crate) fn custom_error(&mut self, marker: impl AsRange, error: impl AsRef<str>) {
-		self.last_error_token = marker.end_token();
-		self.events.push(Event::Error(SyntaxError::Custom {
-			error: error.as_ref().to_string(),
-			range: marker.as_range(self),
-		}));
-	}
 	pub(crate) fn error_with_recovery_set(
 		&mut self,
 		recovery_set: SyntaxKindSet,
@@ -238,27 +198,26 @@ impl<'i> Parser<'i> {
 		self.expected_syntax_tracking_state
 			.set(ExpectedSyntaxTrackingState::Unnamed);
 
-		self.skip_trivia();
 		if self.at_end() || self.at_ts(recovery_set) {
-			let range = self
-				.previous_token()
-				.map(|t| t.range)
-				.unwrap_or_else(|| TextRange::at(TextSize::from(0), TextSize::from(0)));
+			// let range = self
+			// 	.previous_token()
+			// 	.map(|t| t.range)
+			// 	.unwrap_or_else(|| TextRange::at(TextSize::from(0), TextSize::from(0)));
 
-			self.events.push(Event::Error(SyntaxError::Missing {
-				expected: expected_syntax,
-				offset: range.end(),
-			}));
+			// self.events.push(Event::Error(SyntaxError::Missing {
+			// 	expected: expected_syntax,
+			// 	offset: range.end(),
+			// }));
 			return None;
 		}
 
-		let current_token = self.current_token();
+		let current_token = self.current();
 
-		self.events.push(Event::Error(SyntaxError::Unexpected {
-			expected: expected_syntax,
-			found: current_token.kind,
-			range: current_token.range,
-		}));
+		// self.events.push(Event::Error(SyntaxError::Unexpected {
+		// 	expected: expected_syntax,
+		// 	found: current_token.kind,
+		// 	range: current_token.range,
+		// }));
 		self.clear_expected_syntaxes();
 		self.last_error_token = self.offset;
 
@@ -267,17 +226,14 @@ impl<'i> Parser<'i> {
 		Some(m.complete(self, SyntaxKind::ERROR))
 	}
 	fn bump_assert(&mut self, kind: SyntaxKind) {
-		self.skip_trivia();
 		assert!(self.at(kind), "expected {:?}", kind);
 		self.bump_remap(self.current());
 	}
 	fn bump(&mut self) {
-		self.skip_trivia();
 		self.bump_remap(self.current());
 	}
 	fn bump_remap(&mut self, kind: SyntaxKind) {
-		self.skip_trivia();
-		assert_ne!(self.offset, self.lexemes.len(), "already at end");
+		assert_ne!(self.offset, self.kinds.len(), "already at end");
 		self.events.push(Event::Token { kind });
 		self.offset += 1;
 		self.clear_expected_syntaxes();
@@ -302,7 +258,7 @@ impl<'i> Parser<'i> {
 			{
 				let next = 20;
 				write!(out, "\n\nNext {next} tokens:").unwrap();
-				for (i, tok) in self.lexemes.iter().skip(self.offset).take(next).enumerate() {
+				for (i, tok) in self.kinds.iter().skip(self.offset).take(next).enumerate() {
 					write!(out, "\n{i}. {tok:?}").unwrap();
 				}
 			}
@@ -314,39 +270,12 @@ impl<'i> Parser<'i> {
 		self.step();
 		let mut offset = self.offset;
 		for _ in 0..i {
-			while self
-				.lexemes
-				.get(offset)
-				.map(|l| Trivia::can_cast(l.kind))
-				.unwrap_or(false)
-			{
-				offset += 1;
-			}
 			offset += 1;
 		}
-		while self
-			.lexemes
-			.get(offset)
-			.map(|l| Trivia::can_cast(l.kind))
-			.unwrap_or(false)
-		{
-			offset += 1;
-		}
-		self.lexemes.get(offset).map(|l| l.kind).unwrap_or(EOF)
+		self.kinds.get(offset).copied().unwrap_or(EOF)
 	}
 	fn current(&self) -> SyntaxKind {
 		self.nth(0)
-	}
-	fn skip_trivia(&mut self) {
-		while Trivia::can_cast(self.peek_raw()) {
-			self.offset += 1;
-		}
-	}
-	fn peek_raw(&mut self) -> SyntaxKind {
-		self.lexemes
-			.get(self.offset)
-			.map(|l| l.kind)
-			.unwrap_or(SyntaxKind::EOF)
 	}
 	#[must_use]
 	pub(crate) fn expected_syntax_name(&mut self, name: &'static str) -> ExpectedSyntaxGuard {
@@ -507,15 +436,15 @@ fn field(p: &mut Parser) {
 		None
 	};
 	let params = if p.at(T!['(']) {
-		if let Some(plus) = plus {
-			p.custom_error(plus, "can't extend with method");
-		}
+		// if let Some(plus) = plus {
+		// 	p.custom_error(plus, "can't extend with method");
+		// }
 		params_desc(p);
-		if p.at(T![+]) {
-			let r = p.start_ranger();
-			p.bump();
-			p.custom_error(r.finish(p), "can't extend with method");
-		}
+		// if p.at(T![+]) {
+		// 	let r = p.start_ranger();
+		// 	p.bump();
+		// 	p.custom_error(r.finish(p), "can't extend with method");
+		// }
 		true
 	} else {
 		false
@@ -669,10 +598,10 @@ fn array(p: &mut Parser) -> CompletedMarker {
 
 	if elems > 1 && !compspecs.is_empty() {
 		for spec in compspecs {
-			p.custom_error(
-				spec,
-				"compspec may only be used if there is only one array element",
-			)
+			// p.custom_error(
+			// 	spec,
+			// 	"compspec may only be used if there is only one array element",
+			// )
 		}
 
 		m.complete(p, EXPR_ARRAY)
@@ -797,9 +726,9 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 			} else if p.at(T![...]) {
 				let m_err = p.start_ranger();
 				destruct_rest(p);
-				if had_rest {
-					p.custom_error(m_err.finish(p), "only one rest can be present in array");
-				}
+				// if had_rest {
+				// 	p.custom_error(m_err.finish(p), "only one rest can be present in array");
+				// }
 				had_rest = true;
 			} else {
 				destruct(p);
@@ -822,9 +751,9 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 			} else if p.at(T![...]) {
 				let m_err = p.start_ranger();
 				destruct_rest(p);
-				if had_rest {
-					p.custom_error(m_err.finish(p), "only one rest can be present in object");
-				}
+				// if had_rest {
+				// 	p.custom_error(m_err.finish(p), "only one rest can be present in object");
+				// }
 				had_rest = true;
 			} else {
 				if had_rest {
