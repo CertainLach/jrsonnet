@@ -13,7 +13,7 @@ use jrsonnet_rowan_parser::{
 };
 
 use crate::{
-	children::{should_start_with_newline, trivia_after, trivia_between},
+	children::{trivia_after, trivia_between},
 	comments::{format_comments, CommentLocation},
 };
 
@@ -294,7 +294,7 @@ impl Printable for ObjBody {
 					l.r_brace_token().map(Into::into).as_ref(),
 				);
 				for mem in children.into_iter() {
-					if mem.needs_newline_above() {
+					if mem.should_start_with_newline {
 						p!(pi: nl);
 					}
 					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
@@ -314,11 +314,10 @@ impl Printable for ObjBody {
 					p!(pi: nl)
 				}
 
-				// TODO: implement same thing as needs_newline_above, but for end comments
-				if should_start_with_newline(&end_comments) {
+				if end_comments.should_start_with_newline {
 					p!(pi: nl);
 				}
-				p!(pi: items(format_comments(&end_comments, CommentLocation::EndOfItems)));
+				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
 				p!(pi: <i str("}"));
 				pi
 			}
@@ -450,15 +449,17 @@ impl Printable for Expr {
 				} else {
 					p!(pi: str("local") >i nl);
 					for bind in binds {
-						if bind.needs_newline_above() {
+						if bind.should_start_with_newline {
 							p!(pi: nl);
 						}
 						p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
 						p!(pi: {bind.value} str(";"));
 						p!(pi: items(format_comments(&bind.inline_trivia, CommentLocation::ItemInline)) nl);
 					}
-					// TODO: needs_newline_above end_comments
-					p!(pi: items(format_comments(&end_comments, CommentLocation::EndOfItems)));
+					if end_comments.should_start_with_newline {
+						p!(pi: nl)
+					}
+					p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
 					p!(pi: <i);
 				}
 				p!(pi: str(";") nl);
@@ -471,9 +472,11 @@ impl Printable for Expr {
 						.map(Into::into)
 						.as_ref(),
 				);
-				p!(pi: items(format_comments(&expr_comments, CommentLocation::AboveItem)));
 
-				// TODO: needs_newline_above expr
+				if expr_comments.should_start_with_newline {
+					p!(pi: nl);
+				}
+				p!(pi: items(format_comments(&expr_comments.trivia, CommentLocation::AboveItem)));
 				p!(pi: {l.expr()});
 				pi
 			}

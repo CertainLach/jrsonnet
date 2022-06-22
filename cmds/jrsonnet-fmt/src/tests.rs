@@ -20,7 +20,8 @@ fn reformat(input: &str) -> String {
 macro_rules! assert_formatted {
 	($input:literal, $output:literal) => {
 		let formatted = reformat(indoc!($input));
-		let expected = indoc!($output);
+		let mut expected = indoc!($output).to_owned();
+		expected.push('\n');
 		if formatted != expected {
 			panic!(
 				"bad formatting, expected\n```\n{formatted}\n```\nto be equal to\n```\n{expected}\n```",
@@ -49,7 +50,6 @@ fn padding_stripped_for_multiline_comment() {
 	);
 }
 
-// Fails
 #[test]
 fn last_comment_respects_spacing_with_inline_comment_above() {
 	assert_formatted!(

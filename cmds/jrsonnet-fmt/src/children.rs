@@ -1,6 +1,6 @@
 // TODO: Return errors as trivia
 
-use std::{fmt::Debug, marker::PhantomData, mem};
+use std::{fmt::Debug, mem};
 
 use jrsonnet_rowan_parser::{
 	nodes::{Trivia, TriviaKind},
@@ -62,7 +62,7 @@ pub fn trivia_between(
 	node: SyntaxNode,
 	start: Option<&SyntaxElement>,
 	end: Option<&SyntaxElement>,
-) -> ChildTrivia {
+) -> EndingComments {
 	let mut iter = node.children_with_tokens().peekable();
 	while iter.peek() != start {
 		iter.next();
@@ -85,14 +85,17 @@ pub fn trivia_between(
 			)
 		}
 	}
-	out
+	EndingComments {
+		should_start_with_newline: should_start_with_newline(None, &out),
+		trivia: out,
+	}
 }
 
 pub fn children_between<T: AstNode + Debug>(
 	node: SyntaxNode,
 	start: Option<&SyntaxElement>,
 	end: Option<&SyntaxElement>,
-) -> (Vec<Child<T>>, ChildTrivia) {
+) -> (Vec<Child<T>>, EndingComments) {
 	let mut iter = node.children_with_tokens().peekable();
 	while iter.peek() != start {
 		iter.next();
@@ -104,9 +107,14 @@ pub fn children_between<T: AstNode + Debug>(
 	)
 }
 
-pub fn should_start_with_newline(tt: &ChildTrivia) -> bool {
-	// First for previous item end
-	count_newlines_before(tt) >= 2
+pub fn should_start_with_newline(prev_inline: Option<&ChildTrivia>, tt: &ChildTrivia) -> bool {
+	count_newlines_before(tt)
+		+ prev_inline
+			.map(count_newlines_after)
+			.unwrap_or_default()
+
+		// First for previous item end, second for current item
+		>= 2
 }
 
 fn count_newlines_before(tt: &ChildTrivia) -> usize {
@@ -142,10 +150,10 @@ fn count_newlines_after(tt: &ChildTrivia) -> usize {
 	nl_count
 }
 
-pub fn children<'a, T: AstNode + Debug>(
+pub fn children<T: AstNode + Debug>(
 	items: impl Iterator<Item = SyntaxElement>,
 	loose: bool,
-) -> (Vec<Child<T>>, ChildTrivia) {
+) -> (Vec<Child<T>>, EndingComments) {
 	let mut out = Vec::new();
 	let mut current_child = None::<Child<T>>;
 	let mut next = ChildTrivia::new();
@@ -157,15 +165,12 @@ pub fn children<'a, T: AstNode + Debug>(
 		if let Some(value) = item.as_node().cloned().and_then(T::cast) {
 			let before_trivia = mem::take(&mut next);
 			let last_child = current_child.replace(Child {
-				newlines_above: if had_some {
-					count_newlines_before(&before_trivia)
-						+ current_child
-							.as_ref()
-							.map(|c| count_newlines_after(&c.inline_trivia))
-							.unwrap_or_default()
-				} else {
-					0
-				},
+				// First item should not start with newline
+				should_start_with_newline: had_some
+					&& should_start_with_newline(
+						current_child.as_ref().map(|c| &c.inline_trivia),
+						&before_trivia,
+					),
 				before_trivia,
 				value,
 				inline_trivia: Vec::new(),
@@ -206,16 +211,25 @@ pub fn children<'a, T: AstNode + Debug>(
 		}
 	}
 
+	let ending_comments = EndingComments {
+		should_start_with_newline: should_start_with_newline(
+			current_child.as_ref().map(|c| &c.inline_trivia),
+			&next,
+		),
+		trivia: next,
+	};
+
 	if let Some(current_child) = current_child {
 		out.push(current_child);
 	}
 
-	(out, next)
+	(out, ending_comments)
 }
 
 #[derive(Debug)]
 pub struct Child<T> {
-	newlines_above: usize,
+	/// If this child has two newlines above in source code, so it needs to have it in the output
+	pub should_start_with_newline: bool,
 	/// Comment before item, i.e
 	///
 	/// ```ignore
@@ -234,10 +248,8 @@ pub struct Child<T> {
 	pub inline_trivia: ChildTrivia,
 }
 
-impl<T> Child<T> {
-	/// If this child has two newlines above in source code, so it needs to have it in output
-	pub fn needs_newline_above(&self) -> bool {
-		// First line for end of previous item
-		self.newlines_above >= 2
-	}
+pub struct EndingComments {
+	/// If this child has two newlines above in source code, so it needs to have it in the output
+	pub should_start_with_newline: bool,
+	pub trivia: ChildTrivia,
 }
