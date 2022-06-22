@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 dprint-core = "0.58.2"
 jrsonnet-rowan-parser = { path = "../../crates/jrsonnet-rowan-parser" }
+insta = "1.15"
+indoc = "1.0"

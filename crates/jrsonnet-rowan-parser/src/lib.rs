@@ -1,5 +1,11 @@
 #![deny(unused_must_use)]
 
+use event::Sink;
+use generated::nodes::{SourceFile, Trivia};
+use lex::lex;
+use parser::{Parser, SyntaxError};
+pub use rowan;
+
 mod ast;
 mod event;
 mod generated;
@@ -13,18 +19,18 @@ mod tests;
 mod token_set;
 
 pub use ast::{AstChildren, AstNode, AstToken};
-use event::Sink;
-use generated::nodes::SourceFile;
 pub use generated::{nodes, syntax_kinds::SyntaxKind};
-pub use language::{
-	JsonnetLanguage, PreorderWithTokens, SyntaxElement, SyntaxElementChildren, SyntaxNode,
-	SyntaxNodeChildren, SyntaxToken,
-};
-use lex::lex;
-use parser::{Parser, SyntaxError};
+pub use language::*;
+pub use token_set::SyntaxKindSet;
+
 pub fn parse(input: &str) -> (SourceFile, Vec<SyntaxError>) {
 	let lexemes = lex(input);
-	let parser = Parser::new(&lexemes);
+	let kinds = lexemes
+		.iter()
+		.map(|l| l.kind)
+		.filter(|k| !Trivia::can_cast(*k))
+		.collect();
+	let parser = Parser::new(kinds);
 	let events = parser.parse();
 	let sink = Sink::new(events, &lexemes);
 

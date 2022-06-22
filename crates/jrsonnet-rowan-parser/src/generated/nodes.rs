@@ -291,14 +291,8 @@ pub struct ExprObject {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ExprObject {
-	pub fn l_brace_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!['{'])
-	}
 	pub fn obj_body(&self) -> Option<ObjBody> {
 		support::child(&self.syntax)
-	}
-	pub fn r_brace_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!['}'])
 	}
 }
 
@@ -538,6 +532,9 @@ pub struct ObjBodyComp {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ObjBodyComp {
+	pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T!['{'])
+	}
 	pub fn pre(&self) -> AstChildren<ObjLocalPostComma> {
 		support::children(&self.syntax)
 	}
@@ -564,6 +561,9 @@ impl ObjBodyComp {
 	}
 	pub fn comp_specs(&self) -> AstChildren<CompSpec> {
 		support::children(&self.syntax)
+	}
+	pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T!['}'])
 	}
 }
 
@@ -598,8 +598,14 @@ pub struct ObjBodyMemberList {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ObjBodyMemberList {
+	pub fn l_brace_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T!['{'])
+	}
 	pub fn members(&self) -> AstChildren<Member> {
 		support::children(&self.syntax)
+	}
+	pub fn r_brace_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T!['}'])
 	}
 }
 

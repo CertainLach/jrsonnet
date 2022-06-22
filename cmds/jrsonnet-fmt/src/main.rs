@@ -1,6 +1,7 @@
 use std::any::type_name;
 
-use dprint_core::formatting::{PrintItems, PrintOptions, Signal};
+use children::children_between;
+use dprint_core::formatting::{PrintItems, PrintOptions};
 use jrsonnet_rowan_parser::{
 	nodes::{
 		ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
@@ -8,8 +9,18 @@ use jrsonnet_rowan_parser::{
 		Member, Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Text,
 		UnaryOperator,
 	},
-	AstToken, SyntaxToken,
+	AstNode, AstToken, SyntaxToken,
 };
+
+use crate::{
+	children::should_start_with_newline,
+	comments::{format_comments, CommentLocation},
+};
+
+mod children;
+mod comments;
+#[cfg(test)]
+mod tests;
 
 pub trait Printable {
 	fn print(&self) -> PrintItems;
@@ -18,7 +29,7 @@ pub trait Printable {
 macro_rules! pi {
 	(@i; $($t:tt)*) => {{
 		#[allow(unused_mut)]
-		let mut o = PrintItems::new();
+		let mut o = dprint_core::formatting::PrintItems::new();
 		pi!(@s; o: $($t)*);
 		o
 	}};
@@ -27,19 +38,27 @@ macro_rules! pi {
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: nl $($t:tt)*) => {{
-		$o.push_signal(Signal::NewLine);
+		$o.push_signal(dprint_core::formatting::Signal::NewLine);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: tab $($t:tt)*) => {{
+		$o.push_signal(dprint_core::formatting::Signal::Tab);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: >i $($t:tt)*) => {{
-		$o.push_signal(Signal::StartIndent);
+		$o.push_signal(dprint_core::formatting::Signal::StartIndent);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: <i $($t:tt)*) => {{
-		$o.push_signal(Signal::FinishIndent);
+		$o.push_signal(dprint_core::formatting::Signal::FinishIndent);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: {$expr:expr} $($t:tt)*) => {{
 		$o.extend($expr.print());
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: items($expr:expr) $($t:tt)*) => {{
+		$o.extend($expr);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: if ($e:expr)($($then:tt)*) $($t:tt)*) => {{
@@ -66,6 +85,8 @@ macro_rules! p {
 		pi!(@s; $o: $($t)*)
 	};
 }
+pub(crate) use p;
+pub(crate) use pi;
 
 impl<P> Printable for Option<P>
 where
@@ -266,9 +287,18 @@ impl Printable for ObjBody {
 		match self {
 			ObjBody::ObjBodyComp(_) => todo!(),
 			ObjBody::ObjBodyMemberList(l) => {
-				let mut pi = p!(new:);
-				for mem in l.members() {
-					match mem {
+				let mut pi = p!(new: str("{") >i nl);
+				let (children, end_comments) = children_between::<Member>(
+					l.syntax().clone(),
+					l.l_brace_token().map(Into::into).as_ref(),
+					l.r_brace_token().map(Into::into).as_ref(),
+				);
+				for mem in children.into_iter() {
+					if mem.needs_newline_above() {
+						p!(pi: nl);
+					}
+					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
+					match mem.value {
 						Member::MemberBindStmt(b) => {
 							p!(pi: {b.obj_local()})
 						}
@@ -279,8 +309,17 @@ impl Printable for ObjBody {
 							p!(pi: {f.field()})
 						}
 					}
-					p!(pi: str(",") nl)
+					p!(pi: str(","));
+					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
+					p!(pi: nl)
 				}
+
+				// TODO: implement same thing as needs_newline_above, but for end comments
+				if should_start_with_newline(&end_comments) {
+					p!(pi: nl);
+				}
+				p!(pi: items(format_comments(&end_comments, CommentLocation::EndOfItems)));
+				p!(pi: <i str("}"));
 				pi
 			}
 		}
@@ -382,7 +421,7 @@ impl Printable for Expr {
 				pi
 			}
 			Expr::ExprObject(o) => {
-				p!(new: str("{") >i nl {o.obj_body()} <i str("}"))
+				p!(new: {o.obj_body()})
 			}
 			Expr::ExprArrayComp(arr) => {
 				let mut pi = p!(new: str("[") {arr.expr()});
@@ -485,6 +524,47 @@ fn main() {
 		  ],
 		  m: a[1::],
 		  m: b[::],
+
+		  comments: {
+			_: '',
+			//     Plain comment
+			a: '',
+
+			#    Plain comment with empty line before
+			b: '',
+			/*Single-line multiline comment
+
+			*/
+			c: '',
+
+			/**Single-line multiline doc comment
+
+			*/
+			c: '',
+
+			/**multiline doc comment
+			s
+			*/
+			c: '',
+
+			/*
+
+	Multi-line
+
+	comment
+			*/
+			d: '',
+
+			e: '', // Inline comment
+
+			k: '',
+
+			// Text after everything
+		  },
+		  comments2: {
+			k: '',
+			// Text after everything, but no newline above
+		  },
 		  k: if a         == b    then
 
 
