@@ -12,6 +12,7 @@ pub enum CommentLocation {
 	EndOfItems,
 }
 
+#[must_use]
 pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintItems {
 	let mut pi = p!(new:);
 

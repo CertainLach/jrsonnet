@@ -40,14 +40,43 @@ pub fn trivia_after(node: SyntaxNode, start: Option<&SyntaxElement>) -> ChildTri
 	}
 	let mut iter = node.children_with_tokens().peekable();
 	while iter.peek() != start {
-		// println!("Skipped {}");
-		dbg!(&iter.next());
+		iter.next();
 	}
-	dbg!(&iter.next());
+	iter.next();
 	let mut out = Vec::new();
 	for item in iter {
 		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
 			out.push(trivia);
+		} else {
+			assert!(
+				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				"silently eaten token: {:?}",
+				item.kind()
+			)
+		}
+	}
+	out
+}
+
+pub fn trivia_between(
+	node: SyntaxNode,
+	start: Option<&SyntaxElement>,
+	end: Option<&SyntaxElement>,
+) -> ChildTrivia {
+	let mut iter = node.children_with_tokens().peekable();
+	while iter.peek() != start {
+		iter.next();
+	}
+	iter.next();
+
+	let loose = start.is_none() || end.is_none();
+
+	let mut out = Vec::new();
+	for item in iter.take_while(|i| Some(i) != end) {
+		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
+			out.push(trivia);
+		} else if loose {
+			break;
 		} else {
 			assert!(
 				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
