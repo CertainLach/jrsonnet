@@ -10,6 +10,7 @@ publish = false
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
+jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-gcmodule = { version = "0.3.4" }
 
 [lib]

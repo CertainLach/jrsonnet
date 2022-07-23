@@ -9,10 +9,16 @@ use jrsonnet_evaluator::State;
 pub unsafe extern "C" fn jsonnet_ext_var(vm: &State, name: *const c_char, value: *const c_char) {
 	let name = CStr::from_ptr(name);
 	let value = CStr::from_ptr(value);
-	vm.add_ext_str(
-		name.to_str().unwrap().into(),
-		value.to_str().unwrap().into(),
-	)
+
+	let any_resolver = vm.context_initializer();
+	any_resolver
+		.as_any()
+		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
+		.expect("only stdlib context initializer supported")
+		.add_ext_str(
+			name.to_str().unwrap().into(),
+			value.to_str().unwrap().into(),
+		)
 }
 
 /// # Safety
@@ -20,7 +26,13 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &State, name: *const c_char, value:
 pub unsafe extern "C" fn jsonnet_ext_code(vm: &State, name: *const c_char, value: *const c_char) {
 	let name = CStr::from_ptr(name);
 	let value = CStr::from_ptr(value);
-	vm.add_ext_code(name.to_str().unwrap(), value.to_str().unwrap().into())
+
+	let any_resolver = vm.context_initializer();
+	any_resolver
+		.as_any()
+		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
+		.expect("only stdlib context initializer supported")
+		.add_ext_code(name.to_str().unwrap(), value.to_str().unwrap().into())
 		.unwrap()
 }
 /// # Safety

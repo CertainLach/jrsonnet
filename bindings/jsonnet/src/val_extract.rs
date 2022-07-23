@@ -10,7 +10,7 @@ use jrsonnet_evaluator::{State, Val};
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &State, v: &Val) -> *mut c_char {
 	match v {
-		Val::Str(s) => CString::new(&*s as &str).unwrap().into_raw(),
+		Val::Str(s) => CString::new(s as &str).unwrap().into_raw(),
 		_ => std::ptr::null_mut(),
 	}
 }

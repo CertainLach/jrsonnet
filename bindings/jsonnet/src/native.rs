@@ -73,12 +73,17 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		raw_params = raw_params.offset(1);
 	}
 
-	vm.add_native(
-		name,
-		#[allow(deprecated)]
-		Cc::new(tb!(NativeCallback::new(
-			params,
-			tb!(JsonnetNativeCallbackHandler { ctx, cb }),
-		))),
-	)
+	let any_resolver = vm.context_initializer();
+	any_resolver
+		.as_any()
+		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
+		.expect("only stdlib context initializer supported")
+		.add_native(
+			name,
+			#[allow(deprecated)]
+			Cc::new(tb!(NativeCallback::new(
+				params,
+				tb!(JsonnetNativeCallbackHandler { ctx, cb }),
+			))),
+		)
 }

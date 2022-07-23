@@ -31,8 +31,9 @@ pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 #[no_mangle]
 pub extern "C" fn jsonnet_make() -> *mut State {
 	let state = State::default();
-	state.with_stdlib();
 	state.settings_mut().import_resolver = Box::new(NativeImportResolver::default());
+	state.settings_mut().context_initializer =
+		Box::new(jrsonnet_stdlib::ContextInitializer::new(state.clone()));
 	Box::into_raw(Box::new(state))
 }
 
@@ -40,7 +41,7 @@ pub extern "C" fn jsonnet_make() -> *mut State {
 #[no_mangle]
 #[allow(clippy::boxed_local)]
 pub unsafe extern "C" fn jsonnet_destroy(vm: *mut State) {
-	Box::from_raw(vm);
+	drop(Box::from_raw(vm));
 }
 
 #[no_mangle]
@@ -92,7 +93,7 @@ pub unsafe extern "C" fn jsonnet_realloc(_vm: &State, buf: *mut u8, sz: usize) -
 #[no_mangle]
 #[allow(clippy::boxed_local)]
 pub unsafe extern "C" fn jsonnet_json_destroy(_vm: &State, v: *mut Val) {
-	Box::from_raw(v);
+	drop(Box::from_raw(v));
 }
 
 #[no_mangle]
