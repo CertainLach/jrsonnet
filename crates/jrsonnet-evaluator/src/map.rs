@@ -23,6 +23,13 @@ impl LayeredHashMap {
 		}
 	}
 
+	pub(crate) fn new(layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
+		Self(Cc::new(LayeredHashMapInternals {
+			parent: None,
+			current: layer,
+		}))
+	}
+
 	pub fn extend(self, new_layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: Some(self),

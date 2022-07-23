@@ -138,3 +138,30 @@ impl PartialEq for Context {
 		Cc::ptr_eq(&self.0, &other.0)
 	}
 }
+
+#[derive(Default)]
+pub struct ContextBuilder {
+	bindings: GcHashMap<IStr, Thunk<Val>>,
+}
+impl ContextBuilder {
+	pub fn new() -> Self {
+		Self::default()
+	}
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			bindings: GcHashMap::with_capacity(capacity),
+		}
+	}
+	pub fn bind(&mut self, name: IStr, value: Thunk<Val>) -> &mut Self {
+		self.bindings.insert(name, value);
+		self
+	}
+	pub fn build(self) -> Context {
+		Context(Cc::new(ContextInternals {
+			bindings: LayeredHashMap::new(self.bindings),
+			dollar: None,
+			sup: None,
+			this: None,
+		}))
+	}
+}
