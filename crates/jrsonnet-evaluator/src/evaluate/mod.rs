@@ -13,10 +13,9 @@ use crate::{
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
-	stdlib::{std_slice, BUILTINS},
 	tb, throw,
 	typed::Typed,
-	val::{ArrValue, CachedUnbound, Thunk, ThunkValue},
+	val::{ArrValue, CachedUnbound, IndexableVal, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
 	Unbound, Val,
 };
@@ -417,13 +416,13 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::This) => {
 			Val::Obj(ctx.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
 		}
-		Literal(LiteralType::Super) => Val::Obj(
-			ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
+		Literal(LiteralType::Super) => {
+			Val::Obj(ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
 				ctx.this()
 					.clone()
 					.expect("if super exists - then this should to"),
-			),
-		),
+			))
+		}
 		Literal(LiteralType::Dollar) => {
 			Val::Obj(ctx.dollar().clone().ok_or(NoTopLevelObjectFound)?)
 		}
@@ -472,9 +471,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 								key.clone(),
 								heap.into_iter().map(|(_, v)| v).collect()
 							))
-						}
-						Err(e) if matches!(e.error(), MagicThisFileUsed) => {
-							Ok(Val::Str(loc.0.full_path().into()))
 						}
 						Err(e) => Err(e),
 					},
@@ -573,13 +569,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
 		}
-		Intrinsic(name) => Val::Func(FuncVal::StaticBuiltin(
-			BUILTINS
-				.with(|b| b.get(name).copied())
-				.ok_or_else(|| IntrinsicNotFound(name.clone()))?,
-		)),
-		IntrinsicThisFile => return Err(MagicThisFileUsed.into()),
-		IntrinsicId => Val::Func(FuncVal::identity()),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(s.clone(), ctx.clone(), assert)?;
 			evaluate(s, ctx, returned)?
@@ -635,9 +624,9 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 
 			let start = parse_idx(loc, s.clone(), &ctx, &desc.start, "start")?;
 			let end = parse_idx(loc, s.clone(), &ctx, &desc.end, "end")?;
-			let step = parse_idx(loc, s, &ctx, &desc.step, "step")?;
+			let step = parse_idx(loc, s.clone(), &ctx, &desc.step, "step")?;
 
-			std_slice(indexable.into_indexable()?, start, end, step)?
+			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?, s)?
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let tmp = loc.clone().0;

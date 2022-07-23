@@ -6,10 +6,7 @@ use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{
-	stdlib::{format::FormatError, sort::SortError},
-	typed::TypeLocError,
-};
+use crate::{stdlib::format::FormatError, typed::TypeLocError};
 
 fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
@@ -169,13 +166,6 @@ pub enum Error {
 	Format(#[from] FormatError),
 	#[error("type error: {0}")]
 	TypeError(TypeLocError),
-	#[error("sort error: {0}")]
-	Sort(#[from] SortError),
-
-	/// Thrown as error, as this is legacy feature, and error here
-	/// is acceptable for defeating object field cache
-	#[error("should not reach outside: std.thisFile")]
-	MagicThisFileUsed,
 
 	#[cfg(feature = "anyhow-error")]
 	#[error(transparent)]

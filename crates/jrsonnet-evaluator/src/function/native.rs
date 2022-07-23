@@ -1,5 +1,5 @@
 use super::{arglike::ArgLike, CallLocation, FuncVal};
-use crate::{error::Result, typed::Typed, State};
+use crate::{error::Result, typed::Typed, Context, State};
 
 pub trait NativeDesc {
 	type Value;
@@ -19,7 +19,8 @@ macro_rules! impl_native_desc {
 				Box::new(move |s: State, $($gen),*| {
 					let val = val.evaluate(
 						s.clone(),
-						s.create_default_context(),
+						// This isn't intended to be used with ArgsDesc
+						Context::default(),
 						CallLocation::native(),
 						&($($gen,)*),
 						true

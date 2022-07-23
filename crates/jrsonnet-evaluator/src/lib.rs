@@ -37,12 +37,13 @@ mod import;
 mod integrations;
 mod map;
 mod obj;
-mod stdlib;
+pub mod stdlib;
 pub mod trace;
 pub mod typed;
 pub mod val;
 
 use std::{
+	any::Any,
 	borrow::Cow,
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
@@ -55,13 +56,12 @@ pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
-use function::{builtin::Builtin, CallLocation, TlaArg};
+use function::{CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
 use jrsonnet_gcmodule::{Cc, Trace};
-use jrsonnet_interner::IBytes;
-pub use jrsonnet_interner::IStr;
+pub use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
@@ -98,19 +98,40 @@ impl LazyBinding {
 	}
 }
 
+/// During import, this trait will be called to create initial context for file
+/// It may initialize global variables, stdlib for example
+pub trait ContextInitializer {
+	fn initialize(&self, state: State, for_file: Source) -> Context;
+
+	/// # Safety
+	///
+	/// For use only in bindings, should not be used elsewhere.
+	/// Implementations which are not intended to be used in bindings
+	/// should panic on call to this method.
+	unsafe fn as_any(&self) -> &dyn Any;
+}
+
+/// Context initializer, which adds noth
+pub struct DummyContextInitializer;
+impl ContextInitializer for DummyContextInitializer {
+	fn initialize(&self, _state: State, _for_file: Source) -> Context {
+		Context::default()
+	}
+	unsafe fn as_any(&self) -> &dyn Any {
+		panic!("`as_any(&self)` is not supported by dummy initializer")
+	}
+}
+
 pub struct EvaluationSettings {
 	/// Limits recursion by limiting the number of stack frames
 	pub max_stack: usize,
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
-	/// Used for s`td.extVar`
-	pub ext_vars: HashMap<IStr, TlaArg>,
-	/// Used for ext.native
-	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
 	/// TLA vars
 	pub tla_vars: HashMap<IStr, TlaArg>,
-	/// Global variables are inserted in default context
-	pub globals: HashMap<IStr, Val>,
+	/// Context initializer, which will be used for imports and everything
+	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
+	pub context_initializer: Box<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: Box<dyn ImportResolver>,
 	/// Used in manifestification functions
@@ -123,9 +144,7 @@ impl Default for EvaluationSettings {
 		Self {
 			max_stack: 200,
 			max_trace: 20,
-			globals: HashMap::default(),
-			ext_vars: HashMap::default(),
-			ext_natives: HashMap::default(),
+			context_initializer: Box::new(DummyContextInitializer),
 			tla_vars: HashMap::default(),
 			import_resolver: Box::new(DummyImportResolver),
 			manifest_format: ManifestFormat::Json {
@@ -152,7 +171,8 @@ struct EvaluationData {
 
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
 	files: GcHashMap<PathBuf, FileData>,
-	/// Contains tla arguments and others, which aren't needed to be obtained by name
+	/// Contains tla arguments and others, which aren't needed to be obtained by name, however may be used for receiving source
+	/// TODO: look into nix approach, storing source code in `Source` object
 	volatile_files: GcHashMap<String, String>,
 }
 struct FileData {
@@ -333,7 +353,7 @@ impl State {
 					},
 				)
 				.map_err(|e| ImportSyntaxError {
-					path: file_name,
+					path: file_name.clone(),
 					source_code: code.clone(),
 					error: Box::new(e),
 				})?,
@@ -346,7 +366,11 @@ impl State {
 		file.evaluating = true;
 		// Dropping file here, as it borrows data, which may be used in evaluation
 		drop(data);
-		let res = evaluate(self.clone(), self.create_default_context(), &parsed);
+		let res = evaluate(
+			self.clone(),
+			self.create_default_context(file_name),
+			&parsed,
+		);
 
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
@@ -391,26 +415,11 @@ impl State {
 			column,
 		)
 	}
-	/// Adds standard library global variable (std) to this evaluator
-	pub fn with_stdlib(&self) -> &Self {
-		let val = evaluate(
-			self.clone(),
-			self.create_default_context(),
-			&stdlib::get_parsed_stdlib(),
-		)
-		.expect("std should not fail");
-		self.settings_mut().globals.insert("std".into(), val);
-		self
-	}
 
 	/// Creates context with all passed global variables
-	pub fn create_default_context(&self) -> Context {
-		let globals = &self.settings().globals;
-		let mut new_bindings = GcHashMap::with_capacity(globals.len());
-		for (name, value) in globals.iter() {
-			new_bindings.insert(name.clone(), Thunk::evaluated(value.clone()));
-		}
-		Context::new().extend(new_bindings, None, None, None)
+	pub fn create_default_context(&self, source: Source) -> Context {
+		let context_initializer = &self.settings().context_initializer;
+		context_initializer.initialize(self.clone(), source)
 	}
 
 	/// Executes code creating a new stack frame
@@ -545,7 +554,7 @@ impl State {
 				|| {
 					func.evaluate(
 						self.clone(),
-						self.create_default_context(),
+						self.create_default_context(Source::new_virtual(Cow::Borrowed("<tla>"))),
 						CallLocation::native(),
 						&self.settings().tla_vars,
 						true,
@@ -585,48 +594,17 @@ impl State {
 			},
 		)
 		.map_err(|e| ImportSyntaxError {
-			path: source,
+			path: source.clone(),
 			source_code: code.clone().into(),
 			error: Box::new(e),
 		})?;
 		self.data_mut().volatile_files.insert(name, code);
-		evaluate(self.clone(), self.create_default_context(), &parsed)
+		evaluate(self.clone(), self.create_default_context(source), &parsed)
 	}
 }
 
 /// Settings utilities
 impl State {
-	pub fn add_ext_var(&self, name: IStr, value: Val) {
-		self.settings_mut()
-			.ext_vars
-			.insert(name, TlaArg::Val(value));
-	}
-	pub fn add_ext_str(&self, name: IStr, value: IStr) {
-		self.settings_mut()
-			.ext_vars
-			.insert(name, TlaArg::String(value));
-	}
-	pub fn add_ext_code(&self, name: &str, code: String) -> Result<()> {
-		let source_name = format!("<extvar:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&ParserSettings {
-				file_name: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			source_code: code.clone().into(),
-			error: Box::new(e),
-		})?;
-		self.data_mut().volatile_files.insert(source_name, code);
-		self.settings_mut()
-			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
-		Ok(())
-	}
-
 	pub fn add_tla(&self, name: IStr, value: Val) {
 		self.settings_mut()
 			.tla_vars
@@ -672,9 +650,8 @@ impl State {
 	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
 		self.settings_mut().import_resolver = resolver;
 	}
-
-	pub fn add_native(&self, name: IStr, cb: Cc<TraceBox<dyn Builtin>>) {
-		self.settings_mut().ext_natives.insert(name, cb);
+	pub fn context_initializer(&self) -> Ref<dyn ContextInitializer> {
+		Ref::map(self.settings(), |s| &*s.context_initializer)
 	}
 
 	pub fn manifest_format(&self) -> ManifestFormat {
