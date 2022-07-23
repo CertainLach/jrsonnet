@@ -87,16 +87,16 @@ checksum = "baf1de4339761588bc0619e3cbc0120ee582ebb74b53b4efbf79117bd2da40fd"
 
 [[package]]
 name = "clap"
-version = "3.1.18"
+version = "3.2.14"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "d2dbdf4bdacb33466e854ce889eee8dfd5729abf7ccd7664d0a2d60cd384440b"
+checksum = "54635806b078b7925d6e36810b1755f2a4b5b4d57560432c1ecf60bcbe10602b"
 dependencies = [
  "atty",
  "bitflags",
  "clap_derive",
  "clap_lex",
  "indexmap",
- "lazy_static",
+ "once_cell",
  "strsim",
  "termcolor",
  "textwrap",
@@ -104,18 +104,18 @@ dependencies = [
 
 [[package]]
 name = "clap_complete"
-version = "3.1.4"
+version = "3.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "da92e6facd8d73c22745a5d3cbb59bdf8e46e3235c923e516527d8e81eec14a4"
+checksum = "ead064480dfc4880a10764488415a97fdd36a4cf1bb022d372f02e8faf8386e1"
 dependencies = [
  "clap",
 ]
 
 [[package]]
 name = "clap_derive"
-version = "3.1.18"
+version = "3.2.7"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "25320346e922cffe59c0bbc5410c8d8784509efb321488971081313cb1e1a33c"
+checksum = "759bf187376e1afa7b85b959e6a664a3e7a95203415dba952ad19139e798f902"
 dependencies = [
  "heck",
  "proc-macro-error",
@@ -126,9 +126,9 @@ dependencies = [
 
 [[package]]
 name = "clap_lex"
-version = "0.2.0"
+version = "0.2.4"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "a37c35f1112dad5e6e0b1adaff798507497a18fceeb30cceb3bae7d1427b9213"
+checksum = "2850f2f5a82cbf437dd5af4d49848fbdfc27c157c3d010345776f952765261c5"
 dependencies = [
  "os_str_bytes",
 ]
@@ -221,6 +221,7 @@ dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
  "jrsonnet-parser",
+ "jrsonnet-stdlib",
 ]
 
 [[package]]
@@ -229,21 +230,17 @@ version = "0.4.2"
 dependencies = [
  "annotate-snippets",
  "anyhow",
- "base64",
  "bincode",
  "hashbrown 0.12.1",
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
  "jrsonnet-macros",
  "jrsonnet-parser",
- "jrsonnet-stdlib",
  "jrsonnet-types",
- "md5",
  "pathdiff",
  "rustc-hash",
  "serde",
  "serde_json",
- "serde_yaml_with_quirks",
  "static_assertions",
  "strsim",
  "thiserror",
@@ -304,6 +301,18 @@ dependencies = [
 [[package]]
 name = "jrsonnet-stdlib"
 version = "0.4.2"
+dependencies = [
+ "base64",
+ "bincode",
+ "jrsonnet-evaluator",
+ "jrsonnet-gcmodule",
+ "jrsonnet-macros",
+ "jrsonnet-parser",
+ "md5",
+ "serde",
+ "serde_json",
+ "serde_yaml_with_quirks",
+]
 
 [[package]]
 name = "jrsonnet-types"
@@ -320,13 +329,8 @@ dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
  "jrsonnet-parser",
+ "jrsonnet-stdlib",
 ]
-
-[[package]]
-name = "lazy_static"
-version = "1.4.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e2abad23fbc42b3700f2f279844dc832adb2b2eb069b2df918f455c4e18cc646"
 
 [[package]]
 name = "libc"
@@ -336,9 +340,9 @@ checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "linked-hash-map"
-version = "0.5.4"
+version = "0.5.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "7fb9b38af92608140b86b693604b9ffcc5824240a484d1ecd4795bacb2fe88f3"
+checksum = "0717cef1bc8b636c6e1c1bbdefc09e6322da8a9321966e8928ef80d20f7f770f"
 
 [[package]]
 name = "lock_api"
@@ -531,9 +535,9 @@ dependencies = [
 
 [[package]]
 name = "serde_json"
-version = "1.0.81"
+version = "1.0.82"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "9b7ce2b32a1aed03c558dc61a5cd328f15aff2dbc17daad8fb8af04d2100e15c"
+checksum = "82c2c1fdcd807d1098552c5b9a36e425e42e9fbd7c6a37a8425f390f781f7fa7"
 dependencies = [
  "indexmap",
  "itoa",
