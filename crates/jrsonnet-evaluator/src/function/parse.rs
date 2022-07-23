@@ -48,7 +48,10 @@ pub fn parse_function_call(
 ) -> Result<Context> {
 	let mut passed_args = GcHashMap::with_capacity(params.len());
 	if args.unnamed_len() > params.len() {
-		throw!(TooManyArgsFunctionHas(params.len()))
+		throw!(TooManyArgsFunctionHas(
+			params.len(),
+			params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
+		))
 	}
 
 	let mut filled_named = 0;
@@ -126,7 +129,8 @@ pub fn parse_function_call(
 							.0
 							.clone()
 							.name()
-							.unwrap_or_else(|| "<destruct>".into())
+							.unwrap_or_else(|| "<destruct>".into()),
+						params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
 					));
 				}
 			}
@@ -159,7 +163,13 @@ pub fn parse_builtin_call(
 ) -> Result<GcHashMap<BuiltinParamName, Thunk<Val>>> {
 	let mut passed_args = GcHashMap::with_capacity(params.len());
 	if args.unnamed_len() > params.len() {
-		throw!(TooManyArgsFunctionHas(params.len()))
+		throw!(TooManyArgsFunctionHas(
+			params.len(),
+			params
+				.iter()
+				.map(|p| (Some(p.name.as_ref().into()), p.has_default))
+				.collect()
+		))
 	}
 
 	let mut filled_args = 0;
@@ -202,7 +212,13 @@ pub fn parse_builtin_call(
 					}
 				});
 				if !found {
-					throw!(FunctionParameterNotBoundInCall(param.name.clone().into()));
+					throw!(FunctionParameterNotBoundInCall(
+						param.name.clone().into(),
+						params
+							.iter()
+							.map(|p| (Some(p.name.as_ref().into()), p.has_default))
+							.collect()
+					));
 				}
 			}
 			unreachable!();
@@ -215,11 +231,15 @@ pub fn parse_builtin_call(
 /// and with unbound values causing error to be returned
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
 	#[derive(Trace)]
-	struct DependsOnUnbound(IStr);
+	struct DependsOnUnbound(IStr, ParamsDesc);
 	impl ThunkValue for DependsOnUnbound {
 		type Output = Val;
 		fn get(self: Box<Self>, _: State) -> Result<Val> {
-			Err(FunctionParameterNotBoundInCall(self.0.clone()).into())
+			Err(FunctionParameterNotBoundInCall(
+				self.0.clone(),
+				self.1.iter().map(|p| (p.0.name(), p.1.is_some())).collect(),
+			)
+			.into())
 		}
 	}
 
@@ -243,7 +263,8 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 			destruct(
 				&param.0,
 				Thunk::new(tb!(DependsOnUnbound(
-					param.0.name().unwrap_or_else(|| "<destruct>".into())
+					param.0.name().unwrap_or_else(|| "<destruct>".into()),
+					params.clone()
 				))),
 				fctx.clone(),
 				&mut bindings,

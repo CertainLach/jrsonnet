@@ -32,6 +32,31 @@ fn format_found(list: &[IStr], what: &str) -> String {
 	out
 }
 
+fn format_signature(sig: &FunctionSignature) -> String {
+	let mut out = String::new();
+	out.push_str("\nFunction has the following signature: ");
+	out.push('(');
+	if sig.is_empty() {
+		out.push_str("/*no arguments*/");
+	} else {
+		for (i, (name, has_default)) in sig.iter().enumerate() {
+			if i != 0 {
+				out.push_str(", ");
+			}
+			if let Some(name) = name {
+				out.push_str(name);
+			} else {
+				out.push_str("<unnamed>");
+			}
+			if *has_default {
+				out.push_str(" = <default>");
+			}
+		}
+	}
+	out.push(')');
+	out
+}
+
 const fn format_empty_str(str: &str) -> &str {
 	if str.is_empty() {
 		"\"\" (empty string)"
@@ -39,6 +64,8 @@ const fn format_empty_str(str: &str) -> &str {
 		str
 	}
 }
+
+type FunctionSignature = Vec<(Option<IStr>, bool)>;
 
 #[derive(Error, Debug, Clone, Trace)]
 pub enum Error {
@@ -84,10 +111,10 @@ pub enum Error {
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}")]
-	TooManyArgsFunctionHas(usize),
-	#[error("function argument is not passed: {0}")]
-	FunctionParameterNotBoundInCall(IStr),
+	#[error("too many args, function has {0}{}", format_signature(.1))]
+	TooManyArgsFunctionHas(usize, FunctionSignature),
+	#[error("function argument is not passed: {0}{}", format_signature(.1))]
+	FunctionParameterNotBoundInCall(IStr, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),
