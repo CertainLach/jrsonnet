@@ -252,10 +252,6 @@ parser! {
 		pub rule expr_basic(s: &ParserSettings) -> Expr
 			= literal(s)
 
-			/ quiet!{"$intrinsicThisFile" {Expr::IntrinsicThisFile}}
-			/ quiet!{"$intrinsicId" {Expr::IntrinsicId}}
-			/ quiet!{"$intrinsic(" name:id() ")" {Expr::Intrinsic(name)}}
-
 			/ string_expr(s) / number_expr(s)
 			/ array_expr(s)
 			/ obj_expr(s)

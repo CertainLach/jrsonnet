@@ -341,12 +341,6 @@ pub enum Expr {
 	Index(LocExpr, LocExpr),
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
-	/// std.thisFile
-	IntrinsicThisFile,
-	/// std.id,
-	IntrinsicId,
-	/// std.primitiveEquals
-	Intrinsic(IStr),
 	/// if true == false then 1 else 2
 	IfElse {
 		cond: IfSpecData,

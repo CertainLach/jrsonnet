@@ -51,12 +51,6 @@ impl Source {
 	pub fn short_display(&self) -> ShortDisplay {
 		ShortDisplay(self.clone())
 	}
-	pub fn full_path(&self) -> String {
-		match self.inner() {
-			Inner::Real(r) => r.display().to_string(),
-			Inner::Virtual(v) => v.to_string(),
-		}
-	}
 
 	/// Returns None if file is virtual
 	pub fn path(&self) -> Option<&Path> {
