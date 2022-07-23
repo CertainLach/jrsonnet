@@ -2,61 +2,10 @@
   local std = self,
   local id = std.id,
 
-  # Magic legacy field
-  thisFile:: $intrinsicThisFile,
-  id:: $intrinsicId,
-
-  # Those functions aren't normally located in stdlib
-  length:: $intrinsic(length),
-  type:: $intrinsic(type),
-  makeArray:: $intrinsic(makeArray),
-  codepoint:: $intrinsic(codepoint),
-  objectFieldsEx:: $intrinsic(objectFieldsEx),
-  objectHasEx:: $intrinsic(objectHasEx),
-  primitiveEquals:: $intrinsic(primitiveEquals),
-  modulo:: $intrinsic(modulo),
-  floor:: $intrinsic(floor),
-  ceil:: $intrinsic(ceil),
-  extVar:: $intrinsic(extVar),
-  native:: $intrinsic(native),
-  filter:: $intrinsic(filter),
-  char:: $intrinsic(char),
-  encodeUTF8:: $intrinsic(encodeUTF8),
-  decodeUTF8:: $intrinsic(decodeUTF8),
-  md5:: $intrinsic(md5),
-  trace:: $intrinsic(trace),
-  parseJson:: $intrinsic(parseJson),
-  parseYaml:: $intrinsic(parseYaml),
-
-  log:: $intrinsic(log),
-  pow:: $intrinsic(pow),
-  sqrt:: $intrinsic(sqrt),
-
-  sin:: $intrinsic(sin),
-  cos:: $intrinsic(cos),
-  tan:: $intrinsic(tan),
-  asin:: $intrinsic(asin),
-  acos:: $intrinsic(acos),
-  atan:: $intrinsic(atan),
-
-  exp:: $intrinsic(exp),
-  mantissa:: $intrinsic(mantissa),
-  exponent:: $intrinsic(exponent),
-
-  any:: $intrinsic(any),
-  all:: $intrinsic(all),
-
-  isString(v):: std.type(v) == 'string',
-  isNumber(v):: std.type(v) == 'number',
-  isBoolean(v):: std.type(v) == 'boolean',
-  isObject(v):: std.type(v) == 'object',
-  isArray(v):: std.type(v) == 'array',
-  isFunction(v):: std.type(v) == 'function',
+  thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support. This will slow down stdlib caching a bit, though',
 
   toString(a)::
     if std.type(a) == 'string' then a else '' + a,
-
-  substr:: $intrinsic(substr),
 
   startsWith(a, b)::
     if std.length(a) < std.length(b) then
@@ -127,32 +76,12 @@
 
   split(str, c):: std.splitLimit(str, c, -1),
 
-  splitLimit:: $intrinsic(splitLimit),
-
-  strReplace:: $intrinsic(strReplace),
-
-  asciiUpper:: $intrinsic(asciiUpper),
-
-  asciiLower:: $intrinsic(asciiLower),
-
-  range:: $intrinsic(range),
-
   repeat(what, count)::
     local joiner =
       if std.isString(what) then ''
       else if std.isArray(what) then []
       else error 'std.repeat first argument must be an array or a string';
     std.join(joiner, std.makeArray(count, function(i) what)),
-
-  slice:: $intrinsic(slice),
-
-  member:: $intrinsic(member),
-
-  count:: $intrinsic(count),
-
-  mod:: $intrinsic(mod),
-
-  map:: $intrinsic(map),
 
   mapWithIndex(func, arr)::
     if !std.isFunction(func) then
@@ -170,10 +99,6 @@
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
 
-  flatMap:: $intrinsic(flatMap),
-
-  join:: $intrinsic(join),
-
   lines(arr)::
     std.join('\n', arr + ['']),
 
@@ -184,13 +109,6 @@
       std.join('', [std.deepJoin(x) for x in arr])
     else
       error 'Expected string or array, got %s' % std.type(arr),
-
-
-  format:: $intrinsic(format),
-
-  foldr:: $intrinsic(foldr),
-
-  foldl:: $intrinsic(foldl),
 
   filterMap(filter_func, map_func, arr)::
     if !std.isFunction(filter_func) then
@@ -350,8 +268,6 @@
     else
       error 'TOML body must be an object. Got ' + std.type(value),
 
-  escapeStringJson:: $intrinsic(escapeStringJson),
-
   escapeStringPython(str)::
     std.escapeStringJson(str),
 
@@ -376,10 +292,6 @@
   manifestJson(value):: std.manifestJsonEx(value, '    ') tailstrict,
 
   manifestJsonMinified(value):: std.manifestJsonEx(value, '', '', ':'),
-
-  manifestJsonEx:: $intrinsic(manifestJsonEx),
-
-  manifestYamlDoc:: $intrinsic(manifestYamlDoc),
 
   manifestYamlStream(value, indent_array_in_object=false, c_document_end=true)::
     if !std.isArray(value) then
@@ -433,19 +345,6 @@
           std.deepJoin(['<', tag, attrs_str, '>', [aux(x) for x in children], '</', tag, '>']);
 
       aux(value),
-
-  local base64_table = 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/',
-  local base64_inv = { [base64_table[i]]: i for i in std.range(0, 63) },
-
-  base64:: $intrinsic(base64),
-
-  base64DecodeBytes:: $intrinsic(base64DecodeBytes),
-
-  base64Decode:: $intrinsic(base64Decode),
-
-  reverse:: $intrinsic(reverse),
-
-  sort:: $intrinsic(sort),
 
   uniq(arr, keyF=id)::
     local f(a, b) =
@@ -534,7 +433,7 @@
     else
       patch,
 
-  get(o, f, default = null, inc_hidden = true)::
+  get(o, f, default=null, inc_hidden=true)::
     if std.objectHasEx(o, f, inc_hidden) then o[f] else default,
 
   objectFields(o)::
@@ -554,8 +453,6 @@
 
   objectValuesAll(o)::
     [o[k] for k in std.objectFieldsAll(o)],
-
-  equals:: $intrinsic(equals),
 
   resolvePath(f, r)::
     local arr = std.split(f, '/');
