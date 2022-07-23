@@ -774,10 +774,7 @@ pub mod test_format {
 			format_arr(s.clone(), "%+-4o", &[Val::Num(8.0)]).unwrap(),
 			"+10 "
 		);
-		assert_eq!(
-			format_arr(s.clone(), "%+-04o", &[Val::Num(8.0)]).unwrap(),
-			"+10 "
-		);
+		assert_eq!(format_arr(s, "%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
 	}
 
 	#[test]

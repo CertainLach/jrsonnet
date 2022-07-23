@@ -41,7 +41,7 @@ impl ImportResolver for DummyImportResolver {
 	}
 
 	unsafe fn as_any(&self) -> &dyn Any {
-		panic!("`as_any($self)` is not supported by dummy resolver")
+		panic!("`as_any(&self)` is not supported by dummy resolver")
 	}
 }
 #[allow(clippy::use_self)]

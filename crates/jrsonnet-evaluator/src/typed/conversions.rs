@@ -393,6 +393,7 @@ macro_rules! Either {
 	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty) => {Either6<$a, $b, $c, $d, $e, $f>};
 	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty, $g:ty) => {Either7<$a, $b, $c, $d, $e, $f, $g>};
 }
+pub use Either;
 
 pub type MyType = Either![u32, f64, String];
 

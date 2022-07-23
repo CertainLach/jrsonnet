@@ -53,25 +53,25 @@ impl<T: Trace + ?Sized> DerefMut for TraceBox<T> {
 
 impl<T: ?Sized> Borrow<T> for TraceBox<T> {
 	fn borrow(&self) -> &T {
-		&*self.0
+		&self.0
 	}
 }
 
 impl<T: ?Sized> BorrowMut<T> for TraceBox<T> {
 	fn borrow_mut(&mut self) -> &mut T {
-		&mut *self.0
+		&mut self.0
 	}
 }
 
 impl<T: ?Sized> AsRef<T> for TraceBox<T> {
 	fn as_ref(&self) -> &T {
-		&*self.0
+		&self.0
 	}
 }
 
 impl<T: ?Sized> AsMut<T> for TraceBox<T> {
 	fn as_mut(&mut self) -> &mut T {
-		&mut *self.0
+		&mut self.0
 	}
 }
 

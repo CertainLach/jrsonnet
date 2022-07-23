@@ -143,7 +143,7 @@ impl ImportResolver for NativeImportResolver {
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, v: *const c_char) {
 	let cstr = CStr::from_ptr(v);
 	let path = PathBuf::from(cstr.to_str().unwrap());
-	let any_resolver = &vm.settings().import_resolver;
+	let any_resolver = vm.import_resolver();
 	let resolver = any_resolver
 		.as_any()
 		.downcast_ref::<NativeImportResolver>()
