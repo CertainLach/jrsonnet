@@ -11,7 +11,9 @@ use crate::{
 	stdlib::manifest::{
 		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
 	},
-	throw, ObjValue, Result, State, Unbound, WeakObjValue,
+	throw,
+	typed::BoundedUsize,
+	ObjValue, Result, State, Unbound, WeakObjValue,
 };
 
 pub trait ThunkValue: Trace {
@@ -459,6 +461,51 @@ pub enum IndexableVal {
 	Str(IStr),
 	Arr(ArrValue),
 }
+impl IndexableVal {
+	pub fn slice(
+		self,
+		index: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+		end: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+		step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
+	) -> Result<Self> {
+		match &self {
+			IndexableVal::Str(s) => {
+				let index = index.as_deref().copied().unwrap_or(0);
+				let end = end.as_deref().copied().unwrap_or(usize::MAX);
+				let step = step.as_deref().copied().unwrap_or(1);
+
+				if index >= end {
+					return Ok(Self::Str("".into()));
+				}
+
+				Ok(Self::Str(
+					(s.chars()
+						.skip(index)
+						.take(end - index)
+						.step_by(step)
+						.collect::<String>())
+					.into(),
+				))
+			}
+			IndexableVal::Arr(arr) => {
+				let index = index.as_deref().copied().unwrap_or(0);
+				let end = end.as_deref().copied().unwrap_or(usize::MAX).min(arr.len());
+				let step = step.as_deref().copied().unwrap_or(1);
+
+				if index >= end {
+					return Ok(Self::Arr(ArrValue::new_eager()));
+				}
+
+				Ok(Self::Arr(ArrValue::Slice(Box::new(Slice {
+					inner: arr.clone(),
+					from: index as u32,
+					to: end as u32,
+					step: step as u32,
+				}))))
+			}
+		}
+	}
+}
 
 #[derive(Debug, Clone, Trace)]
 pub enum Val {
@@ -469,6 +516,15 @@ pub enum Val {
 	Arr(ArrValue),
 	Obj(ObjValue),
 	Func(FuncVal),
+}
+
+impl From<IndexableVal> for Val {
+	fn from(v: IndexableVal) -> Self {
+		match v {
+			IndexableVal::Str(s) => Self::Str(s),
+			IndexableVal::Arr(a) => Self::Arr(a),
+		}
+	}
 }
 
 #[cfg(target_pointer_width = "64")]
