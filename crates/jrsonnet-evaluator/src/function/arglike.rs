@@ -273,7 +273,8 @@ macro_rules! impl_args_like {
 	}
 }
 impl_args_like! {
-	0usize; A @ B C D E F G H I J K L
+	// First argument is already in position, so count starts from 1
+	1usize; A @ B C D E F G H I J K L
 }
 
 impl ArgsLike for () {
