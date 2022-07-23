@@ -84,7 +84,7 @@ impl Inner {
 		unsafe { Self::new_raw(str.as_bytes(), true) }
 	}
 
-	pub fn as_slice(&self) -> &[u8] {
+	pub const fn as_slice(&self) -> &[u8] {
 		let header = Self::header(self);
 		// SAFETY: data is not null, and it is correctly initialized
 		let size = unsafe { (*header).size };
@@ -99,7 +99,7 @@ impl Inner {
 
 	/// # Safety
 	/// Data should be checked to be utf8 via [`check_utf8`] first
-	pub unsafe fn as_str_unchecked(&self) -> &str {
+	pub const unsafe fn as_str_unchecked(&self) -> &str {
 		// SAFETY: data is checked
 		unsafe { str::from_utf8_unchecked(self.as_slice()) }
 	}
