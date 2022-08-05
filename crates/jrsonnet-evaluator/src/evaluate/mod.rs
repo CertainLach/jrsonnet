@@ -416,13 +416,13 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::This) => {
 			Val::Obj(ctx.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
 		}
-		Literal(LiteralType::Super) => {
-			Val::Obj(ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
+		Literal(LiteralType::Super) => Val::Obj(
+			ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
 				ctx.this()
 					.clone()
 					.expect("if super exists - then this should to"),
-			))
-		}
+			),
+		),
 		Literal(LiteralType::Dollar) => {
 			Val::Obj(ctx.dollar().clone().ok_or(NoTopLevelObjectFound)?)
 		}
@@ -643,10 +643,10 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				Import(_) => s.push(
 					CallLocation::new(loc),
 					|| format!("import {:?}", path.clone()),
-					|| s.import(resolved_path.clone()),
+					|| s.import_resolved(resolved_path),
 				)?,
-				ImportStr(_) => Val::Str(s.import_str(resolved_path)?),
-				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(resolved_path)?)),
+				ImportStr(_) => Val::Str(s.import_resolved_str(resolved_path)?),
+				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_resolved_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}
 		}

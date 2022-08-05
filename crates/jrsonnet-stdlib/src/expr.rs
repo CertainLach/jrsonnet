@@ -15,7 +15,7 @@ pub fn stdlib_expr() -> LocExpr {
 	jrsonnet_parser::parse(
 		STDLIB_STR,
 		&ParserSettings {
-			file_name: Source::new_virtual(Cow::Borrowed("<std>")),
+			file_name: Source::new_virtual(Cow::Borrowed("<std>"), STDLIB_STR.into()),
 		},
 	)
 	.unwrap()

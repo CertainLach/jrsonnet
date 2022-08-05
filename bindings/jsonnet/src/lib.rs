@@ -10,9 +10,9 @@ pub mod vars_tlas;
 
 use std::{
 	alloc::Layout,
+	env,
 	ffi::{CStr, CString},
 	os::raw::{c_char, c_double, c_int, c_uint},
-	path::PathBuf,
 };
 
 use import::NativeImportResolver;
@@ -112,7 +112,10 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 ) -> *const c_char {
 	let filename = CStr::from_ptr(filename);
 	match vm
-		.import(PathBuf::from(filename.to_str().unwrap()))
+		.import(
+			&env::current_dir().expect("cwd"),
+			filename.to_str().unwrap(),
+		)
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest(v))
 	{
@@ -141,10 +144,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	let filename = CStr::from_ptr(filename);
 	let snippet = CStr::from_ptr(snippet);
 	match vm
-		.evaluate_snippet(
-			filename.to_str().unwrap().into(),
-			snippet.to_str().unwrap().into(),
-		)
+		.evaluate_snippet(filename.to_str().unwrap().into(), snippet.to_str().unwrap())
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest(v))
 	{
@@ -186,7 +186,10 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 ) -> *const c_char {
 	let filename = CStr::from_ptr(filename);
 	match vm
-		.import(PathBuf::from(filename.to_str().unwrap()))
+		.import(
+			&env::current_dir().expect("cwd"),
+			filename.to_str().unwrap(),
+		)
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest_multi(v))
 	{
@@ -213,10 +216,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	let filename = CStr::from_ptr(filename);
 	let snippet = CStr::from_ptr(snippet);
 	match vm
-		.evaluate_snippet(
-			filename.to_str().unwrap().into(),
-			snippet.to_str().unwrap().into(),
-		)
+		.evaluate_snippet(filename.to_str().unwrap().into(), snippet.to_str().unwrap())
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest_multi(v))
 	{
@@ -256,7 +256,10 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 ) -> *const c_char {
 	let filename = CStr::from_ptr(filename);
 	match vm
-		.import(PathBuf::from(filename.to_str().unwrap()))
+		.import(
+			&env::current_dir().expect("cwd"),
+			filename.to_str().unwrap(),
+		)
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest_stream(v))
 	{
@@ -283,10 +286,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 	let filename = CStr::from_ptr(filename);
 	let snippet = CStr::from_ptr(snippet);
 	match vm
-		.evaluate_snippet(
-			filename.to_str().unwrap().into(),
-			snippet.to_str().unwrap().into(),
-		)
+		.evaluate_snippet(filename.to_str().unwrap().into(), snippet.to_str().unwrap())
 		.and_then(|v| vm.with_tla(v))
 		.and_then(|v| vm.manifest_stream(v))
 	{

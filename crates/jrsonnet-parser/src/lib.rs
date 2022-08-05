@@ -7,9 +7,11 @@ mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
 pub use peg;
+mod location;
 mod source;
 mod unescape;
-pub use source::Source;
+pub use location::CodeLocation;
+pub use source::{Source, SourcePath};
 
 pub struct ParserSettings {
 	pub file_name: Source,

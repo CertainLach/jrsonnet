@@ -1,9 +1,6 @@
-mod location;
-
 use std::path::{Path, PathBuf};
 
-use jrsonnet_parser::Source;
-pub use location::*;
+use jrsonnet_parser::{CodeLocation, Source};
 
 use crate::{error::Error, LocError, State};
 
@@ -84,31 +81,27 @@ impl TraceFormat for CompactFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		s: &State,
+		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		if let Error::ImportSyntaxError {
-			path,
-			source_code,
-			error,
-		} = error.error()
-		{
+		if let Error::ImportSyntaxError { path, error } = error.error() {
 			use std::fmt::Write;
 
 			writeln!(out)?;
-			let mut n = match path.repr() {
-				Ok(r) => self.resolver.resolve(r),
-				Err(v) => v.to_string(),
+			let mut n = match path.path() {
+				Some(r) => self.resolver.resolve(r),
+				None => path.short_display().to_string(),
 			};
 			let mut offset = error.location.offset;
-			let is_eof = if offset >= source_code.len() {
-				offset = source_code.len().saturating_sub(1);
+			let is_eof = if offset >= path.code().len() {
+				offset = path.code().len().saturating_sub(1);
 				true
 			} else {
 				false
 			};
-			let mut location = offset_to_location(source_code, &[offset as u32])
+			let mut location = path
+				.map_source_locations(&[offset as u32])
 				.into_iter()
 				.next()
 				.unwrap();
@@ -129,13 +122,12 @@ impl TraceFormat for CompactFormat {
 				use std::fmt::Write;
 				#[allow(clippy::option_if_let_else)]
 				if let Some(location) = location {
-					let mut resolved_path = match location.0.repr() {
-						Ok(r) => self.resolver.resolve(r),
-						Err(v) => v.to_string(),
+					let mut resolved_path = match location.0.path() {
+						Some(r) => self.resolver.resolve(r),
+						None => location.0.short_display().to_string(),
 					};
 					// TODO: Process all trace elements first
-					let location =
-						s.map_source_locations(location.0.clone(), &[location.1, location.2]);
+					let location = location.0.map_source_locations(&[location.1, location.2]);
 					write!(resolved_path, ":").unwrap();
 					print_code_location(&mut resolved_path, &location[0], &location[1]).unwrap();
 					write!(resolved_path, ":").unwrap();
@@ -176,7 +168,7 @@ impl TraceFormat for JsFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		s: &State,
+		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -184,10 +176,10 @@ impl TraceFormat for JsFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end = s.map_source_locations(source.0.clone(), &[source.1, source.2]);
-				let resolved_path = match source.0.repr() {
-					Ok(r) => r.display().to_string(),
-					Err(v) => v.to_string(),
+				let start_end = source.0.map_source_locations(&[source.1, source.2]);
+				let resolved_path = match source.0.path() {
+					Some(r) => r.display().to_string(),
+					None => source.0.short_display().to_string(),
 				};
 
 				write!(
@@ -213,19 +205,15 @@ impl TraceFormat for ExplainingFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		s: &State,
+		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		if let Error::ImportSyntaxError {
-			path,
-			source_code,
-			error,
-		} = error.error()
-		{
+		if let Error::ImportSyntaxError { path, error } = error.error() {
 			writeln!(out)?;
 			let offset = error.location.offset;
-			let location = offset_to_location(source_code, &[offset as u32])
+			let location = path
+				.map_source_locations(&[offset as u32])
 				.into_iter()
 				.next()
 				.unwrap();
@@ -234,7 +222,7 @@ impl TraceFormat for ExplainingFormat {
 
 			self.print_snippet(
 				out,
-				source_code,
+				path.code(),
 				path,
 				&location,
 				&end_location,
@@ -246,10 +234,10 @@ impl TraceFormat for ExplainingFormat {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
-				let start_end = s.map_source_locations(source.0.clone(), &[source.1, source.2]);
+				let start_end = source.0.map_source_locations(&[source.1, source.2]);
 				self.print_snippet(
 					out,
-					&s.get_source(source.0.clone()).unwrap(),
+					&source.0.code(),
 					&source.0,
 					&start_end[0],
 					&start_end[1],
@@ -284,9 +272,9 @@ impl ExplainingFormat {
 			.take(end.line_end_offset - end.line_start_offset)
 			.collect();
 
-		let origin = match origin.repr() {
-			Ok(r) => self.resolver.resolve(r),
-			Err(v) => v.to_string(),
+		let origin = match origin.path() {
+			Some(r) => self.resolver.resolve(r),
+			None => origin.short_display().to_string(),
 		};
 		let snippet = Snippet {
 			opt: FormatOptions {

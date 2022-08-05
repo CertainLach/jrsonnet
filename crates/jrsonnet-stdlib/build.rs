@@ -7,7 +7,10 @@ fn main() {
 	let parsed = parse(
 		include_str!("./src/std.jsonnet"),
 		&ParserSettings {
-			file_name: Source::new_virtual(Cow::Borrowed("<std>")),
+			file_name: Source::new_virtual(
+				Cow::Borrowed("<std>"),
+				include_str!("./src/std.jsonnet").into(),
+			),
 		},
 	)
 	.expect("parse");

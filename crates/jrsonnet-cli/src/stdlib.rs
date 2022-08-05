@@ -118,10 +118,10 @@ impl ConfigureState for StdOpts {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
 		for ext in self.ext_code.iter() {
-			ctx.add_ext_code(&ext.name as &str, (&ext.value as &str).into())?;
+			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
 		for ext in self.ext_code_file.iter() {
-			ctx.add_ext_code(&ext.name as &str, (&ext.value as &str).into())?;
+			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
 		s.settings_mut().context_initializer = Box::new(ctx);
 		Ok(())

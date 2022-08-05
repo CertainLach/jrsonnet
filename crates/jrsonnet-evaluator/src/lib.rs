@@ -48,7 +48,7 @@ use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::{self, Debug},
-	path::{Path, PathBuf},
+	path::Path,
 	rc::Rc,
 };
 
@@ -65,7 +65,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
-use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
+use trace::{CompactFormat, TraceFormat};
 pub use val::{ManifestFormat, Thunk, Val};
 
 pub trait Unbound: Trace {
@@ -170,10 +170,7 @@ struct EvaluationData {
 	breakpoints: Breakpoints,
 
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: GcHashMap<PathBuf, FileData>,
-	/// Contains tla arguments and others, which aren't needed to be obtained by name, however may be used for receiving source
-	/// TODO: look into nix approach, storing source code in `Source` object
-	volatile_files: GcHashMap<String, String>,
+	files: GcHashMap<SourcePath, FileData>,
 }
 struct FileData {
 	string: Option<IStr>,
@@ -249,7 +246,8 @@ pub struct EvaluationStateInternals {
 pub struct State(Rc<EvaluationStateInternals>);
 
 impl State {
-	pub fn import_str(&self, path: PathBuf) -> Result<IStr> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -283,7 +281,8 @@ impl State {
 		}
 		Ok(file.string.as_ref().expect("just set").clone())
 	}
-	pub fn import_bin(&self, path: PathBuf) -> Result<IBytes> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved_bin(&self, path: SourcePath) -> Result<IBytes> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -309,7 +308,8 @@ impl State {
 		}
 		Ok(file.bytes.as_ref().expect("just set").clone())
 	}
-	pub fn import(&self, path: PathBuf) -> Result<Val> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved(&self, path: SourcePath) -> Result<Val> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -343,7 +343,8 @@ impl State {
 			);
 		}
 		let code = file.string.as_ref().expect("just set");
-		let file_name = Source::new(path.clone()).expect("resolver should return correct name");
+		let file_name =
+			Source::new(path.clone(), code.clone()).expect("resolver should return correct name");
 		if file.parsed.is_none() {
 			file.parsed = Some(
 				jrsonnet_parser::parse(
@@ -354,7 +355,6 @@ impl State {
 				)
 				.map_err(|e| ImportSyntaxError {
 					path: file_name.clone(),
-					source_code: code.clone(),
 					error: Box::new(e),
 				})?,
 			);
@@ -388,32 +388,9 @@ impl State {
 			Err(e) => Err(e),
 		}
 	}
-
-	pub fn get_source(&self, name: Source) -> Option<String> {
-		let data = self.data();
-		match name.repr() {
-			Ok(real) => data
-				.files
-				.get(real)
-				.and_then(|f| f.string.as_ref())
-				.map(ToString::to_string),
-			Err(e) => data.volatile_files.get(e).map(ToOwned::to_owned),
-		}
-	}
-	pub fn map_source_locations(&self, file: Source, locs: &[u32]) -> Vec<CodeLocation> {
-		offset_to_location(&self.get_source(file).unwrap_or_else(|| "".into()), locs)
-	}
-	pub fn map_from_source_location(
-		&self,
-		file: Source,
-		line: usize,
-		column: usize,
-	) -> Option<usize> {
-		location_to_offset(
-			&self.get_source(file).expect("file not found"),
-			line,
-			column,
-		)
+	pub fn import(&self, from: &Path, path: &str) -> Result<Val> {
+		let resolved = self.resolve_file(from, path)?;
+		self.import_resolved(resolved)
 	}
 
 	/// Creates context with all passed global variables
@@ -554,7 +531,10 @@ impl State {
 				|| {
 					func.evaluate(
 						self.clone(),
-						self.create_default_context(Source::new_virtual(Cow::Borrowed("<tla>"))),
+						self.create_default_context(Source::new_virtual(
+							Cow::Borrowed("<tla>"),
+							IStr::empty(),
+						)),
 						CallLocation::native(),
 						&self.settings().tla_vars,
 						true,
@@ -568,9 +548,9 @@ impl State {
 
 /// Internals
 impl State {
-	fn data(&self) -> Ref<EvaluationData> {
-		self.0.data.borrow()
-	}
+	// fn data(&self) -> Ref<EvaluationData> {
+	// 	self.0.data.borrow()
+	// }
 	fn data_mut(&self) -> RefMut<EvaluationData> {
 		self.0.data.borrow_mut()
 	}
@@ -585,8 +565,9 @@ impl State {
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl State {
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet(&self, name: String, code: String) -> Result<Val> {
-		let source = Source::new_virtual(Cow::Owned(name.clone()));
+	pub fn evaluate_snippet(&self, name: String, code: impl Into<IStr>) -> Result<Val> {
+		let code = code.into();
+		let source = Source::new_virtual(Cow::Owned(name), code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
 			&ParserSettings {
@@ -595,10 +576,8 @@ impl State {
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source.clone(),
-			source_code: code.clone().into(),
 			error: Box::new(e),
 		})?;
-		self.data_mut().volatile_files.insert(name, code);
 		evaluate(self.clone(), self.create_default_context(source), &parsed)
 	}
 }
@@ -617,7 +596,7 @@ impl State {
 	}
 	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
 		let source_name = format!("<top-level-arg:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
+		let source = Source::new_virtual(Cow::Owned(source_name.clone()), code.into());
 		let parsed = jrsonnet_parser::parse(
 			code,
 			&ParserSettings {
@@ -626,22 +605,18 @@ impl State {
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source,
-			source_code: code.into(),
 			error: Box::new(e),
 		})?;
-		self.data_mut()
-			.volatile_files
-			.insert(source_name, code.to_owned());
 		self.settings_mut()
 			.tla_vars
 			.insert(name, TlaArg::Code(parsed));
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
+	pub fn resolve_file(&self, from: &Path, path: &str) -> Result<SourcePath> {
 		self.settings()
 			.import_resolver
-			.resolve_file(from, path.as_ref())
+			.resolve_file_relative(from, path.as_ref())
 	}
 
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {

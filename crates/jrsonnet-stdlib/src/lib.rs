@@ -183,10 +183,10 @@ pub trait TracePrinter {
 
 pub struct StdTracePrinter;
 impl TracePrinter for StdTracePrinter {
-	fn print_trace(&self, s: State, loc: CallLocation, value: IStr) {
+	fn print_trace(&self, _s: State, loc: CallLocation, value: IStr) {
 		eprint!("TRACE:");
 		if let Some(loc) = loc.0 {
-			let locs = s.map_source_locations(loc.0.clone(), &[loc.1]);
+			let locs = loc.0.map_source_locations(&[loc.1]);
 			eprint!(" {}:{}", loc.0.short_display(), locs[0].line);
 		}
 		eprintln!(" {}", value);
@@ -212,9 +212,9 @@ impl Default for Settings {
 	}
 }
 
-pub fn extvar_source(name: &str) -> Source {
+pub fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 	let source_name = format!("<extvar:{}>", name);
-	Source::new_virtual(Cow::Owned(source_name))
+	Source::new_virtual(Cow::Owned(source_name), code.into())
 }
 
 pub struct ContextInitializer {
@@ -260,8 +260,9 @@ impl ContextInitializer {
 			.ext_vars
 			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_ext_code(&self, name: &str, code: String) -> Result<()> {
-		let source = extvar_source(name);
+	pub fn add_ext_code(&self, name: &str, code: impl Into<IStr>) -> Result<()> {
+		let code = code.into();
+		let source = extvar_source(name, code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
 			&jrsonnet_parser::ParserSettings {
@@ -270,7 +271,6 @@ impl ContextInitializer {
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source,
-			source_code: code.clone().into(),
 			error: Box::new(e),
 		})?;
 		// self.data_mut().volatile_files.insert(source_name, code);
@@ -297,11 +297,13 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 			.hide()
 			.value(
 				s,
-				Val::Str(match source.repr() {
-					Ok(p) => p.display().to_string().into(),
-					// Virtual files end up as empty strings in std.thisFile
-					Err(_e) => "".into(),
-				}),
+				Val::Str(
+					source
+						.path()
+						.map(|p| p.display().to_string())
+						.unwrap_or_else(String::new)
+						.into(),
+				),
 			)
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = builder.build();
@@ -343,7 +345,7 @@ fn builtin_substr(str: IStr, from: usize, len: usize) -> Result<String> {
 	settings: Rc<RefCell<Settings>>,
 ))]
 fn builtin_ext_var(this: &builtin_ext_var, s: State, x: IStr) -> Result<Any> {
-	let ctx = s.create_default_context(extvar_source(&x));
+	let ctx = s.create_default_context(extvar_source(&x, ""));
 	Ok(Any(this
 		.settings
 		.borrow()

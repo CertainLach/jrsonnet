@@ -32,7 +32,7 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &State, name: *const c_char, value
 		.as_any()
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
-		.add_ext_code(name.to_str().unwrap(), value.to_str().unwrap().into())
+		.add_ext_code(name.to_str().unwrap(), value.to_str().unwrap())
 		.unwrap()
 }
 /// # Safety

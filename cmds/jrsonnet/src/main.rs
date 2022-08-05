@@ -133,14 +133,14 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
-		s.evaluate_snippet("<cmdline>".to_owned(), (&input as &str).into())?
+		s.evaluate_snippet("<cmdline>".to_owned(), &input as &str)?
 	} else if input == "-" {
 		let mut input = Vec::new();
 		std::io::stdin().read_to_end(&mut input)?;
-		let input_str = std::str::from_utf8(&input)?.into();
+		let input_str = std::str::from_utf8(&input)?;
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(s.resolve_file(&current_dir().expect("cwd"), &input)?)?
+		s.import(&current_dir().expect("cwd"), &input)?
 	};
 
 	let val = s.with_tla(val)?;

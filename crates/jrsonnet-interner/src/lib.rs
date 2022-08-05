@@ -33,6 +33,10 @@ impl Trace for IStr {
 
 impl IStr {
 	#[must_use]
+	pub fn empty() -> Self {
+		"".into()
+	}
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		self as &str
 	}

@@ -16,6 +16,7 @@ use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	throw, ImportResolver, State,
 };
+use jrsonnet_parser::SourcePath;
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(
 	ctx: *mut c_void,
@@ -29,10 +30,10 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 pub struct CallbackImportResolver {
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
-	out: RefCell<HashMap<PathBuf, Vec<u8>>>,
+	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
+	fn resolve_file_relative(&self, from: &Path, path: &str) -> Result<SourcePath> {
 		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
 		let rel = CString::new(path).unwrap().into_raw();
 		let found_here: *mut c_char = null_mut();
@@ -61,7 +62,7 @@ impl ImportResolver for CallbackImportResolver {
 		}
 
 		let found_here_raw = unsafe { CStr::from_ptr(found_here) };
-		let found_here_buf = PathBuf::from(found_here_raw.to_str().unwrap());
+		let found_here_buf = SourcePath::Path(PathBuf::from(found_here_raw.to_str().unwrap()));
 		unsafe {
 			let _ = CString::from_raw(found_here);
 		}
@@ -74,7 +75,7 @@ impl ImportResolver for CallbackImportResolver {
 
 		Ok(found_here_buf)
 	}
-	fn load_file_contents(&self, resolved: &Path) -> Result<Vec<u8>> {
+	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
 
@@ -108,24 +109,28 @@ impl NativeImportResolver {
 	}
 }
 impl ImportResolver for NativeImportResolver {
-	fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
+	fn resolve_file_relative(&self, from: &Path, path: &str) -> Result<SourcePath> {
 		let mut new_path = from.to_owned();
 		new_path.push(path);
 		if new_path.exists() {
-			Ok(new_path)
+			Ok(SourcePath::Path(new_path))
 		} else {
 			for library_path in self.library_paths.borrow().iter() {
 				let mut cloned = library_path.clone();
 				cloned.push(path);
 				if cloned.exists() {
-					return Ok(cloned);
+					return Ok(SourcePath::Path(cloned));
 				}
 			}
 			throw!(ImportFileNotFound(from.to_owned(), path.to_owned()))
 		}
 	}
-	fn load_file_contents(&self, id: &Path) -> Result<Vec<u8>> {
-		let mut file = File::open(id).map_err(|_e| ResolvedFileNotFound(id.to_owned()))?;
+	fn load_file_contents(&self, id: &SourcePath) -> Result<Vec<u8>> {
+		let path = match id {
+			SourcePath::Path(path) => path,
+			_ => unreachable!("NativeImportResolver::resolve_file may only return plain paths"),
+		};
+		let mut file = File::open(path).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
 		let mut out = Vec::new();
 		file.read_to_end(&mut out)
 			.map_err(|e| ImportIo(e.to_string()))?;
