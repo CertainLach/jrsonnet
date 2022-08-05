@@ -102,11 +102,13 @@ pub struct GcOpts {
 }
 impl GcOpts {
 	pub fn stats_printer(&self) -> (Option<GcStatsPrinter>, Option<LeakSpace>) {
+		// Constructed structs have side-effects in Drop impl
+		#[allow(clippy::unnecessary_lazy_evaluations)]
 		(
-			self.gc_print_stats.then_some(GcStatsPrinter {
+			self.gc_print_stats.then(|| GcStatsPrinter {
 				collect_before_printing_stats: self.gc_collect_before_printing_stats,
 			}),
-			(!self.gc_collect_on_exit).then_some(LeakSpace {}),
+			(!self.gc_collect_on_exit).then(|| LeakSpace {}),
 		)
 	}
 }
