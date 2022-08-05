@@ -383,13 +383,13 @@ fn builtin_trace(
 	s: State,
 	loc: CallLocation,
 	str: IStr,
-	rest: Any,
+	rest: Thunk<Val>,
 ) -> Result<Any> {
 	this.settings
 		.borrow()
 		.trace_printer
-		.print_trace(s, loc, str);
-	Ok(rest) as Result<Any>
+		.print_trace(s.clone(), loc, str);
+	Ok(Any(rest.evaluate(s)?))
 }
 
 #[builtin]
