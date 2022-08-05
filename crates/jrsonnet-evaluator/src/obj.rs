@@ -109,7 +109,6 @@ pub trait ObjectAssertion: Trace {
 }
 
 // Field => This
-type CacheKey = (IStr, WeakObjValue);
 
 #[derive(Trace)]
 enum CacheValue {
@@ -129,7 +128,7 @@ pub struct ObjValueInternals {
 	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<CacheKey, CacheValue>>,
+	value_cache: RefCell<GcHashMap<IStr, CacheValue>>,
 }
 
 #[derive(Clone, Trace)]
@@ -369,15 +368,7 @@ impl ObjValue {
 
 	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions(s.clone())?;
-		self.get_raw(s, key, self.0.this.clone().unwrap_or_else(|| self.clone()))
-	}
-
-	// pub fn extend_with(self, key: )
-
-	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
-		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
-
-		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
+		if let Some(v) = self.0.value_cache.borrow().get(&key) {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
 				CacheValue::NotFound => None,
@@ -388,26 +379,38 @@ impl ObjValue {
 		self.0
 			.value_cache
 			.borrow_mut()
-			.insert(cache_key.clone(), CacheValue::Pending);
-		let fill_error = |e: LocError| {
-			self.0
-				.value_cache
-				.borrow_mut()
-				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
-			e
-		};
-		let value = match (self.0.this_entries.get(&key), &self.0.sup) {
-			(Some(k), None) => Ok(Some(
-				self.evaluate_this(s, k, real_this).map_err(fill_error)?,
-			)),
+			.insert(key.clone(), CacheValue::Pending);
+		let value = self
+			.get_raw(
+				s,
+				key.clone(),
+				self.0.this.clone().unwrap_or_else(|| self.clone()),
+			)
+			.map_err(|e| {
+				self.0
+					.value_cache
+					.borrow_mut()
+					.insert(key.clone(), CacheValue::Errored(e.clone()));
+				e
+			})?;
+		self.0.value_cache.borrow_mut().insert(
+			key,
+			match &value {
+				Some(v) => CacheValue::Cached(v.clone()),
+				None => CacheValue::NotFound,
+			},
+		);
+		Ok(value)
+	}
+
+	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
+		match (self.0.this_entries.get(&key), &self.0.sup) {
+			(Some(k), None) => Ok(Some(self.evaluate_this(s, k, real_this)?)),
 			(Some(k), Some(super_obj)) => {
-				let our = self
-					.evaluate_this(s.clone(), k, real_this.clone())
-					.map_err(fill_error)?;
+				let our = self.evaluate_this(s.clone(), k, real_this.clone())?;
 				if k.add {
 					super_obj
-						.get_raw(s.clone(), key, real_this)
-						.map_err(fill_error)?
+						.get_raw(s.clone(), key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
 							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
 						})
@@ -418,15 +421,6 @@ impl ObjValue {
 			(None, Some(super_obj)) => super_obj.get_raw(s, key, real_this),
 			(None, None) => Ok(None),
 		}
-		.map_err(fill_error)?;
-		self.0.value_cache.borrow_mut().insert(
-			cache_key,
-			match &value {
-				Some(v) => CacheValue::Cached(v.clone()),
-				None => CacheValue::NotFound,
-			},
-		);
-		Ok(value)
 	}
 	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: Self) -> Result<Val> {
 		v.invoke
