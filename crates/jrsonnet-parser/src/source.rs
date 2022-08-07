@@ -9,9 +9,12 @@ use jrsonnet_gcmodule::{Trace, Tracer};
 use jrsonnet_interner::IStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
+#[cfg(feature = "structdump")]
+use structdump::Codegen;
 
 use crate::location::{location_to_offset, offset_to_location, CodeLocation};
 
+#[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(PartialEq, Eq, Debug, Hash, Clone)]
 pub enum SourcePath {
@@ -39,9 +42,10 @@ impl SourcePath {
 
 /// Either real file, or virtual
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
+#[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Debug)]
-pub struct Source(Rc<(SourcePath, IStr)>);
+pub struct Source(pub Rc<(SourcePath, IStr)>);
 static_assertions::assert_eq_size!(Source, *const ());
 
 impl Trace for Source {

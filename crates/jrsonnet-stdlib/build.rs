@@ -1,7 +1,7 @@
 use std::{borrow::Cow, env, fs::File, io::Write, path::Path};
 
-use bincode::serialize;
 use jrsonnet_parser::{parse, ParserSettings, Source};
+use structdump::CodegenResult;
 
 fn main() {
 	let parsed = parse(
@@ -15,10 +15,15 @@ fn main() {
 	)
 	.expect("parse");
 
+	let mut out = CodegenResult::default();
+
+	let v = out.codegen(&parsed, true);
+
 	{
 		let out_dir = env::var("OUT_DIR").unwrap();
-		let dest_path = Path::new(&out_dir).join("stdlib.bincode");
+		let dest_path = Path::new(&out_dir).join("stdlib.rs");
 		let mut f = File::create(&dest_path).unwrap();
-		f.write_all(&serialize(&parsed).unwrap()).unwrap();
+		f.write_all(v.to_string().replace(';', ";\n").as_bytes())
+			.unwrap();
 	}
 }
