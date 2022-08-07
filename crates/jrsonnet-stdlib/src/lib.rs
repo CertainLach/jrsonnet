@@ -465,6 +465,7 @@ fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 	Ok(out.into())
 }
 
+#[allow(clippy::comparison_chain)]
 #[builtin]
 fn builtin_starts_with(
 	s: State,
@@ -497,6 +498,7 @@ fn builtin_starts_with(
 	})
 }
 
+#[allow(clippy::comparison_chain)]
 #[builtin]
 fn builtin_ends_with(
 	s: State,

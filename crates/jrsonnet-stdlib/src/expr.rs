@@ -1,11 +1,9 @@
 use jrsonnet_parser::LocExpr;
 
 mod structdump_import {
-	pub(super) use std::{borrow::Cow, rc::Rc};
+	pub(super) use std::{borrow::Cow, option::Option, rc::Rc, vec};
 
 	pub(super) use jrsonnet_parser::*;
-	pub(super) use vec;
-	pub(super) use Option;
 }
 
 pub fn stdlib_expr() -> LocExpr {

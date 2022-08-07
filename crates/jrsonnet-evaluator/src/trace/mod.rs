@@ -237,7 +237,7 @@ impl TraceFormat for ExplainingFormat {
 				let start_end = source.0.map_source_locations(&[source.1, source.2]);
 				self.print_snippet(
 					out,
-					&source.0.code(),
+					source.0.code(),
 					&source.0,
 					&start_end[0],
 					&start_end[1],

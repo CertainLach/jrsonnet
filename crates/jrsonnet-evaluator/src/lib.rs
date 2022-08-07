@@ -596,7 +596,7 @@ impl State {
 	}
 	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
 		let source_name = format!("<top-level-arg:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name.clone()), code.into());
+		let source = Source::new_virtual(Cow::Owned(source_name), code.into());
 		let parsed = jrsonnet_parser::parse(
 			code,
 			&ParserSettings {
