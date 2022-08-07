@@ -9,9 +9,9 @@ use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	function::{builtin::Builtin, ArgLike, CallLocation, FuncVal, TlaArg},
 	gc::TraceBox,
-	tb,
+	tb, throw_runtime,
 	typed::{Any, Either, Either2, Either4, VecVal, M1},
-	val::ArrValue,
+	val::{equals, ArrValue},
 	Context, ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Cc;
@@ -129,6 +129,8 @@ pub fn stdlib_uncached(s: State, settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("asciiUpper".into(), builtin_ascii_upper::INST),
 		("asciiLower".into(), builtin_ascii_lower::INST),
 		("findSubstr".into(), builtin_find_substr::INST),
+		("startsWith".into(), builtin_starts_with::INST),
+		("endsWith".into(), builtin_ends_with::INST),
 	]
 	.iter()
 	.cloned()
@@ -445,4 +447,69 @@ fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 		}
 	}
 	Ok(out.into())
+}
+
+#[builtin]
+fn builtin_starts_with(
+	s: State,
+	a: Either![IStr, ArrValue],
+	b: Either![IStr, ArrValue],
+) -> Result<bool> {
+	Ok(match (a, b) {
+		(Either2::A(a), Either2::A(b)) => a.starts_with(b.as_str()),
+		(Either2::B(a), Either2::B(b)) => {
+			if b.len() > a.len() {
+				return Ok(false);
+			} else if b.len() == a.len() {
+				return equals(s, &Val::Arr(a), &Val::Arr(b));
+			} else {
+				for (a, b) in a
+					.slice(None, Some(b.len()), None)
+					.iter(s.clone())
+					.zip(b.iter(s.clone()))
+				{
+					let a = a?;
+					let b = b?;
+					if !equals(s.clone(), &a, &b)? {
+						return Ok(false);
+					}
+				}
+				true
+			}
+		}
+		_ => throw_runtime!("both arguments should be of the same type"),
+	})
+}
+
+#[builtin]
+fn builtin_ends_with(
+	s: State,
+	a: Either![IStr, ArrValue],
+	b: Either![IStr, ArrValue],
+) -> Result<bool> {
+	Ok(match (a, b) {
+		(Either2::A(a), Either2::A(b)) => a.ends_with(b.as_str()),
+		(Either2::B(a), Either2::B(b)) => {
+			if b.len() > a.len() {
+				return Ok(false);
+			} else if b.len() == a.len() {
+				return equals(s, &Val::Arr(a), &Val::Arr(b));
+			} else {
+				let a_len = a.len();
+				for (a, b) in a
+					.slice(Some(a_len - b.len()), None, None)
+					.iter(s.clone())
+					.zip(b.iter(s.clone()))
+				{
+					let a = a?;
+					let b = b?;
+					if !equals(s.clone(), &a, &b)? {
+						return Ok(false);
+					}
+				}
+				true
+			}
+		}
+		_ => throw_runtime!("both arguments should be of the same type"),
+	})
 }

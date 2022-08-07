@@ -4,20 +4,7 @@
 
   thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support. This will slow down stdlib caching a bit, though',
 
-  toString(a)::
-    if std.type(a) == 'string' then a else '' + a,
-
-  startsWith(a, b)::
-    if std.length(a) < std.length(b) then
-      false
-    else
-      std.substr(a, 0, std.length(b)) == b,
-
-  endsWith(a, b)::
-    if std.length(a) < std.length(b) then
-      false
-    else
-      std.substr(a, std.length(a) - std.length(b), std.length(b)) == b,
+  toString(a):: '' + a,
 
   lstripChars(str, chars)::
     if std.length(str) > 0 && std.member(chars, str[0]) then
