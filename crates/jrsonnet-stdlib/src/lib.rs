@@ -128,6 +128,7 @@ pub fn stdlib_uncached(s: State, settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("splitLimit".into(), builtin_splitlimit::INST),
 		("asciiUpper".into(), builtin_ascii_upper::INST),
 		("asciiLower".into(), builtin_ascii_lower::INST),
+		("findSubstr".into(), builtin_find_substr::INST),
 	]
 	.iter()
 	.cloned()
@@ -419,4 +420,29 @@ fn builtin_ascii_upper(str: IStr) -> Result<String> {
 #[builtin]
 fn builtin_ascii_lower(str: IStr) -> Result<String> {
 	Ok(str.to_ascii_lowercase())
+}
+
+#[builtin]
+fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
+	if pat.is_empty() || str.is_empty() || pat.len() > str.len() {
+		return Ok(ArrValue::empty());
+	}
+
+	let str = str.as_str();
+	let pat = pat.as_bytes();
+	let strb = str.as_bytes();
+
+	let max_pos = str.len() - pat.len();
+
+	let mut out: Vec<Val> = Vec::new();
+	for (ch_idx, (i, _)) in str
+		.char_indices()
+		.take_while(|(i, _)| i <= &max_pos)
+		.enumerate()
+	{
+		if &strb[i..i + pat.len()] == pat {
+			out.push(Val::Num(ch_idx as f64))
+		}
+	}
+	Ok(out.into())
 }

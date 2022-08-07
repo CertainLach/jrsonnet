@@ -206,9 +206,13 @@ impl ArrValue {
 	pub fn new_eager() -> Self {
 		Self::Eager(Cc::new(Vec::new()))
 	}
+	pub fn empty() -> Self {
+		Self::new_range(0, 0)
+	}
 
 	/// # Panics
 	/// If a > b
+	#[inline]
 	pub fn new_range(a: i32, b: i32) -> Self {
 		assert!(a <= b);
 		Self::Range(a, b)

@@ -477,19 +477,6 @@
     } else
       a,
 
-  findSubstr(pat, str)::
-    if !std.isString(pat) then
-      error 'findSubstr first parameter should be a string, got ' + std.type(pat)
-    else if !std.isString(str) then
-      error 'findSubstr second parameter should be a string, got ' + std.type(str)
-    else
-      local pat_len = std.length(pat);
-      local str_len = std.length(str);
-      if pat_len == 0 || str_len == 0 || pat_len > str_len then
-        []
-      else
-        std.filter(function(i) str[i:i + pat_len] == pat, std.range(0, str_len - pat_len)),
-
   find(value, arr)::
     if !std.isArray(arr) then
       error 'find second parameter should be an array, got ' + std.type(arr)
