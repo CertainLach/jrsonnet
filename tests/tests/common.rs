@@ -3,6 +3,7 @@ use jrsonnet_evaluator::{
 	function::{builtin, FuncVal},
 	throw_runtime, ObjValueBuilder, State, Thunk, Val,
 };
+use jrsonnet_stdlib::StateExt;
 
 #[macro_export]
 macro_rules! ensure_eq {
@@ -72,7 +73,5 @@ pub fn with_test(s: &State) {
 		)
 		.expect("no error");
 
-	s.settings_mut()
-		.globals
-		.insert("test".into(), Val::Obj(bobj.build()));
+	s.add_global("test".into(), Thunk::evaluated(Val::Obj(bobj.build())))
 }

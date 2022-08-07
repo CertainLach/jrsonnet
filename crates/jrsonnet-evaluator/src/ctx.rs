@@ -139,17 +139,25 @@ impl PartialEq for Context {
 	}
 }
 
-#[derive(Default)]
 pub struct ContextBuilder {
 	bindings: GcHashMap<IStr, Thunk<Val>>,
+	extend: Option<Context>,
 }
+
 impl ContextBuilder {
 	pub fn new() -> Self {
-		Self::default()
+		Self::with_capacity(0)
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			bindings: GcHashMap::with_capacity(capacity),
+			extend: None,
+		}
+	}
+	pub fn extend(parent: Context) -> Self {
+		Self {
+			bindings: GcHashMap::new(),
+			extend: Some(parent),
 		}
 	}
 	pub fn bind(&mut self, name: IStr, value: Thunk<Val>) -> &mut Self {
@@ -157,11 +165,21 @@ impl ContextBuilder {
 		self
 	}
 	pub fn build(self) -> Context {
-		Context(Cc::new(ContextInternals {
-			bindings: LayeredHashMap::new(self.bindings),
-			dollar: None,
-			sup: None,
-			this: None,
-		}))
+		if let Some(parent) = self.extend {
+			parent.extend(self.bindings, None, None, None)
+		} else {
+			Context(Cc::new(ContextInternals {
+				bindings: LayeredHashMap::new(self.bindings),
+				dollar: None,
+				sup: None,
+				this: None,
+			}))
+		}
+	}
+}
+
+impl Default for ContextBuilder {
+	fn default() -> Self {
+		Self::new()
 	}
 }

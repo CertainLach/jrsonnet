@@ -2,6 +2,7 @@ use std::cell::RefCell;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 
+// TODO: Replace with OnceCell once in std
 #[derive(Clone, Trace)]
 pub struct Pending<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
 impl<T: Trace + 'static> Pending<T> {

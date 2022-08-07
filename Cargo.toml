@@ -1,5 +1,5 @@
 [workspace]
-members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet"]
+members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
 
 [profile.test]
 opt-level = 1

@@ -7,6 +7,7 @@ use jrsonnet_evaluator::{
 	trace::{CompactFormat, PathResolver},
 	FileImportResolver, State,
 };
+use jrsonnet_stdlib::StateExt;
 
 mod common;
 
@@ -20,7 +21,7 @@ fn run(root: &Path, file: &Path) -> String {
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
 
-	let v = match s.import(file.to_owned()) {
+	let v = match s.import(root, &file.display().to_string()) {
 		Ok(v) => v,
 		Err(e) => return s.stringify_err(&e),
 	};
@@ -38,7 +39,7 @@ fn run(root: &Path, file: &Path) -> String {
 #[test]
 fn test() -> io::Result<()> {
 	let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-	root.push("tests/golden");
+	root.push("golden");
 
 	for entry in fs::read_dir(&root)? {
 		let entry = entry?;

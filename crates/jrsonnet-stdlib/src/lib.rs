@@ -8,7 +8,7 @@ use std::{
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	function::{builtin::Builtin, ArgLike, CallLocation, FuncVal, TlaArg},
-	gc::TraceBox,
+	gc::{GcHashMap, TraceBox},
 	tb, throw_runtime,
 	typed::{Any, Either, Either2, Either4, VecVal, M1},
 	val::{equals, ArrValue},
@@ -201,6 +201,8 @@ pub struct Settings {
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
 	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
+	/// Helper to add globals without implementing custom ContextInitializer
+	pub globals: GcHashMap<IStr, Thunk<Val>>,
 	/// Used for `std.trace`
 	pub trace_printer: Box<dyn TracePrinter>,
 }
@@ -210,6 +212,7 @@ impl Default for Settings {
 		Self {
 			ext_vars: Default::default(),
 			ext_natives: Default::default(),
+			globals: Default::default(),
 			trace_printer: Box::new(StdTracePrinter),
 		}
 	}
@@ -289,7 +292,17 @@ impl ContextInitializer {
 impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	#[cfg(not(feature = "legacy-this-file"))]
 	fn initialize(&self, _s: State, _source: Source) -> jrsonnet_evaluator::Context {
-		self.context.clone()
+		let out = self.context.clone();
+		let globals = &self.settings().globals;
+		if globals.is_empty() {
+			return out;
+		}
+
+		let mut out = ContextBuilder::extend(out);
+		for (k, v) in globals.iter() {
+			out.bind(k.clone(), v.clone());
+		}
+		out.build()
 	}
 	#[cfg(feature = "legacy-this-file")]
 	fn initialize(&self, s: State, source: Source) -> jrsonnet_evaluator::Context {
@@ -316,6 +329,9 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 			"std".into(),
 			Thunk::evaluated(Val::Obj(stdlib_with_this_file)),
 		);
+		for (k, v) in &self.settings().globals {
+			context.bind(k.clone(), v.clone())
+		}
 		context.build()
 	}
 	unsafe fn as_any(&self) -> &dyn std::any::Any {
@@ -512,4 +528,26 @@ fn builtin_ends_with(
 		}
 		_ => throw_runtime!("both arguments should be of the same type"),
 	})
+}
+
+pub trait StateExt {
+	/// This method was previously implemented in jrsonnet-evaluator itself
+	fn with_stdlib(&self);
+	fn add_global(&self, name: IStr, value: Thunk<Val>);
+}
+
+impl StateExt for State {
+	fn with_stdlib(&self) {
+		let initializer = ContextInitializer::new(self.clone());
+		self.settings_mut().context_initializer = Box::new(initializer)
+	}
+	fn add_global(&self, name: IStr, value: Thunk<Val>) {
+		// Safety:
+		unsafe { self.settings().context_initializer.as_any() }
+			.downcast_ref::<ContextInitializer>()
+			.expect("not standard context initializer")
+			.settings_mut()
+			.globals
+			.insert(name, value);
+	}
 }

@@ -1,0 +1,10 @@
+[package]
+name = "tests"
+version = "0.1.0"
+edition = "2021"
+
+[dependencies]
+jrsonnet-evaluator = { path = "../crates/jrsonnet-evaluator" }
+jrsonnet-gcmodule = "0.3.4"
+jrsonnet-stdlib = { path = "../crates/jrsonnet-stdlib" }
+serde = "1.0.142"
