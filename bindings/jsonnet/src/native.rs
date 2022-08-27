@@ -12,6 +12,15 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_gcmodule::Cc;
 
+/// The returned JsonnetJsonValue* should be allocated with jsonnet_realloc.  It will be cleaned up
+/// along with the objects rooted at argv by libjsonnet when no-longer needed.  Return a string upon
+/// failure, which will appear in Jsonnet as an error.  The argv pointer is an array whose size
+/// matches the array of parameters supplied when the native callback was originally registered.
+///
+/// - `ctx` User pointer, given in jsonnet_native_callback.
+/// - `argv` Array of arguments from Jsonnet code.
+/// - `param` success Set this byref param to 1 to indicate success and 0 for failure.
+/// Returns the content of the imported file, or an error message.
 type JsonnetNativeCallback = unsafe extern "C" fn(
 	ctx: *const c_void,
 	argv: *const *const Val,
@@ -44,13 +53,20 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		if success == 1 {
 			Ok(v)
 		} else {
-			let e = IStr::from_untyped(v, s).expect("error msg");
+			let e = IStr::from_untyped(v, s).expect("error msg should be a string");
 			Err(Error::RuntimeError(e).into())
 		}
 	}
 }
 
+/// Callback to provide native extensions to Jsonnet.
+///
 /// # Safety
+///
+/// `vm` should be a vm allocated by `jsonnet_make`
+/// `cb` should be a correct function pointer
+/// `raw_params` should point to a NULL-terminated string array
+/// `name`, `raw_params` elements should be a \0-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_native_callback(
 	vm: &State,
@@ -59,13 +75,18 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	ctx: *const c_void,
 	mut raw_params: *const *const c_char,
 ) {
-	let name = CStr::from_ptr(name).to_str().expect("utf8 name").into();
+	let name = CStr::from_ptr(name)
+		.to_str()
+		.expect("name is not utf-8")
+		.into();
 	let mut params = Vec::new();
 	loop {
 		if (*raw_params).is_null() {
 			break;
 		}
-		let param = CStr::from_ptr(*raw_params).to_str().expect("not utf8");
+		let param = CStr::from_ptr(*raw_params)
+			.to_str()
+			.expect("param name is not utf-8");
 		params.push(BuiltinParam {
 			name: param.into(),
 			has_default: false,

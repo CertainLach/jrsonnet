@@ -1,5 +1,5 @@
 [package]
-name = "jsonnet"
+name = "libjsonnet"
 description = "Rust implementation of libjsonnet.so"
 version = "0.4.2"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
@@ -14,9 +14,11 @@ jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-gcmodule = { version = "0.3.4" }
 
 [lib]
+name = "jsonnet"
 crate-type = ["cdylib"]
 
 [features]
+# Export additional functions for native integration, i.e ability to set custom trace format
 interop = []
 experimental = ["exp-preserve-order", "exp-destruct"]
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
