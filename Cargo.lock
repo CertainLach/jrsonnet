@@ -325,7 +325,13 @@ dependencies = [
 ]
 
 [[package]]
-name = "jsonnet"
+name = "libc"
+version = "0.2.126"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
+
+[[package]]
+name = "libjsonnet"
 version = "0.4.2"
 dependencies = [
  "jrsonnet-evaluator",
@@ -333,12 +339,6 @@ dependencies = [
  "jrsonnet-parser",
  "jrsonnet-stdlib",
 ]
-
-[[package]]
-name = "libc"
-version = "0.2.126"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "349d5a591cd28b49e1d1037471617a32ddcda5731b99419008085f72d5a53836"
 
 [[package]]
 name = "linked-hash-map"
