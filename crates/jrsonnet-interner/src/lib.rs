@@ -133,7 +133,7 @@ impl IBytes {
 	}
 
 	#[must_use]
-	pub const fn as_slice(&self) -> &[u8] {
+	pub fn as_slice(&self) -> &[u8] {
 		self.0.as_slice()
 	}
 }

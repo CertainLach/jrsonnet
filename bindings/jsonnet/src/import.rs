@@ -4,19 +4,18 @@ use std::{
 	any::Any,
 	cell::RefCell,
 	collections::HashMap,
+	env::current_dir,
 	ffi::{c_void, CStr, CString},
-	fs::File,
-	io::Read,
 	os::raw::{c_char, c_int},
-	path::{Path, PathBuf},
+	path::PathBuf,
 	ptr::null_mut,
 };
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, ImportResolver, State,
+	throw, FileImportResolver, ImportResolver, State,
 };
-use jrsonnet_parser::SourcePath;
+use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(
 	ctx: *mut c_void,
@@ -33,25 +32,31 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_file_relative(&self, from: &Path, path: &str) -> Result<SourcePath> {
-		let base = CString::new(from.to_str().unwrap()).unwrap().into_raw();
-		let rel = CString::new(path).unwrap().into_raw();
+	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+		let base = if let Some(p) = from.downcast_ref::<SourceFile>() {
+			let mut o = p.path().to_owned();
+			o.pop();
+			o
+		} else if let Some(d) = from.downcast_ref::<SourceDirectory>() {
+			d.path().to_owned()
+		} else if from.is_default() {
+			current_dir().map_err(|e| ImportIo(e.to_string()))?
+		} else {
+			unreachable!("can't resolve this path");
+		};
+		let base = unsafe { crate::unparse_path(&base) };
+		let rel = CString::new(path).unwrap();
 		let found_here: *mut c_char = null_mut();
 		let mut success: i32 = 0;
 		let result_ptr = unsafe {
 			(self.cb)(
 				self.ctx,
-				base,
-				rel,
+				base.as_ptr(),
+				rel.as_ptr(),
 				&mut (found_here as *const _),
 				&mut success,
 			)
 		};
-		// Release memory occipied by arguments passed
-		unsafe {
-			let _ = CString::from_raw(base);
-			let _ = CString::from_raw(rel);
-		}
 		let result_raw = unsafe { CStr::from_ptr(result_ptr) };
 		let result_str = result_raw.to_str().unwrap();
 		assert!(success == 0 || success == 1);
@@ -62,7 +67,9 @@ impl ImportResolver for CallbackImportResolver {
 		}
 
 		let found_here_raw = unsafe { CStr::from_ptr(found_here) };
-		let found_here_buf = SourcePath::Path(PathBuf::from(found_here_raw.to_str().unwrap()));
+		let found_here_buf = SourcePath::new(SourceFile::new(PathBuf::from(
+			found_here_raw.to_str().unwrap(),
+		)));
 		unsafe {
 			let _ = CString::from_raw(found_here);
 		}
@@ -79,12 +86,14 @@ impl ImportResolver for CallbackImportResolver {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
 
-	unsafe fn as_any(&self) -> &dyn Any {
+	fn as_any(&self) -> &dyn Any {
 		self
 	}
 }
 
 /// # Safety
+///
+/// Caller should pass correct callback function
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_import_callback(
 	vm: &State,
@@ -98,52 +107,9 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 	}))
 }
 
-/// Standard FS import resolver
-#[derive(Default)]
-pub struct NativeImportResolver {
-	library_paths: RefCell<Vec<PathBuf>>,
-}
-impl NativeImportResolver {
-	fn add_jpath(&self, path: PathBuf) {
-		self.library_paths.borrow_mut().push(path);
-	}
-}
-impl ImportResolver for NativeImportResolver {
-	fn resolve_file_relative(&self, from: &Path, path: &str) -> Result<SourcePath> {
-		let mut new_path = from.to_owned();
-		new_path.push(path);
-		if new_path.exists() {
-			Ok(SourcePath::Path(new_path))
-		} else {
-			for library_path in self.library_paths.borrow().iter() {
-				let mut cloned = library_path.clone();
-				cloned.push(path);
-				if cloned.exists() {
-					return Ok(SourcePath::Path(cloned));
-				}
-			}
-			throw!(ImportFileNotFound(from.to_owned(), path.to_owned()))
-		}
-	}
-	fn load_file_contents(&self, id: &SourcePath) -> Result<Vec<u8>> {
-		let path = match id {
-			SourcePath::Path(path) => path,
-			_ => unreachable!("NativeImportResolver::resolve_file may only return plain paths"),
-		};
-		let mut file = File::open(path).map_err(|_e| ResolvedFileNotFound(id.clone()))?;
-		let mut out = Vec::new();
-		file.read_to_end(&mut out)
-			.map_err(|e| ImportIo(e.to_string()))?;
-		Ok(out)
-	}
-	unsafe fn as_any(&self) -> &dyn Any {
-		self
-	}
-}
-
 /// # Safety
 ///
-/// This function is safe, if received v is a pointer to normal C string
+/// Caller should pass correct path: it should contain correct utf-8, and be \0-terminated
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, v: *const c_char) {
 	let cstr = CStr::from_ptr(v);
@@ -151,7 +117,7 @@ pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, v: *const c_char) {
 	let any_resolver = vm.import_resolver();
 	let resolver = any_resolver
 		.as_any()
-		.downcast_ref::<NativeImportResolver>()
+		.downcast_ref::<FileImportResolver>()
 		.expect("jpaths are not compatible with callback imports!");
 	resolver.add_jpath(path);
 }

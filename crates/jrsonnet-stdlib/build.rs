@@ -1,4 +1,4 @@
-use std::{borrow::Cow, env, fs::File, io::Write, path::Path};
+use std::{env, fs::File, io::Write, path::Path};
 
 use jrsonnet_parser::{parse, ParserSettings, Source};
 use structdump::CodegenResult;
@@ -8,7 +8,7 @@ fn main() {
 		include_str!("./src/std.jsonnet"),
 		&ParserSettings {
 			file_name: Source::new_virtual(
-				Cow::Borrowed("<std>"),
+				"<std>".into(),
 				include_str!("./src/std.jsonnet").into(),
 			),
 		},

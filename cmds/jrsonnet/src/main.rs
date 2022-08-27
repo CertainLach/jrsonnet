@@ -1,5 +1,4 @@
 use std::{
-	env::current_dir,
 	fs::{create_dir_all, File},
 	io::{Read, Write},
 };
@@ -140,7 +139,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		let input_str = std::str::from_utf8(&input)?;
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(&current_dir().expect("cwd"), &input)?
+		s.import(&input)?
 	};
 
 	let val = s.with_tla(val)?;

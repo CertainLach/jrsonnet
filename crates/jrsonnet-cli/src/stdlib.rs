@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, State};
+use jrsonnet_evaluator::{error::Result, trace::PathResolver, State};
 
 use crate::ConfigureState;
 
@@ -110,7 +110,8 @@ impl ConfigureState for StdOpts {
 		if self.no_stdlib {
 			return Ok(());
 		}
-		let ctx = jrsonnet_stdlib::ContextInitializer::new(s.clone());
+		let ctx =
+			jrsonnet_stdlib::ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
 		for ext in self.ext_str.iter() {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}

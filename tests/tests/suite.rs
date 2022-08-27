@@ -21,7 +21,7 @@ fn run(root: &Path, file: &Path) {
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
 
-	match s.import(root, &file.display().to_string()) {
+	match s.import(file) {
 		Ok(Val::Bool(true)) => {}
 		Ok(Val::Bool(false)) => panic!("test {} returned false", file.display()),
 		Ok(_) => panic!("test {} returned wrong type as result", file.display()),

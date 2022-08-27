@@ -2,7 +2,7 @@
   local std = self,
   local id = std.id,
 
-  thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support. This will slow down stdlib caching a bit, though',
+  thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support.\nThis will slow down stdlib caching a bit, though',
 
   toString(a):: '' + a,
 

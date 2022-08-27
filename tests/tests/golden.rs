@@ -21,7 +21,7 @@ fn run(root: &Path, file: &Path) -> String {
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
 
-	let v = match s.import(root, &file.display().to_string()) {
+	let v = match s.import(file) {
 		Ok(v) => v,
 		Err(e) => return s.stringify_err(&e),
 	};

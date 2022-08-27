@@ -1,5 +1,4 @@
 use std::{
-	borrow::Cow,
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	rc::Rc,
@@ -10,6 +9,7 @@ use jrsonnet_evaluator::{
 	function::{builtin::Builtin, ArgLike, CallLocation, FuncVal, TlaArg},
 	gc::{GcHashMap, TraceBox},
 	tb, throw_runtime,
+	trace::PathResolver,
 	typed::{Any, Either, Either2, Either4, VecVal, M1},
 	val::{equals, ArrValue},
 	Context, ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
@@ -184,13 +184,27 @@ pub trait TracePrinter {
 	fn print_trace(&self, s: State, loc: CallLocation, value: IStr);
 }
 
-pub struct StdTracePrinter;
+pub struct StdTracePrinter {
+	resolver: PathResolver,
+}
+impl StdTracePrinter {
+	pub fn new(resolver: PathResolver) -> Self {
+		Self { resolver }
+	}
+}
 impl TracePrinter for StdTracePrinter {
 	fn print_trace(&self, _s: State, loc: CallLocation, value: IStr) {
 		eprint!("TRACE:");
 		if let Some(loc) = loc.0 {
 			let locs = loc.0.map_source_locations(&[loc.1]);
-			eprint!(" {}:{}", loc.0.short_display(), locs[0].line);
+			eprint!(
+				" {}:{}",
+				match loc.0.source_path().path() {
+					Some(p) => self.resolver.resolve(p),
+					None => loc.0.source_path().to_string(),
+				},
+				locs[0].line
+			);
 		}
 		eprintln!(" {}", value);
 	}
@@ -205,22 +219,13 @@ pub struct Settings {
 	pub globals: GcHashMap<IStr, Thunk<Val>>,
 	/// Used for `std.trace`
 	pub trace_printer: Box<dyn TracePrinter>,
-}
-
-impl Default for Settings {
-	fn default() -> Self {
-		Self {
-			ext_vars: Default::default(),
-			ext_natives: Default::default(),
-			globals: Default::default(),
-			trace_printer: Box::new(StdTracePrinter),
-		}
-	}
+	/// Used for `std.thisFile`
+	pub path_resolver: PathResolver,
 }
 
 pub fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 	let source_name = format!("<extvar:{}>", name);
-	Source::new_virtual(Cow::Owned(source_name), code.into())
+	Source::new_virtual(source_name.into(), code.into())
 }
 
 pub struct ContextInitializer {
@@ -233,8 +238,15 @@ pub struct ContextInitializer {
 	settings: Rc<RefCell<Settings>>,
 }
 impl ContextInitializer {
-	pub fn new(s: State) -> Self {
-		let settings = Rc::new(RefCell::new(Settings::default()));
+	pub fn new(s: State, resolver: PathResolver) -> Self {
+		let settings = Settings {
+			ext_vars: Default::default(),
+			ext_natives: Default::default(),
+			globals: Default::default(),
+			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
+			path_resolver: resolver,
+		};
+		let settings = Rc::new(RefCell::new(settings));
 		Self {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
@@ -313,13 +325,10 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 			.hide()
 			.value(
 				s,
-				Val::Str(
-					source
-						.path()
-						.map(|p| p.display().to_string())
-						.unwrap_or_else(String::new)
-						.into(),
-				),
+				Val::Str(match source.source_path().path() {
+					Some(p) => self.settings().path_resolver.resolve(p).into(),
+					None => source.source_path().to_string().into(),
+				}),
 			)
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = builder.build();
@@ -329,12 +338,12 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 			"std".into(),
 			Thunk::evaluated(Val::Obj(stdlib_with_this_file)),
 		);
-		for (k, v) in &self.settings().globals {
-			context.bind(k.clone(), v.clone())
+		for (k, v) in self.settings().globals.iter() {
+			context.bind(k.clone(), v.clone());
 		}
 		context.build()
 	}
-	unsafe fn as_any(&self) -> &dyn std::any::Any {
+	fn as_any(&self) -> &dyn std::any::Any {
 		self
 	}
 }
@@ -540,12 +549,13 @@ pub trait StateExt {
 
 impl StateExt for State {
 	fn with_stdlib(&self) {
-		let initializer = ContextInitializer::new(self.clone());
+		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
 		self.settings_mut().context_initializer = Box::new(initializer)
 	}
 	fn add_global(&self, name: IStr, value: Thunk<Val>) {
-		// Safety:
-		unsafe { self.settings().context_initializer.as_any() }
+		self.settings()
+			.context_initializer
+			.as_any()
 			.downcast_ref::<ContextInitializer>()
 			.expect("not standard context initializer")
 			.settings_mut()

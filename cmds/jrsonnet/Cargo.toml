@@ -19,6 +19,8 @@ exp-preserve-order = [
 ]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
+# std.thisFile support
+legacy-this-file = ["jrsonnet-cli/legacy-this-file"]
 
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }

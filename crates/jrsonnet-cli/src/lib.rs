@@ -51,7 +51,7 @@ impl ConfigureState for MiscOpts {
 			library_paths.extend(env::split_paths(path.as_os_str()));
 		}
 
-		s.set_import_resolver(Box::new(FileImportResolver { library_paths }));
+		s.set_import_resolver(Box::new(FileImportResolver::new(library_paths)));
 
 		s.set_max_stack(self.max_stack);
 		Ok(())
