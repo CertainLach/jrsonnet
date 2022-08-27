@@ -137,15 +137,21 @@ pub enum Error {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(PathBuf, String),
+	ImportFileNotFound(SourcePath, String),
+	#[error("can't resolve absolute {0}")]
+	AbsoluteImportFileNotFound(PathBuf),
 	#[error("resolved file not found: {:?}", .0)]
 	ResolvedFileNotFound(SourcePath),
+	#[error("can't import {0}: is a directory")]
+	ImportIsADirectory(SourcePath),
 	#[error("imported file is not valid utf-8: {0:?}")]
 	ImportBadFileUtf8(SourcePath),
 	#[error("import io error: {0}")]
 	ImportIo(String),
-	#[error("tried to import {1} from {0}, but imports is not supported")]
-	ImportNotSupported(PathBuf, PathBuf),
+	#[error("tried to import {1} from {0}, but imports are not supported")]
+	ImportNotSupported(SourcePath, String),
+	#[error("tried to import {0}, but absolute imports are not supported")]
+	AbsoluteImportNotSupported(PathBuf),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(

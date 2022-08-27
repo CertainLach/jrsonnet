@@ -44,7 +44,6 @@ pub mod val;
 
 use std::{
 	any::Any,
-	borrow::Cow,
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::{self, Debug},
@@ -103,12 +102,7 @@ impl LazyBinding {
 pub trait ContextInitializer {
 	fn initialize(&self, state: State, for_file: Source) -> Context;
 
-	/// # Safety
-	///
-	/// For use only in bindings, should not be used elsewhere.
-	/// Implementations which are not intended to be used in bindings
-	/// should panic on call to this method.
-	unsafe fn as_any(&self) -> &dyn Any;
+	fn as_any(&self) -> &dyn Any;
 }
 
 /// Context initializer, which adds noth
@@ -117,8 +111,8 @@ impl ContextInitializer for DummyContextInitializer {
 	fn initialize(&self, _state: State, _for_file: Source) -> Context {
 		Context::default()
 	}
-	unsafe fn as_any(&self) -> &dyn Any {
-		panic!("`as_any(&self)` is not supported by dummy initializer")
+	fn as_any(&self) -> &dyn Any {
+		self
 	}
 }
 
@@ -343,8 +337,7 @@ impl State {
 			);
 		}
 		let code = file.string.as_ref().expect("just set");
-		let file_name =
-			Source::new(path.clone(), code.clone()).expect("resolver should return correct name");
+		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
 				jrsonnet_parser::parse(
@@ -388,8 +381,14 @@ impl State {
 			Err(e) => Err(e),
 		}
 	}
-	pub fn import(&self, from: &Path, path: &str) -> Result<Val> {
-		let resolved = self.resolve_file(from, path)?;
+
+	/// Has same semantics as `import 'path'` called from `from` file
+	pub fn import_from(&self, from: &SourcePath, path: &str) -> Result<Val> {
+		let resolved = self.resolve_from(from, path)?;
+		self.import_resolved(resolved)
+	}
+	pub fn import(&self, path: &impl AsRef<Path>) -> Result<Val> {
+		let resolved = self.resolve(path)?;
 		self.import_resolved(resolved)
 	}
 
@@ -532,7 +531,7 @@ impl State {
 					func.evaluate(
 						self.clone(),
 						self.create_default_context(Source::new_virtual(
-							Cow::Borrowed("<tla>"),
+							"<tla>".into(),
 							IStr::empty(),
 						)),
 						CallLocation::native(),
@@ -565,9 +564,9 @@ impl State {
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl State {
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet(&self, name: String, code: impl Into<IStr>) -> Result<Val> {
+	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
-		let source = Source::new_virtual(Cow::Owned(name), code.clone());
+		let source = Source::new_virtual(name.into(), code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
 			&ParserSettings {
@@ -596,7 +595,7 @@ impl State {
 	}
 	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
 		let source_name = format!("<top-level-arg:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name), code.into());
+		let source = Source::new_virtual(source_name.into(), code.into());
 		let parsed = jrsonnet_parser::parse(
 			code,
 			&ParserSettings {
@@ -613,12 +612,17 @@ impl State {
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &Path, path: &str) -> Result<SourcePath> {
-		self.settings()
-			.import_resolver
-			.resolve_file_relative(from, path.as_ref())
+	// Only panics in case of [`ImportResolver`] contract violation
+	#[allow(clippy::missing_panics_doc)]
+	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+		self.import_resolver().resolve_from(from, path.as_ref())
 	}
 
+	// Only panics in case of [`ImportResolver`] contract violation
+	#[allow(clippy::missing_panics_doc)]
+	pub fn resolve(&self, path: &impl AsRef<Path>) -> Result<SourcePath> {
+		self.import_resolver().resolve(path.as_ref())
+	}
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
 		Ref::map(self.settings(), |s| &*s.import_resolver)
 	}

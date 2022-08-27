@@ -630,15 +630,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let tmp = loc.clone().0;
-			let import_location = tmp
-				.path()
-				.map(|p| {
-					let mut p = p.to_owned();
-					p.pop();
-					p
-				})
-				.unwrap_or_default();
-			let resolved_path = s.resolve_file(&import_location, path as &str)?;
+			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
 			match i {
 				Import(_) => s.push(
 					CallLocation::new(loc),

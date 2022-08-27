@@ -5,6 +5,7 @@ use jrsonnet_parser::{CodeLocation, Source};
 use crate::{error::Error, LocError, State};
 
 /// The way paths should be displayed
+#[derive(Clone)]
 pub enum PathResolver {
 	/// Only filename
 	FileName,
@@ -15,6 +16,13 @@ pub enum PathResolver {
 }
 
 impl PathResolver {
+	/// Will return Self::Relative(cwd), or Self::Absolute on cwd failure
+	pub fn new_cwd_fallback() -> Self {
+		match std::env::current_dir() {
+			Ok(v) => Self::Relative(v),
+			Err(_) => Self::Absolute,
+		}
+	}
 	pub fn resolve(&self, from: &Path) -> String {
 		match self {
 			Self::FileName => from
@@ -89,9 +97,9 @@ impl TraceFormat for CompactFormat {
 			use std::fmt::Write;
 
 			writeln!(out)?;
-			let mut n = match path.path() {
+			let mut n = match path.source_path().path() {
 				Some(r) => self.resolver.resolve(r),
-				None => path.short_display().to_string(),
+				None => path.source_path().to_string(),
 			};
 			let mut offset = error.location.offset;
 			let is_eof = if offset >= path.code().len() {
@@ -122,9 +130,9 @@ impl TraceFormat for CompactFormat {
 				use std::fmt::Write;
 				#[allow(clippy::option_if_let_else)]
 				if let Some(location) = location {
-					let mut resolved_path = match location.0.path() {
+					let mut resolved_path = match location.0.source_path().path() {
 						Some(r) => self.resolver.resolve(r),
-						None => location.0.short_display().to_string(),
+						None => location.0.source_path().to_string(),
 					};
 					// TODO: Process all trace elements first
 					let location = location.0.map_source_locations(&[location.1, location.2]);
@@ -177,9 +185,9 @@ impl TraceFormat for JsFormat {
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
 				let start_end = source.0.map_source_locations(&[source.1, source.2]);
-				let resolved_path = match source.0.path() {
+				let resolved_path = match source.0.source_path().path() {
 					Some(r) => r.display().to_string(),
-					None => source.0.short_display().to_string(),
+					None => source.0.source_path().to_string(),
 				};
 
 				write!(
@@ -272,9 +280,9 @@ impl ExplainingFormat {
 			.take(end.line_end_offset - end.line_start_offset)
 			.collect();
 
-		let origin = match origin.path() {
+		let origin = match origin.source_path().path() {
 			Some(r) => self.resolver.resolve(r),
-			None => origin.short_display().to_string(),
+			None => origin.source_path().to_string(),
 		};
 		let snippet = Snippet {
 			opt: FormatOptions {
