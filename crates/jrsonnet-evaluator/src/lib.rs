@@ -387,7 +387,7 @@ impl State {
 		let resolved = self.resolve_from(from, path)?;
 		self.import_resolved(resolved)
 	}
-	pub fn import(&self, path: &impl AsRef<Path>) -> Result<Val> {
+	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
 		let resolved = self.resolve(path)?;
 		self.import_resolved(resolved)
 	}
@@ -620,7 +620,7 @@ impl State {
 
 	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve(&self, path: &impl AsRef<Path>) -> Result<SourcePath> {
+	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())
 	}
 	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {

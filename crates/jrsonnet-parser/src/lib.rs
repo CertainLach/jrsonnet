@@ -360,8 +360,6 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 
 #[cfg(test)]
 pub mod tests {
-	use std::borrow::Cow;
-
 	use jrsonnet_interner::IStr;
 	use BinaryOpType::*;
 
@@ -373,7 +371,7 @@ pub mod tests {
 			parse(
 				$s,
 				&ParserSettings {
-					file_name: Source::new_virtual(Cow::Borrowed("<test>"), IStr::empty()),
+					file_name: Source::new_virtual("<test>".into(), IStr::empty()),
 				},
 			)
 			.unwrap()
@@ -385,7 +383,7 @@ pub mod tests {
 			LocExpr(
 				std::rc::Rc::new($expr),
 				ExprLocation(
-					Source::new_virtual(Cow::Borrowed("<test>"), IStr::empty()),
+					Source::new_virtual("<test>".into(), IStr::empty()),
 					$from,
 					$to,
 				),
@@ -721,7 +719,7 @@ pub mod tests {
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
-		let file_name = Source::new_virtual(Cow::Borrowed("<test>"), IStr::empty());
+		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
 			&ParserSettings { file_name },
