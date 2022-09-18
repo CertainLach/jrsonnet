@@ -25,9 +25,10 @@ use jrsonnet_evaluator::{
 #[no_mangle]
 pub extern "C" fn _start() {}
 
-/// Return the version string of the Jsonnet interpreter.  Conforms to semantic versioning
-/// http://semver.org/ If this does not match LIB_JSONNET_VERSION then there is a mismatch between
-/// header and compiled library.
+/// Return the version string of the Jsonnet interpreter.
+/// Conforms to [semantic versioning](http://semver.org/).
+/// If this does not match `LIB_JSONNET_VERSION`
+/// then there is a mismatch between header and compiled library.
 #[no_mangle]
 pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.16.0\0"
@@ -67,7 +68,7 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 	}
 }
 
-/// Create a new Jsonnet virtual machine.
+/// Creates a new Jsonnet virtual machine.
 #[no_mangle]
 pub extern "C" fn jsonnet_make() -> *mut State {
 	let state = State::default();
@@ -79,7 +80,7 @@ pub extern "C" fn jsonnet_make() -> *mut State {
 	Box::into_raw(Box::new(state))
 }
 
-/// Complement of `jsonnet_vm_make`
+/// Complement of [`jsonnet_vm_make`].
 #[no_mangle]
 #[allow(clippy::boxed_local)]
 pub extern "C" fn jsonnet_destroy(vm: Box<State>) {
@@ -118,7 +119,7 @@ pub extern "C" fn jsonnet_string_output(vm: &State, v: c_int) {
 	}
 }
 
-/// Allocate, resize, or free a buffer.  This will abort if the memory cannot be allocated.  It will
+/// Allocate, resize, or free a buffer.  This will abort if the memory cannot be allocated. It will
 /// only return NULL if sz was zero.
 ///
 /// # Safety

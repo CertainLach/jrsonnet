@@ -12,9 +12,9 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_gcmodule::Cc;
 
-/// The returned JsonnetJsonValue* should be allocated with jsonnet_realloc.  It will be cleaned up
-/// along with the objects rooted at argv by libjsonnet when no-longer needed.  Return a string upon
-/// failure, which will appear in Jsonnet as an error.  The argv pointer is an array whose size
+/// The returned `JsonnetJsonValue*` should be allocated with `jsonnet_realloc`. It will be cleaned up
+/// along with the objects rooted at `argv` by `libjsonnet` when no-longer needed. Return a string upon
+/// failure, which will appear in Jsonnet as an error. The `argv` pointer is an array whose size
 /// matches the array of parameters supplied when the native callback was originally registered.
 ///
 /// - `ctx` User pointer, given in jsonnet_native_callback.

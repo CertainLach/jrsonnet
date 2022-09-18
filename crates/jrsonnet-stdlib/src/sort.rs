@@ -41,9 +41,9 @@ fn get_sort_type<T>(
 			(Val::Num(_), SortKeyType::Unknown) => sort_type = SortKeyType::Number,
 			(Val::Str(_), SortKeyType::String) | (Val::Num(_), SortKeyType::Number) => {}
 			(Val::Str(_) | Val::Num(_), _) => {
-				throw_runtime!("sort elements should have same types")
+				throw_runtime!("sort elements should have the same types")
 			}
-			_ => throw_runtime!("sort key should be string or number"),
+			_ => throw_runtime!("sort key should either be a string or a number"),
 		}
 	}
 	Ok(sort_type)

@@ -66,7 +66,7 @@ pub fn builtin_exp(x: f64) -> Result<f64> {
 }
 
 fn frexp(s: f64) -> (f64, i16) {
-	if 0.0 == s {
+	if s == 0.0 {
 		(s, 0)
 	} else {
 		let lg = s.abs().log2();

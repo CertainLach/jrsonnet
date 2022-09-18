@@ -7,7 +7,7 @@ use std::{ffi::CStr, os::raw::c_char};
 use jrsonnet_evaluator::{val::ArrValue, State, Thunk, Val};
 use jrsonnet_gcmodule::Cc;
 
-/// Add value to the end of the array arr
+/// Adds value to the end of the array `arr`.
 ///
 /// # Safety
 ///
@@ -29,13 +29,13 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, v
 	}
 }
 
-/// Add the field to the object, bound to value.
+/// Adds the field to the object, bound to value.
 ///
 /// This shadows any previous binding of the field.
 ///
 /// # Safety
 ///
-/// `obj` should be pointer to object value allocated by make_object, or returned by other library call
+/// `obj` should be a valid pointer to object value allocated by `make_object`, or returned by other library call
 /// `name` should be \0-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_object_append(

@@ -105,7 +105,7 @@ pub trait ContextInitializer {
 	fn as_any(&self) -> &dyn Any;
 }
 
-/// Context initializer, which adds noth
+/// Context initializer which adds nothing.
 pub struct DummyContextInitializer;
 impl ContextInitializer for DummyContextInitializer {
 	fn initialize(&self, _state: State, _for_file: Source) -> Context {

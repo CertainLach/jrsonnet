@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_evaluator::{State, Val};
 
-/// If the value is a string, return it as UTF8 otherwise return NULL.
+/// If the value is a string, return it as UTF-8, otherwise return `NULL`.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &State, v: &Val) -> *mut c_char {
 	match v {
@@ -16,7 +16,7 @@ pub extern "C" fn jsonnet_json_extract_string(_vm: &State, v: &Val) -> *mut c_ch
 	}
 }
 
-/// If the value is a number, return 1 and store the number in out, otherwise return 0.
+/// If the value is a number, return `1` and store the number in out, otherwise return `0`.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_number(_vm: &State, v: &Val, out: &mut c_double) -> c_int {
 	match v {
@@ -28,7 +28,7 @@ pub extern "C" fn jsonnet_json_extract_number(_vm: &State, v: &Val, out: &mut c_
 	}
 }
 
-/// Return 0 if the value is false, 1 if it is true, and 2 if it is not a bool.
+/// Return `0` if the value is `false`, `1` if it is `true`, and `2` if it is not a `bool`.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_bool(_vm: &State, v: &Val) -> c_int {
 	match v {
@@ -38,7 +38,7 @@ pub extern "C" fn jsonnet_json_extract_bool(_vm: &State, v: &Val) -> c_int {
 	}
 }
 
-/// Return 1 if the value is null, else 0.
+/// Return `1` if the value is `null`, otherwise return `0`.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_null(_vm: &State, v: &Val) -> c_int {
 	match v {
