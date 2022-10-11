@@ -44,7 +44,7 @@ impl FromStr for ExtFile {
 		if out.len() != 2 {
 			return Err("bad ext-file syntax".to_owned());
 		}
-		let file = read_to_string(&out[1]);
+		let file = read_to_string(out[1]);
 		match file {
 			Ok(content) => Ok(Self {
 				name: out[0].into(),

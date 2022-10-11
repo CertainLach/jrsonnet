@@ -70,6 +70,7 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 
 /// Creates a new Jsonnet virtual machine.
 #[no_mangle]
+#[allow(clippy::box_default)]
 pub extern "C" fn jsonnet_make() -> *mut State {
 	let state = State::default();
 	state.settings_mut().import_resolver = Box::new(FileImportResolver::default());

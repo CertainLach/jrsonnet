@@ -108,7 +108,7 @@ impl ArgsLike for Vec<Val> {
 		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		for (idx, el) in self.iter().enumerate() {
-			handler(idx, Thunk::evaluated(el.clone()))?
+			handler(idx, Thunk::evaluated(el.clone()))?;
 		}
 		Ok(())
 	}

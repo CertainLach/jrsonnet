@@ -292,7 +292,7 @@ impl ArrValue {
 				if index >= v.to() {
 					return Ok(None);
 				}
-				v.inner.get(s, index as usize)
+				v.inner.get(s, index)
 			}
 		}
 	}
@@ -332,7 +332,7 @@ impl ArrValue {
 				if index >= s.to() {
 					return None;
 				}
-				s.inner.get_lazy(index as usize)
+				s.inner.get_lazy(index)
 			}
 		}
 	}
@@ -531,8 +531,9 @@ impl From<IndexableVal> for Val {
 	}
 }
 
-#[cfg(target_pointer_width = "64")]
-static_assertions::assert_eq_size!(Val, [u8; 32]);
+// Broken between stable and nightly, as there is new layout size optimization
+// #[cfg(target_pointer_width = "64")]
+// static_assertions::assert_eq_size!(Val, [u8; 24]);
 
 impl Val {
 	pub const fn as_bool(&self) -> Option<bool> {

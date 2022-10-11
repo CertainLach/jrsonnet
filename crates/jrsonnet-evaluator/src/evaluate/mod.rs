@@ -436,7 +436,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(s, ctx, v)?)?,
 		Var(name) => s.push(
 			CallLocation::new(loc),
-			|| format!("variable <{}> access", name),
+			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(s.clone()),
 		)?,
 		Index(value, index) => {
@@ -446,7 +446,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			) {
 				(Val::Obj(v), Val::Str(key)) => s.push(
 					CallLocation::new(loc),
-					|| format!("field <{}> access", key),
+					|| format!("field <{key}> access"),
 					|| match v.get(s.clone(), key.clone()) {
 						Ok(Some(v)) => Ok(v),
 						#[cfg(not(feature = "friendly-errors"))]
@@ -611,7 +611,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				if let Some(value) = expr {
 					Ok(Some(s.push(
 						loc,
-						|| format!("slice {}", desc),
+						|| format!("slice {desc}"),
 						|| T::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
 					)?))
 				} else {

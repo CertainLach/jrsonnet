@@ -12,7 +12,7 @@ pub mod manifest;
 pub fn std_format(s: State, str: IStr, vals: Val) -> Result<String> {
 	s.push(
 		CallLocation::native(),
-		|| format!("std.format of {}", str),
+		|| format!("std.format of {str}"),
 		|| {
 			Ok(match vals {
 				Val::Arr(vals) => format_arr(s.clone(), &str, &vals.evaluated(s.clone())?)?,

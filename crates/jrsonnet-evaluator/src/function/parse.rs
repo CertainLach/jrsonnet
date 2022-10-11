@@ -179,12 +179,7 @@ pub fn parse_builtin_call(
 		// FIXME: O(n) for arg existence check
 		let id = params
 			.iter()
-			.position(|p| {
-				p.name
-					.as_ref()
-					.map(|v| &v as &str == name as &str)
-					.unwrap_or(false)
-			})
+			.position(|p| p.name.as_ref().map_or(false, |v| v as &str == name as &str))
 			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
 		if replace(&mut passed_args[id], Some(arg)).is_some() {
 			throw!(BindingParameterASecondTime(name.clone()));
@@ -209,8 +204,7 @@ pub fn parse_builtin_call(
 					if param
 						.name
 						.as_ref()
-						.map(|v| &v as &str == name as &str)
-						.unwrap_or(false)
+						.map_or(false, |v| v as &str == name as &str)
 					{
 						found = true;
 					}

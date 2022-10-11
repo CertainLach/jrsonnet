@@ -16,12 +16,9 @@ pub enum PathResolver {
 }
 
 impl PathResolver {
-	/// Will return Self::Relative(cwd), or Self::Absolute on cwd failure
+	/// Will return `Self::Relative(cwd)`, or `Self::Absolute` on cwd failure
 	pub fn new_cwd_fallback() -> Self {
-		match std::env::current_dir() {
-			Ok(v) => Self::Relative(v),
-			Err(_) => Self::Absolute,
-		}
+		std::env::current_dir().map_or(Self::Absolute, Self::Relative)
 	}
 	pub fn resolve(&self, from: &Path) -> String {
 		match self {
@@ -97,10 +94,10 @@ impl TraceFormat for CompactFormat {
 			use std::fmt::Write;
 
 			writeln!(out)?;
-			let mut n = match path.source_path().path() {
-				Some(r) => self.resolver.resolve(r),
-				None => path.source_path().to_string(),
-			};
+			let mut n = path.source_path().path().map_or_else(
+				|| path.source_path().to_string(),
+				|r| self.resolver.resolve(r),
+			);
 			let mut offset = error.location.offset;
 			let is_eof = if offset >= path.code().len() {
 				offset = path.code().len().saturating_sub(1);
@@ -119,7 +116,7 @@ impl TraceFormat for CompactFormat {
 
 			write!(n, ":").unwrap();
 			print_code_location(&mut n, &location, &location).unwrap();
-			write!(out, "{:<p$}{}", "", n, p = self.padding,)?;
+			write!(out, "{:<p$}{n}", "", p = self.padding)?;
 		}
 		let file_names = error
 			.trace()
@@ -185,10 +182,10 @@ impl TraceFormat for JsFormat {
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
 				let start_end = source.0.map_source_locations(&[source.1, source.2]);
-				let resolved_path = match source.0.source_path().path() {
-					Some(r) => r.display().to_string(),
-					None => source.0.source_path().to_string(),
-				};
+				let resolved_path = source.0.source_path().path().map_or_else(
+					|| source.0.source_path().to_string(),
+					|r| r.display().to_string(),
+				);
 
 				write!(
 					out,
@@ -196,7 +193,7 @@ impl TraceFormat for JsFormat {
 					desc, resolved_path, start_end[0].line, start_end[0].column,
 				)?;
 			} else {
-				write!(out, "    during {}", desc)?;
+				write!(out, "    during {desc}")?;
 			}
 		}
 		Ok(())
@@ -252,7 +249,7 @@ impl TraceFormat for ExplainingFormat {
 					desc,
 				)?;
 			} else {
-				write!(out, "{}", desc)?;
+				write!(out, "{desc}")?;
 			}
 		}
 		Ok(())
@@ -280,10 +277,10 @@ impl ExplainingFormat {
 			.take(end.line_end_offset - end.line_start_offset)
 			.collect();
 
-		let origin = match origin.source_path().path() {
-			Some(r) => self.resolver.resolve(r),
-			None => origin.source_path().to_string(),
-		};
+		let origin = origin.source_path().path().map_or_else(
+			|| origin.source_path().to_string(),
+			|r| self.resolver.resolve(r),
+		);
 		let snippet = Snippet {
 			opt: FormatOptions {
 				color: true,
@@ -308,7 +305,7 @@ impl ExplainingFormat {
 		};
 
 		let dl = DisplayList::from(snippet);
-		write!(out, "{}", dl)?;
+		write!(out, "{dl}")?;
 
 		Ok(())
 	}

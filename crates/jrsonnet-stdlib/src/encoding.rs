@@ -28,7 +28,7 @@ pub fn builtin_base64(input: Either![IBytes, IStr]) -> Result<String> {
 
 #[builtin]
 pub fn builtin_base64_decode_bytes(input: IStr) -> Result<IBytes> {
-	Ok(base64::decode(&input.as_bytes())
+	Ok(base64::decode(input.as_bytes())
 		.map_err(|_| RuntimeError("bad base64".into()))?
 		.as_slice()
 		.into())
@@ -36,6 +36,6 @@ pub fn builtin_base64_decode_bytes(input: IStr) -> Result<IBytes> {
 
 #[builtin]
 pub fn builtin_base64_decode(input: IStr) -> Result<String> {
-	let bytes = base64::decode(&input.as_bytes()).map_err(|_| RuntimeError("bad base64".into()))?;
+	let bytes = base64::decode(input.as_bytes()).map_err(|_| RuntimeError("bad base64".into()))?;
 	Ok(String::from_utf8(bytes).map_err(|_| RuntimeError("bad utf8".into()))?)
 }

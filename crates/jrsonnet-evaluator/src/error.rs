@@ -100,7 +100,7 @@ pub enum Error {
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),
 
-	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
+	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
@@ -113,7 +113,7 @@ pub enum Error {
 	BindingParameterASecondTime(IStr),
 	#[error("too many args, function has {0}{}", format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
-	#[error("function argument is not passed: {}{}", .0.as_ref().map(|n| n.as_str()).unwrap_or("<unnamed>"), format_signature(.1))]
+	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
 	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
@@ -249,7 +249,7 @@ impl Debug for LocError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
-			writeln!(f, "\t{:?}", el)?;
+			writeln!(f, "\t{el:?}")?;
 		}
 		Ok(())
 	}

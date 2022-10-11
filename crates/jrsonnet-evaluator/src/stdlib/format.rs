@@ -45,7 +45,7 @@ pub fn try_parse_mapping_key(str: &str) -> ParseResult<&str> {
 		let mut i = 1;
 		while i < bytes.len() {
 			if bytes[i] == b')' {
-				return Ok((&str[1..i as usize], &str[i as usize + 1..]));
+				return Ok((&str[1..i], &str[i + 1..]));
 			}
 			i += 1;
 		}
@@ -310,6 +310,7 @@ pub fn render_integer(
 		nums
 	};
 	let neg = iv < 0.0;
+	#[allow(clippy::bool_to_int_with_if)]
 	let zp = padding.saturating_sub(if neg || blank || sign { 1 } else { 0 });
 	let zp2 = zp
 		.max(precision)
@@ -406,6 +407,7 @@ pub fn render_float(
 	ensure_pt: bool,
 	trailing: bool,
 ) {
+	#[allow(clippy::bool_to_int_with_if)]
 	let dot_size = if precision == 0 && !ensure_pt { 0 } else { 1 };
 	padding = padding.saturating_sub(dot_size + precision);
 	render_decimal(out, n.floor(), padding, 0, blank, sign);
@@ -478,10 +480,7 @@ pub fn format_code(
 	precision: Option<usize>,
 ) -> Result<()> {
 	let clfags = &code.cflags;
-	let (fpprec, iprec) = match precision {
-		Some(v) => (v, v),
-		None => (6, 0),
-	};
+	let (fpprec, iprec) = precision.map_or((6, 0), |v| (v, v));
 	let padding = if clfags.zero && !clfags.left {
 		width
 	} else {
@@ -586,8 +585,10 @@ pub fn format_code(
 			}
 		}
 		ConvTypeV::Char => match value.clone() {
-			Val::Num(n) => tmp_out
-				.push(std::char::from_u32(n as u32).ok_or(InvalidUnicodeCodepointGot(n as u32))?),
+			Val::Num(n) => tmp_out.push(
+				std::char::from_u32(n as u32)
+					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
+			),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
 					throw!(RuntimeError(

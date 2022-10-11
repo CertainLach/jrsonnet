@@ -30,8 +30,8 @@ pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 		(Str(a), Num(b)) => Str(format!("{a}{b}").into()),
 
 		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::Str(o.clone().to_string(s)?),
-		(Str(a), o) => Str(format!("{}{}", a, o.clone().to_string(s)?).into()),
-		(o, Str(a)) => Str(format!("{}{}", o.clone().to_string(s)?, a).into()),
+		(Str(a), o) => Str(format!("{a}{}", o.clone().to_string(s)?).into()),
+		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string(s)?).into()),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => {

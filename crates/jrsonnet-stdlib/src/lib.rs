@@ -366,7 +366,7 @@ const fn builtin_codepoint(str: char) -> Result<u32> {
 
 #[builtin]
 fn builtin_substr(str: IStr, from: usize, len: usize) -> Result<String> {
-	Ok(str.chars().skip(from as usize).take(len as usize).collect())
+	Ok(str.chars().skip(from).take(len).collect())
 }
 
 #[builtin(fields(
@@ -380,7 +380,7 @@ fn builtin_ext_var(this: &builtin_ext_var, s: State, x: IStr) -> Result<Any> {
 		.ext_vars
 		.get(&x)
 		.cloned()
-		.ok_or(UndefinedExternalVariable(x))?
+		.ok_or_else(|| UndefinedExternalVariable(x))?
 		.evaluate_arg(s.clone(), ctx, true)?
 		.evaluate(s)?))
 }
@@ -402,7 +402,7 @@ fn builtin_native(this: &builtin_native, name: IStr) -> Result<Any> {
 
 #[builtin]
 fn builtin_char(n: u32) -> Result<char> {
-	Ok(std::char::from_u32(n as u32).ok_or(InvalidUnicodeCodepointGot(n as u32))?)
+	Ok(std::char::from_u32(n).ok_or_else(|| InvalidUnicodeCodepointGot(n))?)
 }
 
 #[builtin(fields(

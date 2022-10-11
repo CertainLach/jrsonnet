@@ -123,15 +123,11 @@ impl ImportResolver for FileImportResolver {
 		};
 		if meta.is_file() {
 			Ok(SourcePath::new(SourceFile::new(
-				path.canonicalize()
-					.map_err(|e| ImportIo(e.to_string()))?
-					.to_owned(),
+				path.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
 			)))
 		} else if meta.is_dir() {
 			Ok(SourcePath::new(SourceDirectory::new(
-				path.canonicalize()
-					.map_err(|e| ImportIo(e.to_string()))?
-					.to_owned(),
+				path.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
 			)))
 		} else {
 			unreachable!("this can't be a symlink")

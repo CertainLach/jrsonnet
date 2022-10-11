@@ -156,9 +156,9 @@ impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(super_obj) = self.0.sup.as_ref() {
 			if f.alternate() {
-				write!(f, "{:#?}", super_obj)?;
+				write!(f, "{super_obj:#?}")?;
 			} else {
-				write!(f, "{:?}", super_obj)?;
+				write!(f, "{super_obj:?}")?;
 			}
 			write!(f, " + ")?;
 		}
@@ -395,10 +395,9 @@ impl ObjValue {
 			})?;
 		self.0.value_cache.borrow_mut().insert(
 			key,
-			match &value {
-				Some(v) => CacheValue::Cached(v.clone()),
-				None => CacheValue::NotFound,
-			},
+			value
+				.as_ref()
+				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),
 		);
 		Ok(value)
 	}
