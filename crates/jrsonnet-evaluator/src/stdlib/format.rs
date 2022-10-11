@@ -285,7 +285,7 @@ const NUMBERS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 #[inline]
 pub fn render_integer(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	blank: bool,
@@ -294,20 +294,22 @@ pub fn render_integer(
 	prefix: &str,
 	caps: bool,
 ) {
+	let radix = radix as f64;
+	let iv = iv.floor();
 	// Digit char indexes in reverse order, i.e
 	// for radix = 16 and n = 12f: [15, 2, 1]
-	let digits = if iv == 0 {
+	let digits = if iv == 0.0 {
 		vec![0u8]
 	} else {
 		let mut v = iv.abs();
 		let mut nums = Vec::with_capacity(1);
-		while v > 0 {
+		while v != 0.0 {
 			nums.push((v % radix) as u8);
-			v /= radix;
+			v = (v / radix).floor();
 		}
 		nums
 	};
-	let neg = iv < 0;
+	let neg = iv < 0.0;
 	let zp = padding.saturating_sub(if neg || blank || sign { 1 } else { 0 });
 	let zp2 = zp
 		.max(precision)
@@ -335,7 +337,7 @@ pub fn render_integer(
 
 pub fn render_decimal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	blank: bool,
@@ -345,7 +347,7 @@ pub fn render_decimal(
 }
 pub fn render_octal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	alt: bool,
@@ -360,7 +362,7 @@ pub fn render_octal(
 		blank,
 		sign,
 		8,
-		if alt && iv != 0 { "0" } else { "" },
+		if alt && iv != 0.0 { "0" } else { "" },
 		false,
 	);
 }
@@ -368,7 +370,7 @@ pub fn render_octal(
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn render_hexadecimal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	alt: bool,
@@ -406,7 +408,7 @@ pub fn render_float(
 ) {
 	let dot_size = if precision == 0 && !ensure_pt { 0 } else { 1 };
 	padding = padding.saturating_sub(dot_size + precision);
-	render_decimal(out, n.floor() as i64, padding, 0, blank, sign);
+	render_decimal(out, n.floor(), padding, 0, blank, sign);
 	if precision == 0 {
 		if ensure_pt {
 			out.push('.');
@@ -420,7 +422,7 @@ pub fn render_float(
 	if trailing || frac > 0.0 {
 		out.push('.');
 		let mut frac_str = String::new();
-		render_decimal(&mut frac_str, frac as i64, precision, 0, false, false);
+		render_decimal(&mut frac_str, frac, precision, 0, false, false);
 		let mut trim = frac_str.len();
 		if !trailing {
 			for b in frac_str.as_bytes().iter().rev() {
@@ -454,7 +456,7 @@ pub fn render_float_sci(
 		n / 10.0_f64.powf(exponent)
 	};
 	let mut exponent_str = String::new();
-	render_decimal(&mut exponent_str, exponent as i64, 3, 0, false, true);
+	render_decimal(&mut exponent_str, exponent, 3, 0, false, true);
 
 	// +1 for e
 	padding = padding.saturating_sub(exponent_str.len() + 1);
@@ -495,7 +497,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_decimal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.blank,
@@ -506,7 +508,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_octal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.alt,
@@ -518,7 +520,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_hexadecimal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.alt,
