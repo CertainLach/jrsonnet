@@ -1,11 +1,12 @@
 use std::{
+	borrow::Cow,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 };
 
 use jrsonnet_evaluator::{
 	error::{Error, LocError},
-	function::builtin::{BuiltinParam, NativeCallback, NativeCallbackHandler},
+	function::builtin::{NativeCallback, NativeCallbackHandler},
 	tb,
 	typed::Typed,
 	IStr, State, Val,
@@ -87,10 +88,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		let param = CStr::from_ptr(*raw_params)
 			.to_str()
 			.expect("param name is not utf-8");
-		params.push(BuiltinParam {
-			name: param.into(),
-			has_default: false,
-		});
+		params.push(Cow::Owned(param.into()));
 		raw_params = raw_params.offset(1);
 	}
 

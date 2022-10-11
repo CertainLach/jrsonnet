@@ -113,8 +113,8 @@ pub enum Error {
 	BindingParameterASecondTime(IStr),
 	#[error("too many args, function has {0}{}", format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
-	#[error("function argument is not passed: {0}{}", format_signature(.1))]
-	FunctionParameterNotBoundInCall(IStr, FunctionSignature),
+	#[error("function argument is not passed: {}{}", .0.as_ref().map(|n| n.as_str()).unwrap_or("<unnamed>"), format_signature(.1))]
+	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),

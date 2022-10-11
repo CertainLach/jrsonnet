@@ -9,7 +9,9 @@ pub type BuiltinParamName = Cow<'static, str>;
 
 #[derive(Clone, Trace)]
 pub struct BuiltinParam {
-	pub name: BuiltinParamName,
+	/// Parameter name for named call parsing
+	pub name: Option<BuiltinParamName>,
+	/// Is implementation allowed to return empty value
 	pub has_default: bool,
 }
 
@@ -40,8 +42,20 @@ pub struct NativeCallback {
 }
 impl NativeCallback {
 	#[deprecated = "prefer using builtins directly, use this interface only for bindings"]
-	pub fn new(params: Vec<BuiltinParam>, handler: TraceBox<dyn NativeCallbackHandler>) -> Self {
-		Self { params, handler }
+	pub fn new(
+		params: Vec<Cow<'static, str>>,
+		handler: TraceBox<dyn NativeCallbackHandler>,
+	) -> Self {
+		Self {
+			params: params
+				.into_iter()
+				.map(|n| BuiltinParam {
+					name: Some(n),
+					has_default: false,
+				})
+				.collect(),
+			handler,
+		}
 	}
 }
 
@@ -58,11 +72,12 @@ impl Builtin for NativeCallback {
 
 	fn call(&self, s: State, ctx: Context, _loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
-		let mut out_args = Vec::with_capacity(self.params.len());
-		for p in &self.params {
-			out_args.push(args[&p.name].evaluate(s.clone())?);
-		}
-		self.handler.call(s, &out_args)
+		let args = args
+			.into_iter()
+			.map(|a| a.expect("legacy natives have no default params"))
+			.map(|a| a.evaluate(s.clone()))
+			.collect::<Result<Vec<Val>>>()?;
+		self.handler.call(s, &args)
 	}
 }
 
