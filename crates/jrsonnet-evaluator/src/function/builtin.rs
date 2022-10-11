@@ -13,10 +13,15 @@ pub struct BuiltinParam {
 	pub has_default: bool,
 }
 
-/// Do not implement it directly, instead use #[builtin] macro
+/// Description of function defined by native code
+///
+/// Prefer to use #[builtin] macro, instead of manual implementation of this trait
 pub trait Builtin: Trace {
+	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
+	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
+	/// Call the builtin
 	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
 }
 
