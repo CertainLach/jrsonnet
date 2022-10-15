@@ -41,17 +41,10 @@ unsafe fn parse_path(input: &CStr) -> Cow<Path> {
 		let str = OsStr::from_bytes(input.to_bytes());
 		Cow::Borrowed(Path::new(str))
 	}
-	#[cfg(target_family = "windows")]
+	#[cfg(not(target_family = "unix"))]
 	{
-		use std::os::windows::ffi::OsStringExt;
-		let str = input.to_str().expect("input is not utf8");
-		let wide = str.encode_utf16().collect::<Vec<_>>();
-		let wide = OsString::from_wide(&wide);
-		Cow::Owned(PathBuf::new(wide))
-	}
-	#[cfg(not(any(target_family = "unix", target_family = "windows")))]
-	{
-		compile_error!("unsupported os")
+		let string = input.to_str().expect("bad utf-8");
+		Cow::Borrowed(string.as_ref())
 	}
 }
 
@@ -62,9 +55,11 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 		let str = CString::new(input.as_os_str().as_bytes()).expect("input has zero byte in it");
 		Cow::Owned(str)
 	}
-	#[cfg(not(any(target_family = "unix", target_family = "windows")))]
+	#[cfg(not(target_family = "unix"))]
 	{
-		compile_error!("unsupported os")
+		let str = input.as_os_str().to_str().expect("bad utf-8");
+		let cstr = CString::new(str).expect("input has NUL inside");
+		Cow::Owned(cstr)
 	}
 }
 
@@ -169,7 +164,7 @@ pub extern "C" fn jsonnet_max_trace(vm: &State, v: c_uint) {
 ///
 /// # Safety
 ///
-/// `filename` should be a \0-terminated string
+/// `filename` should be a NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_evaluate_file(
 	vm: &State,
@@ -200,7 +195,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 ///
 /// # Safety
 ///
-/// `filename`, `snippet` should be a \0-terminated strings
+/// `filename`, `snippet` should be a NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	vm: &State,

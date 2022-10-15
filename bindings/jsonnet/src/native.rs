@@ -65,9 +65,9 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// # Safety
 ///
 /// `vm` should be a vm allocated by `jsonnet_make`
-/// `cb` should be a correct function pointer
-/// `raw_params` should point to a NULL-terminated string array
-/// `name`, `raw_params` elements should be a \0-terminated strings
+/// `name` should be a NUL-terminated string
+/// `cb` should be a function pointer
+/// `raw_params` should point to a NULL-terminated array of NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_native_callback(
 	vm: &State,

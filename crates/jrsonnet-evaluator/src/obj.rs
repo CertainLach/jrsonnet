@@ -15,7 +15,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, LazyBinding, Result, State, Thunk, Unbound, Val,
+	throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -100,7 +100,7 @@ pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
 	original_index: FieldIndex,
-	pub invoke: LazyBinding,
+	pub invoke: MaybeUnbound,
 	pub location: Option<ExprLocation>,
 }
 
@@ -208,7 +208,7 @@ impl ObjValue {
 		new.insert(key, value);
 		Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
 	}
-	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder> {
+	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder<'_>> {
 		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
 	}
 
@@ -239,6 +239,8 @@ impl ObjValue {
 	}
 
 	/// Run callback for every field found in object
+	///
+	/// Returns true if ended prematurely
 	pub(crate) fn enum_fields(
 		&self,
 		depth: SuperDepth,
@@ -500,7 +502,7 @@ impl ObjValueBuilder {
 		self.assertions.push(assertion);
 		self
 	}
-	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder> {
+	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder<'_>> {
 		let field_index = self.next_field_index;
 		self.next_field_index = self.next_field_index.next();
 		ObjMemberBuilder::new(ValueBuilder(self), name, field_index)
@@ -558,7 +560,7 @@ impl<Kind> ObjMemberBuilder<Kind> {
 		self.location = Some(location);
 		self
 	}
-	fn build_member(self, binding: LazyBinding) -> (Kind, IStr, ObjMember) {
+	fn build_member(self, binding: MaybeUnbound) -> (Kind, IStr, ObjMember) {
 		(
 			self.kind,
 			self.name,
@@ -574,18 +576,18 @@ impl<Kind> ObjMemberBuilder<Kind> {
 }
 
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
-impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
+impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn value(self, s: State, value: Val) -> Result<()> {
-		self.binding(s, LazyBinding::Bound(Thunk::evaluated(value)))
+		self.binding(s, MaybeUnbound::Bound(Thunk::evaluated(value)))
 	}
 	pub fn bindable(
 		self,
 		s: State,
 		bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>,
 	) -> Result<()> {
-		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
+		self.binding(s, MaybeUnbound::Unbound(Cc::new(bindable)))
 	}
-	pub fn binding(self, s: State, binding: LazyBinding) -> Result<()> {
+	pub fn binding(self, s: State, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
 		let location = member.location.clone();
 		let old = receiver.0.map.insert(name.clone(), member);
@@ -601,14 +603,14 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 }
 
 pub struct ExtendBuilder<'v>(&'v mut ObjValue);
-impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
+impl ObjMemberBuilder<ExtendBuilder<'_>> {
 	pub fn value(self, value: Val) {
-		self.binding(LazyBinding::Bound(Thunk::evaluated(value)));
+		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value)));
 	}
 	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) {
-		self.binding(LazyBinding::Bindable(Cc::new(bindable)));
+		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));
 	}
-	pub fn binding(self, binding: LazyBinding) {
+	pub fn binding(self, binding: MaybeUnbound) {
 		let (receiver, name, member) = self.build_member(binding);
 		let new = receiver.0.clone();
 		*receiver.0 = new.extend_with_raw_member(name, member);

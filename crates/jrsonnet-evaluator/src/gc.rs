@@ -22,7 +22,7 @@ macro_rules! tb {
 }
 
 impl<T: ?Sized + Trace> Trace for TraceBox<T> {
-	fn trace(&self, tracer: &mut Tracer) {
+	fn trace(&self, tracer: &mut Tracer<'_>) {
 		self.0.trace(tracer);
 	}
 
@@ -92,7 +92,7 @@ impl<V> Trace for GcHashSet<V>
 where
 	V: Trace,
 {
-	fn trace(&self, tracer: &mut jrsonnet_gcmodule::Tracer) {
+	fn trace(&self, tracer: &mut Tracer<'_>) {
 		for v in &self.0 {
 			v.trace(tracer);
 		}
@@ -133,7 +133,7 @@ where
 	K: Trace,
 	V: Trace,
 {
-	fn trace(&self, tracer: &mut jrsonnet_gcmodule::Tracer) {
+	fn trace(&self, tracer: &mut Tracer<'_>) {
 		for (k, v) in &self.0 {
 			k.trace(tracer);
 			v.trace(tracer);

@@ -12,7 +12,7 @@ use jrsonnet_gcmodule::Cc;
 ///
 /// # Safety
 ///
-/// `v` should be a \0-terminated string
+/// `v` should be a NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_make_string(_vm: &State, val: *const c_char) -> *mut Val {
 	let val = CStr::from_ptr(val);

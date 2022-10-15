@@ -269,9 +269,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 		}
 	}
 	let this = builder.build();
-	let _ctx = ctx
-		.extend(GcHashMap::new(), None, None, Some(this.clone()))
-		.into_future(fctx);
+	fctx.fill(ctx.extend(GcHashMap::new(), None, None, Some(this.clone())));
 	Ok(this)
 }
 
@@ -356,7 +354,7 @@ pub fn evaluate_apply(
 	ctx: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: CallLocation,
+	loc: CallLocation<'_>,
 	tailstrict: bool,
 ) -> Result<Val> {
 	let value = evaluate(s.clone(), ctx.clone(), value)?;
@@ -602,7 +600,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Slice(value, desc) => {
 			fn parse_idx<T: Typed>(
-				loc: CallLocation,
+				loc: CallLocation<'_>,
 				s: State,
 				ctx: &Context,
 				expr: &Option<LocExpr>,

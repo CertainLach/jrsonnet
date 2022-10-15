@@ -11,8 +11,8 @@ use jrsonnet_gcmodule::Cc;
 ///
 /// # Safety
 ///
-/// `arr` should be correct pointer to array value allocated by make_array, or returned by other library call
-/// `val` should be correct pointer to value allocated using this library
+/// `arr` should be a pointer to array value allocated by make_array, or returned by other library call
+/// `val` should be a pointer to value allocated using this library
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, val: &Val) {
 	match arr {
@@ -35,8 +35,8 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, v
 ///
 /// # Safety
 ///
-/// `obj` should be a valid pointer to object value allocated by `make_object`, or returned by other library call
-/// `name` should be \0-terminated string
+/// `obj` should be a pointer to object value allocated by `make_object`, or returned by other library call
+/// `name` should be NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_object_append(
 	_vm: &State,

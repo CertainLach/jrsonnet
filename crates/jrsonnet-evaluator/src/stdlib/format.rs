@@ -36,7 +36,7 @@ use FormatError::*;
 
 type ParseResult<'t, T> = std::result::Result<(T, &'t str), FormatError>;
 
-pub fn try_parse_mapping_key(str: &str) -> ParseResult<&str> {
+pub fn try_parse_mapping_key(str: &str) -> ParseResult<'_, &str> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -96,7 +96,7 @@ pub struct CFlags {
 	pub sign: bool,
 }
 
-pub fn try_parse_cflags(str: &str) -> ParseResult<CFlags> {
+pub fn try_parse_cflags(str: &str) -> ParseResult<'_, CFlags> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -125,7 +125,7 @@ pub enum Width {
 	Star,
 	Fixed(usize),
 }
-pub fn try_parse_field_width(str: &str) -> ParseResult<Width> {
+pub fn try_parse_field_width(str: &str) -> ParseResult<'_, Width> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -146,7 +146,7 @@ pub fn try_parse_field_width(str: &str) -> ParseResult<Width> {
 	Ok((Width::Fixed(out), &str[digits..]))
 }
 
-pub fn try_parse_precision(str: &str) -> ParseResult<Option<Width>> {
+pub fn try_parse_precision(str: &str) -> ParseResult<'_, Option<Width>> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -159,7 +159,7 @@ pub fn try_parse_precision(str: &str) -> ParseResult<Option<Width>> {
 }
 
 // Only skips
-pub fn try_parse_length_modifier(str: &str) -> ParseResult<()> {
+pub fn try_parse_length_modifier(str: &str) -> ParseResult<'_, ()> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -191,7 +191,7 @@ pub struct ConvType {
 	caps: bool,
 }
 
-pub fn parse_conversion_type(str: &str) -> ParseResult<ConvType> {
+pub fn parse_conversion_type(str: &str) -> ParseResult<'_, ConvType> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -226,7 +226,7 @@ pub struct Code<'s> {
 	convtype: ConvTypeV,
 	caps: bool,
 }
-pub fn parse_code(str: &str) -> ParseResult<Code> {
+pub fn parse_code(str: &str) -> ParseResult<'_, Code<'_>> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -255,7 +255,7 @@ pub enum Element<'s> {
 	String(&'s str),
 	Code(Code<'s>),
 }
-pub fn parse_codes(mut str: &str) -> Result<Vec<Element>> {
+pub fn parse_codes(mut str: &str) -> Result<Vec<Element<'_>>> {
 	let mut bytes = str.as_bytes();
 	let mut out = vec![];
 	let mut offset = 0;
@@ -475,7 +475,7 @@ pub fn format_code(
 	s: State,
 	out: &mut String,
 	value: &Val,
-	code: &Code,
+	code: &Code<'_>,
 	width: usize,
 	precision: Option<usize>,
 ) -> Result<()> {

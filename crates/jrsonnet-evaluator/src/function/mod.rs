@@ -18,43 +18,50 @@ pub mod builtin;
 pub mod native;
 pub mod parse;
 
+/// Function callsite location.
+/// Either from other jsonnet code, specified by expression location, or from native (without location).
 #[derive(Clone, Copy)]
 pub struct CallLocation<'l>(pub Option<&'l ExprLocation>);
 impl<'l> CallLocation<'l> {
+	/// Construct new location for calls coming from specified jsonnet expression location.
 	pub const fn new(loc: &'l ExprLocation) -> Self {
 		Self(Some(loc))
 	}
 }
 impl CallLocation<'static> {
+	/// Construct new location for calls coming from native code.
 	pub const fn native() -> Self {
 		Self(None)
 	}
 }
 
-/// Function implemented in jsonnet
+/// Represents Jsonnet function defined in code.
 #[derive(Debug, PartialEq, Trace)]
 pub struct FuncDesc {
-	/// In expressions like
+	/// # Example
+	///
+	/// In expressions like this, deducted to `a`, unspecified otherwise.
 	/// ```jsonnet
 	/// local a = function() ...
 	/// local a() ...
 	/// { a: function() ... }
 	/// { a() = ... }
 	/// ```
-	///
-	/// Deducted to `a`, unspecified otherwise
 	pub name: IStr,
-	/// Context, in which this function was evaluated
+	/// Context, in which this function was evaluated.
 	///
-	/// I.e in
+	/// # Example
+	/// In
 	/// ```jsonnet
 	/// local a = 2;
 	/// function() ...
 	/// ```
-	/// context will contain `a`
+	/// context will contain `a`.
 	pub ctx: Context,
 
+	/// Function parameter definition
 	pub params: ParamsDesc,
+	/// Function body
 	pub body: LocExpr,
 }
 impl FuncDesc {
@@ -82,17 +89,17 @@ impl FuncDesc {
 	}
 }
 
-/// Any possible function value, including plain functions and user-provided builtins
+/// Represents a Jsonnet function value, including plain functions and user-provided builtins.
 #[allow(clippy::module_name_repetitions)]
 #[derive(Trace, Clone)]
 pub enum FuncVal {
-	/// std.id
+	/// Identity function, kept this way for comparsions.
 	Id,
-	/// Plain function implemented in jsonnet
+	/// Plain function implemented in jsonnet.
 	Normal(Cc<FuncDesc>),
-	/// Standard library function
+	/// Standard library function.
 	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
-	/// User-provided function
+	/// User-provided function.
 	Builtin(Cc<TraceBox<dyn Builtin>>),
 }
 
@@ -110,9 +117,7 @@ impl Debug for FuncVal {
 }
 
 impl FuncVal {
-	pub fn into_native<D: NativeDesc>(self) -> D::Value {
-		D::into_native(self)
-	}
+	/// Amount of non-default required arguments
 	pub fn params_len(&self) -> usize {
 		match self {
 			Self::Id => 1,
@@ -121,6 +126,7 @@ impl FuncVal {
 			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default).count(),
 		}
 	}
+	/// Function name, as defined in code.
 	pub fn name(&self) -> IStr {
 		match self {
 			Self::Id => "id".into(),
@@ -129,11 +135,14 @@ impl FuncVal {
 			Self::Builtin(builtin) => builtin.name().into(),
 		}
 	}
+	/// Call function using arguments evaluated in specified `call_ctx` [`Context`].
+	///
+	/// If `tailstrict` is specified - then arguments will be evaluated before being passed to function body.
 	pub fn evaluate(
 		&self,
 		s: State,
 		call_ctx: Context,
-		loc: CallLocation,
+		loc: CallLocation<'_>,
 		args: &dyn ArgsLike,
 		tailstrict: bool,
 	) -> Result<Val> {
@@ -156,13 +165,22 @@ impl FuncVal {
 			Self::Builtin(b) => b.call(s, call_ctx, loc, args),
 		}
 	}
+	/// Helper method, which calls [`Self::evaluate`] with sensible defaults for native code.
 	pub fn evaluate_simple(&self, s: State, args: &dyn ArgsLike) -> Result<Val> {
 		self.evaluate(s, Context::default(), CallLocation::native(), args, true)
 	}
+	/// Convert jsonnet function to plain `Fn` value.
+	pub fn into_native<D: NativeDesc>(self) -> D::Value {
+		D::into_native(self)
+	}
 
+	/// Is this function an indentity function.
+	///
+	/// Currently only works for builtin `std.id`, aka `Self::Id` value, `function(x) x` defined by jsonnet will not count as identity.
 	pub const fn is_identity(&self) -> bool {
 		matches!(self, Self::Id)
 	}
+	/// Identity function value.
 	pub const fn identity() -> Self {
 		Self::Id
 	}

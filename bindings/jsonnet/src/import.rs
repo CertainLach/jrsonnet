@@ -93,7 +93,7 @@ impl ImportResolver for CallbackImportResolver {
 
 /// # Safety
 ///
-/// Caller should pass correct callback function
+/// It should be safe to call `cb` using valid values with passed `ctx`
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_import_callback(
 	vm: &State,
@@ -109,10 +109,10 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 
 /// # Safety
 ///
-/// Caller should pass correct path: it should contain correct utf-8, and be \0-terminated
+/// `path` should be a NUL-terminated string
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, v: *const c_char) {
-	let cstr = CStr::from_ptr(v);
+pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, path: *const c_char) {
+	let cstr = CStr::from_ptr(path);
 	let path = PathBuf::from(cstr.to_str().unwrap());
 	let any_resolver = vm.import_resolver();
 	let resolver = any_resolver

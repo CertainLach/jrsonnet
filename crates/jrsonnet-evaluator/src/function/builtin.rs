@@ -24,7 +24,13 @@ pub trait Builtin: Trace {
 	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
 	/// Call the builtin
-	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(
+		&self,
+		s: State,
+		ctx: Context,
+		loc: CallLocation<'_>,
+		args: &dyn ArgsLike,
+	) -> Result<Val>;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
@@ -70,7 +76,13 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, s: State, ctx: Context, _loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+	fn call(
+		&self,
+		s: State,
+		ctx: Context,
+		_loc: CallLocation<'_>,
+		args: &dyn ArgsLike,
+	) -> Result<Val> {
 		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
 		let args = args
 			.into_iter()

@@ -67,7 +67,10 @@ const fn format_empty_str(str: &str) -> &str {
 
 type FunctionSignature = Vec<(Option<IStr>, bool)>;
 
+/// Possible errors
+#[allow(missing_docs)]
 #[derive(Error, Debug, Clone, Trace)]
+#[non_exhaustive]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -217,9 +220,13 @@ impl From<Error> for LocError {
 	}
 }
 
+/// Single stack trace frame
 #[derive(Clone, Debug, Trace)]
 pub struct StackTraceElement {
+	/// Source of this frame
+	/// Some frames only act as description, without attached source
 	pub location: Option<ExprLocation>,
+	/// Frame description
 	pub desc: String,
 }
 #[derive(Debug, Clone, Trace)]

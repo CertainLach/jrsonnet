@@ -20,6 +20,9 @@ impl Debug for ContextInternals {
 	}
 }
 
+/// Context keeps information about current lexical code location
+///
+/// This information includes local variables, top-level object (`$`), current object (`this`), and super object (`super`)
 #[derive(Debug, Clone, Trace)]
 pub struct Context(Cc<ContextInternals>);
 impl Context {
@@ -160,8 +163,11 @@ impl ContextBuilder {
 			extend: Some(parent),
 		}
 	}
+	/// # Panics
+	/// If `name` is already bound
 	pub fn bind(&mut self, name: IStr, value: Thunk<Val>) -> &mut Self {
-		self.bindings.insert(name, value);
+		let old = self.bindings.insert(name, value);
+		assert!(old.is_none(), "variable bound twice in single context call");
 		self
 	}
 	pub fn build(self) -> Context {

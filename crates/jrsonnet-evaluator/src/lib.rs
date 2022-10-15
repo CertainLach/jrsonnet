@@ -1,4 +1,18 @@
-#![warn(clippy::all, clippy::nursery, clippy::pedantic)]
+//! jsonnet interpreter implementation
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![warn(
+	clippy::all,
+	clippy::nursery,
+	clippy::pedantic,
+	// missing_docs,
+	elided_lifetimes_in_paths,
+	explicit_outlives_requirements,
+	noop_method_call,
+	single_use_lifetimes,
+	variant_size_differences,
+	rustdoc::all
+)]
 #![allow(
 	macro_expanded_macro_exports_accessed_by_absolute_paths,
 	clippy::ptr_arg,
@@ -67,23 +81,32 @@ pub use obj::*;
 use trace::{CompactFormat, TraceFormat};
 pub use val::{ManifestFormat, Thunk, Val};
 
+/// Thunk without bound `super`/`this`
+/// object inheritance may be overriden multiple times, and will be fixed only on field read
 pub trait Unbound: Trace {
+	/// Type of value after object context is bound
 	type Bound;
+	/// Create value bound to specified object context
 	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
 }
 
+/// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
+/// Standard jsonnet fields are always unbound
 #[derive(Clone, Trace)]
-pub enum LazyBinding {
-	Bindable(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
+pub enum MaybeUnbound {
+	/// Value needs to be bound to `this`/`super`
+	Unbound(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
+	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
 
-impl Debug for LazyBinding {
+impl Debug for MaybeUnbound {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "LazyBinding")
+		write!(f, "MaybeUnbound")
 	}
 }
-impl LazyBinding {
+impl MaybeUnbound {
+	/// Attach object context to value, if required
 	pub fn evaluate(
 		&self,
 		s: State,
@@ -91,17 +114,19 @@ impl LazyBinding {
 		this: Option<ObjValue>,
 	) -> Result<Thunk<Val>> {
 		match self {
-			Self::Bindable(v) => v.bind(s, sup, this),
+			Self::Unbound(v) => v.bind(s, sup, this),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
 }
 
-/// During import, this trait will be called to create initial context for file
-/// It may initialize global variables, stdlib for example
+/// During import, this trait will be called to create initial context for file.
+/// It may initialize global variables, stdlib for example.
 pub trait ContextInitializer {
+	/// Initialize default file context.
 	fn initialize(&self, state: State, for_file: Source) -> Context;
-
+	/// Allows upcasting from abstract to concrete context initializer.
+	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
 	fn as_any(&self) -> &dyn Any;
 }
 
@@ -116,6 +141,7 @@ impl ContextInitializer for DummyContextInitializer {
 	}
 }
 
+/// Dynamically reconfigurable evaluation settings
 pub struct EvaluationSettings {
 	/// Limits recursion by limiting the number of stack frames
 	pub max_stack: usize,
@@ -401,7 +427,7 @@ impl State {
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: CallLocation,
+		e: CallLocation<'_>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -547,16 +573,13 @@ impl State {
 
 /// Internals
 impl State {
-	// fn data(&self) -> Ref<EvaluationData> {
-	// 	self.0.data.borrow()
-	// }
-	fn data_mut(&self) -> RefMut<EvaluationData> {
+	fn data_mut(&self) -> RefMut<'_, EvaluationData> {
 		self.0.data.borrow_mut()
 	}
-	pub fn settings(&self) -> Ref<EvaluationSettings> {
+	pub fn settings(&self) -> Ref<'_, EvaluationSettings> {
 		self.0.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<EvaluationSettings> {
+	pub fn settings_mut(&self) -> RefMut<'_, EvaluationSettings> {
 		self.0.settings.borrow_mut()
 	}
 }
@@ -623,13 +646,13 @@ impl State {
 	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())
 	}
-	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
+	pub fn import_resolver(&self) -> Ref<'_, dyn ImportResolver> {
 		Ref::map(self.settings(), |s| &*s.import_resolver)
 	}
 	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
 		self.settings_mut().import_resolver = resolver;
 	}
-	pub fn context_initializer(&self) -> Ref<dyn ContextInitializer> {
+	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
 		Ref::map(self.settings(), |s| &*s.context_initializer)
 	}
 
@@ -640,7 +663,7 @@ impl State {
 		self.settings_mut().manifest_format = format;
 	}
 
-	pub fn trace_format(&self) -> Ref<dyn TraceFormat> {
+	pub fn trace_format(&self) -> Ref<'_, dyn TraceFormat> {
 		Ref::map(self.settings(), |s| &*s.trace_format)
 	}
 	pub fn set_trace_format(&self, format: Box<dyn TraceFormat>) {

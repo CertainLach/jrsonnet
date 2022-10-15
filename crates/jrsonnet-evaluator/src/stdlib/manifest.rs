@@ -116,7 +116,7 @@ fn manifest_json_ex_buf(
 						|| {
 							let value = obj.get(s.clone(), field.clone())?.unwrap();
 							manifest_json_ex_buf(s.clone(), &value, buf, cur_padding, options)?;
-							Ok(Val::Null)
+							Ok(())
 						},
 					)?;
 				}
