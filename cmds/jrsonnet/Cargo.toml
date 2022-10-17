@@ -15,9 +15,12 @@ exp-preserve-order = [
     "jrsonnet-evaluator/exp-preserve-order",
     "jrsonnet-evaluator/exp-serde-preserve-order",
     "jrsonnet-cli/exp-preserve-order",
+    "jrsonnet-cli/exp-serde-preserve-order",
 ]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
+# std.thisFile support
+legacy-this-file = ["jrsonnet-cli/legacy-this-file"]
 
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }
@@ -27,5 +30,5 @@ jrsonnet-gcmodule = { version = "0.3.4" }
 
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
-clap = { version = "3.1", features = ["derive"] }
-clap_complete = { version = "3.1" }
+clap = { version = "3.2", features = ["derive"] }
+clap_complete = { version = "3.2" }

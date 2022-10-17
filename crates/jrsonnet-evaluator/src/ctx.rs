@@ -20,6 +20,9 @@ impl Debug for ContextInternals {
 	}
 }
 
+/// Context keeps information about current lexical code location
+///
+/// This information includes local variables, top-level object (`$`), current object (`this`), and super object (`super`)
 #[derive(Debug, Clone, Trace)]
 pub struct Context(Cc<ContextInternals>);
 impl Context {
@@ -136,5 +139,53 @@ impl Default for Context {
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
 		Cc::ptr_eq(&self.0, &other.0)
+	}
+}
+
+pub struct ContextBuilder {
+	bindings: GcHashMap<IStr, Thunk<Val>>,
+	extend: Option<Context>,
+}
+
+impl ContextBuilder {
+	pub fn new() -> Self {
+		Self::with_capacity(0)
+	}
+	pub fn with_capacity(capacity: usize) -> Self {
+		Self {
+			bindings: GcHashMap::with_capacity(capacity),
+			extend: None,
+		}
+	}
+	pub fn extend(parent: Context) -> Self {
+		Self {
+			bindings: GcHashMap::new(),
+			extend: Some(parent),
+		}
+	}
+	/// # Panics
+	/// If `name` is already bound
+	pub fn bind(&mut self, name: IStr, value: Thunk<Val>) -> &mut Self {
+		let old = self.bindings.insert(name, value);
+		assert!(old.is_none(), "variable bound twice in single context call");
+		self
+	}
+	pub fn build(self) -> Context {
+		if let Some(parent) = self.extend {
+			parent.extend(self.bindings, None, None, None)
+		} else {
+			Context(Cc::new(ContextInternals {
+				bindings: LayeredHashMap::new(self.bindings),
+				dollar: None,
+				sup: None,
+				this: None,
+			}))
+		}
+	}
+}
+
+impl Default for ContextBuilder {
+	fn default() -> Self {
+		Self::new()
 	}
 }

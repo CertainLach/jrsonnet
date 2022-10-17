@@ -7,9 +7,11 @@ mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
 pub use peg;
+mod location;
 mod source;
 mod unescape;
-pub use source::Source;
+pub use location::CodeLocation;
+pub use source::{Source, SourceDirectory, SourceFile, SourcePath, SourcePathT, SourceVirtual};
 
 pub struct ParserSettings {
 	pub file_name: Source,
@@ -193,7 +195,7 @@ parser! {
 			/ assertion:assertion(s) {expr::Member::AssertStmt(assertion)}
 			/ field:field(s) {expr::Member::Field(field)}
 		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
-			= pre_locals:(b: obj_local(s) comma() {b})* "[" _ key:expr(s) _ "]" _ plus:"+"? _ ":" _ value:expr(s) post_locals:(comma() b:obj_local(s) {b})* _ forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
+			= pre_locals:(b: obj_local(s) comma() {b})* "[" _ key:expr(s) _ "]" _ plus:"+"? _ ":" _ value:expr(s) post_locals:(comma() b:obj_local(s) {b})* _ ("," _)? forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
 				let mut compspecs = vec![CompSpec::ForSpec(forspec)];
 				compspecs.extend(others.unwrap_or_default());
 				expr::ObjBody::ObjComp(expr::ObjComp{
@@ -251,10 +253,6 @@ parser! {
 
 		pub rule expr_basic(s: &ParserSettings) -> Expr
 			= literal(s)
-
-			/ quiet!{"$intrinsicThisFile" {Expr::IntrinsicThisFile}}
-			/ quiet!{"$intrinsicId" {Expr::IntrinsicId}}
-			/ quiet!{"$intrinsic(" name:id() ")" {Expr::Intrinsic(name)}}
 
 			/ string_expr(s) / number_expr(s)
 			/ array_expr(s)
@@ -362,8 +360,7 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 
 #[cfg(test)]
 pub mod tests {
-	use std::borrow::Cow;
-
+	use jrsonnet_interner::IStr;
 	use BinaryOpType::*;
 
 	use super::{expr::*, parse};
@@ -374,7 +371,7 @@ pub mod tests {
 			parse(
 				$s,
 				&ParserSettings {
-					file_name: Source::new_virtual(Cow::Borrowed("<test>")),
+					file_name: Source::new_virtual("<test>".into(), IStr::empty()),
 				},
 			)
 			.unwrap()
@@ -385,7 +382,11 @@ pub mod tests {
 		($expr:expr, $from:expr, $to:expr$(,)?) => {
 			LocExpr(
 				std::rc::Rc::new($expr),
-				ExprLocation(Source::new_virtual(Cow::Borrowed("<test>")), $from, $to),
+				ExprLocation(
+					Source::new_virtual("<test>".into(), IStr::empty()),
+					$from,
+					$to,
+				),
 			)
 		};
 	}
@@ -715,15 +716,10 @@ pub mod tests {
 	}
 
 	#[test]
-	fn can_parse_stdlib() {
-		parse!(jrsonnet_stdlib::STDLIB_STR);
-	}
-
-	#[test]
 	fn add_location_info_to_all_sub_expressions() {
 		use Expr::*;
 
-		let file_name = Source::new_virtual(Cow::Borrowed("<test>"));
+		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
 			&ParserSettings { file_name },

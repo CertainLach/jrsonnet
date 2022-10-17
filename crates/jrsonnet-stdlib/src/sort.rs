@@ -1,26 +1,12 @@
-use jrsonnet_gcmodule::{Cc, Trace};
-
-use crate::{
-	error::{Error, LocError, Result},
-	function::FuncVal,
-	throw,
+use jrsonnet_evaluator::{
+	error::Result,
+	function::{builtin, FuncVal},
+	throw_runtime,
 	typed::Any,
+	val::ArrValue,
 	State, Val,
 };
-
-#[derive(Debug, Clone, thiserror::Error, Trace)]
-pub enum SortError {
-	#[error("sort key should be string or number")]
-	SortKeyShouldBeStringOrNumber,
-	#[error("sort elements should have equal types")]
-	SortElementsShouldHaveEqualType,
-}
-
-impl From<SortError> for LocError {
-	fn from(s: SortError) -> Self {
-		Self::new(Error::Sort(s))
-	}
-}
+use jrsonnet_gcmodule::Cc;
 
 #[derive(Copy, Clone)]
 enum SortKeyType {
@@ -44,7 +30,7 @@ impl Ord for NonNaNf64 {
 }
 
 fn get_sort_type<T>(
-	values: &mut Vec<T>,
+	values: &mut [T],
 	key_getter: impl Fn(&mut T) -> &mut Val,
 ) -> Result<SortKeyType> {
 	let mut sort_type = SortKeyType::Unknown;
@@ -55,9 +41,9 @@ fn get_sort_type<T>(
 			(Val::Num(_), SortKeyType::Unknown) => sort_type = SortKeyType::Number,
 			(Val::Str(_), SortKeyType::String) | (Val::Num(_), SortKeyType::Number) => {}
 			(Val::Str(_) | Val::Num(_), _) => {
-				throw!(SortError::SortElementsShouldHaveEqualType)
+				throw_runtime!("sort elements should have the same types")
 			}
-			_ => throw!(SortError::SortKeyShouldBeStringOrNumber),
+			_ => throw_runtime!("sort key should either be a string or a number"),
 		}
 	}
 	Ok(sort_type)
@@ -107,4 +93,17 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Ve
 		};
 		Ok(Cc::new(vk.into_iter().map(|v| v.0).collect()))
 	}
+}
+
+#[builtin]
+#[allow(non_snake_case)]
+pub fn builtin_sort(s: State, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+	if arr.len() <= 1 {
+		return Ok(arr);
+	}
+	Ok(ArrValue::Eager(super::sort::sort(
+		s.clone(),
+		arr.evaluated(s)?,
+		keyF.unwrap_or_else(FuncVal::identity),
+	)?))
 }

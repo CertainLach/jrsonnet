@@ -84,6 +84,8 @@ impl Inner {
 		unsafe { Self::new_raw(str.as_bytes(), true) }
 	}
 
+	// `slice::from_raw_parts` is not yet stabilized
+	#[allow(clippy::missing_const_for_fn)]
 	pub fn as_slice(&self) -> &[u8] {
 		let header = Self::header(self);
 		// SAFETY: data is not null, and it is correctly initialized

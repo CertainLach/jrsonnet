@@ -96,6 +96,34 @@ pub trait ArgsLike {
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
 }
 
+impl ArgsLike for Vec<Val> {
+	fn unnamed_len(&self) -> usize {
+		self.len()
+	}
+	fn unnamed_iter(
+		&self,
+		_s: State,
+		_ctx: Context,
+		_tailstrict: bool,
+		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+	) -> Result<()> {
+		for (idx, el) in self.iter().enumerate() {
+			handler(idx, Thunk::evaluated(el.clone()))?;
+		}
+		Ok(())
+	}
+	fn named_iter(
+		&self,
+		_s: State,
+		_ctx: Context,
+		_tailstrict: bool,
+		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+	) -> Result<()> {
+		Ok(())
+	}
+	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+}
+
 impl ArgsLike for ArgsDesc {
 	fn unnamed_len(&self) -> usize {
 		self.unnamed.len()
@@ -273,7 +301,8 @@ macro_rules! impl_args_like {
 	}
 }
 impl_args_like! {
-	0usize; A @ B C D E F G H I J K L
+	// First argument is already in position, so count starts from 1
+	1usize; A @ B C D E F G H I J K L
 }
 
 impl ArgsLike for () {

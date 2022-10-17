@@ -7,12 +7,19 @@ license = "MIT"
 edition = "2021"
 
 [features]
-default = ["serde"]
+default = []
+# Implement value serialization using structdump
+structdump = ["dep:structdump"]
+# Implement value serialization using serde
+#
+# Warning: serialized values won't be deduplicated
 serde = ["dep:serde"]
 
 [dependencies]
 jrsonnet-gcmodule = { version = "0.3.4" }
 
 serde = { version = "1.0", optional = true }
+structdump = { version = "0.2.0", optional = true }
+
 rustc-hash = "1.1"
 hashbrown = { version = "0.12.1", features = ["inline-more"] }

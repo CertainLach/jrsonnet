@@ -21,8 +21,8 @@ pub enum TypeError {
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
 		"number out of bounds: {0} not in {}..{}",
-		.1.map(|v|v.to_string()).unwrap_or_else(|| "".to_owned()),
-		.2.map(|v|v.to_string()).unwrap_or_else(|| "".to_owned()),
+		.1.map(|v|v.to_string()).unwrap_or_default(),
+		.2.map(|v|v.to_string()).unwrap_or_default(),
 	)]
 	BoundsFailed(f64, Option<f64>, Option<f64>),
 }
@@ -65,7 +65,7 @@ impl Display for TypeLocErrorList {
 				writeln!(f)?;
 			}
 			out.clear();
-			write!(out, "{}", err)?;
+			write!(out, "{err}")?;
 
 			for (i, line) in out.lines().enumerate() {
 				if line.trim().is_empty() {
@@ -77,7 +77,7 @@ impl Display for TypeLocErrorList {
 					writeln!(f)?;
 					write!(f, "    ")?;
 				}
-				write!(f, "{}", line)?;
+				write!(f, "{line}")?;
 			}
 		}
 		Ok(())
@@ -125,8 +125,8 @@ enum ValuePathItem {
 impl Display for ValuePathItem {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			Self::Field(name) => write!(f, ".{:?}", name)?,
-			Self::Index(idx) => write!(f, "[{}]", idx)?,
+			Self::Field(name) => write!(f, ".{name:?}")?,
+			Self::Index(idx) => write!(f, "[{idx}]")?,
 		}
 		Ok(())
 	}
@@ -138,7 +138,7 @@ impl Display for ValuePathStack {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		write!(f, "self")?;
 		for elem in self.0.iter().rev() {
-			write!(f, "{}", elem)?;
+			write!(f, "{elem}")?;
 		}
 		Ok(())
 	}
@@ -171,7 +171,7 @@ impl CheckType for ComplexValType {
 					for (i, item) in a.iter(s.clone()).enumerate() {
 						push_type_description(
 							s.clone(),
-							|| format!("array index {}", i),
+							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(s.clone(), &item.clone()?),
 						)?;
@@ -185,7 +185,7 @@ impl CheckType for ComplexValType {
 					for (i, item) in a.iter(s.clone()).enumerate() {
 						push_type_description(
 							s.clone(),
-							|| format!("array index {}", i),
+							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(s.clone(), &item.clone()?),
 						)?;
@@ -200,7 +200,7 @@ impl CheckType for ComplexValType {
 						if let Some(got_v) = obj.get(s.clone(), (*k).into())? {
 							push_type_description(
 								s.clone(),
-								|| format!("property {}", k),
+								|| format!("property {k}"),
 								|| ValuePathItem::Field((*k).into()),
 								|| v.check(s.clone(), &got_v),
 							)?;

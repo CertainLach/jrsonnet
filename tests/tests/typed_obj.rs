@@ -3,6 +3,7 @@ mod common;
 use std::fmt::Debug;
 
 use jrsonnet_evaluator::{error::Result, typed::Typed, State};
+use jrsonnet_stdlib::StateExt;
 
 #[derive(Clone, Typed, PartialEq, Debug)]
 struct A {
@@ -25,7 +26,7 @@ fn simple_object() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let a = A::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(a, A { a: 1, b: 2 });
@@ -45,7 +46,7 @@ fn renamed_field() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let b = B::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(b, B { a: 1, b: 2 });
@@ -77,10 +78,7 @@ fn flattened_object() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let obj = Object::from_untyped(
-		s.evaluate_snippet(
-			"snip".to_owned(),
-			"{apiVersion: 'ver', kind: 'kind', b: 2}".into(),
-		)?,
+		s.evaluate_snippet("snip".to_owned(), "{apiVersion: 'ver', kind: 'kind', b: 2}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(
@@ -112,7 +110,7 @@ fn optional_field_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let c = C::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(c, C { a: Some(1), b: 2 });
@@ -128,10 +126,7 @@ fn optional_field_some() -> Result<()> {
 fn optional_field_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let c = C::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{b: 2}".into())?,
-		s.clone(),
-	)?;
+	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2}")?, s.clone())?;
 	ensure_eq!(c, C { a: None, b: 2 });
 	ensure_eq!(
 		&C::into_untyped(c.clone(), s.clone())?.to_string(s.clone())? as &str,
@@ -158,7 +153,7 @@ fn flatten_optional_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let d = D::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(
@@ -181,7 +176,7 @@ fn flatten_optional_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 	let d = D::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}".into())?,
+		s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}")?,
 		s.clone(),
 	)?;
 	ensure_eq!(d, D { e: None, b: 2 });

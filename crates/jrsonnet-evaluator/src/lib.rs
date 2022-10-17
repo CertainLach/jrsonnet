@@ -1,4 +1,18 @@
-#![warn(clippy::all, clippy::nursery, clippy::pedantic)]
+//! jsonnet interpreter implementation
+
+#![deny(unsafe_op_in_unsafe_fn)]
+#![warn(
+	clippy::all,
+	clippy::nursery,
+	clippy::pedantic,
+	// missing_docs,
+	elided_lifetimes_in_paths,
+	explicit_outlives_requirements,
+	noop_method_call,
+	single_use_lifetimes,
+	variant_size_differences,
+	rustdoc::all
+)]
 #![allow(
 	macro_expanded_macro_exports_accessed_by_absolute_paths,
 	clippy::ptr_arg,
@@ -37,17 +51,17 @@ mod import;
 mod integrations;
 mod map;
 mod obj;
-mod stdlib;
+pub mod stdlib;
 pub mod trace;
 pub mod typed;
 pub mod val;
 
 use std::{
-	borrow::Cow,
+	any::Any,
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	fmt::{self, Debug},
-	path::{Path, PathBuf},
+	path::Path,
 	rc::Rc,
 };
 
@@ -55,36 +69,44 @@ pub use ctx::*;
 pub use dynamic::*;
 use error::{Error::*, LocError, Result, StackTraceElement};
 pub use evaluate::*;
-use function::{builtin::Builtin, CallLocation, TlaArg};
+use function::{CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
 use jrsonnet_gcmodule::{Cc, Trace};
-use jrsonnet_interner::IBytes;
-pub use jrsonnet_interner::IStr;
+pub use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
-use trace::{location_to_offset, offset_to_location, CodeLocation, CompactFormat, TraceFormat};
+use trace::{CompactFormat, TraceFormat};
 pub use val::{ManifestFormat, Thunk, Val};
 
+/// Thunk without bound `super`/`this`
+/// object inheritance may be overriden multiple times, and will be fixed only on field read
 pub trait Unbound: Trace {
+	/// Type of value after object context is bound
 	type Bound;
+	/// Create value bound to specified object context
 	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
 }
 
+/// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
+/// Standard jsonnet fields are always unbound
 #[derive(Clone, Trace)]
-pub enum LazyBinding {
-	Bindable(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
+pub enum MaybeUnbound {
+	/// Value needs to be bound to `this`/`super`
+	Unbound(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
+	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
 
-impl Debug for LazyBinding {
+impl Debug for MaybeUnbound {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "LazyBinding")
+		write!(f, "MaybeUnbound")
 	}
 }
-impl LazyBinding {
+impl MaybeUnbound {
+	/// Attach object context to value, if required
 	pub fn evaluate(
 		&self,
 		s: State,
@@ -92,25 +114,44 @@ impl LazyBinding {
 		this: Option<ObjValue>,
 	) -> Result<Thunk<Val>> {
 		match self {
-			Self::Bindable(v) => v.bind(s, sup, this),
+			Self::Unbound(v) => v.bind(s, sup, this),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
 }
 
+/// During import, this trait will be called to create initial context for file.
+/// It may initialize global variables, stdlib for example.
+pub trait ContextInitializer {
+	/// Initialize default file context.
+	fn initialize(&self, state: State, for_file: Source) -> Context;
+	/// Allows upcasting from abstract to concrete context initializer.
+	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
+	fn as_any(&self) -> &dyn Any;
+}
+
+/// Context initializer which adds nothing.
+pub struct DummyContextInitializer;
+impl ContextInitializer for DummyContextInitializer {
+	fn initialize(&self, _state: State, _for_file: Source) -> Context {
+		Context::default()
+	}
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+}
+
+/// Dynamically reconfigurable evaluation settings
 pub struct EvaluationSettings {
 	/// Limits recursion by limiting the number of stack frames
 	pub max_stack: usize,
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
-	/// Used for s`td.extVar`
-	pub ext_vars: HashMap<IStr, TlaArg>,
-	/// Used for ext.native
-	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
 	/// TLA vars
 	pub tla_vars: HashMap<IStr, TlaArg>,
-	/// Global variables are inserted in default context
-	pub globals: HashMap<IStr, Val>,
+	/// Context initializer, which will be used for imports and everything
+	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
+	pub context_initializer: Box<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: Box<dyn ImportResolver>,
 	/// Used in manifestification functions
@@ -123,9 +164,7 @@ impl Default for EvaluationSettings {
 		Self {
 			max_stack: 200,
 			max_trace: 20,
-			globals: HashMap::default(),
-			ext_vars: HashMap::default(),
-			ext_natives: HashMap::default(),
+			context_initializer: Box::new(DummyContextInitializer),
 			tla_vars: HashMap::default(),
 			import_resolver: Box::new(DummyImportResolver),
 			manifest_format: ManifestFormat::Json {
@@ -151,9 +190,7 @@ struct EvaluationData {
 	breakpoints: Breakpoints,
 
 	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: GcHashMap<PathBuf, FileData>,
-	/// Contains tla arguments and others, which aren't needed to be obtained by name
-	volatile_files: GcHashMap<String, String>,
+	files: GcHashMap<SourcePath, FileData>,
 }
 struct FileData {
 	string: Option<IStr>,
@@ -229,7 +266,8 @@ pub struct EvaluationStateInternals {
 pub struct State(Rc<EvaluationStateInternals>);
 
 impl State {
-	pub fn import_str(&self, path: PathBuf) -> Result<IStr> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -263,7 +301,8 @@ impl State {
 		}
 		Ok(file.string.as_ref().expect("just set").clone())
 	}
-	pub fn import_bin(&self, path: PathBuf) -> Result<IBytes> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved_bin(&self, path: SourcePath) -> Result<IBytes> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -289,7 +328,8 @@ impl State {
 		}
 		Ok(file.bytes.as_ref().expect("just set").clone())
 	}
-	pub fn import(&self, path: PathBuf) -> Result<Val> {
+	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
+	pub fn import_resolved(&self, path: SourcePath) -> Result<Val> {
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
 
@@ -323,7 +363,7 @@ impl State {
 			);
 		}
 		let code = file.string.as_ref().expect("just set");
-		let file_name = Source::new(path.clone()).expect("resolver should return correct name");
+		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
 				jrsonnet_parser::parse(
@@ -333,8 +373,7 @@ impl State {
 					},
 				)
 				.map_err(|e| ImportSyntaxError {
-					path: file_name,
-					source_code: code.clone(),
+					path: file_name.clone(),
 					error: Box::new(e),
 				})?,
 			);
@@ -346,7 +385,11 @@ impl State {
 		file.evaluating = true;
 		// Dropping file here, as it borrows data, which may be used in evaluation
 		drop(data);
-		let res = evaluate(self.clone(), self.create_default_context(), &parsed);
+		let res = evaluate(
+			self.clone(),
+			self.create_default_context(file_name),
+			&parsed,
+		);
 
 		let mut data = self.data_mut();
 		let mut file = data.files.raw_entry_mut().from_key(&path);
@@ -365,58 +408,26 @@ impl State {
 		}
 	}
 
-	pub fn get_source(&self, name: Source) -> Option<String> {
-		let data = self.data();
-		match name.repr() {
-			Ok(real) => data
-				.files
-				.get(real)
-				.and_then(|f| f.string.as_ref())
-				.map(ToString::to_string),
-			Err(e) => data.volatile_files.get(e).map(ToOwned::to_owned),
-		}
+	/// Has same semantics as `import 'path'` called from `from` file
+	pub fn import_from(&self, from: &SourcePath, path: &str) -> Result<Val> {
+		let resolved = self.resolve_from(from, path)?;
+		self.import_resolved(resolved)
 	}
-	pub fn map_source_locations(&self, file: Source, locs: &[u32]) -> Vec<CodeLocation> {
-		offset_to_location(&self.get_source(file).unwrap_or_else(|| "".into()), locs)
-	}
-	pub fn map_from_source_location(
-		&self,
-		file: Source,
-		line: usize,
-		column: usize,
-	) -> Option<usize> {
-		location_to_offset(
-			&self.get_source(file).expect("file not found"),
-			line,
-			column,
-		)
-	}
-	/// Adds standard library global variable (std) to this evaluator
-	pub fn with_stdlib(&self) -> &Self {
-		let val = evaluate(
-			self.clone(),
-			self.create_default_context(),
-			&stdlib::get_parsed_stdlib(),
-		)
-		.expect("std should not fail");
-		self.settings_mut().globals.insert("std".into(), val);
-		self
+	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
+		let resolved = self.resolve(path)?;
+		self.import_resolved(resolved)
 	}
 
 	/// Creates context with all passed global variables
-	pub fn create_default_context(&self) -> Context {
-		let globals = &self.settings().globals;
-		let mut new_bindings = GcHashMap::with_capacity(globals.len());
-		for (name, value) in globals.iter() {
-			new_bindings.insert(name.clone(), Thunk::evaluated(value.clone()));
-		}
-		Context::new().extend(new_bindings, None, None, None)
+	pub fn create_default_context(&self, source: Source) -> Context {
+		let context_initializer = &self.settings().context_initializer;
+		context_initializer.initialize(self.clone(), source)
 	}
 
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		&self,
-		e: CallLocation,
+		e: CallLocation<'_>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
@@ -545,7 +556,10 @@ impl State {
 				|| {
 					func.evaluate(
 						self.clone(),
-						self.create_default_context(),
+						self.create_default_context(Source::new_virtual(
+							"<tla>".into(),
+							IStr::empty(),
+						)),
 						CallLocation::native(),
 						&self.settings().tla_vars,
 						true,
@@ -559,16 +573,13 @@ impl State {
 
 /// Internals
 impl State {
-	fn data(&self) -> Ref<EvaluationData> {
-		self.0.data.borrow()
-	}
-	fn data_mut(&self) -> RefMut<EvaluationData> {
+	fn data_mut(&self) -> RefMut<'_, EvaluationData> {
 		self.0.data.borrow_mut()
 	}
-	pub fn settings(&self) -> Ref<EvaluationSettings> {
+	pub fn settings(&self) -> Ref<'_, EvaluationSettings> {
 		self.0.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<EvaluationSettings> {
+	pub fn settings_mut(&self) -> RefMut<'_, EvaluationSettings> {
 		self.0.settings.borrow_mut()
 	}
 }
@@ -576,8 +587,9 @@ impl State {
 /// Raw methods evaluate passed values but don't perform TLA execution
 impl State {
 	/// Parses and evaluates the given snippet
-	pub fn evaluate_snippet(&self, name: String, code: String) -> Result<Val> {
-		let source = Source::new_virtual(Cow::Owned(name.clone()));
+	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
+		let code = code.into();
+		let source = Source::new_virtual(name.into(), code.clone());
 		let parsed = jrsonnet_parser::parse(
 			&code,
 			&ParserSettings {
@@ -585,48 +597,15 @@ impl State {
 			},
 		)
 		.map_err(|e| ImportSyntaxError {
-			path: source,
-			source_code: code.clone().into(),
+			path: source.clone(),
 			error: Box::new(e),
 		})?;
-		self.data_mut().volatile_files.insert(name, code);
-		evaluate(self.clone(), self.create_default_context(), &parsed)
+		evaluate(self.clone(), self.create_default_context(source), &parsed)
 	}
 }
 
 /// Settings utilities
 impl State {
-	pub fn add_ext_var(&self, name: IStr, value: Val) {
-		self.settings_mut()
-			.ext_vars
-			.insert(name, TlaArg::Val(value));
-	}
-	pub fn add_ext_str(&self, name: IStr, value: IStr) {
-		self.settings_mut()
-			.ext_vars
-			.insert(name, TlaArg::String(value));
-	}
-	pub fn add_ext_code(&self, name: &str, code: String) -> Result<()> {
-		let source_name = format!("<extvar:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&ParserSettings {
-				file_name: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			source_code: code.clone().into(),
-			error: Box::new(e),
-		})?;
-		self.data_mut().volatile_files.insert(source_name, code);
-		self.settings_mut()
-			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
-		Ok(())
-	}
-
 	pub fn add_tla(&self, name: IStr, value: Val) {
 		self.settings_mut()
 			.tla_vars
@@ -638,8 +617,8 @@ impl State {
 			.insert(name, TlaArg::String(value));
 	}
 	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
-		let source_name = format!("<top-level-arg:{}>", name);
-		let source = Source::new_virtual(Cow::Owned(source_name.clone()));
+		let source_name = format!("<top-level-arg:{name}>");
+		let source = Source::new_virtual(source_name.into(), code.into());
 		let parsed = jrsonnet_parser::parse(
 			code,
 			&ParserSettings {
@@ -648,33 +627,33 @@ impl State {
 		)
 		.map_err(|e| ImportSyntaxError {
 			path: source,
-			source_code: code.into(),
 			error: Box::new(e),
 		})?;
-		self.data_mut()
-			.volatile_files
-			.insert(source_name, code.to_owned());
 		self.settings_mut()
 			.tla_vars
 			.insert(name, TlaArg::Code(parsed));
 		Ok(())
 	}
 
-	pub fn resolve_file(&self, from: &Path, path: &str) -> Result<PathBuf> {
-		self.settings()
-			.import_resolver
-			.resolve_file(from, path.as_ref())
+	// Only panics in case of [`ImportResolver`] contract violation
+	#[allow(clippy::missing_panics_doc)]
+	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+		self.import_resolver().resolve_from(from, path.as_ref())
 	}
 
-	pub fn import_resolver(&self) -> Ref<dyn ImportResolver> {
+	// Only panics in case of [`ImportResolver`] contract violation
+	#[allow(clippy::missing_panics_doc)]
+	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
+		self.import_resolver().resolve(path.as_ref())
+	}
+	pub fn import_resolver(&self) -> Ref<'_, dyn ImportResolver> {
 		Ref::map(self.settings(), |s| &*s.import_resolver)
 	}
 	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
 		self.settings_mut().import_resolver = resolver;
 	}
-
-	pub fn add_native(&self, name: IStr, cb: Cc<TraceBox<dyn Builtin>>) {
-		self.settings_mut().ext_natives.insert(name, cb);
+	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
+		Ref::map(self.settings(), |s| &*s.context_initializer)
 	}
 
 	pub fn manifest_format(&self) -> ManifestFormat {
@@ -684,7 +663,7 @@ impl State {
 		self.settings_mut().manifest_format = format;
 	}
 
-	pub fn trace_format(&self) -> Ref<dyn TraceFormat> {
+	pub fn trace_format(&self) -> Ref<'_, dyn TraceFormat> {
 		Ref::map(self.settings(), |s| &*s.trace_format)
 	}
 	pub fn set_trace_format(&self, format: Box<dyn TraceFormat>) {

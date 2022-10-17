@@ -16,7 +16,7 @@ impl Typed for Value {
 			Self::Null => Val::Null,
 			Self::Bool(v) => Val::Bool(v),
 			Self::Number(n) => Val::Num(n.as_f64().ok_or_else(|| {
-				RuntimeError(format!("json number can't be represented as jsonnet: {}", n).into())
+				RuntimeError(format!("json number can't be represented as jsonnet: {n}").into())
 			})?),
 			Self::String(s) => Val::Str((&s as &str).into()),
 			Self::Array(a) => {

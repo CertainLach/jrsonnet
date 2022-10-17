@@ -122,13 +122,13 @@ enum ArgInfo {
 	Normal {
 		ty: Box<Type>,
 		is_option: bool,
-		name: String,
+		name: Option<String>,
 		cfg_attrs: Vec<Attribute>,
 		// ident: Ident,
 	},
 	Lazy {
 		is_option: bool,
-		name: String,
+		name: Option<String>,
 	},
 	State,
 	Location,
@@ -142,8 +142,8 @@ impl ArgInfo {
 			FnArg::Typed(a) => a,
 		};
 		let ident = match &arg.pat as &Pat {
-			Pat::Ident(i) => i.ident.clone(),
-			_ => return Err(Error::new(arg.pat.span(), "arg should be plain identifier")),
+			Pat::Ident(i) => Some(i.ident.clone()),
+			_ => None,
 		};
 		let ty = &arg.ty;
 		if type_is_path(ty, "State").is_some() {
@@ -153,7 +153,7 @@ impl ArgInfo {
 		} else if type_is_path(ty, "Thunk").is_some() {
 			return Ok(Self::Lazy {
 				is_option: false,
-				name: ident.to_string(),
+				name: ident.map(|v| v.to_string()),
 			});
 		}
 
@@ -166,7 +166,7 @@ impl ArgInfo {
 			if type_is_path(ty, "Thunk").is_some() {
 				return Ok(Self::Lazy {
 					is_option: true,
-					name: ident.to_string(),
+					name: ident.map(|v| v.to_string()),
 				});
 			}
 
@@ -185,7 +185,7 @@ impl ArgInfo {
 		Ok(Self::Normal {
 			ty,
 			is_option,
-			name: ident.to_string(),
+			name: ident.map(|v| v.to_string()),
 			cfg_attrs,
 		})
 	}
@@ -248,69 +248,95 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 			name,
 			cfg_attrs,
 			..
-		} => Some(quote! {
-			#(#cfg_attrs)*
-			BuiltinParam {
-				name: std::borrow::Cow::Borrowed(#name),
-				has_default: #is_option,
-			},
-		}),
-		ArgInfo::Lazy { is_option, name } => Some(quote! {
-			BuiltinParam {
-				name: std::borrow::Cow::Borrowed(#name),
-				has_default: #is_option,
-			},
-		}),
+		} => {
+			let name = name
+				.as_ref()
+				.map(|n| quote! {Some(std::borrow::Cow::Borrowed(#n))})
+				.unwrap_or_else(|| quote! {None});
+			Some(quote! {
+				#(#cfg_attrs)*
+				BuiltinParam {
+					name: #name,
+					has_default: #is_option,
+				},
+			})
+		}
+		ArgInfo::Lazy { is_option, name } => {
+			let name = name
+				.as_ref()
+				.map(|n| quote! {Some(std::borrow::Cow::Borrowed(#n))})
+				.unwrap_or_else(|| quote! {None});
+			Some(quote! {
+				BuiltinParam {
+					name: #name,
+					has_default: #is_option,
+				},
+			})
+		}
 		ArgInfo::State => None,
 		ArgInfo::Location => None,
 		ArgInfo::This => None,
 	});
 
-	let pass = args.iter().map(|a| match a {
-		ArgInfo::Normal {
-			ty,
-			is_option,
-			name,
-			cfg_attrs,
-		} => {
-			let eval = quote! {s.push_description(
-				|| format!("argument <{}> evaluation", #name),
-				|| <#ty>::from_untyped(value.evaluate(s.clone())?, s.clone()),
-			)?};
-			let value = if *is_option {
-				quote! {if let Some(value) = parsed.get(#name) {
-					Some(#eval)
-				} else {
-					None
-				},}
-			} else {
-				quote! {{
-					let value = parsed.get(#name).expect("args shape is checked");
-					#eval
-				},}
-			};
-			quote! {
-				#(#cfg_attrs)*
-				#value
+	let mut id = 0usize;
+	let pass = args
+		.iter()
+		.map(|a| match a {
+			ArgInfo::Normal { .. } | ArgInfo::Lazy { .. } => {
+				let cid = id;
+				id += 1;
+				(quote! {#cid}, a)
 			}
-		}
-		ArgInfo::Lazy { is_option, name } => {
-			if *is_option {
-				quote! {if let Some(value) = parsed.get(#name) {
-					Some(value.clone())
+			ArgInfo::State | ArgInfo::Location | ArgInfo::This => {
+				(quote! {compile_error!("should not use id")}, a)
+			}
+		})
+		.map(|(id, a)| match a {
+			ArgInfo::Normal {
+				ty,
+				is_option,
+				name,
+				cfg_attrs,
+			} => {
+				let name = name.as_ref().map(|v| v.as_str()).unwrap_or("<unnamed>");
+				let eval = quote! {s.push_description(
+					|| format!("argument <{}> evaluation", #name),
+					|| <#ty>::from_untyped(value.evaluate(s.clone())?, s.clone()),
+				)?};
+				let value = if *is_option {
+					quote! {if let Some(value) = &parsed[#id] {
+						Some(#eval)
+					} else {
+						None
+					},}
 				} else {
-					None
-				}}
-			} else {
+					quote! {{
+						let value = parsed[#id].as_ref().expect("args shape is checked");
+						#eval
+					},}
+				};
 				quote! {
-					parsed.get(#name).expect("args shape is correct").clone(),
+					#(#cfg_attrs)*
+					#value
 				}
 			}
-		}
-		ArgInfo::State => quote! {s.clone(),},
-		ArgInfo::Location => quote! {location,},
-		ArgInfo::This => quote! {self,},
-	});
+			ArgInfo::Lazy { is_option, .. } => {
+				if *is_option {
+					quote! {if let Some(value) = &parsed[#id] {
+						Some(value.clone())
+					} else {
+						None
+					}}
+				} else {
+					quote! {
+						parsed[#id].as_ref().expect("args shape is correct").clone(),
+					}
+				}
+			}
+			ArgInfo::State => quote! {s.clone(),},
+			ArgInfo::Location => quote! {location,},
+			ArgInfo::This => quote! {self,},
+		});
 
 	let fields = attr.fields.iter().map(|field| {
 		let name = &field.name;

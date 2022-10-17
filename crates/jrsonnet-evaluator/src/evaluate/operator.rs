@@ -21,14 +21,17 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	Ok(match (a, b) {
+		(Str(a), Str(b)) if a.is_empty() => Val::Str(b.clone()),
+		(Str(a), Str(b)) if b.is_empty() => Val::Str(a.clone()),
 		(Str(v1), Str(v2)) => Str(((**v1).to_owned() + v2).into()),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
 		(Num(a), Str(b)) => Str(format!("{a}{b}").into()),
 		(Str(a), Num(b)) => Str(format!("{a}{b}").into()),
 
-		(Str(a), o) => Str(format!("{}{}", a, o.clone().to_string(s)?).into()),
-		(o, Str(a)) => Str(format!("{}{}", o.clone().to_string(s)?, a).into()),
+		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::Str(o.clone().to_string(s)?),
+		(Str(a), o) => Str(format!("{a}{}", o.clone().to_string(s)?).into()),
+		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string(s)?).into()),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => {

@@ -13,10 +13,9 @@ use crate::{
 	error::Error::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
-	stdlib::{std_slice, BUILTINS},
 	tb, throw,
 	typed::Typed,
-	val::{ArrValue, CachedUnbound, Thunk, ThunkValue},
+	val::{ArrValue, CachedUnbound, IndexableVal, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
 	Unbound, Val,
 };
@@ -270,9 +269,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 		}
 	}
 	let this = builder.build();
-	let _ctx = ctx
-		.extend(GcHashMap::new(), None, None, Some(this.clone()))
-		.into_future(fctx);
+	fctx.fill(ctx.extend(GcHashMap::new(), None, None, Some(this.clone())));
 	Ok(this)
 }
 
@@ -357,7 +354,7 @@ pub fn evaluate_apply(
 	ctx: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
-	loc: CallLocation,
+	loc: CallLocation<'_>,
 	tailstrict: bool,
 ) -> Result<Val> {
 	let value = evaluate(s.clone(), ctx.clone(), value)?;
@@ -437,7 +434,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(s, ctx, v)?)?,
 		Var(name) => s.push(
 			CallLocation::new(loc),
-			|| format!("variable <{}> access", name),
+			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(s.clone()),
 		)?,
 		Index(value, index) => {
@@ -447,7 +444,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			) {
 				(Val::Obj(v), Val::Str(key)) => s.push(
 					CallLocation::new(loc),
-					|| format!("field <{}> access", key),
+					|| format!("field <{key}> access"),
 					|| match v.get(s.clone(), key.clone()) {
 						Ok(Some(v)) => Ok(v),
 						#[cfg(not(feature = "friendly-errors"))]
@@ -472,9 +469,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 								key.clone(),
 								heap.into_iter().map(|(_, v)| v).collect()
 							))
-						}
-						Err(e) if matches!(e.error(), MagicThisFileUsed) => {
-							Ok(Val::Str(loc.0.full_path().into()))
 						}
 						Err(e) => Err(e),
 					},
@@ -573,13 +567,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
 		}
-		Intrinsic(name) => Val::Func(FuncVal::StaticBuiltin(
-			BUILTINS
-				.with(|b| b.get(name).copied())
-				.ok_or_else(|| IntrinsicNotFound(name.clone()))?,
-		)),
-		IntrinsicThisFile => return Err(MagicThisFileUsed.into()),
-		IntrinsicId => Val::Func(FuncVal::identity()),
 		AssertExpr(assert, returned) => {
 			evaluate_assert(s.clone(), ctx.clone(), assert)?;
 			evaluate(s, ctx, returned)?
@@ -613,7 +600,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		Slice(value, desc) => {
 			fn parse_idx<T: Typed>(
-				loc: CallLocation,
+				loc: CallLocation<'_>,
 				s: State,
 				ctx: &Context,
 				expr: &Option<LocExpr>,
@@ -622,7 +609,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				if let Some(value) = expr {
 					Ok(Some(s.push(
 						loc,
-						|| format!("slice {}", desc),
+						|| format!("slice {desc}"),
 						|| T::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
 					)?))
 				} else {
@@ -635,29 +622,21 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 
 			let start = parse_idx(loc, s.clone(), &ctx, &desc.start, "start")?;
 			let end = parse_idx(loc, s.clone(), &ctx, &desc.end, "end")?;
-			let step = parse_idx(loc, s, &ctx, &desc.step, "step")?;
+			let step = parse_idx(loc, s.clone(), &ctx, &desc.step, "step")?;
 
-			std_slice(indexable.into_indexable()?, start, end, step)?
+			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?, s)?
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let tmp = loc.clone().0;
-			let import_location = tmp
-				.path()
-				.map(|p| {
-					let mut p = p.to_owned();
-					p.pop();
-					p
-				})
-				.unwrap_or_default();
-			let resolved_path = s.resolve_file(&import_location, path as &str)?;
+			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
 			match i {
 				Import(_) => s.push(
 					CallLocation::new(loc),
 					|| format!("import {:?}", path.clone()),
-					|| s.import(resolved_path.clone()),
+					|| s.import_resolved(resolved_path),
 				)?,
-				ImportStr(_) => Val::Str(s.import_str(resolved_path)?),
-				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_bin(resolved_path)?)),
+				ImportStr(_) => Val::Str(s.import_resolved_str(resolved_path)?),
+				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_resolved_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}
 		}

@@ -9,15 +9,28 @@ pub type BuiltinParamName = Cow<'static, str>;
 
 #[derive(Clone, Trace)]
 pub struct BuiltinParam {
-	pub name: BuiltinParamName,
+	/// Parameter name for named call parsing
+	pub name: Option<BuiltinParamName>,
+	/// Is implementation allowed to return empty value
 	pub has_default: bool,
 }
 
-/// Do not implement it directly, instead use #[builtin] macro
+/// Description of function defined by native code
+///
+/// Prefer to use #[builtin] macro, instead of manual implementation of this trait
 pub trait Builtin: Trace {
+	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
+	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
-	fn call(&self, s: State, ctx: Context, loc: CallLocation, args: &dyn ArgsLike) -> Result<Val>;
+	/// Call the builtin
+	fn call(
+		&self,
+		s: State,
+		ctx: Context,
+		loc: CallLocation<'_>,
+		args: &dyn ArgsLike,
+	) -> Result<Val>;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
@@ -35,8 +48,20 @@ pub struct NativeCallback {
 }
 impl NativeCallback {
 	#[deprecated = "prefer using builtins directly, use this interface only for bindings"]
-	pub fn new(params: Vec<BuiltinParam>, handler: TraceBox<dyn NativeCallbackHandler>) -> Self {
-		Self { params, handler }
+	pub fn new(
+		params: Vec<Cow<'static, str>>,
+		handler: TraceBox<dyn NativeCallbackHandler>,
+	) -> Self {
+		Self {
+			params: params
+				.into_iter()
+				.map(|n| BuiltinParam {
+					name: Some(n),
+					has_default: false,
+				})
+				.collect(),
+			handler,
+		}
 	}
 }
 
@@ -51,13 +76,20 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, s: State, ctx: Context, _loc: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+	fn call(
+		&self,
+		s: State,
+		ctx: Context,
+		_loc: CallLocation<'_>,
+		args: &dyn ArgsLike,
+	) -> Result<Val> {
 		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
-		let mut out_args = Vec::with_capacity(self.params.len());
-		for p in &self.params {
-			out_args.push(args[&p.name].evaluate(s.clone())?);
-		}
-		self.handler.call(s, &out_args)
+		let args = args
+			.into_iter()
+			.map(|a| a.expect("legacy natives have no default params"))
+			.map(|a| a.evaluate(s.clone()))
+			.collect::<Result<Vec<Val>>>()?;
+		self.handler.call(s, &args)
 	}
 }
 

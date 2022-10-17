@@ -1,4 +1,5 @@
 use jrsonnet_evaluator::{error::Result, throw_runtime, State, Val};
+use jrsonnet_stdlib::StateExt;
 
 mod common;
 
@@ -7,9 +8,9 @@ fn assert_positive() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
 
-	let v = s.evaluate_snippet("snip".to_owned(), "assert 1 == 1: 'fail'; null".into())?;
+	let v = s.evaluate_snippet("snip".to_owned(), "assert 1 == 1: 'fail'; null")?;
 	ensure_val_eq!(s, v, Val::Null);
-	let v = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 1)".into())?;
+	let v = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 1)")?;
 	ensure_val_eq!(s, v, Val::Bool(true));
 
 	Ok(())
@@ -21,7 +22,7 @@ fn assert_negative() -> Result<()> {
 	s.with_stdlib();
 
 	{
-		let e = match s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null".into()) {
+		let e = match s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null") {
 			Ok(_) => throw_runtime!("assertion should fail"),
 			Err(e) => e,
 		};
@@ -29,7 +30,7 @@ fn assert_negative() -> Result<()> {
 		ensure!(e.starts_with("assert failed: fail\n"));
 	}
 	{
-		let e = match s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)".into()) {
+		let e = match s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)") {
 			Ok(_) => throw_runtime!("assertion should fail"),
 			Err(e) => e,
 		};

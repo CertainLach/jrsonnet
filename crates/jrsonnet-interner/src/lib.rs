@@ -33,6 +33,10 @@ impl Trace for IStr {
 
 impl IStr {
 	#[must_use]
+	pub fn empty() -> Self {
+		"".into()
+	}
+	#[must_use]
 	pub fn as_str(&self) -> &str {
 		self as &str
 	}
@@ -201,6 +205,7 @@ impl From<&[u8]> for IBytes {
 	}
 }
 
+#[cfg(feature = "serde")]
 impl serde::Serialize for IStr {
 	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
 	where
@@ -210,6 +215,7 @@ impl serde::Serialize for IStr {
 	}
 }
 
+#[cfg(feature = "serde")]
 impl<'de> serde::Deserialize<'de> for IStr {
 	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
@@ -217,6 +223,24 @@ impl<'de> serde::Deserialize<'de> for IStr {
 	{
 		let str = <&str>::deserialize(deserializer)?;
 		Ok(intern_str(str))
+	}
+}
+
+#[cfg(feature = "structdump")]
+impl structdump::Codegen for IStr {
+	fn gen_code(
+		&self,
+		res: &mut structdump::CodegenResult,
+		_unique: bool,
+	) -> structdump::TokenStream {
+		let s: &str = self;
+		res.add_code(
+			structdump::quote! {
+				structdump_import::IStr::from(#s)
+			},
+			Some(structdump::quote![structdump_import::IStr]),
+			false,
+		)
 	}
 }
 

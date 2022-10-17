@@ -2,14 +2,11 @@ use std::{fmt::Debug, path::PathBuf};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, SourcePath, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{
-	stdlib::{format::FormatError, sort::SortError},
-	typed::TypeLocError,
-};
+use crate::{stdlib::format::FormatError, typed::TypeLocError};
 
 fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
@@ -35,6 +32,31 @@ fn format_found(list: &[IStr], what: &str) -> String {
 	out
 }
 
+fn format_signature(sig: &FunctionSignature) -> String {
+	let mut out = String::new();
+	out.push_str("\nFunction has the following signature: ");
+	out.push('(');
+	if sig.is_empty() {
+		out.push_str("/*no arguments*/");
+	} else {
+		for (i, (name, has_default)) in sig.iter().enumerate() {
+			if i != 0 {
+				out.push_str(", ");
+			}
+			if let Some(name) = name {
+				out.push_str(name);
+			} else {
+				out.push_str("<unnamed>");
+			}
+			if *has_default {
+				out.push_str(" = <default>");
+			}
+		}
+	}
+	out.push(')');
+	out
+}
+
 const fn format_empty_str(str: &str) -> &str {
 	if str.is_empty() {
 		"\"\" (empty string)"
@@ -43,7 +65,12 @@ const fn format_empty_str(str: &str) -> &str {
 	}
 }
 
+type FunctionSignature = Vec<(Option<IStr>, bool)>;
+
+/// Possible errors
+#[allow(missing_docs)]
 #[derive(Error, Debug, Clone, Trace)]
+#[non_exhaustive]
 pub enum Error {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -76,7 +103,7 @@ pub enum Error {
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),
 
-	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{}", e)).collect::<Vec<_>>().join(", "))]
+	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
@@ -87,10 +114,10 @@ pub enum Error {
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}")]
-	TooManyArgsFunctionHas(usize),
-	#[error("function argument is not passed: {0}")]
-	FunctionParameterNotBoundInCall(IStr),
+	#[error("too many args, function has {0}{}", format_signature(.1))]
+	TooManyArgsFunctionHas(usize, FunctionSignature),
+	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
+	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),
@@ -113,26 +140,31 @@ pub enum Error {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(PathBuf, String),
-	#[error("resolved file not found: {0}")]
-	ResolvedFileNotFound(PathBuf),
+	ImportFileNotFound(SourcePath, String),
+	#[error("can't resolve absolute {0}")]
+	AbsoluteImportFileNotFound(PathBuf),
+	#[error("resolved file not found: {:?}", .0)]
+	ResolvedFileNotFound(SourcePath),
+	#[error("can't import {0}: is a directory")]
+	ImportIsADirectory(SourcePath),
 	#[error("imported file is not valid utf-8: {0:?}")]
-	ImportBadFileUtf8(PathBuf),
+	ImportBadFileUtf8(SourcePath),
 	#[error("import io error: {0}")]
 	ImportIo(String),
-	#[error("tried to import {1} from {0}, but imports is not supported")]
-	ImportNotSupported(PathBuf, PathBuf),
+	#[error("tried to import {1} from {0}, but imports are not supported")]
+	ImportNotSupported(SourcePath, String),
+	#[error("tried to import {0}, but absolute imports are not supported")]
+	AbsoluteImportNotSupported(PathBuf),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(
 		"syntax error: expected {}, got {:?}",
 		.error.expected,
-		.source_code.chars().nth(error.location.offset)
+		.path.code().chars().nth(error.location.offset)
 		.map_or_else(|| "EOF".into(), |c| c.to_string())
 	)]
 	ImportSyntaxError {
 		path: Source,
-		source_code: IStr,
 		#[trace(skip)]
 		error: Box<jrsonnet_parser::ParseError>,
 	},
@@ -169,13 +201,6 @@ pub enum Error {
 	Format(#[from] FormatError),
 	#[error("type error: {0}")]
 	TypeError(TypeLocError),
-	#[error("sort error: {0}")]
-	Sort(#[from] SortError),
-
-	/// Thrown as error, as this is legacy feature, and error here
-	/// is acceptable for defeating object field cache
-	#[error("should not reach outside: std.thisFile")]
-	MagicThisFileUsed,
 
 	#[cfg(feature = "anyhow-error")]
 	#[error(transparent)]
@@ -195,9 +220,13 @@ impl From<Error> for LocError {
 	}
 }
 
+/// Single stack trace frame
 #[derive(Clone, Debug, Trace)]
 pub struct StackTraceElement {
+	/// Source of this frame
+	/// Some frames only act as description, without attached source
 	pub location: Option<ExprLocation>,
+	/// Frame description
 	pub desc: String,
 }
 #[derive(Debug, Clone, Trace)]
@@ -227,7 +256,7 @@ impl Debug for LocError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
-			writeln!(f, "\t{:?}", el)?;
+			writeln!(f, "\t{el:?}")?;
 		}
 		Ok(())
 	}

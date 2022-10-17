@@ -5,9 +5,10 @@ use jrsonnet_evaluator::{
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
 	tb,
 	typed::Typed,
-	State, Val,
+	Context, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Cc;
+use jrsonnet_stdlib::StateExt;
 
 #[builtin]
 fn a() -> Result<u32> {
@@ -19,12 +20,7 @@ fn basic_function() -> Result<()> {
 	let s = State::default();
 	let a: a = a {};
 	let v = u32::from_untyped(
-		a.call(
-			s.clone(),
-			s.create_default_context(),
-			CallLocation::native(),
-			&(),
-		)?,
+		a.call(s.clone(), Context::new(), CallLocation::native(), &())?,
 		s,
 	)?;
 
@@ -41,9 +37,9 @@ fn native_add(a: u32, b: u32) -> Result<u32> {
 fn call_from_code() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	s.settings_mut().globals.insert(
+	s.add_global(
 		"nativeAdd".into(),
-		Val::Func(FuncVal::StaticBuiltin(native_add::INST)),
+		Thunk::evaluated(Val::Func(FuncVal::StaticBuiltin(native_add::INST))),
 	);
 
 	let v = s.evaluate_snippet(
@@ -52,8 +48,7 @@ fn call_from_code() -> Result<()> {
             assert nativeAdd(1, 2) == 3;
             assert nativeAdd(100, 200) == 300;
             null
-        "
-		.into(),
+        ",
 	)?;
 	ensure_val_eq!(s, v, Val::Null);
 	Ok(())
@@ -75,9 +70,9 @@ fn curry_add(a: u32) -> Result<FuncVal> {
 fn nonstatic_builtin() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	s.settings_mut().globals.insert(
+	s.add_global(
 		"curryAdd".into(),
-		Val::Func(FuncVal::StaticBuiltin(curry_add::INST)),
+		Thunk::evaluated(Val::Func(FuncVal::StaticBuiltin(curry_add::INST))),
 	);
 
 	let v = s.evaluate_snippet(
@@ -92,8 +87,7 @@ fn nonstatic_builtin() -> Result<()> {
             assert b(2) == 6;
             assert b(200) == 204;
             null
-        "
-		.into(),
+        ",
 	)?;
 	ensure_val_eq!(s, v, Val::Null);
 	Ok(())

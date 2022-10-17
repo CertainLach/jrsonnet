@@ -1,15 +1,15 @@
-mod ext;
 mod manifest;
+mod stdlib;
 mod tla;
 mod trace;
 
 use std::{env, path::PathBuf};
 
 use clap::Parser;
-pub use ext::*;
 use jrsonnet_evaluator::{error::Result, FileImportResolver, State};
 use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
+pub use stdlib::*;
 pub use tla::*;
 pub use trace::*;
 
@@ -31,13 +31,6 @@ pub struct InputOpts {
 #[derive(Parser)]
 #[clap(next_help_heading = "OPTIONS")]
 pub struct MiscOpts {
-	/// Disable standard library.
-	/// By default standard library will be available via global `std` variable.
-	/// Note that standard library will still be loaded
-	/// if chosen manifestification method is not `none`.
-	#[clap(long)]
-	no_stdlib: bool,
-
 	/// Maximal allowed number of stack frames,
 	/// stack overflow error will be raised if this number gets exceeded.
 	#[clap(long, short = 's', default_value = "200")]
@@ -52,17 +45,13 @@ pub struct MiscOpts {
 }
 impl ConfigureState for MiscOpts {
 	fn configure(&self, s: &State) -> Result<()> {
-		if !self.no_stdlib {
-			s.with_stdlib();
-		}
-
 		let mut library_paths = self.jpath.clone();
 		library_paths.reverse();
 		if let Some(path) = env::var_os("JSONNET_PATH") {
 			library_paths.extend(env::split_paths(path.as_os_str()));
 		}
 
-		s.set_import_resolver(Box::new(FileImportResolver { library_paths }));
+		s.set_import_resolver(Box::new(FileImportResolver::new(library_paths)));
 
 		s.set_max_stack(self.max_stack);
 		Ok(())
@@ -79,7 +68,7 @@ pub struct GeneralOpts {
 	#[clap(flatten)]
 	tla: TLAOpts,
 	#[clap(flatten)]
-	ext: ExtVarOpts,
+	std: StdOpts,
 
 	#[clap(flatten)]
 	trace: TraceOpts,
@@ -91,7 +80,7 @@ impl ConfigureState for GeneralOpts {
 		self.trace.configure(s)?;
 		self.misc.configure(s)?;
 		self.tla.configure(s)?;
-		self.ext.configure(s)?;
+		self.std.configure(s)?;
 		Ok(())
 	}
 }
@@ -113,6 +102,8 @@ pub struct GcOpts {
 }
 impl GcOpts {
 	pub fn stats_printer(&self) -> (Option<GcStatsPrinter>, Option<LeakSpace>) {
+		// Constructed structs have side-effects in Drop impl
+		#[allow(clippy::unnecessary_lazy_evaluations)]
 		(
 			self.gc_print_stats.then(|| GcStatsPrinter {
 				collect_before_printing_stats: self.gc_collect_before_printing_stats,

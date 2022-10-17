@@ -36,7 +36,7 @@ use FormatError::*;
 
 type ParseResult<'t, T> = std::result::Result<(T, &'t str), FormatError>;
 
-pub fn try_parse_mapping_key(str: &str) -> ParseResult<&str> {
+pub fn try_parse_mapping_key(str: &str) -> ParseResult<'_, &str> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -45,7 +45,7 @@ pub fn try_parse_mapping_key(str: &str) -> ParseResult<&str> {
 		let mut i = 1;
 		while i < bytes.len() {
 			if bytes[i] == b')' {
-				return Ok((&str[1..i as usize], &str[i as usize + 1..]));
+				return Ok((&str[1..i], &str[i + 1..]));
 			}
 			i += 1;
 		}
@@ -96,7 +96,7 @@ pub struct CFlags {
 	pub sign: bool,
 }
 
-pub fn try_parse_cflags(str: &str) -> ParseResult<CFlags> {
+pub fn try_parse_cflags(str: &str) -> ParseResult<'_, CFlags> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -125,7 +125,7 @@ pub enum Width {
 	Star,
 	Fixed(usize),
 }
-pub fn try_parse_field_width(str: &str) -> ParseResult<Width> {
+pub fn try_parse_field_width(str: &str) -> ParseResult<'_, Width> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -146,7 +146,7 @@ pub fn try_parse_field_width(str: &str) -> ParseResult<Width> {
 	Ok((Width::Fixed(out), &str[digits..]))
 }
 
-pub fn try_parse_precision(str: &str) -> ParseResult<Option<Width>> {
+pub fn try_parse_precision(str: &str) -> ParseResult<'_, Option<Width>> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -159,7 +159,7 @@ pub fn try_parse_precision(str: &str) -> ParseResult<Option<Width>> {
 }
 
 // Only skips
-pub fn try_parse_length_modifier(str: &str) -> ParseResult<()> {
+pub fn try_parse_length_modifier(str: &str) -> ParseResult<'_, ()> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -191,7 +191,7 @@ pub struct ConvType {
 	caps: bool,
 }
 
-pub fn parse_conversion_type(str: &str) -> ParseResult<ConvType> {
+pub fn parse_conversion_type(str: &str) -> ParseResult<'_, ConvType> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -226,7 +226,7 @@ pub struct Code<'s> {
 	convtype: ConvTypeV,
 	caps: bool,
 }
-pub fn parse_code(str: &str) -> ParseResult<Code> {
+pub fn parse_code(str: &str) -> ParseResult<'_, Code<'_>> {
 	if str.is_empty() {
 		return Err(TruncatedFormatCode);
 	}
@@ -255,7 +255,7 @@ pub enum Element<'s> {
 	String(&'s str),
 	Code(Code<'s>),
 }
-pub fn parse_codes(mut str: &str) -> Result<Vec<Element>> {
+pub fn parse_codes(mut str: &str) -> Result<Vec<Element<'_>>> {
 	let mut bytes = str.as_bytes();
 	let mut out = vec![];
 	let mut offset = 0;
@@ -285,7 +285,7 @@ const NUMBERS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 #[inline]
 pub fn render_integer(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	blank: bool,
@@ -294,20 +294,23 @@ pub fn render_integer(
 	prefix: &str,
 	caps: bool,
 ) {
+	let radix = radix as f64;
+	let iv = iv.floor();
 	// Digit char indexes in reverse order, i.e
 	// for radix = 16 and n = 12f: [15, 2, 1]
-	let digits = if iv == 0 {
+	let digits = if iv == 0.0 {
 		vec![0u8]
 	} else {
 		let mut v = iv.abs();
 		let mut nums = Vec::with_capacity(1);
-		while v > 0 {
+		while v != 0.0 {
 			nums.push((v % radix) as u8);
-			v /= radix;
+			v = (v / radix).floor();
 		}
 		nums
 	};
-	let neg = iv < 0;
+	let neg = iv < 0.0;
+	#[allow(clippy::bool_to_int_with_if)]
 	let zp = padding.saturating_sub(if neg || blank || sign { 1 } else { 0 });
 	let zp2 = zp
 		.max(precision)
@@ -335,7 +338,7 @@ pub fn render_integer(
 
 pub fn render_decimal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	blank: bool,
@@ -345,7 +348,7 @@ pub fn render_decimal(
 }
 pub fn render_octal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	alt: bool,
@@ -360,7 +363,7 @@ pub fn render_octal(
 		blank,
 		sign,
 		8,
-		if alt && iv != 0 { "0" } else { "" },
+		if alt && iv != 0.0 { "0" } else { "" },
 		false,
 	);
 }
@@ -368,7 +371,7 @@ pub fn render_octal(
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn render_hexadecimal(
 	out: &mut String,
-	iv: i64,
+	iv: f64,
 	padding: usize,
 	precision: usize,
 	alt: bool,
@@ -404,9 +407,10 @@ pub fn render_float(
 	ensure_pt: bool,
 	trailing: bool,
 ) {
+	#[allow(clippy::bool_to_int_with_if)]
 	let dot_size = if precision == 0 && !ensure_pt { 0 } else { 1 };
 	padding = padding.saturating_sub(dot_size + precision);
-	render_decimal(out, n.floor() as i64, padding, 0, blank, sign);
+	render_decimal(out, n.floor(), padding, 0, blank, sign);
 	if precision == 0 {
 		if ensure_pt {
 			out.push('.');
@@ -420,7 +424,7 @@ pub fn render_float(
 	if trailing || frac > 0.0 {
 		out.push('.');
 		let mut frac_str = String::new();
-		render_decimal(&mut frac_str, frac as i64, precision, 0, false, false);
+		render_decimal(&mut frac_str, frac, precision, 0, false, false);
 		let mut trim = frac_str.len();
 		if !trailing {
 			for b in frac_str.as_bytes().iter().rev() {
@@ -454,7 +458,7 @@ pub fn render_float_sci(
 		n / 10.0_f64.powf(exponent)
 	};
 	let mut exponent_str = String::new();
-	render_decimal(&mut exponent_str, exponent as i64, 3, 0, false, true);
+	render_decimal(&mut exponent_str, exponent, 3, 0, false, true);
 
 	// +1 for e
 	padding = padding.saturating_sub(exponent_str.len() + 1);
@@ -471,15 +475,12 @@ pub fn format_code(
 	s: State,
 	out: &mut String,
 	value: &Val,
-	code: &Code,
+	code: &Code<'_>,
 	width: usize,
 	precision: Option<usize>,
 ) -> Result<()> {
 	let clfags = &code.cflags;
-	let (fpprec, iprec) = match precision {
-		Some(v) => (v, v),
-		None => (6, 0),
-	};
+	let (fpprec, iprec) = precision.map_or((6, 0), |v| (v, v));
 	let padding = if clfags.zero && !clfags.left {
 		width
 	} else {
@@ -495,7 +496,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_decimal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.blank,
@@ -506,7 +507,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_octal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.alt,
@@ -518,7 +519,7 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone(), s)?;
 			render_hexadecimal(
 				&mut tmp_out,
-				value as i64,
+				value,
 				padding,
 				iprec,
 				clfags.alt,
@@ -584,8 +585,10 @@ pub fn format_code(
 			}
 		}
 		ConvTypeV::Char => match value.clone() {
-			Val::Num(n) => tmp_out
-				.push(std::char::from_u32(n as u32).ok_or(InvalidUnicodeCodepointGot(n as u32))?),
+			Val::Num(n) => tmp_out.push(
+				std::char::from_u32(n as u32)
+					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
+			),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
 					throw!(RuntimeError(
@@ -774,10 +777,7 @@ pub mod test_format {
 			format_arr(s.clone(), "%+-4o", &[Val::Num(8.0)]).unwrap(),
 			"+10 "
 		);
-		assert_eq!(
-			format_arr(s.clone(), "%+-04o", &[Val::Num(8.0)]).unwrap(),
-			"+10 "
-		);
+		assert_eq!(format_arr(s, "%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
 	}
 
 	#[test]

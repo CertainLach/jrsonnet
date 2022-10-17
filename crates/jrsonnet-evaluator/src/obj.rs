@@ -15,7 +15,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, LazyBinding, Result, State, Thunk, Unbound, Val,
+	throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -100,7 +100,7 @@ pub struct ObjMember {
 	pub add: bool,
 	pub visibility: Visibility,
 	original_index: FieldIndex,
-	pub invoke: LazyBinding,
+	pub invoke: MaybeUnbound,
 	pub location: Option<ExprLocation>,
 }
 
@@ -109,7 +109,6 @@ pub trait ObjectAssertion: Trace {
 }
 
 // Field => This
-type CacheKey = (IStr, WeakObjValue);
 
 #[derive(Trace)]
 enum CacheValue {
@@ -129,7 +128,7 @@ pub struct ObjValueInternals {
 	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<CacheKey, CacheValue>>,
+	value_cache: RefCell<GcHashMap<IStr, CacheValue>>,
 }
 
 #[derive(Clone, Trace)]
@@ -157,9 +156,9 @@ impl Debug for ObjValue {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		if let Some(super_obj) = self.0.sup.as_ref() {
 			if f.alternate() {
-				write!(f, "{:#?}", super_obj)?;
+				write!(f, "{super_obj:#?}")?;
 			} else {
-				write!(f, "{:?}", super_obj)?;
+				write!(f, "{super_obj:?}")?;
 			}
 			write!(f, " + ")?;
 		}
@@ -209,7 +208,7 @@ impl ObjValue {
 		new.insert(key, value);
 		Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
 	}
-	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder> {
+	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder<'_>> {
 		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
 	}
 
@@ -240,6 +239,8 @@ impl ObjValue {
 	}
 
 	/// Run callback for every field found in object
+	///
+	/// Returns true if ended prematurely
 	pub(crate) fn enum_fields(
 		&self,
 		depth: SuperDepth,
@@ -369,15 +370,7 @@ impl ObjValue {
 
 	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions(s.clone())?;
-		self.get_raw(s, key, self.0.this.clone().unwrap_or_else(|| self.clone()))
-	}
-
-	// pub fn extend_with(self, key: )
-
-	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
-		let cache_key = (key.clone(), WeakObjValue(real_this.0.downgrade()));
-
-		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
+		if let Some(v) = self.0.value_cache.borrow().get(&key) {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
 				CacheValue::NotFound => None,
@@ -388,26 +381,37 @@ impl ObjValue {
 		self.0
 			.value_cache
 			.borrow_mut()
-			.insert(cache_key.clone(), CacheValue::Pending);
-		let fill_error = |e: LocError| {
-			self.0
-				.value_cache
-				.borrow_mut()
-				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
-			e
-		};
-		let value = match (self.0.this_entries.get(&key), &self.0.sup) {
-			(Some(k), None) => Ok(Some(
-				self.evaluate_this(s, k, real_this).map_err(fill_error)?,
-			)),
+			.insert(key.clone(), CacheValue::Pending);
+		let value = self
+			.get_raw(
+				s,
+				key.clone(),
+				self.0.this.clone().unwrap_or_else(|| self.clone()),
+			)
+			.map_err(|e| {
+				self.0
+					.value_cache
+					.borrow_mut()
+					.insert(key.clone(), CacheValue::Errored(e.clone()));
+				e
+			})?;
+		self.0.value_cache.borrow_mut().insert(
+			key,
+			value
+				.as_ref()
+				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),
+		);
+		Ok(value)
+	}
+
+	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
+		match (self.0.this_entries.get(&key), &self.0.sup) {
+			(Some(k), None) => Ok(Some(self.evaluate_this(s, k, real_this)?)),
 			(Some(k), Some(super_obj)) => {
-				let our = self
-					.evaluate_this(s.clone(), k, real_this.clone())
-					.map_err(fill_error)?;
+				let our = self.evaluate_this(s.clone(), k, real_this.clone())?;
 				if k.add {
 					super_obj
-						.get_raw(s.clone(), key, real_this)
-						.map_err(fill_error)?
+						.get_raw(s.clone(), key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
 							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
 						})
@@ -418,15 +422,6 @@ impl ObjValue {
 			(None, Some(super_obj)) => super_obj.get_raw(s, key, real_this),
 			(None, None) => Ok(None),
 		}
-		.map_err(fill_error)?;
-		self.0.value_cache.borrow_mut().insert(
-			cache_key,
-			match &value {
-				Some(v) => CacheValue::Cached(v.clone()),
-				None => CacheValue::NotFound,
-			},
-		);
-		Ok(value)
 	}
 	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: Self) -> Result<Val> {
 		v.invoke
@@ -507,7 +502,7 @@ impl ObjValueBuilder {
 		self.assertions.push(assertion);
 		self
 	}
-	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder> {
+	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder<'_>> {
 		let field_index = self.next_field_index;
 		self.next_field_index = self.next_field_index.next();
 		ObjMemberBuilder::new(ValueBuilder(self), name, field_index)
@@ -565,7 +560,7 @@ impl<Kind> ObjMemberBuilder<Kind> {
 		self.location = Some(location);
 		self
 	}
-	fn build_member(self, binding: LazyBinding) -> (Kind, IStr, ObjMember) {
+	fn build_member(self, binding: MaybeUnbound) -> (Kind, IStr, ObjMember) {
 		(
 			self.kind,
 			self.name,
@@ -581,18 +576,18 @@ impl<Kind> ObjMemberBuilder<Kind> {
 }
 
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
-impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
+impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn value(self, s: State, value: Val) -> Result<()> {
-		self.binding(s, LazyBinding::Bound(Thunk::evaluated(value)))
+		self.binding(s, MaybeUnbound::Bound(Thunk::evaluated(value)))
 	}
 	pub fn bindable(
 		self,
 		s: State,
 		bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>,
 	) -> Result<()> {
-		self.binding(s, LazyBinding::Bindable(Cc::new(bindable)))
+		self.binding(s, MaybeUnbound::Unbound(Cc::new(bindable)))
 	}
-	pub fn binding(self, s: State, binding: LazyBinding) -> Result<()> {
+	pub fn binding(self, s: State, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
 		let location = member.location.clone();
 		let old = receiver.0.map.insert(name.clone(), member);
@@ -608,14 +603,14 @@ impl<'v> ObjMemberBuilder<ValueBuilder<'v>> {
 }
 
 pub struct ExtendBuilder<'v>(&'v mut ObjValue);
-impl<'v> ObjMemberBuilder<ExtendBuilder<'v>> {
+impl ObjMemberBuilder<ExtendBuilder<'_>> {
 	pub fn value(self, value: Val) {
-		self.binding(LazyBinding::Bound(Thunk::evaluated(value)));
+		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value)));
 	}
 	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) {
-		self.binding(LazyBinding::Bindable(Cc::new(bindable)));
+		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));
 	}
-	pub fn binding(self, binding: LazyBinding) {
+	pub fn binding(self, binding: MaybeUnbound) {
 		let (receiver, name, member) = self.build_member(binding);
 		let new = receiver.0.clone();
 		*receiver.0 = new.extend_with_raw_member(name, member);

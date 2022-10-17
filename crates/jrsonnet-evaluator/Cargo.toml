@@ -7,9 +7,7 @@ license = "MIT"
 edition = "2021"
 
 [features]
-default = ["serialized-stdlib", "explaining-traces", "friendly-errors"]
-# Serializes standard library AST instead of parsing them every run
-serialized-stdlib = ["bincode", "jrsonnet-parser/serde"]
+default = ["explaining-traces", "friendly-errors"]
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
@@ -23,11 +21,12 @@ exp-preserve-order = []
 exp-serde-preserve-order = ["serde_json/preserve_order"]
 # Implements field destructuring
 exp-destruct = ["jrsonnet-parser/exp-destruct"]
+# Provide Typed for conversions to/from serde_json::Value type
+serde_json = ["dep:serde_json"]
 
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
 jrsonnet-types = { path = "../jrsonnet-types", version = "0.4.2" }
 jrsonnet-macros = { path = "../jrsonnet-macros", version = "0.4.2" }
 jrsonnet-gcmodule = { version = "0.3.4" }
@@ -36,15 +35,13 @@ pathdiff = "0.2.1"
 hashbrown = "0.12.1"
 static_assertions = "1.1"
 
-md5 = "0.7.0"
-base64 = "0.13.0"
 rustc-hash = "1.1"
 
 thiserror = "1.0"
 
 serde = "1.0"
-serde_json = "1.0"
-serde_yaml_with_quirks = "0.8.24"
+# Optional integration
+serde_json = { version = "1.0.82", optional = true }
 
 anyhow = { version = "1.0", optional = true }
 # Friendly errors
@@ -53,9 +50,3 @@ strsim = { version = "0.10.0", optional = true }
 bincode = { version = "1.3", optional = true }
 # Explaining traces
 annotate-snippets = { version = "0.9.1", features = ["color"], optional = true }
-
-[build-dependencies]
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib", version = "0.4.2" }
-jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
-serde = "1.0"
-bincode = "1.3"

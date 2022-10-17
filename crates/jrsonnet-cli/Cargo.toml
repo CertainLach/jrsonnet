@@ -7,7 +7,15 @@ license = "MIT"
 edition = "2021"
 
 [features]
-exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
+exp-preserve-order = [
+    "jrsonnet-evaluator/exp-preserve-order",
+    "jrsonnet-stdlib/exp-preserve-order",
+]
+exp-serde-preserve-order = [
+    "jrsonnet-evaluator/exp-serde-preserve-order",
+    "jrsonnet-stdlib/exp-serde-preserve-order",
+]
+legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 
 [dependencies]
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2", features = [
@@ -15,5 +23,6 @@ jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.
 ] }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
 jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib", version = "0.4.2" }
 
-clap = { version = "3.1", features = ["derive"] }
+clap = { version = "3.2", features = ["derive"] }
