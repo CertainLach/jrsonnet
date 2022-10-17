@@ -6,7 +6,7 @@ pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
-	error::{Error::*, Result},
+	error::Result,
 	function::{FuncDesc, FuncVal},
 	throw,
 	typed::CheckType,
@@ -41,13 +41,10 @@ macro_rules! impl_int {
 					Val::Num(n) => {
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
-							throw!(RuntimeError(
-								format!(
-									"cannot convert number with fractional part to {}",
-									stringify!($ty)
-								)
-								.into()
-							))
+							throw!(
+								"cannot convert number with fractional part to {}",
+								stringify!($ty)
+							)
 						}
 						Ok(n as Self)
 					}
@@ -99,13 +96,10 @@ macro_rules! impl_bounded_int {
 					Val::Num(n) => {
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
-							throw!(RuntimeError(
-								format!(
-									"cannot convert number with fractional part to {}",
-									stringify!($ty)
-								)
-								.into()
-							))
+							throw!(
+								"cannot convert number with fractional part to {}",
+								stringify!($ty)
+							)
 						}
 						Ok(Self(n as $ty))
 					}
@@ -167,7 +161,7 @@ impl Typed for usize {
 
 	fn into_untyped(value: Self, _: State) -> Result<Val> {
 		if value > u32::MAX as Self {
-			throw!(RuntimeError("number is too large".into()))
+			throw!("number is too large")
 		}
 		Ok(Val::Num(value as f64))
 	}
@@ -178,9 +172,7 @@ impl Typed for usize {
 			Val::Num(n) => {
 				#[allow(clippy::float_cmp)]
 				if n.trunc() != n {
-					throw!(RuntimeError(
-						"cannot convert number with fractional part to usize".into()
-					))
+					throw!("cannot convert number with fractional part to usize")
 				}
 				Ok(n as Self)
 			}
@@ -440,7 +432,7 @@ impl Typed for Cc<FuncDesc> {
 		<Self as Typed>::TYPE.check(s, &value)?;
 		match value {
 			Val::Func(FuncVal::Normal(desc)) => Ok(desc),
-			Val::Func(_) => throw!(RuntimeError("expected normal function, not builtin".into())),
+			Val::Func(_) => throw!("expected normal function, not builtin"),
 			_ => unreachable!(),
 		}
 	}

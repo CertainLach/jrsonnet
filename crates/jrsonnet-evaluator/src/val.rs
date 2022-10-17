@@ -629,7 +629,7 @@ impl Val {
 		if num.is_finite() {
 			Ok(Self::Num(num))
 		} else {
-			throw!(RuntimeError("overflow".into()))
+			throw!("overflow")
 		}
 	}
 
@@ -843,14 +843,14 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
 		(Val::Num(a), Val::Num(b)) => (a - b).abs() <= f64::EPSILON,
-		(Val::Arr(_), Val::Arr(_)) => throw!(RuntimeError(
-			"primitiveEquals operates on primitive types, got array".into(),
-		)),
-		(Val::Obj(_), Val::Obj(_)) => throw!(RuntimeError(
-			"primitiveEquals operates on primitive types, got object".into(),
-		)),
+		(Val::Arr(_), Val::Arr(_)) => {
+			throw!("primitiveEquals operates on primitive types, got array")
+		}
+		(Val::Obj(_), Val::Obj(_)) => {
+			throw!("primitiveEquals operates on primitive types, got object")
+		}
 		(a, b) if is_function_like(a) && is_function_like(b) => {
-			throw!(RuntimeError("cannot test equality of functions".into()))
+			throw!("cannot test equality of functions")
 		}
 		(_, _) => false,
 	})

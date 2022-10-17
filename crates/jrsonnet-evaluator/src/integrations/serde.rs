@@ -72,7 +72,7 @@ impl Typed for Value {
 				}
 				Self::Object(out)
 			}
-			Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+			Val::Func(_) => throw!("tried to manifest function"),
 		})
 	}
 }

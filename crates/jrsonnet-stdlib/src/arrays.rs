@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
-	throw_runtime,
+	throw,
 	typed::{Any, BoundedUsize, Typed, VecVal},
 	val::{equals, ArrValue, IndexableVal},
 	IStr, State, Val,
@@ -43,7 +43,7 @@ pub fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Ind
 				match func.evaluate_simple(s.clone(), &(c.to_string(),))? {
 					Val::Str(o) => out.push_str(&o),
 					Val::Null => continue,
-					_ => throw_runtime!("in std.join all items should be strings"),
+					_ => throw!("in std.join all items should be strings"),
 				};
 			}
 			Ok(IndexableVal::Str(out.into()))
@@ -59,7 +59,7 @@ pub fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Ind
 						}
 					}
 					Val::Null => continue,
-					_ => throw_runtime!("in std.join all items should be arrays"),
+					_ => throw!("in std.join all items should be arrays"),
 				};
 			}
 			Ok(IndexableVal::Arr(out.into()))
@@ -128,7 +128,7 @@ pub fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<Indexa
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {
-					throw_runtime!("in std.join all items should be arrays");
+					throw!("in std.join all items should be arrays");
 				}
 			}
 
@@ -149,7 +149,7 @@ pub fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<Indexa
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {
-					throw_runtime!("in std.join all items should be strings");
+					throw!("in std.join all items should be strings");
 				}
 			}
 

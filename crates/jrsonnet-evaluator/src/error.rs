@@ -266,14 +266,13 @@ pub type Result<V, E = LocError> = std::result::Result<V, E>;
 
 #[macro_export]
 macro_rules! throw {
-	($e: expr) => {
-		return Err($e.into())
+	($w:ident$(::$i:ident)*$(($($tt:tt)*))?) => {
+		return Err($w$(::$i)*$(($($tt)*))?.into())
 	};
-}
-
-#[macro_export]
-macro_rules! throw_runtime {
-	($($tt:tt)*) => {
-		return Err($crate::error::Error::RuntimeError(format!($($tt)*).into()).into())
+	($l:literal) => {
+		return Err($crate::error::Error::RuntimeError($l.into()).into())
+	};
+	($l:literal, $($tt:tt)*) => {
+		return Err($crate::error::Error::RuntimeError(format!($l, $($tt)*).into()).into())
 	};
 }

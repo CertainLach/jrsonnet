@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
-	throw_runtime, ObjValueBuilder, State, Thunk, Val,
+	throw, ObjValueBuilder, State, Thunk, Val,
 };
 use jrsonnet_stdlib::StateExt;
 
@@ -11,7 +11,7 @@ macro_rules! ensure_eq {
 		let a = &$a;
 		let b = &$b;
 		if a != b {
-			::jrsonnet_evaluator::throw_runtime!("assertion failed: a != b\na={:#?}\nb={:#?}", a, b)
+			::jrsonnet_evaluator::throw!("assertion failed: a != b\na={:#?}\nb={:#?}", a, b)
 		}
 	}};
 }
@@ -20,7 +20,7 @@ macro_rules! ensure_eq {
 macro_rules! ensure {
 	($v:expr $(,)?) => {
 		if !$v {
-			::jrsonnet_evaluator::throw_runtime!("assertion failed: {}", stringify!($v))
+			::jrsonnet_evaluator::throw!("assertion failed: {}", stringify!($v))
 		}
 	};
 }
@@ -29,7 +29,7 @@ macro_rules! ensure {
 macro_rules! ensure_val_eq {
 	($s:expr, $a:expr, $b:expr) => {{
 		if !::jrsonnet_evaluator::val::equals($s.clone(), &$a.clone(), &$b.clone())? {
-			::jrsonnet_evaluator::throw_runtime!(
+			::jrsonnet_evaluator::throw!(
 				"assertion failed: a != b\na={:#?}\nb={:#?}",
 				$a.to_json(
 					$s.clone(),
@@ -52,7 +52,7 @@ macro_rules! ensure_val_eq {
 fn assert_throw(s: State, lazy: Thunk<Val>, message: String) -> Result<bool> {
 	match lazy.evaluate(s) {
 		Ok(_) => {
-			throw_runtime!("expected argument to throw on evaluation, but it returned instead")
+			throw!("expected argument to throw on evaluation, but it returned instead")
 		}
 		Err(e) => {
 			let error = format!("{}", e.error());

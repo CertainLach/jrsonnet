@@ -1,4 +1,4 @@
-use jrsonnet_evaluator::{error::Result, throw_runtime, State, Val};
+use jrsonnet_evaluator::{error::Result, throw, State, Val};
 use jrsonnet_stdlib::StateExt;
 
 mod common;
@@ -23,7 +23,7 @@ fn assert_negative() -> Result<()> {
 
 	{
 		let e = match s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null") {
-			Ok(_) => throw_runtime!("assertion should fail"),
+			Ok(_) => throw!("assertion should fail"),
 			Err(e) => e,
 		};
 		let e = s.stringify_err(&e);
@@ -31,7 +31,7 @@ fn assert_negative() -> Result<()> {
 	}
 	{
 		let e = match s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)") {
-			Ok(_) => throw_runtime!("assertion should fail"),
+			Ok(_) => throw!("assertion should fail"),
 			Err(e) => e,
 		};
 		let e = s.stringify_err(&e);

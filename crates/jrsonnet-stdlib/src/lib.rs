@@ -8,7 +8,7 @@ use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	function::{builtin::Builtin, ArgLike, CallLocation, FuncVal, TlaArg},
 	gc::{GcHashMap, TraceBox},
-	tb, throw_runtime,
+	tb, throw,
 	trace::PathResolver,
 	typed::{Any, Either, Either2, Either4, VecVal, M1},
 	val::{equals, ArrValue},
@@ -500,7 +500,7 @@ fn builtin_starts_with(
 				true
 			}
 		}
-		_ => throw_runtime!("both arguments should be of the same type"),
+		_ => throw!("both arguments should be of the same type"),
 	})
 }
 
@@ -534,7 +534,7 @@ fn builtin_ends_with(
 				true
 			}
 		}
-		_ => throw_runtime!("both arguments should be of the same type"),
+		_ => throw!("both arguments should be of the same type"),
 	})
 }
 

@@ -591,9 +591,7 @@ pub fn format_code(
 			),
 			Val::Str(s) => {
 				if s.chars().count() != 1 {
-					throw!(RuntimeError(
-						format!("%c expected 1 char string, got {}", s.chars().count()).into(),
-					));
+					throw!("%c expected 1 char string, got {}", s.chars().count(),);
 				}
 				tmp_out.push_str(&s);
 			}

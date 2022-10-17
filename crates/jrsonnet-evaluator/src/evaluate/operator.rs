@@ -150,13 +150,13 @@ pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -
 		(Num(v1), BitXor, Num(v2)) => Num(f64::from((*v1 as i32) ^ (*v2 as i32))),
 		(Num(v1), Lhs, Num(v2)) => {
 			if *v2 < 0.0 {
-				throw!(RuntimeError("shift by negative exponent".into()))
+				throw!("shift by negative exponent")
 			}
 			Num(f64::from((*v1 as i32) << (*v2 as i32)))
 		}
 		(Num(v1), Rhs, Num(v2)) => {
 			if *v2 < 0.0 {
-				throw!(RuntimeError("shift by negative exponent".into()))
+				throw!("shift by negative exponent")
 			}
 			Num(f64::from((*v1 as i32) >> (*v2 as i32)))
 		}

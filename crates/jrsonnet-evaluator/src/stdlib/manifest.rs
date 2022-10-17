@@ -341,7 +341,7 @@ fn manifest_yaml_ex_buf(
 				}
 			}
 		}
-		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+		Val::Func(_) => throw!("tried to manifest function"),
 	}
 	Ok(())
 }

@@ -32,7 +32,7 @@ pub fn destruct(
 		Destruct::Array { start, rest, end } => {
 			use jrsonnet_parser::DestructRest;
 
-			use crate::{throw_runtime, val::ArrValue};
+			use crate::{throw, val::ArrValue};
 
 			#[derive(Trace)]
 			struct DataThunk {
@@ -47,14 +47,14 @@ pub fn destruct(
 					let v = self.parent.evaluate(s)?;
 					let arr = match v {
 						Val::Arr(a) => a,
-						_ => throw_runtime!("expected array"),
+						_ => throw!("expected array"),
 					};
 					if !self.has_rest {
 						if arr.len() != self.min_len {
-							throw_runtime!("expected {} elements, got {}", self.min_len, arr.len())
+							throw!("expected {} elements, got {}", self.min_len, arr.len())
 						}
 					} else if arr.len() < self.min_len {
-						throw_runtime!(
+						throw!(
 							"expected at least {} elements, but array was only {}",
 							self.min_len,
 							arr.len()
@@ -163,7 +163,7 @@ pub fn destruct(
 		}
 		#[cfg(feature = "exp-destruct")]
 		Destruct::Object { fields, rest } => {
-			use crate::{obj::ObjValue, throw_runtime};
+			use crate::{obj::ObjValue, throw};
 
 			#[derive(Trace)]
 			struct DataThunk {
@@ -178,17 +178,17 @@ pub fn destruct(
 					let v = self.parent.evaluate(s)?;
 					let obj = match v {
 						Val::Obj(o) => o,
-						_ => throw_runtime!("expected object"),
+						_ => throw!("expected object"),
 					};
 					for field in &self.field_names {
 						if !obj.has_field_ex(field.clone(), true) {
-							throw_runtime!("missing field: {}", field);
+							throw!("missing field: {}", field);
 						}
 					}
 					if !self.has_rest {
 						let len = obj.len();
 						if len != self.field_names.len() {
-							throw_runtime!("too many fields, and rest not found");
+							throw!("too many fields, and rest not found");
 						}
 					}
 					Ok(obj)
