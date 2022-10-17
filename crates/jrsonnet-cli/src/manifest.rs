@@ -28,13 +28,11 @@ impl FromStr for ManifestFormatName {
 #[clap(next_help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
 	/// Output format, wraps resulting value to corresponding std.manifest call.
-	/// If set to `string` then plain string value is expected to be returned,
-	/// otherwise output will be serialized to the specified format.
-	#[clap(long, short = 'f', default_value = "json", possible_values = &["string", "json", "yaml"])]
+	#[clap(long, short = 'f', default_value = "json", possible_values = &["json", "yaml"])]
 	format: ManifestFormatName,
 	/// Expect plain string as output.
-	/// Shortcut for `--format=string` thus this option is mutually exclusive with `format` option.
-	#[clap(long, short = 'S')]
+	/// Mutually exclusive with `--format`
+	#[clap(long, short = 'S', conflicts_with = "format")]
 	string: bool,
 	/// Write output as YAML stream, can be used with --format json/yaml
 	#[clap(long, short = 'y')]
