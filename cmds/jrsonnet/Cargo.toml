@@ -13,9 +13,7 @@ mimalloc = ["mimallocator"]
 # Experimental feature, which allows to preserve order of object fields
 exp-preserve-order = [
     "jrsonnet-evaluator/exp-preserve-order",
-    "jrsonnet-evaluator/exp-serde-preserve-order",
     "jrsonnet-cli/exp-preserve-order",
-    "jrsonnet-cli/exp-serde-preserve-order",
 ]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]

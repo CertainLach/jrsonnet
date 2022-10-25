@@ -11,10 +11,6 @@ exp-preserve-order = [
     "jrsonnet-evaluator/exp-preserve-order",
     "jrsonnet-stdlib/exp-preserve-order",
 ]
-exp-serde-preserve-order = [
-    "jrsonnet-evaluator/exp-serde-preserve-order",
-    "jrsonnet-stdlib/exp-serde-preserve-order",
-]
 legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 
 [dependencies]

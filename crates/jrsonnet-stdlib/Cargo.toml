@@ -15,18 +15,9 @@ codegenerated-stdlib = ["jrsonnet-parser/structdump"]
 legacy-this-file = []
 # Add order preservation flag to some functions
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
-# Preserve order for files parsed via `std.parseJson`
-# Shame it isn't possible to enable per parse call, instead of globally
-exp-serde-preserve-order = [
-    "serde_json/preserve_order",
-    "jrsonnet-evaluator/exp-serde-preserve-order",
-]
 
 [dependencies]
-jrsonnet-evaluator = { path = "../jrsonnet-evaluator", features = [
-    # std.parseJson parses file via serde, then converts Value to evaluator Val
-    "serde_json",
-], version = "0.4.2" }
+jrsonnet-evaluator = { path = "../jrsonnet-evaluator", version = "0.4.2" }
 jrsonnet-macros = { path = "../jrsonnet-macros", version = "0.4.2" }
 jrsonnet-parser = { path = "../jrsonnet-parser", version = "0.4.2" }
 jrsonnet-gcmodule = "0.3.4"

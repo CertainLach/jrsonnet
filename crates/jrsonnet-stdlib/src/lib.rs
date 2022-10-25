@@ -6,16 +6,13 @@ use std::{
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	function::{builtin::Builtin, ArgLike, CallLocation, FuncVal, TlaArg},
+	function::{builtin::Builtin, CallLocation, FuncVal, TlaArg},
 	gc::{GcHashMap, TraceBox},
-	tb, throw,
+	tb,
 	trace::PathResolver,
-	typed::{Any, Either, Either2, Either4, VecVal, M1},
-	val::{equals, ArrValue},
 	Context, ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Cc;
-use jrsonnet_macros::builtin;
 use jrsonnet_parser::Source;
 
 mod expr;

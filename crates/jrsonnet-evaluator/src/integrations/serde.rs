@@ -1,78 +1,164 @@
-use jrsonnet_types::ComplexValType;
-use serde_json::{Map, Number, Value};
+use std::borrow::Cow;
 
-use crate::{
-	error::{Error::*, Result},
-	throw,
-	typed::Typed,
-	ObjValueBuilder, State, Val,
-};
+use jrsonnet_gcmodule::Cc;
+use serde::{de::Visitor, ser::Error, Deserialize, Serialize};
 
-impl Typed for Value {
-	const TYPE: &'static ComplexValType = &ComplexValType::Any;
+use crate::{error::Result, val::ArrValue, ObjValueBuilder, State, Val};
 
-	fn into_untyped(value: Self, s: State) -> Result<Val> {
-		Ok(match value {
-			Self::Null => Val::Null,
-			Self::Bool(v) => Val::Bool(v),
-			Self::Number(n) => Val::Num(n.as_f64().ok_or_else(|| {
-				RuntimeError(format!("json number can't be represented as jsonnet: {n}").into())
-			})?),
-			Self::String(s) => Val::Str((&s as &str).into()),
-			Self::Array(a) => {
-				let mut out: Vec<Val> = Vec::with_capacity(a.len());
-				for v in a {
-					out.push(Self::into_untyped(v, s.clone())?);
-				}
-				Val::Arr(out.into())
+impl<'de> Deserialize<'de> for Val {
+	fn deserialize<D>(deserializer: D) -> Result<Val, D::Error>
+	where
+		D: serde::Deserializer<'de>,
+	{
+		struct ValVisitor;
+
+		// macro_rules! visit_num {
+		// 	($($method:ident => $ty:ty),* $(,)?) => {$(
+		// 		fn $method<E>(self, v: $ty) -> Result<Self::Value, E>
+		// 		where
+		// 			E: serde::de::Error,
+		// 		{
+		// 			Ok(Val::Num(f64::from(v)))
+		// 		}
+		// 	)*};
+		// }
+
+		impl<'de> Visitor<'de> for ValVisitor {
+			type Value = Val;
+
+			fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Bool(v))
 			}
-			Self::Object(o) => {
-				let mut builder = ObjValueBuilder::with_capacity(o.len());
-				for (k, v) in o {
-					builder
-						.member((&k as &str).into())
-						.value(s.clone(), Self::into_untyped(v, s.clone())?)?;
+			fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				if !v.is_finite() {
+					return Err(E::custom("only finite numbers are supported"));
 				}
-				Val::Obj(builder.build())
+				Ok(Val::Num(v))
 			}
-		})
+			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Str(v.into()))
+			}
+
+			// visit_num! {
+			// 	visit_i8 => i8,
+			// 	visit_i16 => i16,
+			// 	visit_i32 => i32,
+			// 	visit_u8 => u8,
+			// 	visit_u16 => u16,
+			// 	visit_u32 => u32,
+			// }
+			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Num(v as f64))
+			}
+			fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Num(v as f64))
+			}
+
+			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Arr(ArrValue::Bytes(v.into())))
+			}
+
+			fn visit_none<E>(self) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Null)
+			}
+			fn visit_some<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+			where
+				D: serde::Deserializer<'de>,
+			{
+				deserializer.deserialize_any(self)
+			}
+
+			fn visit_unit<E>(self) -> Result<Self::Value, E>
+			where
+				E: serde::de::Error,
+			{
+				Ok(Val::Null)
+			}
+
+			fn visit_newtype_struct<D>(self, deserializer: D) -> Result<Self::Value, D::Error>
+			where
+				D: serde::Deserializer<'de>,
+			{
+				deserializer.deserialize_any(self)
+			}
+
+			fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
+			where
+				A: serde::de::SeqAccess<'de>,
+			{
+				let mut out = seq.size_hint().map_or_else(Vec::new, Vec::with_capacity);
+
+				while let Some(val) = seq.next_element::<Val>()? {
+					out.push(val);
+				}
+
+				Ok(Val::Arr(ArrValue::Eager(Cc::new(out))))
+			}
+
+			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
+			where
+				A: serde::de::MapAccess<'de>,
+			{
+				let mut out = map
+					.size_hint()
+					.map_or_else(ObjValueBuilder::new, ObjValueBuilder::with_capacity);
+
+				while let Some((k, v)) = map.next_entry::<Cow<'de, str>, Val>()? {
+					// Jsonnet ignores duplicate keys
+					out.member(k.into()).value_unchecked(v);
+				}
+
+				Ok(Val::Obj(out.build()))
+			}
+
+			fn expecting(&self, formatter: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+				write!(formatter, "any valid jsonnet value")
+			}
+		}
+		deserializer.deserialize_any(ValVisitor)
 	}
+}
 
-	fn from_untyped(value: Val, s: State) -> Result<Self> {
-		Ok(match value {
-			Val::Bool(b) => Self::Bool(b),
-			Val::Null => Self::Null,
-			Val::Str(s) => Self::String((&s as &str).into()),
-			Val::Num(n) => Self::Number(if n.fract() <= f64::EPSILON {
-				(n as i64).into()
-			} else {
-				Number::from_f64(n).expect("jsonnet numbers can't be infinite or NaN")
-			}),
-			Val::Arr(a) => {
-				let mut out = Vec::with_capacity(a.len());
-				for item in a.iter(s.clone()) {
-					out.push(Self::from_untyped(item?, s.clone())?);
+impl Serialize for Val {
+	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
+	where
+		S: serde::Serializer,
+	{
+		match self {
+			Val::Bool(v) => serializer.serialize_bool(*v),
+			Val::Null => serializer.serialize_none(),
+			Val::Str(s) => serializer.serialize_str(s),
+			Val::Num(n) => serializer.serialize_f64(*n),
+			Val::Arr(arr) => {
+				let mut seq = serializer.serialize_seq(Some(arr.len()))?;
+				for element in arr.iter(State::default()) {
+					// seq.serialize_element()
 				}
-				Self::Array(out)
+				todo!()
 			}
-			Val::Obj(o) => {
-				let mut out = Map::new();
-				for key in o.fields(
-					#[cfg(feature = "exp-preserve-order")]
-					cfg!(feature = "exp-serde-preserve-order"),
-				) {
-					out.insert(
-						(&key as &str).into(),
-						Self::from_untyped(
-							o.get(s.clone(), key)?
-								.expect("key is present in fields, so value should exist"),
-							s.clone(),
-						)?,
-					);
-				}
-				Self::Object(out)
-			}
-			Val::Func(_) => throw!("tried to manifest function"),
-		})
+			Val::Obj(_) => todo!(),
+			Val::Func(_) => Err(S::Error::custom("tried to manifest function")),
+		}
 	}
 }
