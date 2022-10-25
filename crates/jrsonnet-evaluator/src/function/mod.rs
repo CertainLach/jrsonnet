@@ -4,7 +4,7 @@ pub use arglike::{ArgLike, ArgsLike, TlaArg};
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{ExprLocation, LocExpr, ParamsDesc};
+use jrsonnet_parser::{Destruct, Expr, ExprLocation, LocExpr, ParamsDesc};
 
 use self::{
 	builtin::{Builtin, StaticBuiltin},
@@ -176,9 +176,34 @@ impl FuncVal {
 
 	/// Is this function an indentity function.
 	///
-	/// Currently only works for builtin `std.id`, aka `Self::Id` value, `function(x) x` defined by jsonnet will not count as identity.
-	pub const fn is_identity(&self) -> bool {
-		matches!(self, Self::Id)
+	/// Currently only works for builtin `std.id`, aka `Self::Id` value, and `function(x) x`.
+	///
+	/// This function should only be used for optimization, not for the conditional logic, i.e code should work with syntetic identity function too
+	pub fn is_identity(&self) -> bool {
+		if matches!(self, Self::Id) {
+			return true;
+		}
+
+		match self {
+			Self::Id => true,
+			Self::Normal(desc) => {
+				if desc.params.len() != 1 {
+					return false;
+				}
+				let param = &desc.params[0];
+				if param.1.is_some() {
+					return false;
+				}
+				#[allow(clippy::infallible_destructuring_match)]
+				let id = match &param.0 {
+					Destruct::Full(id) => id,
+					#[cfg(feature = "exp-destruct")]
+					_ => return false,
+				};
+				&desc.body.0 as &Expr == &Expr::Var(id.clone())
+			}
+			_ => false,
+		}
 	}
 	/// Identity function value.
 	pub const fn identity() -> Self {
