@@ -85,8 +85,8 @@ pub extern "C" fn jsonnet_destroy(vm: Box<State>) {
 
 /// Set the maximum stack depth.
 #[no_mangle]
-pub extern "C" fn jsonnet_max_stack(vm: &State, v: c_uint) {
-	vm.settings_mut().max_stack = v as usize;
+pub extern "C" fn jsonnet_max_stack(_vm: &State, _v: c_uint) {
+	todo!()
 }
 
 /// Set the number of objects required before a garbage collection cycle is allowed.

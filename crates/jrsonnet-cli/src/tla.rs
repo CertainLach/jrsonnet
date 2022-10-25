@@ -47,6 +47,7 @@ pub struct TLAOpts {
 	tla_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for TLAOpts {
+	type Guards = ();
 	fn configure(&self, s: &State) -> Result<()> {
 		for tla in self.tla_str.iter() {
 			s.add_tla_str((&tla.name as &str).into(), (&tla.value as &str).into());

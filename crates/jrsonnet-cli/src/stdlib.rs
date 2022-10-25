@@ -106,6 +106,7 @@ pub struct StdOpts {
 	ext_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for StdOpts {
+	type Guards = ();
 	fn configure(&self, s: &State) -> Result<()> {
 		if self.no_stdlib {
 			return Ok(());

@@ -137,43 +137,36 @@ pub fn stdlib_uncached(s: State, settings: Rc<RefCell<Settings>>) -> ObjValue {
 		builder
 			.member(name.into())
 			.hide()
-			.value(s.clone(), Val::Func(FuncVal::StaticBuiltin(builtin)))
+			.value(Val::Func(FuncVal::StaticBuiltin(builtin)))
 			.expect("no conflict");
 	}
 
 	builder
 		.member("extVar".into())
 		.hide()
-		.value(
-			s.clone(),
-			Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_ext_var {
-				settings: settings.clone()
-			})))),
-		)
+		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_ext_var {
+			settings: settings.clone()
+		})))))
 		.expect("no conflict");
 	builder
 		.member("native".into())
 		.hide()
-		.value(
-			s.clone(),
-			Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_native {
-				settings: settings.clone()
-			})))),
-		)
+		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_native {
+			settings: settings.clone()
+		})))))
 		.expect("no conflict");
 	builder
 		.member("trace".into())
 		.hide()
-		.value(
-			s.clone(),
-			Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_trace { settings })))),
-		)
+		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_trace {
+			settings
+		})))))
 		.expect("no conflict");
 
 	builder
 		.member("id".into())
 		.hide()
-		.value(s, Val::Func(FuncVal::Id))
+		.value(Val::Func(FuncVal::Id))
 		.expect("no conflict");
 
 	builder.build()

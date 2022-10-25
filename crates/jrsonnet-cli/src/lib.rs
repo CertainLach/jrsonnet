@@ -3,10 +3,12 @@ mod stdlib;
 mod tla;
 mod trace;
 
-use std::{env, path::PathBuf};
+use std::{env, marker::PhantomData, path::PathBuf};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, FileImportResolver, State};
+use jrsonnet_evaluator::{
+	error::Result, stack::StackDepthLimitOverrideGuard, FileImportResolver, State,
+};
 use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
 pub use stdlib::*;
@@ -14,7 +16,9 @@ pub use tla::*;
 pub use trace::*;
 
 pub trait ConfigureState {
-	fn configure(&self, s: &State) -> Result<()>;
+	type Guards;
+
+	fn configure(&self, s: &State) -> Result<Self::Guards>;
 }
 
 #[derive(Parser)]
@@ -44,7 +48,8 @@ pub struct MiscOpts {
 	jpath: Vec<PathBuf>,
 }
 impl ConfigureState for MiscOpts {
-	fn configure(&self, s: &State) -> Result<()> {
+	type Guards = StackDepthLimitOverrideGuard;
+	fn configure(&self, s: &State) -> Result<Self::Guards> {
 		let mut library_paths = self.jpath.clone();
 		library_paths.reverse();
 		if let Some(path) = env::var_os("JSONNET_PATH") {
@@ -53,8 +58,8 @@ impl ConfigureState for MiscOpts {
 
 		s.set_import_resolver(Box::new(FileImportResolver::new(library_paths)));
 
-		s.set_max_stack(self.max_stack);
-		Ok(())
+		let _depth_limit = jrsonnet_evaluator::stack::limit_stack_depth(self.max_stack);
+		Ok(_depth_limit)
 	}
 }
 
@@ -72,16 +77,24 @@ pub struct GeneralOpts {
 
 	#[clap(flatten)]
 	trace: TraceOpts,
+
+	#[clap(flatten)]
+	gc: GcOpts,
 }
 
 impl ConfigureState for GeneralOpts {
-	fn configure(&self, s: &State) -> Result<()> {
+	type Guards = (
+		<MiscOpts as ConfigureState>::Guards,
+		<GcOpts as ConfigureState>::Guards,
+	);
+	fn configure(&self, s: &State) -> Result<Self::Guards> {
 		// Configure trace first, because tla-code/ext-code can throw
 		self.trace.configure(s)?;
-		self.misc.configure(s)?;
+		let misc_guards = self.misc.configure(s)?;
 		self.tla.configure(s)?;
 		self.std.configure(s)?;
-		Ok(())
+		let gc_guards = self.gc.configure(s)?;
+		Ok((misc_guards, gc_guards))
 	}
 }
 
@@ -100,20 +113,22 @@ pub struct GcOpts {
 	#[clap(long)]
 	gc_collect_before_printing_stats: bool,
 }
-impl GcOpts {
-	pub fn stats_printer(&self) -> (Option<GcStatsPrinter>, Option<LeakSpace>) {
+impl ConfigureState for GcOpts {
+	type Guards = (Option<GcStatsPrinter>, Option<LeakSpace>);
+
+	fn configure(&self, _s: &State) -> Result<Self::Guards> {
 		// Constructed structs have side-effects in Drop impl
 		#[allow(clippy::unnecessary_lazy_evaluations)]
-		(
+		Ok((
 			self.gc_print_stats.then(|| GcStatsPrinter {
 				collect_before_printing_stats: self.gc_collect_before_printing_stats,
 			}),
-			(!self.gc_collect_on_exit).then(|| LeakSpace {}),
-		)
+			(!self.gc_collect_on_exit).then(|| LeakSpace(PhantomData)),
+		))
 	}
 }
 
-pub struct LeakSpace {}
+pub struct LeakSpace(PhantomData<()>);
 
 impl Drop for LeakSpace {
 	fn drop(&mut self) {

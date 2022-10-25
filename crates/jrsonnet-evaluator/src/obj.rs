@@ -577,22 +577,29 @@ impl<Kind> ObjMemberBuilder<Kind> {
 
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
 impl ObjMemberBuilder<ValueBuilder<'_>> {
-	pub fn value(self, s: State, value: Val) -> Result<()> {
-		self.binding(s, MaybeUnbound::Bound(Thunk::evaluated(value)))
+	/// Inserts value, replacing if it is already defined
+	pub fn value_unchecked(self, value: Val) {
+		let (receiver, name, member) =
+			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value)));
+		let entry = receiver.0.map.entry(name);
+		entry.insert(member);
 	}
-	pub fn bindable(
-		self,
-		s: State,
-		bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>,
-	) -> Result<()> {
-		self.binding(s, MaybeUnbound::Unbound(Cc::new(bindable)))
+
+	pub fn value(self, value: Val) -> Result<()> {
+		self.thunk(Thunk::evaluated(value))
 	}
-	pub fn binding(self, s: State, binding: MaybeUnbound) -> Result<()> {
+	pub fn thunk(self, value: Thunk<Val>) -> Result<()> {
+		self.binding(MaybeUnbound::Bound(value))
+	}
+	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) -> Result<()> {
+		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)))
+	}
+	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
 		let location = member.location.clone();
 		let old = receiver.0.map.insert(name.clone(), member);
 		if old.is_some() {
-			s.push(
+			State::push(
 				CallLocation(location.as_ref()),
 				|| format!("field <{}> initializtion", name.clone()),
 				|| throw!(DuplicateFieldName(name.clone())),

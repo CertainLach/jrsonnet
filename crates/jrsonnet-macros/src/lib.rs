@@ -299,7 +299,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				cfg_attrs,
 			} => {
 				let name = name.as_ref().map(|v| v.as_str()).unwrap_or("<unnamed>");
-				let eval = quote! {s.push_description(
+				let eval = quote! {jrsonnet_evaluator::State::push_description(
 					|| format!("argument <{}> evaluation", #name),
 					|| <#ty>::from_untyped(value.evaluate(s.clone())?, s.clone()),
 				)?};

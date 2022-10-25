@@ -1,5 +1,5 @@
 //! jsonnet interpreter implementation
-
+#![cfg_attr(feature = "nightly", feature(thread_local))]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(
 	clippy::all,
@@ -51,6 +51,7 @@ mod import;
 mod integrations;
 mod map;
 mod obj;
+pub mod stack;
 pub mod stdlib;
 pub mod trace;
 pub mod typed;
@@ -67,7 +68,7 @@ use std::{
 
 pub use ctx::*;
 pub use dynamic::*;
-use error::{Error::*, LocError, Result, StackTraceElement};
+use error::{Error::*, LocError, Result, ResultExt};
 pub use evaluate::*;
 use function::{CallLocation, TlaArg};
 use gc::{GcHashMap, TraceBox};
@@ -78,6 +79,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
+use stack::check_depth;
 use trace::{CompactFormat, TraceFormat};
 pub use val::{ManifestFormat, Thunk, Val};
 
@@ -143,8 +145,6 @@ impl ContextInitializer for DummyContextInitializer {
 
 /// Dynamically reconfigurable evaluation settings
 pub struct EvaluationSettings {
-	/// Limits recursion by limiting the number of stack frames
-	pub max_stack: usize,
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
 	/// TLA vars
@@ -162,7 +162,6 @@ pub struct EvaluationSettings {
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		Self {
-			max_stack: 200,
 			max_trace: 20,
 			context_initializer: Box::new(DummyContextInitializer),
 			tla_vars: HashMap::default(),
@@ -180,18 +179,6 @@ impl Default for EvaluationSettings {
 	}
 }
 
-#[derive(Default)]
-struct EvaluationData {
-	/// Used for stack overflow detection, stacktrace is populated on unwind
-	stack_depth: usize,
-	/// Updated every time stack entry is popt
-	stack_generation: usize,
-
-	breakpoints: Breakpoints,
-
-	/// Contains file source codes and evaluation results for imports and pretty-printed stacktraces
-	files: GcHashMap<SourcePath, FileData>,
-}
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
@@ -221,42 +208,10 @@ impl FileData {
 	}
 }
 
-#[allow(clippy::type_complexity)]
-pub struct Breakpoint {
-	loc: ExprLocation,
-	collected: RefCell<HashMap<usize, (usize, Vec<Result<Val>>)>>,
-}
-#[derive(Default)]
-struct Breakpoints(Vec<Rc<Breakpoint>>);
-impl Breakpoints {
-	fn insert(
-		&self,
-		stack_depth: usize,
-		stack_generation: usize,
-		loc: &ExprLocation,
-		result: Result<Val>,
-	) -> Result<Val> {
-		if self.0.is_empty() {
-			return result;
-		}
-		for item in &self.0 {
-			if item.loc.belongs_to(loc) {
-				let mut collected = item.collected.borrow_mut();
-				let (depth, vals) = collected.entry(stack_generation).or_default();
-				if stack_depth > *depth {
-					vals.clear();
-				}
-				vals.push(result.clone());
-			}
-		}
-		result
-	}
-}
-
 #[derive(Default)]
 pub struct EvaluationStateInternals {
 	/// Internal state
-	data: RefCell<EvaluationData>,
+	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
 	/// Settings, safe to change at runtime
 	settings: RefCell<EvaluationSettings>,
 }
@@ -268,8 +223,8 @@ pub struct State(Rc<EvaluationStateInternals>);
 impl State {
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
-		let mut data = self.data_mut();
-		let mut file = data.files.raw_entry_mut().from_key(&path);
+		let mut file_cache = self.file_cache();
+		let mut file = file_cache.raw_entry_mut().from_key(&path);
 
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
@@ -303,8 +258,8 @@ impl State {
 	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_bin(&self, path: SourcePath) -> Result<IBytes> {
-		let mut data = self.data_mut();
-		let mut file = data.files.raw_entry_mut().from_key(&path);
+		let mut file_cache = self.file_cache();
+		let mut file = file_cache.raw_entry_mut().from_key(&path);
 
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
@@ -330,8 +285,8 @@ impl State {
 	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved(&self, path: SourcePath) -> Result<Val> {
-		let mut data = self.data_mut();
-		let mut file = data.files.raw_entry_mut().from_key(&path);
+		let mut file_cache = self.file_cache();
+		let mut file = file_cache.raw_entry_mut().from_key(&path);
 
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
@@ -383,16 +338,16 @@ impl State {
 			throw!(InfiniteRecursionDetected)
 		}
 		file.evaluating = true;
-		// Dropping file here, as it borrows data, which may be used in evaluation
-		drop(data);
+		// Dropping file cache guard here, as evaluation may use this map too
+		drop(file_cache);
 		let res = evaluate(
 			self.clone(),
 			self.create_default_context(file_name),
 			&parsed,
 		);
 
-		let mut data = self.data_mut();
-		let mut file = data.files.raw_entry_mut().from_key(&path);
+		let mut file_cache = self.file_cache();
+		let mut file = file_cache.raw_entry_mut().from_key(&path);
 
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
@@ -426,35 +381,13 @@ impl State {
 
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
-		&self,
 		e: CallLocation<'_>,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
-		{
-			let mut data = self.data_mut();
-			let stack_depth = &mut data.stack_depth;
-			if *stack_depth > self.max_stack() {
-				// Error creation uses data, so i drop guard here
-				drop(data);
-				throw!(StackOverflow);
-			}
-			*stack_depth += 1;
-		}
-		let result = f();
-		{
-			let mut data = self.data_mut();
-			data.stack_depth -= 1;
-			data.stack_generation += 1;
-		}
-		if let Err(mut err) = result {
-			err.trace_mut().0.push(StackTraceElement {
-				location: e.0.cloned(),
-				desc: frame_desc(),
-			});
-			return Err(err);
-		}
-		result
+		let _guard = check_depth()?;
+
+		f().with_description_src(e, frame_desc)
 	}
 
 	/// Executes code creating a new stack frame
@@ -464,64 +397,18 @@ impl State {
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<Val>,
 	) -> Result<Val> {
-		{
-			let mut data = self.data_mut();
-			let stack_depth = &mut data.stack_depth;
-			if *stack_depth > self.max_stack() {
-				// Error creation uses data, so i drop guard here
-				drop(data);
-				throw!(StackOverflow);
-			}
-			*stack_depth += 1;
-		}
-		let mut result = f();
-		{
-			let mut data = self.data_mut();
-			data.stack_depth -= 1;
-			data.stack_generation += 1;
-			result = data
-				.breakpoints
-				.insert(data.stack_depth, data.stack_generation, e, result);
-		}
-		if let Err(mut err) = result {
-			err.trace_mut().0.push(StackTraceElement {
-				location: Some(e.clone()),
-				desc: frame_desc(),
-			});
-			return Err(err);
-		}
-		result
+		let _guard = check_depth()?;
+
+		f().with_description_src(e, frame_desc)
 	}
 	/// Executes code creating a new stack frame
 	pub fn push_description<T>(
-		&self,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<T>,
 	) -> Result<T> {
-		{
-			let mut data = self.data_mut();
-			let stack_depth = &mut data.stack_depth;
-			if *stack_depth > self.max_stack() {
-				// Error creation uses data, so i drop guard here
-				drop(data);
-				throw!(StackOverflow);
-			}
-			*stack_depth += 1;
-		}
-		let result = f();
-		{
-			let mut data = self.data_mut();
-			data.stack_depth -= 1;
-			data.stack_generation += 1;
-		}
-		if let Err(mut err) = result {
-			err.trace_mut().0.push(StackTraceElement {
-				location: None,
-				desc: frame_desc(),
-			});
-			return Err(err);
-		}
-		result
+		let _guard = check_depth()?;
+
+		f().with_description(frame_desc)
 	}
 
 	/// # Panics
@@ -536,7 +423,7 @@ impl State {
 	}
 
 	pub fn manifest(&self, val: Val) -> Result<IStr> {
-		self.push_description(
+		Self::push_description(
 			|| "manifestification".to_string(),
 			|| val.manifest(self.clone(), &self.manifest_format()),
 		)
@@ -551,7 +438,7 @@ impl State {
 	/// If passed value is function then call with set TLA
 	pub fn with_tla(&self, val: Val) -> Result<Val> {
 		Ok(match val {
-			Val::Func(func) => self.push_description(
+			Val::Func(func) => State::push_description(
 				|| "during TLA call".to_owned(),
 				|| {
 					func.evaluate(
@@ -573,8 +460,8 @@ impl State {
 
 /// Internals
 impl State {
-	fn data_mut(&self) -> RefMut<'_, EvaluationData> {
-		self.0.data.borrow_mut()
+	fn file_cache(&self) -> RefMut<'_, GcHashMap<SourcePath, FileData>> {
+		self.0.file_cache.borrow_mut()
 	}
 	pub fn settings(&self) -> Ref<'_, EvaluationSettings> {
 		self.0.settings.borrow()
@@ -675,12 +562,5 @@ impl State {
 	}
 	pub fn set_max_trace(&self, trace: usize) {
 		self.settings_mut().max_trace = trace;
-	}
-
-	pub fn max_stack(&self) -> usize {
-		self.settings().max_stack
-	}
-	pub fn set_max_stack(&self, trace: usize) {
-		self.settings_mut().max_stack = trace;
 	}
 }

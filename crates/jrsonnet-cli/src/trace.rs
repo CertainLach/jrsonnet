@@ -41,6 +41,7 @@ pub struct TraceOpts {
 	max_trace: usize,
 }
 impl ConfigureState for TraceOpts {
+	type Guards = ();
 	fn configure(&self, s: &State) -> Result<()> {
 		let resolver = PathResolver::new_cwd_fallback();
 		match self

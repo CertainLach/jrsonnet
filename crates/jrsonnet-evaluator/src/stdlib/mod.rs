@@ -10,7 +10,7 @@ pub mod format;
 pub mod manifest;
 
 pub fn std_format(s: State, str: IStr, vals: Val) -> Result<String> {
-	s.push(
+	State::push(
 		CallLocation::native(),
 		|| format!("std.format of {str}"),
 		|| {

@@ -2,11 +2,11 @@ use std::{fmt::Debug, path::PathBuf};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, ExprLocation, Source, SourcePath, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, ExprLocation, LocExpr, Source, SourcePath, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{stdlib::format::FormatError, typed::TypeLocError};
+use crate::{function::CallLocation, stdlib::format::FormatError, typed::TypeLocError};
 
 fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
@@ -262,7 +262,72 @@ impl Debug for LocError {
 	}
 }
 
+pub trait ErrorSource {
+	fn to_location(self) -> Option<ExprLocation>;
+}
+impl ErrorSource for &LocExpr {
+	fn to_location(self) -> Option<ExprLocation> {
+		Some(self.1.clone())
+	}
+}
+impl ErrorSource for &ExprLocation {
+	fn to_location(self) -> Option<ExprLocation> {
+		Some(self.clone())
+	}
+}
+impl ErrorSource for CallLocation<'_> {
+	fn to_location(self) -> Option<ExprLocation> {
+		self.0.cloned()
+	}
+}
+
 pub type Result<V, E = LocError> = std::result::Result<V, E>;
+pub trait ResultExt: Sized {
+	#[must_use]
+	fn with_description<O: Into<String>>(self, msg: impl FnOnce() -> O) -> Self;
+	#[must_use]
+	fn description(self, msg: &str) -> Self {
+		self.with_description(|| msg)
+	}
+
+	#[must_use]
+	fn with_description_src<O: Into<String>>(
+		self,
+		src: impl ErrorSource,
+		msg: impl FnOnce() -> O,
+	) -> Self;
+	#[must_use]
+	fn description_src(self, src: impl ErrorSource, msg: &str) -> Self {
+		self.with_description_src(src, || msg)
+	}
+}
+impl<T> ResultExt for Result<T, LocError> {
+	fn with_description<O: Into<String>>(mut self, msg: impl FnOnce() -> O) -> Self {
+		if let Err(e) = &mut self {
+			let trace = e.trace_mut();
+			trace.0.push(StackTraceElement {
+				location: None,
+				desc: msg().into(),
+			});
+		}
+		self
+	}
+
+	fn with_description_src<O: Into<String>>(
+		mut self,
+		src: impl ErrorSource,
+		msg: impl FnOnce() -> O,
+	) -> Self {
+		if let Err(e) = &mut self {
+			let trace = e.trace_mut();
+			trace.0.push(StackTraceElement {
+				location: src.to_location(),
+				desc: msg().into(),
+			});
+		}
+		self
+	}
+}
 
 #[macro_export]
 macro_rules! throw {

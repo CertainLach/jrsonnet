@@ -5,7 +5,7 @@ use std::{
 
 use clap::{AppSettings, IntoApp, Parser};
 use clap_complete::Shell;
-use jrsonnet_cli::{ConfigureState, GcOpts, GeneralOpts, ManifestOpts, OutputOpts};
+use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, State};
 
 #[cfg(feature = "mimalloc")]
@@ -60,8 +60,6 @@ struct Opts {
 	output: OutputOpts,
 	#[clap(flatten)]
 	debug: DebugOpts,
-	#[clap(flatten)]
-	gc: GcOpts,
 }
 
 fn main() {
@@ -113,7 +111,6 @@ impl From<LocError> for Error {
 }
 
 fn main_catch(opts: Opts) -> bool {
-	let _printer = opts.gc.stats_printer();
 	let s = State::default();
 	if let Err(e) = main_real(&s, opts) {
 		if let Error::Evaluation(e) = e {
@@ -127,7 +124,7 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	opts.general.configure(s)?;
+	let _guards = opts.general.configure(s)?;
 	opts.manifest.configure(s)?;
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;

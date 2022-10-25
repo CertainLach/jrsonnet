@@ -20,8 +20,8 @@ friendly-errors = ["strsim"]
 exp-preserve-order = []
 # Implements field destructuring
 exp-destruct = ["jrsonnet-parser/exp-destruct"]
-# Provide Typed for conversions to/from serde_json::Value type
-serde_json = ["dep:serde_json"]
+# Improves performance, and implements some useful things using nightly-only features
+nightly = []
 
 [dependencies]
 jrsonnet-interner = { path = "../jrsonnet-interner", version = "0.4.2" }

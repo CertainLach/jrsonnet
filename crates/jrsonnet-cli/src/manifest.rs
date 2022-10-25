@@ -47,6 +47,7 @@ pub struct ManifestOpts {
 	exp_preserve_order: bool,
 }
 impl ConfigureState for ManifestOpts {
+	type Guards = ();
 	fn configure(&self, s: &State) -> Result<()> {
 		if self.string {
 			s.set_manifest_format(ManifestFormat::String);

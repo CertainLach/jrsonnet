@@ -111,7 +111,7 @@ fn manifest_json_ex_buf(
 					buf.push_str(cur_padding);
 					escape_string_json_buf(&field, buf);
 					buf.push_str(options.key_val_sep);
-					s.push_description(
+					State::push_description(
 						|| format!("field <{}> manifestification", field.clone()),
 						|| {
 							let value = obj.get(s.clone(), field.clone())?.unwrap();

@@ -34,7 +34,7 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocEx
 pub fn evaluate_field_name(s: State, ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		FieldName::Fixed(n) => Some(n.clone()),
-		FieldName::Dyn(expr) => s.push(
+		FieldName::Dyn(expr) => State::push(
 			CallLocation::new(&expr.1),
 			|| "evaluating field name".to_string(),
 			|| {
@@ -184,14 +184,11 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.with_add(*plus)
 					.with_visibility(*visibility)
 					.with_location(value.1.clone())
-					.bindable(
-						s.clone(),
-						tb!(UnboundValue {
-							uctx: uctx.clone(),
-							value: value.clone(),
-							name: name.clone()
-						}),
-					)?;
+					.bindable(tb!(UnboundValue {
+						uctx: uctx.clone(),
+						value: value.clone(),
+						name: name.clone()
+					}))?;
 			}
 			Member::Field(FieldMember {
 				name,
@@ -233,15 +230,12 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					.member(name.clone())
 					.hide()
 					.with_location(value.1.clone())
-					.bindable(
-						s.clone(),
-						tb!(UnboundMethod {
-							uctx: uctx.clone(),
-							value: value.clone(),
-							params: params.clone(),
-							name: name.clone()
-						}),
-					)?;
+					.bindable(tb!(UnboundMethod {
+						uctx: uctx.clone(),
+						value: value.clone(),
+						params: params.clone(),
+						name: name.clone()
+					}))?;
 			}
 			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
@@ -324,13 +318,10 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 							.member(n)
 							.with_location(obj.value.1.clone())
 							.with_add(obj.plus)
-							.bindable(
-								s.clone(),
-								tb!(UnboundValue {
-									uctx,
-									value: obj.value.clone(),
-								}),
-							)?;
+							.bindable(tb!(UnboundValue {
+								uctx,
+								value: obj.value.clone(),
+							}))?;
 					}
 					v => throw!(FieldMustBeStringGot(v.value_type())),
 				}
@@ -364,7 +355,7 @@ pub fn evaluate_apply(
 			if tailstrict {
 				body()?
 			} else {
-				s.push(loc, || format!("function <{}> call", f.name()), body)?
+				State::push(loc, || format!("function <{}> call", f.name()), body)?
 			}
 		}
 		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type())),
@@ -374,13 +365,13 @@ pub fn evaluate_apply(
 pub fn evaluate_assert(s: State, ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
-	let assertion_result = s.push(
+	let assertion_result = State::push(
 		CallLocation::new(&value.1),
 		|| "assertion condition".to_owned(),
 		|| bool::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
 	)?;
 	if !assertion_result {
-		s.push(
+		State::push(
 			CallLocation::new(&value.1),
 			|| "assertion failure".to_owned(),
 			|| {
@@ -432,7 +423,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(s, ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(s, ctx, v)?)?,
-		Var(name) => s.push(
+		Var(name) => State::push(
 			CallLocation::new(loc),
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(s.clone()),
@@ -442,7 +433,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				evaluate(s.clone(), ctx.clone(), value)?,
 				evaluate(s.clone(), ctx, index)?,
 			) {
-				(Val::Obj(v), Val::Str(key)) => s.push(
+				(Val::Obj(v), Val::Str(key)) => State::push(
 					CallLocation::new(loc),
 					|| format!("field <{key}> access"),
 					|| match v.get(s.clone(), key.clone()) {
@@ -571,7 +562,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate_assert(s.clone(), ctx.clone(), assert)?;
 			evaluate(s, ctx, returned)?
 		}
-		ErrorStmt(e) => s.push(
+		ErrorStmt(e) => State::push(
 			CallLocation::new(loc),
 			|| "error statement".to_owned(),
 			|| {
@@ -585,7 +576,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if s.push(
+			if State::push(
 				CallLocation::new(loc),
 				|| "if condition".to_owned(),
 				|| bool::from_untyped(evaluate(s.clone(), ctx.clone(), &cond.0)?, s.clone()),
@@ -607,7 +598,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
-					Ok(Some(s.push(
+					Ok(Some(State::push(
 						loc,
 						|| format!("slice {desc}"),
 						|| T::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
@@ -630,7 +621,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let tmp = loc.clone().0;
 			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
 			match i {
-				Import(_) => s.push(
+				Import(_) => State::push(
 					CallLocation::new(loc),
 					|| format!("import {:?}", path.clone()),
 					|| s.import_resolved(resolved_path),

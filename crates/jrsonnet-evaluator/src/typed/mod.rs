@@ -85,12 +85,11 @@ impl Display for TypeLocErrorList {
 }
 
 fn push_type_description(
-	s: State,
 	error_reason: impl Fn() -> String,
 	path: impl Fn() -> ValuePathItem,
 	item: impl Fn() -> Result<()>,
 ) -> Result<()> {
-	s.push_description(error_reason, || match item() {
+	State::push_description(error_reason, || match item() {
 		Ok(_) => Ok(()),
 		Err(mut e) => {
 			if let Error::TypeError(e) = &mut e.error_mut() {
@@ -170,7 +169,6 @@ impl CheckType for ComplexValType {
 				Val::Arr(a) => {
 					for (i, item) in a.iter(s.clone()).enumerate() {
 						push_type_description(
-							s.clone(),
 							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(s.clone(), &item.clone()?),
@@ -184,7 +182,6 @@ impl CheckType for ComplexValType {
 				Val::Arr(a) => {
 					for (i, item) in a.iter(s.clone()).enumerate() {
 						push_type_description(
-							s.clone(),
 							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
 							|| elem_type.check(s.clone(), &item.clone()?),
@@ -199,7 +196,6 @@ impl CheckType for ComplexValType {
 					for (k, v) in elems.iter() {
 						if let Some(got_v) = obj.get(s.clone(), (*k).into())? {
 							push_type_description(
-								s.clone(),
 								|| format!("property {k}"),
 								|| ValuePathItem::Field((*k).into()),
 								|| v.check(s.clone(), &got_v),
