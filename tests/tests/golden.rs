@@ -13,10 +13,10 @@ mod common;
 
 fn run(root: &Path, file: &Path) -> String {
 	let s = State::default();
-	s.set_trace_format(Box::new(CompactFormat {
+	s.set_trace_format(CompactFormat {
 		resolver: PathResolver::Relative(root.to_owned()),
 		padding: 3,
-	}));
+	});
 	s.with_stdlib();
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
@@ -26,7 +26,6 @@ fn run(root: &Path, file: &Path) -> String {
 		Err(e) => return s.stringify_err(&e),
 	};
 	match v.to_json(
-		s.clone(),
 		3,
 		#[cfg(feature = "exp-preserve-order")]
 		false,

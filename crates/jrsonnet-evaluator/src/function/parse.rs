@@ -12,7 +12,7 @@ use crate::{
 	gc::GcHashMap,
 	tb, throw,
 	val::ThunkValue,
-	Context, Pending, State, Thunk, Val,
+	Context, Pending, Thunk, Val,
 };
 
 #[derive(Trace)]
@@ -24,8 +24,8 @@ struct EvaluateNamedThunk {
 
 impl ThunkValue for EvaluateNamedThunk {
 	type Output = Val;
-	fn get(self: Box<Self>, s: State) -> Result<Val> {
-		evaluate_named(s, self.ctx.unwrap(), &self.value, self.name)
+	fn get(self: Box<Self>) -> Result<Val> {
+		evaluate_named(self.ctx.unwrap(), &self.value, self.name)
 	}
 }
 
@@ -38,7 +38,6 @@ impl ThunkValue for EvaluateNamedThunk {
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_function_call(
-	s: State,
 	ctx: Context,
 	body_ctx: Context,
 	params: &ParamsDesc,
@@ -56,7 +55,7 @@ pub fn parse_function_call(
 	let mut filled_named = 0;
 	let mut filled_positionals = 0;
 
-	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
 		destruct(
 			&name,
@@ -68,7 +67,7 @@ pub fn parse_function_call(
 		Ok(())
 	})?;
 
-	args.named_iter(s, ctx, tailstrict, &mut |name, value| {
+	args.named_iter(ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
 		if !params.iter().any(|p| p.0.name().as_ref() == Some(name)) {
 			throw!(UnknownFunctionParameter((name as &str).to_owned()));
@@ -150,7 +149,6 @@ pub fn parse_function_call(
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_builtin_call(
-	s: State,
 	ctx: Context,
 	params: &[BuiltinParam],
 	args: &dyn ArgsLike,
@@ -169,13 +167,13 @@ pub fn parse_builtin_call(
 
 	let mut filled_args = 0;
 
-	args.unnamed_iter(s.clone(), ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
 		passed_args[id] = Some(arg);
 		filled_args += 1;
 		Ok(())
 	})?;
 
-	args.named_iter(s, ctx, tailstrict, &mut |name, arg| {
+	args.named_iter(ctx, tailstrict, &mut |name, arg| {
 		// FIXME: O(n) for arg existence check
 		let id = params
 			.iter()
@@ -232,7 +230,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 	struct DependsOnUnbound(IStr, ParamsDesc);
 	impl ThunkValue for DependsOnUnbound {
 		type Output = Val;
-		fn get(self: Box<Self>, _: State) -> Result<Val> {
+		fn get(self: Box<Self>) -> Result<Val> {
 			Err(FunctionParameterNotBoundInCall(
 				Some(self.0.clone()),
 				self.1.iter().map(|p| (p.0.name(), p.1.is_some())).collect(),

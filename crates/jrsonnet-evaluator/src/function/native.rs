@@ -1,5 +1,8 @@
-use super::{arglike::ArgLike, CallLocation, FuncVal};
-use crate::{error::Result, typed::Typed, Context, State};
+use super::{
+	arglike::{ArgLike, OptionalContext},
+	FuncVal,
+};
+use crate::{error::Result, typed::Typed};
 
 pub trait NativeDesc {
 	type Value;
@@ -9,23 +12,18 @@ macro_rules! impl_native_desc {
 	($($gen:ident)*) => {
 		impl<$($gen,)* O> NativeDesc for (($($gen,)*), O)
 		where
-			$($gen: ArgLike,)*
+			$($gen: ArgLike + OptionalContext,)*
 			O: Typed,
 		{
-			type Value = Box<dyn Fn(State, $($gen,)*) -> Result<O>>;
+			type Value = Box<dyn Fn($($gen,)*) -> Result<O>>;
 
 			#[allow(non_snake_case)]
 			fn into_native(val: FuncVal) -> Self::Value {
-				Box::new(move |s: State, $($gen),*| {
-					let val = val.evaluate(
-						s.clone(),
-						// This isn't intended to be used with ArgsDesc
-						Context::default(),
-						CallLocation::native(),
+				Box::new(move |$($gen),*| {
+					let val = val.evaluate_simple(
 						&($($gen,)*),
-						true
 					)?;
-					O::from_untyped(val, s.clone())
+					O::from_untyped(val)
 				})
 			}
 		}

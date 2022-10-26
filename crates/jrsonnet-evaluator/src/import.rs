@@ -8,6 +8,7 @@ use std::{
 };
 
 use fs::File;
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::{
@@ -19,7 +20,7 @@ use crate::{
 };
 
 /// Implements file resolution logic for `import` and `importStr`
-pub trait ImportResolver {
+pub trait ImportResolver: Trace {
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
 	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
 	/// where `${vendor}` is a library path.
@@ -47,6 +48,7 @@ pub trait ImportResolver {
 }
 
 /// Dummy resolver, can't resolve/load any file
+#[derive(Trace)]
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
 	fn load_file_contents(&self, _resolved: &SourcePath) -> Result<Vec<u8>> {
@@ -65,7 +67,7 @@ impl Default for Box<dyn ImportResolver> {
 }
 
 /// File resolver, can load file from both FS and library paths
-#[derive(Default)]
+#[derive(Default, Trace)]
 pub struct FileImportResolver {
 	/// Library directories to search for file.
 	/// Referred to as `jpath` in original jsonnet implementation.
@@ -82,6 +84,7 @@ impl FileImportResolver {
 		self.library_paths.borrow_mut().push(path);
 	}
 }
+
 impl ImportResolver for FileImportResolver {
 	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
 		let mut direct = if let Some(f) = from.downcast_ref::<SourceFile>() {

@@ -105,7 +105,7 @@ pub struct ObjMember {
 }
 
 pub trait ObjectAssertion: Trace {
-	fn run(&self, s: State, super_obj: Option<ObjValue>, this: Option<ObjValue>) -> Result<()>;
+	fn run(&self, super_obj: Option<ObjValue>, this: Option<ObjValue>) -> Result<()>;
 }
 
 // Field => This
@@ -368,8 +368,19 @@ impl ObjValue {
 			.map_or(false, |v| v.is_visible())
 	}
 
-	pub fn get(&self, s: State, key: IStr) -> Result<Option<Val>> {
-		self.run_assertions(s.clone())?;
+	pub fn iter(&self) -> impl Iterator<Item = (IStr, Result<Val>)> + '_ {
+		let fields = self.fields();
+		fields.into_iter().map(|field| {
+			(
+				field.clone(),
+				self.get(field)
+					.map(|opt| opt.expect("iterating over keys, field exists")),
+			)
+		})
+	}
+
+	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
+		self.run_assertions()?;
 		if let Some(v) = self.0.value_cache.borrow().get(&key) {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
@@ -384,7 +395,6 @@ impl ObjValue {
 			.insert(key.clone(), CacheValue::Pending);
 		let value = self
 			.get_raw(
-				s,
 				key.clone(),
 				self.0.this.clone().unwrap_or_else(|| self.clone()),
 			)
@@ -404,49 +414,47 @@ impl ObjValue {
 		Ok(value)
 	}
 
-	fn get_raw(&self, s: State, key: IStr, real_this: Self) -> Result<Option<Val>> {
+	fn get_raw(&self, key: IStr, real_this: Self) -> Result<Option<Val>> {
 		match (self.0.this_entries.get(&key), &self.0.sup) {
-			(Some(k), None) => Ok(Some(self.evaluate_this(s, k, real_this)?)),
+			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
 			(Some(k), Some(super_obj)) => {
-				let our = self.evaluate_this(s.clone(), k, real_this.clone())?;
+				let our = self.evaluate_this(k, real_this.clone())?;
 				if k.add {
 					super_obj
-						.get_raw(s.clone(), key, real_this)?
+						.get_raw(key, real_this)?
 						.map_or(Ok(Some(our.clone())), |v| {
-							Ok(Some(evaluate_add_op(s.clone(), &v, &our)?))
+							Ok(Some(evaluate_add_op(&v, &our)?))
 						})
 				} else {
 					Ok(Some(our))
 				}
 			}
-			(None, Some(super_obj)) => super_obj.get_raw(s, key, real_this),
+			(None, Some(super_obj)) => super_obj.get_raw(key, real_this),
 			(None, None) => Ok(None),
 		}
 	}
-	fn evaluate_this(&self, s: State, v: &ObjMember, real_this: Self) -> Result<Val> {
+	fn evaluate_this(&self, v: &ObjMember, real_this: Self) -> Result<Val> {
 		v.invoke
-			.evaluate(s.clone(), self.0.sup.clone(), Some(real_this))?
-			.evaluate(s)
+			.evaluate(self.0.sup.clone(), Some(real_this))?
+			.evaluate()
 	}
 
-	fn run_assertions_raw(&self, s: State, real_this: &Self) -> Result<()> {
+	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
 		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
-				if let Err(e) =
-					assertion.run(s.clone(), self.0.sup.clone(), Some(real_this.clone()))
-				{
+				if let Err(e) = assertion.run(self.0.sup.clone(), Some(real_this.clone())) {
 					self.0.assertions_ran.borrow_mut().remove(real_this);
 					return Err(e);
 				}
 			}
 			if let Some(super_obj) = &self.0.sup {
-				super_obj.run_assertions_raw(s, real_this)?;
+				super_obj.run_assertions_raw(real_this)?;
 			}
 		}
 		Ok(())
 	}
-	pub fn run_assertions(&self, s: State) -> Result<()> {
-		self.run_assertions_raw(s, self)
+	pub fn run_assertions(&self) -> Result<()> {
+		self.run_assertions_raw(self)
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {

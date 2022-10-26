@@ -4,7 +4,7 @@ use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
 	error::Error::*, evaluate, stdlib::std_format, throw, typed::Typed, val::equals, Context,
-	Result, State, Val,
+	Result, Val,
 };
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
@@ -18,7 +18,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
+pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	Ok(match (a, b) {
 		(Str(a), Str(b)) if a.is_empty() => Val::Str(b.clone()),
@@ -29,9 +29,9 @@ pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 		(Num(a), Str(b)) => Str(format!("{a}{b}").into()),
 		(Str(a), Num(b)) => Str(format!("{a}{b}").into()),
 
-		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::Str(o.clone().to_string(s)?),
-		(Str(a), o) => Str(format!("{a}{}", o.clone().to_string(s)?).into()),
-		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string(s)?).into()),
+		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::Str(o.clone().to_string()?),
+		(Str(a), o) => Str(format!("{a}{}", o.clone().to_string()?).into()),
+		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string()?).into()),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => {
@@ -49,7 +49,7 @@ pub fn evaluate_add_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_mod_op(s: State, a: &Val, b: &Val) -> Result<Val> {
+pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	match (a, b) {
 		(Num(a), Num(b)) => {
@@ -58,9 +58,7 @@ pub fn evaluate_mod_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 			}
 			Ok(Num(a % b))
 		}
-		(Str(str), vals) => {
-			String::into_untyped(std_format(s.clone(), str.clone(), vals.clone())?, s)
-		}
+		(Str(str), vals) => String::into_untyped(std_format(str.clone(), vals.clone())?),
 		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mod,
 			a.value_type(),
@@ -70,7 +68,6 @@ pub fn evaluate_mod_op(s: State, a: &Val, b: &Val) -> Result<Val> {
 }
 
 pub fn evaluate_binary_op_special(
-	s: State,
 	ctx: Context,
 	a: &LocExpr,
 	op: BinaryOpType,
@@ -78,24 +75,24 @@ pub fn evaluate_binary_op_special(
 ) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
-	Ok(match (evaluate(s.clone(), ctx.clone(), a)?, op, b) {
+	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
 		(Bool(true), Or, _o) => Val::Bool(true),
 		(Bool(false), And, _o) => Val::Bool(false),
-		(a, op, eb) => evaluate_binary_op_normal(s.clone(), &a, op, &evaluate(s, ctx, eb)?)?,
+		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(ctx, eb)?)?,
 	})
 }
 
-pub fn evaluate_compare_op(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Result<Ordering> {
+pub fn evaluate_compare_op(a: &Val, op: BinaryOpType, b: &Val) -> Result<Ordering> {
 	use Val::*;
 	Ok(match (a, b) {
 		(Str(a), Str(b)) => a.cmp(b),
 		(Num(a), Num(b)) => a.partial_cmp(b).expect("jsonnet numbers are non NaN"),
 		(Arr(a), Arr(b)) => {
-			let ai = a.iter(s.clone());
-			let bi = b.iter(s.clone());
+			let ai = a.iter();
+			let bi = b.iter();
 
 			for (a, b) in ai.zip(bi) {
-				let ord = evaluate_compare_op(s.clone(), &a?, op, &b?)?;
+				let ord = evaluate_compare_op(&a?, op, &b?)?;
 				if !ord.is_eq() {
 					return Ok(ord);
 				}
@@ -111,22 +108,22 @@ pub fn evaluate_compare_op(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Resu
 	})
 }
 
-pub fn evaluate_binary_op_normal(s: State, a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
+pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
-		(a, Add, b) => evaluate_add_op(s, a, b)?,
+		(a, Add, b) => evaluate_add_op(a, b)?,
 
-		(a, Eq, b) => Bool(equals(s, a, b)?),
-		(a, Neq, b) => Bool(!equals(s, a, b)?),
+		(a, Eq, b) => Bool(equals(a, b)?),
+		(a, Neq, b) => Bool(!equals(a, b)?),
 
-		(a, Lt, b) => Bool(evaluate_compare_op(s, a, Lt, b)?.is_lt()),
-		(a, Gt, b) => Bool(evaluate_compare_op(s, a, Gt, b)?.is_gt()),
-		(a, Lte, b) => Bool(evaluate_compare_op(s, a, Lte, b)?.is_le()),
-		(a, Gte, b) => Bool(evaluate_compare_op(s, a, Gte, b)?.is_ge()),
+		(a, Lt, b) => Bool(evaluate_compare_op(a, Lt, b)?.is_lt()),
+		(a, Gt, b) => Bool(evaluate_compare_op(a, Gt, b)?.is_gt()),
+		(a, Lte, b) => Bool(evaluate_compare_op(a, Lte, b)?.is_le()),
+		(a, Gte, b) => Bool(evaluate_compare_op(a, Gte, b)?.is_ge()),
 
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
-		(a, Mod, b) => evaluate_mod_op(s, a, b)?,
+		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
 		(Str(v1), Mul, Num(v2)) => Str(v1.repeat(*v2 as usize).into()),
 

@@ -6,7 +6,7 @@ use jrsonnet_evaluator::{
 		ManifestYamlOptions,
 	},
 	typed::Any,
-	IStr, State,
+	IStr,
 };
 
 #[builtin]
@@ -16,7 +16,6 @@ pub fn builtin_escape_string_json(str_: IStr) -> Result<String> {
 
 #[builtin]
 pub fn builtin_manifest_json_ex(
-	s: State,
 	value: Any,
 	indent: IStr,
 	newline: Option<IStr>,
@@ -26,7 +25,6 @@ pub fn builtin_manifest_json_ex(
 	let newline = newline.as_deref().unwrap_or("\n");
 	let key_val_sep = key_val_sep.as_deref().unwrap_or(": ");
 	manifest_json_ex(
-		s,
 		&value.0,
 		&ManifestJsonOptions {
 			padding: &indent,
@@ -41,14 +39,12 @@ pub fn builtin_manifest_json_ex(
 
 #[builtin]
 pub fn builtin_manifest_yaml_doc(
-	s: State,
 	value: Any,
 	indent_array_in_object: Option<bool>,
 	quote_keys: Option<bool>,
 	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<String> {
 	manifest_yaml_ex(
-		s,
 		&value.0,
 		&ManifestYamlOptions {
 			padding: "  ",

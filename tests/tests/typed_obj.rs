@@ -11,12 +11,12 @@ struct A {
 	b: u16,
 }
 
-fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T, s: State) -> Result<()> {
-	let untyped = T::into_untyped(value.clone(), s.clone())?;
-	let value2 = T::from_untyped(untyped.clone(), s.clone())?;
+fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T) -> Result<()> {
+	let untyped = T::into_untyped(value.clone())?;
+	let value2 = T::from_untyped(untyped.clone())?;
 	ensure_eq!(value, value2);
-	let untyped2 = T::into_untyped(value2, s.clone())?;
-	ensure_val_eq!(s, untyped, untyped2);
+	let untyped2 = T::into_untyped(value2)?;
+	ensure_val_eq!(untyped, untyped2);
 
 	Ok(())
 }
@@ -25,12 +25,9 @@ fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T, s: State) -> R
 fn simple_object() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let a = A::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?,
-		s.clone(),
-	)?;
+	let a = A::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?)?;
 	ensure_eq!(a, A { a: 1, b: 2 });
-	test_roundtrip(a, s)?;
+	test_roundtrip(a)?;
 	Ok(())
 }
 
@@ -45,16 +42,13 @@ struct B {
 fn renamed_field() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let b = B::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}")?,
-		s.clone(),
-	)?;
+	let b = B::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}")?)?;
 	ensure_eq!(b, B { a: 1, b: 2 });
 	ensure_eq!(
-		&B::into_untyped(b.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&B::into_untyped(b.clone())?.to_string()? as &str,
 		r#"{"a": 1, "c": 2}"#,
 	);
-	test_roundtrip(b, s)?;
+	test_roundtrip(b)?;
 	Ok(())
 }
 
@@ -79,7 +73,6 @@ fn flattened_object() -> Result<()> {
 	s.with_stdlib();
 	let obj = Object::from_untyped(
 		s.evaluate_snippet("snip".to_owned(), "{apiVersion: 'ver', kind: 'kind', b: 2}")?,
-		s.clone(),
 	)?;
 	ensure_eq!(
 		obj,
@@ -92,10 +85,10 @@ fn flattened_object() -> Result<()> {
 		}
 	);
 	ensure_eq!(
-		&Object::into_untyped(obj.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&Object::into_untyped(obj.clone())?.to_string()? as &str,
 		r#"{"apiVersion": "ver", "b": 2, "kind": "kind"}"#,
 	);
-	test_roundtrip(obj, s)?;
+	test_roundtrip(obj)?;
 	Ok(())
 }
 
@@ -109,16 +102,13 @@ struct C {
 fn optional_field_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let c = C::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?,
-		s.clone(),
-	)?;
+	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?)?;
 	ensure_eq!(c, C { a: Some(1), b: 2 });
 	ensure_eq!(
-		&C::into_untyped(c.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&C::into_untyped(c.clone())?.to_string()? as &str,
 		r#"{"a": 1, "b": 2}"#,
 	);
-	test_roundtrip(c, s)?;
+	test_roundtrip(c)?;
 	Ok(())
 }
 
@@ -126,13 +116,13 @@ fn optional_field_some() -> Result<()> {
 fn optional_field_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2}")?, s.clone())?;
+	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2}")?)?;
 	ensure_eq!(c, C { a: None, b: 2 });
 	ensure_eq!(
-		&C::into_untyped(c.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&C::into_untyped(c.clone())?.to_string()? as &str,
 		r#"{"b": 2}"#,
 	);
-	test_roundtrip(c, s)?;
+	test_roundtrip(c)?;
 	Ok(())
 }
 
@@ -152,10 +142,7 @@ struct E {
 fn flatten_optional_some() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let d = D::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}")?,
-		s.clone(),
-	)?;
+	let d = D::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}")?)?;
 	ensure_eq!(
 		d,
 		D {
@@ -164,10 +151,10 @@ fn flatten_optional_some() -> Result<()> {
 		}
 	);
 	ensure_eq!(
-		&D::into_untyped(d.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&D::into_untyped(d.clone())?.to_string()? as &str,
 		r#"{"b": 2, "v": 1}"#,
 	);
-	test_roundtrip(d, s)?;
+	test_roundtrip(d)?;
 	Ok(())
 }
 
@@ -175,15 +162,12 @@ fn flatten_optional_some() -> Result<()> {
 fn flatten_optional_none() -> Result<()> {
 	let s = State::default();
 	s.with_stdlib();
-	let d = D::from_untyped(
-		s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}")?,
-		s.clone(),
-	)?;
+	let d = D::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}")?)?;
 	ensure_eq!(d, D { e: None, b: 2 });
 	ensure_eq!(
-		&D::into_untyped(d.clone(), s.clone())?.to_string(s.clone())? as &str,
+		&D::into_untyped(d.clone())?.to_string()? as &str,
 		r#"{"b": 2}"#,
 	);
-	test_roundtrip(d, s)?;
+	test_roundtrip(d)?;
 	Ok(())
 }

@@ -5,7 +5,7 @@ use jrsonnet_evaluator::{
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
 	tb,
 	typed::Typed,
-	Context, State, Thunk, Val,
+	ContextBuilder, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Cc;
 use jrsonnet_stdlib::StateExt;
@@ -17,12 +17,12 @@ fn a() -> Result<u32> {
 
 #[test]
 fn basic_function() -> Result<()> {
-	let s = State::default();
 	let a: a = a {};
-	let v = u32::from_untyped(
-		a.call(s.clone(), Context::new(), CallLocation::native(), &())?,
-		s,
-	)?;
+	let v = u32::from_untyped(a.call(
+		ContextBuilder::dangerous_empty_state().build(),
+		CallLocation::native(),
+		&(),
+	)?)?;
 
 	ensure_eq!(v, 1);
 	Ok(())
@@ -50,7 +50,7 @@ fn call_from_code() -> Result<()> {
             null
         ",
 	)?;
-	ensure_val_eq!(s, v, Val::Null);
+	ensure_val_eq!(v, Val::Null);
 	Ok(())
 }
 
@@ -89,6 +89,6 @@ fn nonstatic_builtin() -> Result<()> {
             null
         ",
 	)?;
-	ensure_val_eq!(s, v, Val::Null);
+	ensure_val_eq!(v, Val::Null);
 	Ok(())
 }

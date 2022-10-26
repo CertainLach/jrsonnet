@@ -4,6 +4,7 @@
 	clippy::undocumented_unsafe_blocks
 )]
 #![warn(clippy::pedantic, clippy::nursery)]
+#![allow(clippy::missing_const_for_fn)]
 use std::{
 	borrow::Cow,
 	cell::RefCell,

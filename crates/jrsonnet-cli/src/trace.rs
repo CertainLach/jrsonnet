@@ -49,13 +49,11 @@ impl ConfigureState for TraceOpts {
 			.as_ref()
 			.unwrap_or(&TraceFormatName::Compact)
 		{
-			TraceFormatName::Compact => s.set_trace_format(Box::new(CompactFormat {
+			TraceFormatName::Compact => s.set_trace_format(CompactFormat {
 				resolver,
 				padding: 4,
-			})),
-			TraceFormatName::Explaining => {
-				s.set_trace_format(Box::new(ExplainingFormat { resolver }))
-			}
+			}),
+			TraceFormatName::Explaining => s.set_trace_format(ExplainingFormat { resolver }),
 		}
 		s.set_max_trace(self.max_trace);
 		Ok(())

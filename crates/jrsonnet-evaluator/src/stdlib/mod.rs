@@ -9,15 +9,15 @@ use crate::{error::Result, function::CallLocation, State, Val};
 pub mod format;
 pub mod manifest;
 
-pub fn std_format(s: State, str: IStr, vals: Val) -> Result<String> {
+pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 	State::push(
 		CallLocation::native(),
 		|| format!("std.format of {str}"),
 		|| {
 			Ok(match vals {
-				Val::Arr(vals) => format_arr(s.clone(), &str, &vals.evaluated(s.clone())?)?,
-				Val::Obj(obj) => format_obj(s.clone(), &str, &obj)?,
-				o => format_arr(s.clone(), &str, &[o])?,
+				Val::Arr(vals) => format_arr(&str, &vals.evaluated()?)?,
+				Val::Obj(obj) => format_obj(&str, &obj)?,
+				o => format_arr(&str, &[o])?,
 			})
 		},
 	)

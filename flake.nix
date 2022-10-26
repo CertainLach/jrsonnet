@@ -21,6 +21,8 @@
           nativeBuildInputs = with pkgs;[
             rust
             cargo-edit
+            hyperfine
+            go-jsonnet
           ];
         };
       }

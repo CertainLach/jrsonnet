@@ -27,18 +27,16 @@ macro_rules! ensure {
 
 #[macro_export]
 macro_rules! ensure_val_eq {
-	($s:expr, $a:expr, $b:expr) => {{
-		if !::jrsonnet_evaluator::val::equals($s.clone(), &$a.clone(), &$b.clone())? {
+	($a:expr, $b:expr) => {{
+		if !::jrsonnet_evaluator::val::equals(&$a.clone(), &$b.clone())? {
 			::jrsonnet_evaluator::throw!(
 				"assertion failed: a != b\na={:#?}\nb={:#?}",
 				$a.to_json(
-					$s.clone(),
 					2,
 					#[cfg(feature = "exp-preserve-order")]
 					false
 				)?,
 				$b.to_json(
-					$s.clone(),
 					2,
 					#[cfg(feature = "exp-preserve-order")]
 					false
@@ -49,8 +47,8 @@ macro_rules! ensure_val_eq {
 }
 
 #[builtin]
-fn assert_throw(s: State, lazy: Thunk<Val>, message: String) -> Result<bool> {
-	match lazy.evaluate(s) {
+fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
+	match lazy.evaluate() {
 		Ok(_) => {
 			throw!("expected argument to throw on evaluation, but it returned instead")
 		}
@@ -67,10 +65,7 @@ pub fn with_test(s: &State) {
 	let mut bobj = ObjValueBuilder::new();
 	bobj.member("assertThrow".into())
 		.hide()
-		.value(
-			s.clone(),
-			Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)),
-		)
+		.value(Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)))
 		.expect("no error");
 
 	s.add_global("test".into(), Thunk::evaluated(Val::Obj(bobj.build())))

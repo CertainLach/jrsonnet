@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, trace::PathResolver, State};
+use jrsonnet_evaluator::{error::Result, tb, trace::PathResolver, State};
 
 use crate::ConfigureState;
 
@@ -125,7 +125,7 @@ impl ConfigureState for StdOpts {
 		for ext in self.ext_code_file.iter() {
 			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
-		s.settings_mut().context_initializer = Box::new(ctx);
+		s.settings_mut().context_initializer = tb!(ctx);
 		Ok(())
 	}
 }

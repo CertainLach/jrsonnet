@@ -130,7 +130,7 @@ enum ArgInfo {
 		is_option: bool,
 		name: Option<String>,
 	},
-	State,
+	Context,
 	Location,
 	This,
 }
@@ -146,8 +146,8 @@ impl ArgInfo {
 			_ => None,
 		};
 		let ty = &arg.ty;
-		if type_is_path(ty, "State").is_some() {
-			return Ok(Self::State);
+		if type_is_path(ty, "Context").is_some() {
+			return Ok(Self::Context);
 		} else if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
 		} else if type_is_path(ty, "Thunk").is_some() {
@@ -273,7 +273,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				},
 			})
 		}
-		ArgInfo::State => None,
+		ArgInfo::Context => None,
 		ArgInfo::Location => None,
 		ArgInfo::This => None,
 	});
@@ -287,7 +287,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				id += 1;
 				(quote! {#cid}, a)
 			}
-			ArgInfo::State | ArgInfo::Location | ArgInfo::This => {
+			ArgInfo::Context | ArgInfo::Location | ArgInfo::This => {
 				(quote! {compile_error!("should not use id")}, a)
 			}
 		})
@@ -301,7 +301,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				let name = name.as_ref().map(|v| v.as_str()).unwrap_or("<unnamed>");
 				let eval = quote! {jrsonnet_evaluator::State::push_description(
 					|| format!("argument <{}> evaluation", #name),
-					|| <#ty>::from_untyped(value.evaluate(s.clone())?, s.clone()),
+					|| <#ty>::from_untyped(value.evaluate()?),
 				)?};
 				let value = if *is_option {
 					quote! {if let Some(value) = &parsed[#id] {
@@ -333,7 +333,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 					}
 				}
 			}
-			ArgInfo::State => quote! {s.clone(),},
+			ArgInfo::Context => quote! {ctx.clone(),},
 			ArgInfo::Location => quote! {location,},
 			ArgInfo::This => quote! {self,},
 		});
@@ -394,12 +394,12 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 				fn params(&self) -> &[BuiltinParam] {
 					PARAMS
 				}
-				fn call(&self, s: State, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(s.clone(), ctx, &PARAMS, args, false)?;
+				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#pass)*);
 					let result = result?;
-					<#result_inner>::into_untyped(result, s)
+					<#result_inner>::into_untyped(result)
 				}
 			}
 		};
@@ -535,11 +535,11 @@ impl TypedField {
 			// optional flatten is handled in same way as serde
 			return if self.is_option {
 				quote! {
-					#ident: <#ty>::parse(&obj, s.clone()).ok(),
+					#ident: <#ty>::parse(&obj).ok(),
 				}
 			} else {
 				quote! {
-					#ident: <#ty>::parse(&obj, s.clone())?,
+					#ident: <#ty>::parse(&obj)?,
 				}
 			};
 		};
@@ -547,15 +547,15 @@ impl TypedField {
 		let name = self.name().unwrap();
 		let value = if self.is_option {
 			quote! {
-				if let Some(value) = obj.get(s.clone(), #name.into())? {
-					Some(<#ty>::from_untyped(value, s.clone())?)
+				if let Some(value) = obj.get(#name.into())? {
+					Some(<#ty>::from_untyped(value)?)
 				} else {
 					None
 				}
 			}
 		} else {
 			quote! {
-				<#ty>::from_untyped(obj.get(s.clone(), #name.into())?.ok_or_else(|| Error::NoSuchField(#name.into(), vec![]))?, s.clone())?
+				<#ty>::from_untyped(obj.get(#name.into())?.ok_or_else(|| Error::NoSuchField(#name.into(), vec![]))?)?
 			}
 		};
 
@@ -570,23 +570,23 @@ impl TypedField {
 			if self.is_option {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into()).value(s.clone(), <#ty>::into_untyped(value, s.clone())?)?;
+						out.member(#name.into()).value(<#ty>::into_untyped(value)?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into()).value(s.clone(), <#ty>::into_untyped(self.#ident, s.clone())?)?;
+					out.member(#name.into()).value(<#ty>::into_untyped(self.#ident)?)?;
 				}
 			}
 		} else if self.is_option {
 			quote! {
 				if let Some(value) = self.#ident {
-					value.serialize(s.clone(), out)?;
+					value.serialize(out)?;
 				}
 			}
 		} else {
 			quote! {
-				self.#ident.serialize(s.clone(), out)?;
+				self.#ident.serialize(out)?;
 			}
 		})
 	}
@@ -628,14 +628,14 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			impl Typed for #ident {
 				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
 
-				fn from_untyped(value: Val, s: State) -> Result<Self> {
+				fn from_untyped(value: Val) -> Result<Self> {
 					let obj = value.as_obj().expect("shape is correct");
-					Self::parse(&obj, s)
+					Self::parse(&obj)
 				}
 
-				fn into_untyped(value: Self, s: State) -> Result<Val> {
+				fn into_untyped(value: Self) -> Result<Val> {
 					let mut out = ObjValueBuilder::new();
-					value.serialize(s, &mut out)?;
+					value.serialize(&mut out)?;
 					Ok(Val::Obj(out.build()))
 				}
 
@@ -661,12 +661,12 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			#typed
 
 			impl TypedObj for #ident {
-				fn serialize(self, s: State, out: &mut ObjValueBuilder) -> Result<(), LocError> {
+				fn serialize(self, out: &mut ObjValueBuilder) -> Result<(), LocError> {
 					#(#fields_serialize)*
 
 					Ok(())
 				}
-				fn parse(obj: &ObjValue, s: State) -> Result<Self, LocError> {
+				fn parse(obj: &ObjValue) -> Result<Self, LocError> {
 					Ok(Self {
 						#(#fields_parse)*
 					})

@@ -17,7 +17,7 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	trace::PathResolver, FileImportResolver, IStr, ManifestFormat, State, Val,
+	tb, trace::PathResolver, FileImportResolver, IStr, ManifestFormat, State, Val,
 };
 
 /// WASM stub
@@ -68,8 +68,8 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 #[allow(clippy::box_default)]
 pub extern "C" fn jsonnet_make() -> *mut State {
 	let state = State::default();
-	state.settings_mut().import_resolver = Box::new(FileImportResolver::default());
-	state.settings_mut().context_initializer = Box::new(jrsonnet_stdlib::ContextInitializer::new(
+	state.settings_mut().import_resolver = tb!(FileImportResolver::default());
+	state.settings_mut().context_initializer = tb!(jrsonnet_stdlib::ContextInitializer::new(
 		state.clone(),
 		PathResolver::new_cwd_fallback(),
 	));

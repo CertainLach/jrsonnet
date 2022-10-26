@@ -1,4 +1,7 @@
-use std::{fmt::Debug, path::PathBuf};
+use std::{
+	fmt::{Debug, Display},
+	path::PathBuf,
+};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
@@ -252,13 +255,24 @@ impl LocError {
 		&mut (self.0).1
 	}
 }
-impl Debug for LocError {
+impl Display for LocError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
-			writeln!(f, "\t{el:?}")?;
+			write!(f, "\t{}", el.desc)?;
+			if let Some(loc) = &el.location {
+				write!(f, "at {}", loc.0 .0 .0)?;
+				// loc.0
+				loc.0.map_source_locations(&[loc.1, loc.2]);
+			}
+			writeln!(f)?;
 		}
 		Ok(())
+	}
+}
+impl Debug for LocError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_tuple("LocError").field(&self.0).finish()
 	}
 }
 

@@ -1,11 +1,12 @@
 use std::path::{Path, PathBuf};
 
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{CodeLocation, Source};
 
 use crate::{error::Error, LocError, State};
 
 /// The way paths should be displayed
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub enum PathResolver {
 	/// Only filename
 	FileName,
@@ -43,7 +44,7 @@ impl PathResolver {
 
 /// Implements pretty-printing of traces
 #[allow(clippy::module_name_repetitions)]
-pub trait TraceFormat {
+pub trait TraceFormat: Trace {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
@@ -77,6 +78,7 @@ fn print_code_location(
 }
 
 /// vanilla-like jsonnet formatting
+#[derive(Trace)]
 pub struct CompactFormat {
 	pub resolver: PathResolver,
 	pub padding: usize,
@@ -168,6 +170,7 @@ impl TraceFormat for CompactFormat {
 	}
 }
 
+#[derive(Trace)]
 pub struct JsFormat;
 impl TraceFormat for JsFormat {
 	fn write_trace(
@@ -202,6 +205,7 @@ impl TraceFormat for JsFormat {
 
 /// rustc-like trace displaying
 #[cfg(feature = "explaining-traces")]
+#[derive(Trace)]
 pub struct ExplainingFormat {
 	pub resolver: PathResolver,
 }
@@ -222,7 +226,7 @@ impl TraceFormat for ExplainingFormat {
 				.into_iter()
 				.next()
 				.unwrap();
-			let mut end_location = location.clone();
+			let mut end_location = location;
 			end_location.offset += 1;
 
 			self.print_snippet(

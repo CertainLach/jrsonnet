@@ -1,10 +1,10 @@
 use jrsonnet_evaluator::{
 	error::Result,
-	function::{builtin, FuncVal},
+	function::{builtin, CallLocation, FuncVal},
 	throw,
 	typed::Any,
 	val::ArrValue,
-	State, Val,
+	Context, Val,
 };
 use jrsonnet_gcmodule::Cc;
 
@@ -50,7 +50,7 @@ fn get_sort_type<T>(
 }
 
 /// * `key_getter` - None, if identity sort required
-pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Vec<Val>>> {
+pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Vec<Val>>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
@@ -76,7 +76,12 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Ve
 		for value in values.iter() {
 			vk.push((
 				value.clone(),
-				key_getter.evaluate_simple(s.clone(), &(Any(value.clone()),))?,
+				key_getter.evaluate(
+					ctx.clone(),
+					CallLocation::native(),
+					&(Any(value.clone()),),
+					true,
+				)?,
 			));
 		}
 		let sort_type = get_sort_type(&mut vk, |v| &mut v.1)?;
@@ -97,13 +102,13 @@ pub fn sort(s: State, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Ve
 
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_sort(s: State, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_sort(ctx: Context, arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
 	Ok(ArrValue::Eager(super::sort::sort(
-		s.clone(),
-		arr.evaluated(s)?,
+		ctx,
+		arr.evaluated()?,
 		keyF.unwrap_or_else(FuncVal::identity),
 	)?))
 }

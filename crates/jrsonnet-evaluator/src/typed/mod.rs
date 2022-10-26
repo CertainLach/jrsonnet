@@ -102,11 +102,11 @@ fn push_type_description(
 
 // TODO: check_fast for fast path of union type checking
 pub trait CheckType {
-	fn check(&self, s: State, value: &Val) -> Result<()>;
+	fn check(&self, value: &Val) -> Result<()>;
 }
 
 impl CheckType for ValType {
-	fn check(&self, _: State, value: &Val) -> Result<()> {
+	fn check(&self, value: &Val) -> Result<()> {
 		let got = value.value_type();
 		if got != *self {
 			let loc_error: TypeLocError = TypeError::ExpectedGot((*self).into(), got).into();
@@ -145,10 +145,10 @@ impl Display for ValuePathStack {
 
 impl CheckType for ComplexValType {
 	#[allow(clippy::too_many_lines)]
-	fn check(&self, s: State, value: &Val) -> Result<()> {
+	fn check(&self, value: &Val) -> Result<()> {
 		match self {
 			Self::Any => Ok(()),
-			Self::Simple(t) => t.check(s, value),
+			Self::Simple(t) => t.check(value),
 			Self::Char => match value {
 				Val::Str(s) if s.len() == 1 || s.chars().count() == 1 => Ok(()),
 				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
@@ -167,11 +167,11 @@ impl CheckType for ComplexValType {
 			}
 			Self::Array(elem_type) => match value {
 				Val::Arr(a) => {
-					for (i, item) in a.iter(s.clone()).enumerate() {
+					for (i, item) in a.iter().enumerate() {
 						push_type_description(
 							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
-							|| elem_type.check(s.clone(), &item.clone()?),
+							|| elem_type.check(&item.clone()?),
 						)?;
 					}
 					Ok(())
@@ -180,11 +180,11 @@ impl CheckType for ComplexValType {
 			},
 			Self::ArrayRef(elem_type) => match value {
 				Val::Arr(a) => {
-					for (i, item) in a.iter(s.clone()).enumerate() {
+					for (i, item) in a.iter().enumerate() {
 						push_type_description(
 							|| format!("array index {i}"),
 							|| ValuePathItem::Index(i as u64),
-							|| elem_type.check(s.clone(), &item.clone()?),
+							|| elem_type.check(&item.clone()?),
 						)?;
 					}
 					Ok(())
@@ -194,11 +194,11 @@ impl CheckType for ComplexValType {
 			Self::ObjectRef(elems) => match value {
 				Val::Obj(obj) => {
 					for (k, v) in elems.iter() {
-						if let Some(got_v) = obj.get(s.clone(), (*k).into())? {
+						if let Some(got_v) = obj.get((*k).into())? {
 							push_type_description(
 								|| format!("property {k}"),
 								|| ValuePathItem::Field((*k).into()),
-								|| v.check(s.clone(), &got_v),
+								|| v.check(&got_v),
 							)?;
 						} else {
 							return Err(
@@ -213,7 +213,7 @@ impl CheckType for ComplexValType {
 			Self::Union(types) => {
 				let mut errors = Vec::new();
 				for ty in types.iter() {
-					match ty.check(s.clone(), value) {
+					match ty.check(value) {
 						Ok(()) => {
 							return Ok(());
 						}
@@ -228,7 +228,7 @@ impl CheckType for ComplexValType {
 			Self::UnionRef(types) => {
 				let mut errors = Vec::new();
 				for ty in types.iter() {
-					match ty.check(s.clone(), value) {
+					match ty.check(value) {
 						Ok(()) => {
 							return Ok(());
 						}
@@ -242,13 +242,13 @@ impl CheckType for ComplexValType {
 			}
 			Self::Sum(types) => {
 				for ty in types.iter() {
-					ty.check(s.clone(), value)?;
+					ty.check(value)?;
 				}
 				Ok(())
 			}
 			Self::SumRef(types) => {
 				for ty in types.iter() {
-					ty.check(s.clone(), value)?;
+					ty.check(value)?;
 				}
 				Ok(())
 			}

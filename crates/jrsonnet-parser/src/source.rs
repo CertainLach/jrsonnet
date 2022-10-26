@@ -289,7 +289,7 @@ impl Source {
 		&self.0 .0
 	}
 
-	pub fn map_source_locations(&self, locs: &[u32]) -> Vec<CodeLocation> {
+	pub fn map_source_locations<const S: usize>(&self, locs: &[u32; S]) -> [CodeLocation; S] {
 		offset_to_location(&self.0 .1, locs)
 	}
 	pub fn map_from_source_location(&self, line: usize, column: usize) -> Option<usize> {

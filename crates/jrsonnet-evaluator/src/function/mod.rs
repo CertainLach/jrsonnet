@@ -7,11 +7,12 @@ pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, ExprLocation, LocExpr, ParamsDesc};
 
 use self::{
+	arglike::OptionalContext,
 	builtin::{Builtin, StaticBuiltin},
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{evaluate, gc::TraceBox, typed::Any, Context, Result, State, Val};
+use crate::{evaluate, gc::TraceBox, typed::Any, Context, ContextBuilder, Result, Val};
 
 pub mod arglike;
 pub mod builtin;
@@ -73,19 +74,11 @@ impl FuncDesc {
 	/// Create context, with which body code will run
 	pub fn call_body_context(
 		&self,
-		s: State,
 		call_ctx: Context,
 		args: &dyn ArgsLike,
 		tailstrict: bool,
 	) -> Result<Context> {
-		parse_function_call(
-			s,
-			call_ctx,
-			self.ctx.clone(),
-			&self.params,
-			args,
-			tailstrict,
-		)
+		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
 	}
 }
 
@@ -140,7 +133,6 @@ impl FuncVal {
 	/// If `tailstrict` is specified - then arguments will be evaluated before being passed to function body.
 	pub fn evaluate(
 		&self,
-		s: State,
 		call_ctx: Context,
 		loc: CallLocation<'_>,
 		args: &dyn ArgsLike,
@@ -155,19 +147,23 @@ impl FuncVal {
 				}
 				static ID: &builtin_id = &builtin_id {};
 
-				ID.call(s, call_ctx, loc, args)
+				ID.call(call_ctx, loc, args)
 			}
 			Self::Normal(func) => {
-				let body_ctx = func.call_body_context(s.clone(), call_ctx, args, tailstrict)?;
-				evaluate(s, body_ctx, &func.body)
+				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
+				evaluate(body_ctx, &func.body)
 			}
-			Self::StaticBuiltin(b) => b.call(s, call_ctx, loc, args),
-			Self::Builtin(b) => b.call(s, call_ctx, loc, args),
+			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
+			Self::Builtin(b) => b.call(call_ctx, loc, args),
 		}
 	}
-	/// Helper method, which calls [`Self::evaluate`] with sensible defaults for native code.
-	pub fn evaluate_simple(&self, s: State, args: &dyn ArgsLike) -> Result<Val> {
-		self.evaluate(s, Context::default(), CallLocation::native(), args, true)
+	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(&self, args: &A) -> Result<Val> {
+		self.evaluate(
+			ContextBuilder::dangerous_empty_state().build(),
+			CallLocation::native(),
+			args,
+			true,
+		)
 	}
 	/// Convert jsonnet function to plain `Fn` value.
 	pub fn into_native<D: NativeDesc>(self) -> D::Value {
@@ -180,10 +176,6 @@ impl FuncVal {
 	///
 	/// This function should only be used for optimization, not for the conditional logic, i.e code should work with syntetic identity function too
 	pub fn is_identity(&self) -> bool {
-		if matches!(self, Self::Id) {
-			return true;
-		}
-
 		match self {
 			Self::Id => true,
 			Self::Normal(desc) => {

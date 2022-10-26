@@ -8,7 +8,7 @@ use crate::{
 	gc::GcHashMap,
 	tb, throw,
 	val::ThunkValue,
-	Context, Pending, State, Thunk, Val,
+	Context, Pending, Thunk, Val,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -261,12 +261,11 @@ pub fn evaluate_dest(
 			}
 			impl ThunkValue for EvaluateThunkValue {
 				type Output = Val;
-				fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-					if let Some(name) = self.name {
-						evaluate_named(s, self.fctx.unwrap(), &self.expr, name)
-					} else {
-						evaluate(s, self.fctx.unwrap(), &self.expr)
-					}
+				fn get(self: Box<Self>) -> Result<Self::Output> {
+					self.name.map_or_else(
+						|| evaluate(self.fctx.unwrap(), &self.expr),
+						|name| evaluate_named(self.fctx.unwrap(), &self.expr, name),
+					)
 				}
 			}
 			let data = Thunk::new(tb!(EvaluateThunkValue {
@@ -291,7 +290,7 @@ pub fn evaluate_dest(
 			impl ThunkValue for MethodThunk {
 				type Output = Val;
 
-				fn get(self: Box<Self>, _s: State) -> Result<Self::Output> {
+				fn get(self: Box<Self>) -> Result<Self::Output> {
 					Ok(evaluate_method(
 						self.fctx.unwrap(),
 						self.name,

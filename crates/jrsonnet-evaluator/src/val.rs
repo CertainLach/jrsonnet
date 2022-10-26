@@ -13,12 +13,12 @@ use crate::{
 	},
 	throw,
 	typed::BoundedUsize,
-	ObjValue, Result, State, Unbound, WeakObjValue,
+	ObjValue, Result, Unbound, WeakObjValue,
 };
 
 pub trait ThunkValue: Trace {
 	type Output;
-	fn get(self: Box<Self>, s: State) -> Result<Self::Output>;
+	fn get(self: Box<Self>) -> Result<Self::Output>;
 }
 
 #[derive(Trace)]
@@ -43,11 +43,11 @@ where
 	pub fn evaluated(val: T) -> Self {
 		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
 	}
-	pub fn force(&self, s: State) -> Result<()> {
-		self.evaluate(s)?;
+	pub fn force(&self) -> Result<()> {
+		self.evaluate()?;
 		Ok(())
 	}
-	pub fn evaluate(&self, s: State) -> Result<T> {
+	pub fn evaluate(&self) -> Result<T> {
 		match &*self.0.borrow() {
 			ThunkInner::Computed(v) => return Ok(v.clone()),
 			ThunkInner::Errored(e) => return Err(e.clone()),
@@ -61,7 +61,7 @@ where
 		} else {
 			unreachable!()
 		};
-		let new_value = match value.0.get(s) {
+		let new_value = match value.0.get() {
 			Ok(v) => v,
 			Err(e) => {
 				*self.0.borrow_mut() = ThunkInner::Errored(e.clone());
@@ -94,7 +94,7 @@ impl<I: Unbound<Bound = T>, T: Trace> CachedUnbound<I, T> {
 }
 impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 	type Bound = T;
-	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<T> {
+	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<T> {
 		let cache_key = (
 			sup.as_ref().map(|s| s.clone().downgrade()),
 			this.as_ref().map(|t| t.clone().downgrade()),
@@ -104,7 +104,7 @@ impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 				return Ok(t.clone());
 			}
 		}
-		let bound = self.value.bind(s, sup, this)?;
+		let bound = self.value.bind(sup, this)?;
 
 		{
 			let mut cache = self.cache.borrow_mut();
@@ -126,7 +126,7 @@ impl<T: Trace> PartialEq for Thunk<T> {
 	}
 }
 
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub enum ManifestFormat {
 	YamlStream(Box<ManifestFormat>),
 	Yaml {
@@ -268,14 +268,14 @@ impl ArrValue {
 	/// Get array element by index, evaluating it, if it is lazy.
 	///
 	/// Returns `None` on out-of-bounds condition.
-	pub fn get(&self, s: State, index: usize) -> Result<Option<Val>> {
+	pub fn get(&self, index: usize) -> Result<Option<Val>> {
 		match self {
 			Self::Bytes(i) => i
 				.get(index)
 				.map_or(Ok(None), |v| Ok(Some(Val::Num(f64::from(*v))))),
 			Self::Lazy(vec) => {
 				if let Some(v) = vec.get(index) {
-					Ok(Some(v.evaluate(s)?))
+					Ok(Some(v.evaluate()?))
 				} else {
 					Ok(None)
 				}
@@ -284,9 +284,9 @@ impl ArrValue {
 			Self::Extended(v) => {
 				let a_len = v.0.len();
 				if a_len > index {
-					v.0.get(s, index)
+					v.0.get(index)
 				} else {
-					v.1.get(s, index - a_len)
+					v.1.get(index - a_len)
 				}
 			}
 			Self::Range(a, _) => {
@@ -300,14 +300,14 @@ impl ArrValue {
 				if index >= len {
 					return Ok(None);
 				}
-				v.get(s, len - index - 1)
+				v.get(len - index - 1)
 			}
 			Self::Slice(v) => {
 				let index = v.from() + index * v.step();
 				if index >= v.to() {
 					return Ok(None);
 				}
-				v.inner.get(s, index)
+				v.inner.get(index)
 			}
 		}
 	}
@@ -356,7 +356,7 @@ impl ArrValue {
 	}
 
 	/// Evaluate all array elements, returning new array.
-	pub fn evaluated(&self, s: State) -> Result<Cc<Vec<Val>>> {
+	pub fn evaluated(&self) -> Result<Cc<Vec<Val>>> {
 		Ok(match self {
 			Self::Bytes(i) => {
 				let mut out = Vec::with_capacity(i.len());
@@ -368,14 +368,14 @@ impl ArrValue {
 			Self::Lazy(vec) => {
 				let mut out = Vec::with_capacity(vec.len());
 				for item in vec.iter() {
-					out.push(item.evaluate(s.clone())?);
+					out.push(item.evaluate()?);
 				}
 				Cc::new(out)
 			}
 			Self::Eager(vec) => vec.clone(),
 			Self::Extended(_v) => {
 				let mut out = Vec::with_capacity(self.len());
-				for item in self.iter(s) {
+				for item in self.iter() {
 					out.push(item?);
 				}
 				Cc::new(out)
@@ -388,7 +388,7 @@ impl ArrValue {
 				Cc::new(out)
 			}
 			Self::Reversed(r) => {
-				let mut r = r.evaluated(s)?;
+				let mut r = r.evaluated()?;
 				Cc::update_with(&mut r, |v| v.reverse());
 				r
 			}
@@ -401,7 +401,7 @@ impl ArrValue {
 					.take(v.to() - v.from())
 					.step_by(v.step())
 				{
-					out.push(v.evaluate(s.clone())?);
+					out.push(v.evaluate()?);
 				}
 				Cc::new(out)
 			}
@@ -409,13 +409,13 @@ impl ArrValue {
 	}
 
 	/// Iterate over elements, evaluating them.
-	pub fn iter(&self, s: State) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
+	pub fn iter(&self) -> impl DoubleEndedIterator<Item = Result<Val>> + '_ {
 		(0..self.len()).map(move |idx| match self {
 			Self::Bytes(b) => Ok(Val::Num(f64::from(b[idx]))),
-			Self::Lazy(l) => l[idx].evaluate(s.clone()),
+			Self::Lazy(l) => l[idx].evaluate(),
 			Self::Eager(e) => Ok(e[idx].clone()),
 			Self::Extended(..) | Self::Range(..) | Self::Reversed(..) | Self::Slice(..) => {
-				self.get(s.clone(), idx).map(|e| e.expect("idx < len"))
+				self.get(idx).map(|e| e.expect("idx < len"))
 			}
 		})
 	}
@@ -439,10 +439,10 @@ impl ArrValue {
 	}
 
 	/// Return a new array, produced by passing every element of current array to specified callback function.
-	pub fn map(self, s: State, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
+	pub fn map(self, mapper: impl Fn(Val) -> Result<Val>) -> Result<Self> {
 		let mut out = Vec::with_capacity(self.len());
 
-		for value in self.iter(s) {
+		for value in self.iter() {
 			out.push(mapper(value?)?);
 		}
 
@@ -450,10 +450,10 @@ impl ArrValue {
 	}
 
 	/// Return a new array, produced from current array by removing every value, for which specified callback function returns false.
-	pub fn filter(self, s: State, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
+	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
 		let mut out = Vec::with_capacity(self.len());
 
-		for value in self.iter(s) {
+		for value in self.iter() {
 			let value = value?;
 			if filter(&value)? {
 				out.push(value);
@@ -645,14 +645,13 @@ impl Val {
 		}
 	}
 
-	pub fn to_string(&self, s: State) -> Result<IStr> {
+	pub fn to_string(&self) -> Result<IStr> {
 		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
 			v => manifest_json_ex(
-				s,
 				v,
 				&ManifestJsonOptions {
 					padding: "",
@@ -668,7 +667,7 @@ impl Val {
 	}
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, s: State, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
+	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
 		let obj = match self {
 			Self::Obj(obj) => obj,
 			_ => throw!(MultiManifestOutputIsNotAObject),
@@ -680,28 +679,28 @@ impl Val {
 		let mut out = Vec::with_capacity(keys.len());
 		for key in keys {
 			let value = obj
-				.get(s.clone(), key.clone())?
+				.get(key.clone())?
 				.expect("item in object")
-				.manifest(s.clone(), ty)?;
+				.manifest(ty)?;
 			out.push((key, value));
 		}
 		Ok(out)
 	}
 
 	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, s: State, ty: &ManifestFormat) -> Result<Vec<IStr>> {
+	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
 		let arr = match self {
 			Self::Arr(a) => a,
 			_ => throw!(StreamManifestOutputIsNotAArray),
 		};
 		let mut out = Vec::with_capacity(arr.len());
-		for i in arr.iter(s.clone()) {
-			out.push(i?.manifest(s.clone(), ty)?);
+		for i in arr.iter() {
+			out.push(i?.manifest(ty)?);
 		}
 		Ok(out)
 	}
 
-	pub fn manifest(&self, s: State, ty: &ManifestFormat) -> Result<IStr> {
+	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
 				let arr = match self {
@@ -717,9 +716,9 @@ impl Val {
 				};
 
 				if !arr.is_empty() {
-					for v in arr.iter(s.clone()) {
+					for v in arr.iter() {
 						out.push_str("---\n");
-						out.push_str(&v?.manifest(s.clone(), format)?);
+						out.push_str(&v?.manifest(format)?);
 						out.push('\n');
 					}
 					out.push_str("...");
@@ -732,7 +731,6 @@ impl Val {
 				#[cfg(feature = "exp-preserve-order")]
 				preserve_order,
 			} => self.to_yaml(
-				s,
 				*padding,
 				#[cfg(feature = "exp-preserve-order")]
 				*preserve_order,
@@ -742,12 +740,11 @@ impl Val {
 				#[cfg(feature = "exp-preserve-order")]
 				preserve_order,
 			} => self.to_json(
-				s,
 				*padding,
 				#[cfg(feature = "exp-preserve-order")]
 				*preserve_order,
 			)?,
-			ManifestFormat::ToString => self.to_string(s)?,
+			ManifestFormat::ToString => self.to_string()?,
 			ManifestFormat::String => match self {
 				Self::Str(s) => s.clone(),
 				_ => throw!(StringManifestOutputIsNotAString),
@@ -758,12 +755,10 @@ impl Val {
 	/// For manifestification
 	pub fn to_json(
 		&self,
-		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<IStr> {
 		manifest_json_ex(
-			s,
 			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
@@ -784,12 +779,10 @@ impl Val {
 	/// Calls `std.manifestJson`
 	pub fn to_std_json(
 		&self,
-		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<Rc<str>> {
 		manifest_json_ex(
-			s,
 			self,
 			&ManifestJsonOptions {
 				padding: &" ".repeat(padding),
@@ -805,13 +798,11 @@ impl Val {
 
 	pub fn to_yaml(
 		&self,
-		s: State,
 		padding: usize,
 		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 	) -> Result<IStr> {
 		let padding = &" ".repeat(padding);
 		manifest_yaml_ex(
-			s,
 			self,
 			&ManifestYamlOptions {
 				padding,
@@ -857,7 +848,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 }
 
 /// Native implementation of `std.equals`
-pub fn equals(s: State, val_a: &Val, val_b: &Val) -> Result<bool> {
+pub fn equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 	if val_a.value_type() != val_b.value_type() {
 		return Ok(false);
 	}
@@ -869,8 +860,8 @@ pub fn equals(s: State, val_a: &Val, val_b: &Val) -> Result<bool> {
 			if a.len() != b.len() {
 				return Ok(false);
 			}
-			for (a, b) in a.iter(s.clone()).zip(b.iter(s.clone())) {
-				if !equals(s.clone(), &a?, &b?)? {
+			for (a, b) in a.iter().zip(b.iter()) {
+				if !equals(&a?, &b?)? {
 					return Ok(false);
 				}
 			}
@@ -893,9 +884,8 @@ pub fn equals(s: State, val_a: &Val, val_b: &Val) -> Result<bool> {
 			}
 			for field in fields {
 				if !equals(
-					s.clone(),
-					&a.get(s.clone(), field.clone())?.expect("field exists"),
-					&b.get(s.clone(), field)?.expect("field exists"),
+					&a.get(field.clone())?.expect("field exists"),
+					&b.get(field)?.expect("field exists"),
 				)? {
 					return Ok(false);
 				}

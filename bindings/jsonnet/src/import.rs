@@ -15,6 +15,7 @@ use jrsonnet_evaluator::{
 	error::{Error::*, Result},
 	throw, FileImportResolver, ImportResolver, State,
 };
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(
@@ -26,8 +27,11 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 ) -> *mut c_char;
 
 /// Resolves imports using callback
+#[derive(Trace)]
 pub struct CallbackImportResolver {
+	#[trace(skip)]
 	cb: JsonnetImportCallback,
+	#[trace(skip)]
 	ctx: *mut c_void,
 	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
 }

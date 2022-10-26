@@ -4,9 +4,10 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
-use crate::{
-	error::Result, evaluate, tb, typed::Typed, val::ThunkValue, Context, State, Thunk, Val,
-};
+use crate::{error::Result, evaluate, tb, typed::Typed, val::ThunkValue, Context, Thunk, Val};
+
+/// Marker for arguments, which can be evaluated with context set to None
+pub trait OptionalContext {}
 
 #[derive(Trace)]
 struct EvaluateThunk {
@@ -15,19 +16,19 @@ struct EvaluateThunk {
 }
 impl ThunkValue for EvaluateThunk {
 	type Output = Val;
-	fn get(self: Box<Self>, s: State) -> Result<Val> {
-		evaluate(s, self.ctx, &self.expr)
+	fn get(self: Box<Self>) -> Result<Val> {
+		evaluate(self.ctx, &self.expr)
 	}
 }
 
 pub trait ArgLike {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
 }
 
 impl ArgLike for &LocExpr {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		Ok(if tailstrict {
-			Thunk::evaluated(evaluate(s, ctx, self)?)
+			Thunk::evaluated(evaluate(ctx, self)?)
 		} else {
 			Thunk::new(tb!(EvaluateThunk {
 				ctx,
@@ -41,24 +42,25 @@ impl<T> ArgLike for T
 where
 	T: Typed + Clone,
 {
-	fn evaluate_arg(&self, s: State, _ctx: Context, _tailstrict: bool) -> Result<Thunk<Val>> {
-		let val = T::into_untyped(self.clone(), s)?;
+	fn evaluate_arg(&self, _ctx: Context, _tailstrict: bool) -> Result<Thunk<Val>> {
+		let val = T::into_untyped(self.clone())?;
 		Ok(Thunk::evaluated(val))
 	}
 }
+impl<T> OptionalContext for T where T: Typed + Clone {}
 
-#[derive(Clone)]
+#[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
 	Code(LocExpr),
 	Val(Val),
 }
 impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, s: State, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		match self {
 			TlaArg::String(s) => Ok(Thunk::evaluated(Val::Str(s.clone()))),
 			TlaArg::Code(code) => Ok(if tailstrict {
-				Thunk::evaluated(evaluate(s, ctx, code)?)
+				Thunk::evaluated(evaluate(ctx, code)?)
 			} else {
 				Thunk::new(tb!(EvaluateThunk {
 					ctx,
@@ -81,14 +83,12 @@ pub trait ArgsLike {
 	fn unnamed_len(&self) -> usize;
 	fn unnamed_iter(
 		&self,
-		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
 	) -> Result<()>;
 	fn named_iter(
 		&self,
-		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
@@ -102,7 +102,6 @@ impl ArgsLike for Vec<Val> {
 	}
 	fn unnamed_iter(
 		&self,
-		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -114,7 +113,6 @@ impl ArgsLike for Vec<Val> {
 	}
 	fn named_iter(
 		&self,
-		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
@@ -123,6 +121,7 @@ impl ArgsLike for Vec<Val> {
 	}
 	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
 }
+impl OptionalContext for Vec<Val> {}
 
 impl ArgsLike for ArgsDesc {
 	fn unnamed_len(&self) -> usize {
@@ -131,7 +130,6 @@ impl ArgsLike for ArgsDesc {
 
 	fn unnamed_iter(
 		&self,
-		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -140,7 +138,7 @@ impl ArgsLike for ArgsDesc {
 			handler(
 				id,
 				if tailstrict {
-					Thunk::evaluated(evaluate(s.clone(), ctx.clone(), arg)?)
+					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
 					Thunk::new(tb!(EvaluateThunk {
 						ctx: ctx.clone(),
@@ -154,7 +152,6 @@ impl ArgsLike for ArgsDesc {
 
 	fn named_iter(
 		&self,
-		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
@@ -163,7 +160,7 @@ impl ArgsLike for ArgsDesc {
 			handler(
 				name,
 				if tailstrict {
-					Thunk::evaluated(evaluate(s.clone(), ctx.clone(), arg)?)
+					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
 					Thunk::new(tb!(EvaluateThunk {
 						ctx: ctx.clone(),
@@ -190,7 +187,6 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 
 	fn unnamed_iter(
 		&self,
-		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -200,16 +196,12 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 
 	fn named_iter(
 		&self,
-		s: State,
 		ctx: Context,
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		for (name, value) in self.iter() {
-			handler(
-				name,
-				value.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?,
-			)?;
+			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
 		}
 		Ok(())
 	}
@@ -220,6 +212,7 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 		}
 	}
 }
+impl<A, S> OptionalContext for HashMap<IStr, A, S> where A: ArgLike + OptionalContext {}
 
 macro_rules! impl_args_like {
 	($count:expr; $($gen:ident)*) => {
@@ -231,7 +224,6 @@ macro_rules! impl_args_like {
 			#[allow(non_snake_case, unused_assignments)]
 			fn unnamed_iter(
 				&self,
-				s: State,
 				ctx: Context,
 				tailstrict: bool,
 				handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -239,14 +231,13 @@ macro_rules! impl_args_like {
 				let mut i = 0usize;
 				let ($($gen,)*) = self;
 				$(
-					handler(i, $gen.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?)?;
+					handler(i, $gen.evaluate_arg(ctx.clone(), tailstrict)?)?;
 					i+=1;
 				)*
 				Ok(())
 			}
 			fn named_iter(
 				&self,
-				_s: State,
 				_ctx: Context,
 				_tailstrict: bool,
 				_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
@@ -255,6 +246,8 @@ macro_rules! impl_args_like {
 			}
 			fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
 		}
+		impl<$($gen: ArgLike,)*> OptionalContext for ($($gen,)*) where $($gen: OptionalContext),* {}
+
 		impl<$($gen: ArgLike,)*> sealed::Named for ($((IStr, $gen),)*) {}
 		impl<$($gen: ArgLike,)*> ArgsLike for ($((IStr, $gen),)*) {
 			fn unnamed_len(&self) -> usize {
@@ -262,7 +255,6 @@ macro_rules! impl_args_like {
 			}
 			fn unnamed_iter(
 				&self,
-				_s: State,
 				_ctx: Context,
 				_tailstrict: bool,
 				_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -272,14 +264,13 @@ macro_rules! impl_args_like {
 			#[allow(non_snake_case)]
 			fn named_iter(
 				&self,
-				s: State,
 				ctx: Context,
 				tailstrict: bool,
 				handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				let ($($gen,)*) = self;
 				$(
-					handler(&$gen.0, $gen.1.evaluate_arg(s.clone(), ctx.clone(), tailstrict)?)?;
+					handler(&$gen.0, $gen.1.evaluate_arg(ctx.clone(), tailstrict)?)?;
 				)*
 				Ok(())
 			}
@@ -291,6 +282,7 @@ macro_rules! impl_args_like {
 				)*
 			}
 		}
+		impl<$($gen: ArgLike,)*> OptionalContext for ($((IStr, $gen),)*) where $($gen: OptionalContext),* {}
 	};
 	($count:expr; $($cur:ident)* @ $c:ident $($rest:ident)*) => {
 		impl_args_like!($count; $($cur)*);
@@ -312,7 +304,6 @@ impl ArgsLike for () {
 
 	fn unnamed_iter(
 		&self,
-		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
@@ -322,7 +313,6 @@ impl ArgsLike for () {
 
 	fn named_iter(
 		&self,
-		_s: State,
 		_ctx: Context,
 		_tailstrict: bool,
 		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
@@ -332,3 +322,4 @@ impl ArgsLike for () {
 
 	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
 }
+impl OptionalContext for () {}

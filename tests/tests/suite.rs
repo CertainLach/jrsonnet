@@ -13,10 +13,10 @@ mod common;
 
 fn run(root: &Path, file: &Path) {
 	let s = State::default();
-	s.set_trace_format(Box::new(CompactFormat {
+	s.set_trace_format(CompactFormat {
 		resolver: PathResolver::Relative(root.to_owned()),
 		padding: 3,
-	}));
+	});
 	s.with_stdlib();
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));

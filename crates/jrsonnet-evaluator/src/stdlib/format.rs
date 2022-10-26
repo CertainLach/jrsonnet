@@ -6,7 +6,7 @@ use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{error::Error::*, throw, typed::Typed, LocError, ObjValue, Result, State, Val};
+use crate::{error::Error::*, throw, typed::Typed, LocError, ObjValue, Result, Val};
 
 #[derive(Debug, Clone, Error, Trace)]
 pub enum FormatError {
@@ -472,7 +472,6 @@ pub fn render_float_sci(
 
 #[allow(clippy::too_many_lines)]
 pub fn format_code(
-	s: State,
 	out: &mut String,
 	value: &Val,
 	code: &Code<'_>,
@@ -491,9 +490,9 @@ pub fn format_code(
 	let mut tmp_out = String::new();
 
 	match code.convtype {
-		ConvTypeV::String => tmp_out.push_str(&value.clone().to_string(s)?),
+		ConvTypeV::String => tmp_out.push_str(&value.clone().to_string()?),
 		ConvTypeV::Decimal => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			render_decimal(
 				&mut tmp_out,
 				value,
@@ -504,7 +503,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Octal => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			render_octal(
 				&mut tmp_out,
 				value,
@@ -516,7 +515,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Hexadecimal => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			render_hexadecimal(
 				&mut tmp_out,
 				value,
@@ -529,7 +528,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Scientific => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			render_float_sci(
 				&mut tmp_out,
 				value,
@@ -543,7 +542,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Float => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			render_float(
 				&mut tmp_out,
 				value,
@@ -556,7 +555,7 @@ pub fn format_code(
 			);
 		}
 		ConvTypeV::Shorter => {
-			let value = f64::from_untyped(value.clone(), s)?;
+			let value = f64::from_untyped(value.clone())?;
 			let exponent = value.log10().floor();
 			if exponent < -4.0 || exponent >= fpprec as f64 {
 				render_float_sci(
@@ -623,7 +622,7 @@ pub fn format_code(
 	Ok(())
 }
 
-pub fn format_arr(s: State, str: &str, mut values: &[Val]) -> Result<String> {
+pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 	let codes = parse_codes(str)?;
 	let mut out = String::new();
 
@@ -640,7 +639,7 @@ pub fn format_arr(s: State, str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						usize::from_untyped(value.clone(), s.clone())?
+						usize::from_untyped(value.clone())?
 					}
 					Width::Fixed(n) => n,
 				};
@@ -651,7 +650,7 @@ pub fn format_arr(s: State, str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						Some(usize::from_untyped(value.clone(), s.clone())?)
+						Some(usize::from_untyped(value.clone())?)
 					}
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,
@@ -669,7 +668,7 @@ pub fn format_arr(s: State, str: &str, mut values: &[Val]) -> Result<String> {
 					value
 				};
 
-				format_code(s.clone(), &mut out, value, &c, width, precision)?;
+				format_code(&mut out, value, &c, width, precision)?;
 			}
 		}
 	}
@@ -677,7 +676,7 @@ pub fn format_arr(s: State, str: &str, mut values: &[Val]) -> Result<String> {
 	Ok(out)
 }
 
-pub fn format_obj(s: State, str: &str, values: &ObjValue) -> Result<String> {
+pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 	let codes = parse_codes(str)?;
 	let mut out = String::new();
 
@@ -709,14 +708,14 @@ pub fn format_obj(s: State, str: &str, values: &ObjValue) -> Result<String> {
 					if f.is_empty() {
 						throw!(MappingKeysRequired);
 					}
-					if let Some(v) = values.get(s.clone(), f.clone())? {
+					if let Some(v) = values.get(f.clone())? {
 						v
 					} else {
 						throw!(NoSuchFormatField(f));
 					}
 				};
 
-				format_code(s.clone(), &mut out, &value, &c, width, precision)?;
+				format_code(&mut out, &value, &c, width, precision)?;
 			}
 		}
 	}
@@ -742,48 +741,21 @@ pub mod test_format {
 
 	#[test]
 	fn octals() {
-		let s = State::default();
-		assert_eq!(
-			format_arr(s.clone(), "%#o", &[Val::Num(8.0)]).unwrap(),
-			"010"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%#4o", &[Val::Num(8.0)]).unwrap(),
-			" 010"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%4o", &[Val::Num(8.0)]).unwrap(),
-			"  10"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%04o", &[Val::Num(8.0)]).unwrap(),
-			"0010"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%+4o", &[Val::Num(8.0)]).unwrap(),
-			" +10"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%+04o", &[Val::Num(8.0)]).unwrap(),
-			"+010"
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%-4o", &[Val::Num(8.0)]).unwrap(),
-			"10  "
-		);
-		assert_eq!(
-			format_arr(s.clone(), "%+-4o", &[Val::Num(8.0)]).unwrap(),
-			"+10 "
-		);
-		assert_eq!(format_arr(s, "%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
+		assert_eq!(format_arr("%#o", &[Val::Num(8.0)]).unwrap(), "010");
+		assert_eq!(format_arr("%#4o", &[Val::Num(8.0)]).unwrap(), " 010");
+		assert_eq!(format_arr("%4o", &[Val::Num(8.0)]).unwrap(), "  10");
+		assert_eq!(format_arr("%04o", &[Val::Num(8.0)]).unwrap(), "0010");
+		assert_eq!(format_arr("%+4o", &[Val::Num(8.0)]).unwrap(), " +10");
+		assert_eq!(format_arr("%+04o", &[Val::Num(8.0)]).unwrap(), "+010");
+		assert_eq!(format_arr("%-4o", &[Val::Num(8.0)]).unwrap(), "10  ");
+		assert_eq!(format_arr("%+-4o", &[Val::Num(8.0)]).unwrap(), "+10 ");
+		assert_eq!(format_arr("%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
 	}
 
 	#[test]
 	fn percent_doesnt_consumes_values() {
-		let s = State::default();
 		assert_eq!(
 			format_arr(
-				s,
 				"How much error budget is left looking at our %.3f%% availability gurantees?",
 				&[Val::Num(4.0)]
 			)

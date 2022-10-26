@@ -25,13 +25,12 @@ pub struct ManifestJsonOptions<'s> {
 	pub preserve_order: bool,
 }
 
-pub fn manifest_json_ex(s: State, val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
+pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
 	let mut out = String::new();
-	manifest_json_ex_buf(s, val, &mut out, &mut String::new(), options)?;
+	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
 }
 fn manifest_json_ex_buf(
-	s: State,
 	val: &Val,
 	buf: &mut String,
 	cur_padding: &mut String,
@@ -59,7 +58,7 @@ fn manifest_json_ex_buf(
 
 				let old_len = cur_padding.len();
 				cur_padding.push_str(options.padding);
-				for (i, item) in items.iter(s.clone()).enumerate() {
+				for (i, item) in items.iter().enumerate() {
 					if i != 0 {
 						buf.push(',');
 						if mtype == ManifestType::ToString {
@@ -69,7 +68,7 @@ fn manifest_json_ex_buf(
 						}
 					}
 					buf.push_str(cur_padding);
-					manifest_json_ex_buf(s.clone(), &item?, buf, cur_padding, options)?;
+					manifest_json_ex_buf(&item?, buf, cur_padding, options)?;
 				}
 				cur_padding.truncate(old_len);
 
@@ -86,7 +85,7 @@ fn manifest_json_ex_buf(
 			buf.push(']');
 		}
 		Val::Obj(obj) => {
-			obj.run_assertions(s.clone())?;
+			obj.run_assertions()?;
 			buf.push('{');
 			let fields = obj.fields(
 				#[cfg(feature = "exp-preserve-order")]
@@ -114,8 +113,8 @@ fn manifest_json_ex_buf(
 					State::push_description(
 						|| format!("field <{}> manifestification", field.clone()),
 						|| {
-							let value = obj.get(s.clone(), field.clone())?.unwrap();
-							manifest_json_ex_buf(s.clone(), &value, buf, cur_padding, options)?;
+							let value = obj.get(field.clone())?.unwrap();
+							manifest_json_ex_buf(&value, buf, cur_padding, options)?;
 							Ok(())
 						},
 					)?;
@@ -222,15 +221,14 @@ fn yaml_needs_quotes(string: &str) -> bool {
 		|| string.parse::<f64>().is_ok()
 }
 
-pub fn manifest_yaml_ex(s: State, val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
+pub fn manifest_yaml_ex(val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
 	let mut out = String::new();
-	manifest_yaml_ex_buf(s, val, &mut out, &mut String::new(), options)?;
+	manifest_yaml_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
 }
 
 #[allow(clippy::too_many_lines)]
 fn manifest_yaml_ex_buf(
-	s: State,
 	val: &Val,
 	buf: &mut String,
 	cur_padding: &mut String,
@@ -268,7 +266,7 @@ fn manifest_yaml_ex_buf(
 			if a.is_empty() {
 				buf.push_str("[]");
 			} else {
-				for (i, item) in a.iter(s.clone()).enumerate() {
+				for (i, item) in a.iter().enumerate() {
 					if i != 0 {
 						buf.push('\n');
 						buf.push_str(cur_padding);
@@ -292,7 +290,7 @@ fn manifest_yaml_ex_buf(
 					if extra_padding {
 						cur_padding.push_str(options.padding);
 					}
-					manifest_yaml_ex_buf(s.clone(), &item, buf, cur_padding, options)?;
+					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
 					cur_padding.truncate(prev_len);
 				}
 			}
@@ -320,7 +318,7 @@ fn manifest_yaml_ex_buf(
 					}
 					buf.push(':');
 					let prev_len = cur_padding.len();
-					let item = o.get(s.clone(), key.clone())?.expect("field exists");
+					let item = o.get(key.clone())?.expect("field exists");
 					match &item {
 						Val::Arr(a) if !a.is_empty() => {
 							buf.push('\n');
@@ -336,7 +334,7 @@ fn manifest_yaml_ex_buf(
 						}
 						_ => buf.push(' '),
 					}
-					manifest_yaml_ex_buf(s.clone(), &item, buf, cur_padding, options)?;
+					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
 					cur_padding.truncate(prev_len);
 				}
 			}

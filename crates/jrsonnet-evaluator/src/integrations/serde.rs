@@ -1,7 +1,11 @@
 use std::borrow::Cow;
 
 use jrsonnet_gcmodule::Cc;
-use serde::{de::Visitor, ser::Error, Deserialize, Serialize};
+use serde::{
+	de::Visitor,
+	ser::{Error, SerializeMap, SerializeSeq},
+	Deserialize, Serialize,
+};
 
 use crate::{error::Result, val::ArrValue, ObjValueBuilder, State, Val};
 
@@ -152,12 +156,48 @@ impl Serialize for Val {
 			Val::Num(n) => serializer.serialize_f64(*n),
 			Val::Arr(arr) => {
 				let mut seq = serializer.serialize_seq(Some(arr.len()))?;
-				for element in arr.iter(State::default()) {
-					// seq.serialize_element()
+				for (i, element) in arr.iter().enumerate() {
+					let mut serde_error = None;
+					// TODO: rewrite using try{} after stabilization
+					State::push_description(
+						|| format!("array index [{i}]"),
+						|| {
+							let e = element?;
+							if let Err(e) = seq.serialize_element(&e) {
+								serde_error = Some(e);
+							}
+							Ok(())
+						},
+					)
+					.map_err(|e| S::Error::custom(e.to_string()))?;
+					if let Some(e) = serde_error {
+						return Err(e);
+					}
 				}
-				todo!()
+				seq.end()
 			}
-			Val::Obj(_) => todo!(),
+			Val::Obj(obj) => {
+				let mut map = serializer.serialize_map(Some(obj.len()))?;
+				for (field, value) in obj.iter() {
+					let mut serde_error = None;
+					// TODO: rewrite using try{} after stabilization
+					State::push_description(
+						|| format!("object field {field:?}"),
+						|| {
+							let v = value?;
+							if let Err(e) = map.serialize_entry(field.as_str(), &v) {
+								serde_error = Some(e);
+							}
+							Ok(())
+						},
+					)
+					.map_err(|e| S::Error::custom(e.to_string()))?;
+					if let Some(e) = serde_error {
+						return Err(e);
+					}
+				}
+				map.end()
+			}
 			Val::Func(_) => Err(S::Error::custom("tried to manifest function")),
 		}
 	}

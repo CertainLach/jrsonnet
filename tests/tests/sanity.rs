@@ -9,9 +9,9 @@ fn assert_positive() -> Result<()> {
 	s.with_stdlib();
 
 	let v = s.evaluate_snippet("snip".to_owned(), "assert 1 == 1: 'fail'; null")?;
-	ensure_val_eq!(s, v, Val::Null);
+	ensure_val_eq!(v, Val::Null);
 	let v = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 1)")?;
-	ensure_val_eq!(s, v, Val::Bool(true));
+	ensure_val_eq!(v, Val::Bool(true));
 
 	Ok(())
 }

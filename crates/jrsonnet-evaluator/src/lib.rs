@@ -36,6 +36,8 @@
 	clippy::use_self,
 	// https://github.com/rust-lang/rust-clippy/issues/8539
 	clippy::iter_with_drain,
+	// ci is being run with nightly, but library should work on stable
+	clippy::missing_const_for_fn,
 )]
 
 // For jrsonnet-macros
@@ -63,7 +65,6 @@ use std::{
 	collections::HashMap,
 	fmt::{self, Debug},
 	path::Path,
-	rc::Rc,
 };
 
 pub use ctx::*;
@@ -89,7 +90,7 @@ pub trait Unbound: Trace {
 	/// Type of value after object context is bound
 	type Bound;
 	/// Create value bound to specified object context
-	fn bind(&self, s: State, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
+	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
 }
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
@@ -109,14 +110,9 @@ impl Debug for MaybeUnbound {
 }
 impl MaybeUnbound {
 	/// Attach object context to value, if required
-	pub fn evaluate(
-		&self,
-		s: State,
-		sup: Option<ObjValue>,
-		this: Option<ObjValue>,
-	) -> Result<Thunk<Val>> {
+	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Thunk<Val>> {
 		match self {
-			Self::Unbound(v) => v.bind(s, sup, this),
+			Self::Unbound(v) => v.bind(sup, this),
 			Self::Bound(v) => Ok(v.clone()),
 		}
 	}
@@ -124,7 +120,7 @@ impl MaybeUnbound {
 
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
-pub trait ContextInitializer {
+pub trait ContextInitializer: Trace {
 	/// Initialize default file context.
 	fn initialize(&self, state: State, for_file: Source) -> Context;
 	/// Allows upcasting from abstract to concrete context initializer.
@@ -133,10 +129,11 @@ pub trait ContextInitializer {
 }
 
 /// Context initializer which adds nothing.
+#[derive(Trace)]
 pub struct DummyContextInitializer;
 impl ContextInitializer for DummyContextInitializer {
-	fn initialize(&self, _state: State, _for_file: Source) -> Context {
-		Context::default()
+	fn initialize(&self, state: State, _for_file: Source) -> Context {
+		ContextBuilder::new(state).build()
 	}
 	fn as_any(&self) -> &dyn Any {
 		self
@@ -144,6 +141,7 @@ impl ContextInitializer for DummyContextInitializer {
 }
 
 /// Dynamically reconfigurable evaluation settings
+#[derive(Trace)]
 pub struct EvaluationSettings {
 	/// Limits amount of stack trace items preserved
 	pub max_trace: usize,
@@ -151,27 +149,27 @@ pub struct EvaluationSettings {
 	pub tla_vars: HashMap<IStr, TlaArg>,
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
-	pub context_initializer: Box<dyn ContextInitializer>,
+	pub context_initializer: TraceBox<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
-	pub import_resolver: Box<dyn ImportResolver>,
+	pub import_resolver: TraceBox<dyn ImportResolver>,
 	/// Used in manifestification functions
 	pub manifest_format: ManifestFormat,
 	/// Used for bindings
-	pub trace_format: Box<dyn TraceFormat>,
+	pub trace_format: TraceBox<dyn TraceFormat>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		Self {
 			max_trace: 20,
-			context_initializer: Box::new(DummyContextInitializer),
+			context_initializer: tb!(DummyContextInitializer),
 			tla_vars: HashMap::default(),
-			import_resolver: Box::new(DummyImportResolver),
+			import_resolver: tb!(DummyImportResolver),
 			manifest_format: ManifestFormat::Json {
 				padding: 4,
 				#[cfg(feature = "exp-preserve-order")]
 				preserve_order: false,
 			},
-			trace_format: Box::new(CompactFormat {
+			trace_format: tb!(CompactFormat {
 				padding: 4,
 				resolver: trace::PathResolver::Absolute,
 			}),
@@ -179,6 +177,7 @@ impl Default for EvaluationSettings {
 	}
 }
 
+#[derive(Trace)]
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
@@ -208,7 +207,7 @@ impl FileData {
 	}
 }
 
-#[derive(Default)]
+#[derive(Default, Trace)]
 pub struct EvaluationStateInternals {
 	/// Internal state
 	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
@@ -217,8 +216,8 @@ pub struct EvaluationStateInternals {
 }
 
 /// Maintains stack trace and import resolution
-#[derive(Default, Clone)]
-pub struct State(Rc<EvaluationStateInternals>);
+#[derive(Default, Clone, Trace)]
+pub struct State(Cc<EvaluationStateInternals>);
 
 impl State {
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
@@ -340,11 +339,7 @@ impl State {
 		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too
 		drop(file_cache);
-		let res = evaluate(
-			self.clone(),
-			self.create_default_context(file_name),
-			&parsed,
-		);
+		let res = evaluate(self.create_default_context(file_name), &parsed);
 
 		let mut file_cache = self.file_cache();
 		let mut file = file_cache.raw_entry_mut().from_key(&path);
@@ -425,14 +420,14 @@ impl State {
 	pub fn manifest(&self, val: Val) -> Result<IStr> {
 		Self::push_description(
 			|| "manifestification".to_string(),
-			|| val.manifest(self.clone(), &self.manifest_format()),
+			|| val.manifest(&self.manifest_format()),
 		)
 	}
 	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(IStr, IStr)>> {
-		val.manifest_multi(self.clone(), &self.manifest_format())
+		val.manifest_multi(&self.manifest_format())
 	}
 	pub fn manifest_stream(&self, val: Val) -> Result<Vec<IStr>> {
-		val.manifest_stream(self.clone(), &self.manifest_format())
+		val.manifest_stream(&self.manifest_format())
 	}
 
 	/// If passed value is function then call with set TLA
@@ -442,7 +437,6 @@ impl State {
 				|| "during TLA call".to_owned(),
 				|| {
 					func.evaluate(
-						self.clone(),
 						self.create_default_context(Source::new_virtual(
 							"<tla>".into(),
 							IStr::empty(),
@@ -487,7 +481,7 @@ impl State {
 			path: source.clone(),
 			error: Box::new(e),
 		})?;
-		evaluate(self.clone(), self.create_default_context(source), &parsed)
+		evaluate(self.create_default_context(source), &parsed)
 	}
 }
 
@@ -537,7 +531,7 @@ impl State {
 		Ref::map(self.settings(), |s| &*s.import_resolver)
 	}
 	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
-		self.settings_mut().import_resolver = resolver;
+		self.settings_mut().import_resolver = TraceBox(resolver);
 	}
 	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
 		Ref::map(self.settings(), |s| &*s.context_initializer)
@@ -553,8 +547,8 @@ impl State {
 	pub fn trace_format(&self) -> Ref<'_, dyn TraceFormat> {
 		Ref::map(self.settings(), |s| &*s.trace_format)
 	}
-	pub fn set_trace_format(&self, format: Box<dyn TraceFormat>) {
-		self.settings_mut().trace_format = format;
+	pub fn set_trace_format(&self, format: impl TraceFormat) {
+		self.settings_mut().trace_format = tb!(format);
 	}
 
 	pub fn max_trace(&self) -> usize {

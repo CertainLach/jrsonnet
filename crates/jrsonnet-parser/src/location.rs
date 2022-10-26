@@ -1,5 +1,5 @@
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, Debug, Default)]
 pub struct CodeLocation {
 	pub offset: usize,
 
@@ -24,9 +24,9 @@ pub fn location_to_offset(mut file: &str, mut line: usize, column: usize) -> Opt
 }
 
 #[allow(clippy::module_name_repetitions)]
-pub fn offset_to_location(file: &str, offsets: &[u32]) -> Vec<CodeLocation> {
+pub fn offset_to_location<const S: usize>(file: &str, offsets: &[u32; S]) -> [CodeLocation; S] {
 	if offsets.is_empty() {
-		return vec![];
+		return [CodeLocation::default(); S];
 	}
 	let mut line = 1;
 	let mut column = 1;
@@ -40,16 +40,7 @@ pub fn offset_to_location(file: &str, offsets: &[u32]) -> Vec<CodeLocation> {
 	offset_map.sort_by_key(|v| v.0);
 	offset_map.reverse();
 
-	let mut out = vec![
-		CodeLocation {
-			offset: 0,
-			column: 0,
-			line: 0,
-			line_start_offset: 0,
-			line_end_offset: 0
-		};
-		offsets.len()
-	];
+	let mut out = [CodeLocation::default(); S];
 	let mut with_no_known_line_ending = vec![];
 	let mut this_line_offset = 0;
 	for (pos, ch) in file
@@ -103,7 +94,7 @@ pub mod tests {
 				"hello world\n_______________________________________________________",
 				&[0, 14]
 			),
-			vec![
+			[
 				CodeLocation {
 					offset: 0,
 					line: 1,

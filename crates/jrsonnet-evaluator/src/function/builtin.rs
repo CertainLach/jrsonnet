@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use jrsonnet_gcmodule::Trace;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{error::Result, gc::TraceBox, Context, State, Val};
+use crate::{error::Result, gc::TraceBox, Context, Val};
 
 pub type BuiltinParamName = Cow<'static, str>;
 
@@ -24,13 +24,7 @@ pub trait Builtin: Trace {
 	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
 	/// Call the builtin
-	fn call(
-		&self,
-		s: State,
-		ctx: Context,
-		loc: CallLocation<'_>,
-		args: &dyn ArgsLike,
-	) -> Result<Val>;
+	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
@@ -76,23 +70,17 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(
-		&self,
-		s: State,
-		ctx: Context,
-		_loc: CallLocation<'_>,
-		args: &dyn ArgsLike,
-	) -> Result<Val> {
-		let args = parse_builtin_call(s.clone(), ctx, &self.params, args, true)?;
+	fn call(&self, ctx: Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
+		let args = parse_builtin_call(ctx, &self.params, args, true)?;
 		let args = args
 			.into_iter()
 			.map(|a| a.expect("legacy natives have no default params"))
-			.map(|a| a.evaluate(s.clone()))
+			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;
-		self.handler.call(s, &args)
+		self.handler.call(&args)
 	}
 }
 
 pub trait NativeCallbackHandler: Trace {
-	fn call(&self, s: State, args: &[Val]) -> Result<Val>;
+	fn call(&self, args: &[Val]) -> Result<Val>;
 }

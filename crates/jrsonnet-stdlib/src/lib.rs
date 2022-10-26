@@ -12,7 +12,7 @@ use jrsonnet_evaluator::{
 	trace::PathResolver,
 	Context, ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
-use jrsonnet_gcmodule::Cc;
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_parser::Source;
 
 mod expr;
@@ -41,11 +41,11 @@ pub use strings::*;
 mod misc;
 pub use misc::*;
 
-pub fn stdlib_uncached(s: State, settings: Rc<RefCell<Settings>>) -> ObjValue {
+pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
 
 	let expr = expr::stdlib_expr();
-	let eval = jrsonnet_evaluator::evaluate(s.clone(), Context::default(), &expr)
+	let eval = jrsonnet_evaluator::evaluate(ContextBuilder::dangerous_empty_state().build(), &expr)
 		.expect("stdlib.jsonnet should have no errors")
 		.as_obj()
 		.expect("stdlib.jsonnet should evaluate to object");
@@ -173,7 +173,7 @@ pub fn stdlib_uncached(s: State, settings: Rc<RefCell<Settings>>) -> ObjValue {
 }
 
 pub trait TracePrinter {
-	fn print_trace(&self, s: State, loc: CallLocation, value: IStr);
+	fn print_trace(&self, loc: CallLocation, value: IStr);
 }
 
 pub struct StdTracePrinter {
@@ -185,7 +185,7 @@ impl StdTracePrinter {
 	}
 }
 impl TracePrinter for StdTracePrinter {
-	fn print_trace(&self, _s: State, loc: CallLocation, value: IStr) {
+	fn print_trace(&self, loc: CallLocation, value: IStr) {
 		eprint!("TRACE:");
 		if let Some(loc) = loc.0 {
 			let locs = loc.0.map_source_locations(&[loc.1]);
@@ -220,6 +220,7 @@ pub fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 	Source::new_virtual(source_name.into(), code.into())
 }
 
+#[derive(Trace)]
 pub struct ContextInitializer {
 	// When we don't need to support legacy-this-file, we can reuse same context for all files
 	#[cfg(not(feature = "legacy-this-file"))]
@@ -242,10 +243,10 @@ impl ContextInitializer {
 		Self {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
-				let mut context = ContextBuilder::with_capacity(1);
+				let mut context = ContextBuilder::with_capacity(s, 1);
 				context.bind(
 					"std".into(),
-					Thunk::evaluated(Val::Obj(stdlib_uncached(s, settings.clone()))),
+					Thunk::evaluated(Val::Obj(stdlib_uncached(settings.clone()))),
 				);
 				context.build()
 			},
@@ -349,7 +350,7 @@ pub trait StateExt {
 impl StateExt for State {
 	fn with_stdlib(&self) {
 		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
-		self.settings_mut().context_initializer = Box::new(initializer)
+		self.settings_mut().context_initializer = tb!(initializer)
 	}
 	fn add_global(&self, name: IStr, value: Thunk<Val>) {
 		self.settings()

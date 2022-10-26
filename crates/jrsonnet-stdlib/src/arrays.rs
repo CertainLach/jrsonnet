@@ -2,17 +2,17 @@ use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
 	throw,
-	typed::{Any, BoundedUsize, Typed, VecVal},
+	typed::{Any, BoundedUsize, Either2, NativeFn, Typed, VecVal},
 	val::{equals, ArrValue, IndexableVal},
-	IStr, State, Val,
+	Either, IStr, Val,
 };
 use jrsonnet_gcmodule::Cc;
 
 #[builtin]
-pub fn builtin_make_array(s: State, sz: usize, func: FuncVal) -> Result<VecVal> {
+pub fn builtin_make_array(sz: usize, func: NativeFn<((f64,), Any)>) -> Result<VecVal> {
 	let mut out = Vec::with_capacity(sz);
 	for i in 0..sz {
-		out.push(func.evaluate_simple(s.clone(), &(i as f64,))?);
+		out.push(func(i as f64)?.0);
 	}
 	Ok(VecVal(Cc::new(out)))
 }
@@ -28,19 +28,20 @@ pub fn builtin_slice(
 }
 
 #[builtin]
-pub fn builtin_map(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.map(s.clone(), |val| {
-		func.evaluate_simple(s.clone(), &(Any(val),))
-	})
+pub fn builtin_map(func: NativeFn<((Any,), Any)>, arr: ArrValue) -> Result<ArrValue> {
+	arr.map(|val| Ok(func(Any(val))?.0))
 }
 
 #[builtin]
-pub fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<IndexableVal> {
+pub fn builtin_flatmap(
+	func: NativeFn<((Either![String, Any],), Any)>,
+	arr: IndexableVal,
+) -> Result<IndexableVal> {
 	match arr {
 		IndexableVal::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
-				match func.evaluate_simple(s.clone(), &(c.to_string(),))? {
+				match func(Either2::A(c.to_string()))?.0 {
 					Val::Str(o) => out.push_str(&o),
 					Val::Null => continue,
 					_ => throw!("in std.join all items should be strings"),
@@ -50,11 +51,11 @@ pub fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Ind
 		}
 		IndexableVal::Arr(a) => {
 			let mut out = Vec::new();
-			for el in a.iter(s.clone()) {
+			for el in a.iter() {
 				let el = el?;
-				match func.evaluate_simple(s.clone(), &(Any(el),))? {
+				match func(Either2::B(Any(el)))?.0 {
 					Val::Arr(o) => {
-						for oe in o.iter(s.clone()) {
+						for oe in o.iter() {
 							out.push(oe?);
 						}
 					}
@@ -68,29 +69,24 @@ pub fn builtin_flatmap(s: State, func: FuncVal, arr: IndexableVal) -> Result<Ind
 }
 
 #[builtin]
-pub fn builtin_filter(s: State, func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(s.clone(), |val| {
-		bool::from_untyped(
-			func.evaluate_simple(s.clone(), &(Any(val.clone()),))?,
-			s.clone(),
-		)
-	})
+pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
+	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(Any(val.clone()),))?))
 }
 
 #[builtin]
-pub fn builtin_foldl(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
+pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
-	for i in arr.iter(s.clone()) {
-		acc = func.evaluate_simple(s.clone(), &(Any(acc), Any(i?)))?;
+	for i in arr.iter() {
+		acc = func.evaluate_simple(&(Any(acc), Any(i?)))?;
 	}
 	Ok(Any(acc))
 }
 
 #[builtin]
-pub fn builtin_foldr(s: State, func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
+pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 	let mut acc = init.0;
-	for i in arr.iter(s.clone()).rev() {
-		acc = func.evaluate_simple(s.clone(), &(Any(i?), Any(acc)))?;
+	for i in arr.iter().rev() {
+		acc = func.evaluate_simple(&(Any(i?), Any(acc)))?;
 	}
 	Ok(Any(acc))
 }
@@ -104,25 +100,25 @@ pub fn builtin_range(from: i32, to: i32) -> Result<ArrValue> {
 }
 
 #[builtin]
-pub fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
+pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 	Ok(match sep {
 		IndexableVal::Arr(joiner_items) => {
 			let mut out = Vec::new();
 
 			let mut first = true;
-			for item in arr.iter(s.clone()) {
+			for item in arr.iter() {
 				let item = item?.clone();
 				if let Val::Arr(items) = item {
 					if !first {
 						out.reserve(joiner_items.len());
 						// TODO: extend
-						for item in joiner_items.iter(s.clone()) {
+						for item in joiner_items.iter() {
 							out.push(item?);
 						}
 					}
 					first = false;
 					out.reserve(items.len());
-					for item in items.iter(s.clone()) {
+					for item in items.iter() {
 						out.push(item?);
 					}
 				} else if matches!(item, Val::Null) {
@@ -138,7 +134,7 @@ pub fn builtin_join(s: State, sep: IndexableVal, arr: ArrValue) -> Result<Indexa
 			let mut out = String::new();
 
 			let mut first = true;
-			for item in arr.iter(s) {
+			for item in arr.iter() {
 				let item = item?.clone();
 				if let Val::Str(item) = item {
 					if !first {
@@ -164,9 +160,9 @@ pub fn builtin_reverse(value: ArrValue) -> Result<ArrValue> {
 }
 
 #[builtin]
-pub fn builtin_any(s: State, arr: ArrValue) -> Result<bool> {
-	for v in arr.iter(s.clone()) {
-		let v = bool::from_untyped(v?, s.clone())?;
+pub fn builtin_any(arr: ArrValue) -> Result<bool> {
+	for v in arr.iter() {
+		let v = bool::from_untyped(v?)?;
 		if v {
 			return Ok(true);
 		}
@@ -175,9 +171,9 @@ pub fn builtin_any(s: State, arr: ArrValue) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_all(s: State, arr: ArrValue) -> Result<bool> {
-	for v in arr.iter(s.clone()) {
-		let v = bool::from_untyped(v?, s.clone())?;
+pub fn builtin_all(arr: ArrValue) -> Result<bool> {
+	for v in arr.iter() {
+		let v = bool::from_untyped(v?)?;
 		if !v {
 			return Ok(false);
 		}
@@ -186,16 +182,16 @@ pub fn builtin_all(s: State, arr: ArrValue) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_member(s: State, arr: IndexableVal, x: Any) -> Result<bool> {
+pub fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
 	match arr {
 		IndexableVal::Str(str) => {
-			let x: IStr = IStr::from_untyped(x.0, s)?;
+			let x: IStr = IStr::from_untyped(x.0)?;
 			Ok(!x.is_empty() && str.contains(&*x))
 		}
 		IndexableVal::Arr(a) => {
-			for item in a.iter(s.clone()) {
+			for item in a.iter() {
 				let item = item?;
-				if equals(s.clone(), &item, &x.0)? {
+				if equals(&item, &x.0)? {
 					return Ok(true);
 				}
 			}
@@ -205,10 +201,10 @@ pub fn builtin_member(s: State, arr: IndexableVal, x: Any) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_count(s: State, arr: Vec<Any>, v: Any) -> Result<usize> {
+pub fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
 	let mut count = 0;
 	for item in &arr {
-		if equals(s.clone(), &item.0, &v.0)? {
+		if equals(&item.0, &v.0)? {
 			count += 1;
 		}
 	}

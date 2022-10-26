@@ -36,7 +36,7 @@ struct JsonnetNativeCallbackHandler {
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, s: State, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, args: &[Val]) -> Result<Val, LocError> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));
@@ -54,7 +54,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		if success == 1 {
 			Ok(v)
 		} else {
-			let e = IStr::from_untyped(v, s).expect("error msg should be a string");
+			let e = IStr::from_untyped(v).expect("error msg should be a string");
 			Err(Error::RuntimeError(e).into())
 		}
 	}

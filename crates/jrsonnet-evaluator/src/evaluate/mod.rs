@@ -31,18 +31,18 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocEx
 	})))
 }
 
-pub fn evaluate_field_name(s: State, ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
+pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		FieldName::Fixed(n) => Some(n.clone()),
 		FieldName::Dyn(expr) => State::push(
 			CallLocation::new(&expr.1),
 			|| "evaluating field name".to_string(),
 			|| {
-				let value = evaluate(s.clone(), ctx, expr)?;
+				let value = evaluate(ctx, expr)?;
 				if matches!(value, Val::Null) {
 					Ok(None)
 				} else {
-					Ok(Some(IStr::from_untyped(value, s.clone())?))
+					Ok(Some(IStr::from_untyped(value)?))
 				}
 			},
 		)?,
@@ -50,7 +50,6 @@ pub fn evaluate_field_name(s: State, ctx: Context, field_name: &FieldName) -> Re
 }
 
 pub fn evaluate_comp(
-	s: State,
 	ctx: Context,
 	specs: &[CompSpec],
 	callback: &mut impl FnMut(Context) -> Result<()>,
@@ -58,25 +57,22 @@ pub fn evaluate_comp(
 	match specs.get(0) {
 		None => callback(ctx)?,
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
-			if bool::from_untyped(evaluate(s.clone(), ctx.clone(), cond)?, s.clone())? {
-				evaluate_comp(s, ctx, &specs[1..], callback)?;
+			if bool::from_untyped(evaluate(ctx.clone(), cond)?)? {
+				evaluate_comp(ctx, &specs[1..], callback)?;
 			}
 		}
-		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => {
-			match evaluate(s.clone(), ctx.clone(), expr)? {
-				Val::Arr(list) => {
-					for item in list.iter(s.clone()) {
-						evaluate_comp(
-							s.clone(),
-							ctx.clone().with_var(var.clone(), item?.clone()),
-							&specs[1..],
-							callback,
-						)?;
-					}
+		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => match evaluate(ctx.clone(), expr)? {
+			Val::Arr(list) => {
+				for item in list.iter() {
+					evaluate_comp(
+						ctx.clone().with_var(var.clone(), item?.clone()),
+						&specs[1..],
+						callback,
+					)?;
 				}
-				_ => throw!(InComprehensionCanOnlyIterateOverArray),
 			}
-		}
+			_ => throw!(InComprehensionCanOnlyIterateOverArray),
+		},
 	}
 	Ok(())
 }
@@ -96,12 +92,7 @@ fn evaluate_object_locals(
 	impl Unbound for UnboundLocals {
 		type Bound = Context;
 
-		fn bind(
-			&self,
-			_s: State,
-			sup: Option<ObjValue>,
-			this: Option<ObjValue>,
-		) -> Result<Context> {
+		fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Context> {
 			let fctx = Context::new_future();
 			let mut new_bindings = GcHashMap::new();
 			for b in self.locals.iter() {
@@ -123,7 +114,7 @@ fn evaluate_object_locals(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -> Result<ObjValue> {
+pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<ObjValue> {
 	let mut builder = ObjValueBuilder::new();
 	let locals = Rc::new(
 		members
@@ -159,20 +150,18 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
-						s: State,
 						sup: Option<ObjValue>,
 						this: Option<ObjValue>,
 					) -> Result<Thunk<Val>> {
 						Ok(Thunk::evaluated(evaluate_named(
-							s.clone(),
-							self.uctx.bind(s, sup, this)?,
+							self.uctx.bind(sup, this)?,
 							&self.value,
 							self.name.clone(),
 						)?))
 					}
 				}
 
-				let name = evaluate_field_name(s.clone(), ctx.clone(), name)?;
+				let name = evaluate_field_name(ctx.clone(), name)?;
 				let name = if let Some(name) = name {
 					name
 				} else {
@@ -207,12 +196,11 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					type Bound = Thunk<Val>;
 					fn bind(
 						&self,
-						s: State,
 						sup: Option<ObjValue>,
 						this: Option<ObjValue>,
 					) -> Result<Thunk<Val>> {
 						Ok(Thunk::evaluated(evaluate_method(
-							self.uctx.bind(s, sup, this)?,
+							self.uctx.bind(sup, this)?,
 							self.name.clone(),
 							self.params.clone(),
 							self.value.clone(),
@@ -220,7 +208,7 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					}
 				}
 
-				let name = if let Some(name) = evaluate_field_name(s.clone(), ctx.clone(), name)? {
+				let name = if let Some(name) = evaluate_field_name(ctx.clone(), name)? {
 					name
 				} else {
 					continue;
@@ -245,14 +233,9 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 					assert: AssertStmt,
 				}
 				impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
-					fn run(
-						&self,
-						s: State,
-						sup: Option<ObjValue>,
-						this: Option<ObjValue>,
-					) -> Result<()> {
-						let ctx = self.uctx.bind(s.clone(), sup, this)?;
-						evaluate_assert(s, ctx, &self.assert)
+					fn run(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<()> {
+						let ctx = self.uctx.bind(sup, this)?;
+						evaluate_assert(ctx, &self.assert)
 					}
 				}
 				builder.assert(tb!(ObjectAssert {
@@ -267,9 +250,9 @@ pub fn evaluate_member_list_object(s: State, ctx: Context, members: &[Member]) -
 	Ok(this)
 }
 
-pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjValue> {
+pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 	Ok(match object {
-		ObjBody::MemberList(members) => evaluate_member_list_object(s, ctx, members)?,
+		ObjBody::MemberList(members) => evaluate_member_list_object(ctx, members)?,
 		ObjBody::ObjComp(obj) => {
 			let mut builder = ObjValueBuilder::new();
 			let locals = Rc::new(
@@ -280,8 +263,8 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 					.collect::<Vec<_>>(),
 			);
 			let mut ctxs = vec![];
-			evaluate_comp(s.clone(), ctx, &obj.compspecs, &mut |ctx| {
-				let key = evaluate(s.clone(), ctx.clone(), &obj.key)?;
+			evaluate_comp(ctx, &obj.compspecs, &mut |ctx| {
+				let key = evaluate(ctx.clone(), &obj.key)?;
 				let fctx = Context::new_future();
 				ctxs.push((ctx, fctx.clone()));
 				let uctx = evaluate_object_locals(fctx, locals.clone());
@@ -298,13 +281,11 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 							type Bound = Thunk<Val>;
 							fn bind(
 								&self,
-								s: State,
 								sup: Option<ObjValue>,
 								this: Option<ObjValue>,
 							) -> Result<Thunk<Val>> {
 								Ok(Thunk::evaluated(evaluate(
-									s.clone(),
-									self.uctx.bind(s, sup, this.clone())?.extend(
+									self.uctx.bind(sup, this.clone())?.extend(
 										GcHashMap::new(),
 										None,
 										None,
@@ -341,17 +322,16 @@ pub fn evaluate_object(s: State, ctx: Context, object: &ObjBody) -> Result<ObjVa
 }
 
 pub fn evaluate_apply(
-	s: State,
 	ctx: Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
 	loc: CallLocation<'_>,
 	tailstrict: bool,
 ) -> Result<Val> {
-	let value = evaluate(s.clone(), ctx.clone(), value)?;
+	let value = evaluate(ctx.clone(), value)?;
 	Ok(match value {
 		Val::Func(f) => {
-			let body = || f.evaluate(s.clone(), ctx, loc, args, tailstrict);
+			let body = || f.evaluate(ctx, loc, args, tailstrict);
 			if tailstrict {
 				body()?
 			} else {
@@ -362,13 +342,13 @@ pub fn evaluate_apply(
 	})
 }
 
-pub fn evaluate_assert(s: State, ctx: Context, assertion: &AssertStmt) -> Result<()> {
+pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = State::push(
 		CallLocation::new(&value.1),
 		|| "assertion condition".to_owned(),
-		|| bool::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
+		|| bool::from_untyped(evaluate(ctx.clone(), value)?),
 	)?;
 	if !assertion_result {
 		State::push(
@@ -376,28 +356,26 @@ pub fn evaluate_assert(s: State, ctx: Context, assertion: &AssertStmt) -> Result
 			|| "assertion failure".to_owned(),
 			|| {
 				if let Some(msg) = msg {
-					throw!(AssertionFailed(
-						evaluate(s.clone(), ctx, msg)?.to_string(s.clone())?
-					));
+					throw!(AssertionFailed(evaluate(ctx, msg)?.to_string()?));
 				}
-				throw!(AssertionFailed(Val::Null.to_string(s.clone())?));
+				throw!(AssertionFailed(Val::Null.to_string()?));
 			},
 		)?;
 	}
 	Ok(())
 }
 
-pub fn evaluate_named(s: State, ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
+pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(raw_expr, _loc) = expr;
 	Ok(match &**raw_expr {
 		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
-		_ => evaluate(s, ctx, expr)?,
+		_ => evaluate(ctx, expr)?,
 	})
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
+pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
 	// let bp = with_state(|s| s.0.stop_at.borrow().clone());
@@ -418,94 +396,89 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
-		Parened(e) => evaluate(s, ctx, e)?,
+		Parened(e) => evaluate(ctx, e)?,
 		Str(v) => Val::Str(v.clone()),
 		Num(v) => Val::new_checked_num(*v)?,
-		BinaryOp(v1, o, v2) => evaluate_binary_op_special(s, ctx, v1, *o, v2)?,
-		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(s, ctx, v)?)?,
+		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
+		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => State::push(
 			CallLocation::new(loc),
 			|| format!("variable <{name}> access"),
-			|| ctx.binding(name.clone())?.evaluate(s.clone()),
+			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index(value, index) => {
-			match (
-				evaluate(s.clone(), ctx.clone(), value)?,
-				evaluate(s.clone(), ctx, index)?,
-			) {
-				(Val::Obj(v), Val::Str(key)) => State::push(
-					CallLocation::new(loc),
-					|| format!("field <{key}> access"),
-					|| match v.get(s.clone(), key.clone()) {
-						Ok(Some(v)) => Ok(v),
-						#[cfg(not(feature = "friendly-errors"))]
-						Ok(None) => throw!(NoSuchField(key.clone(), vec![])),
-						#[cfg(feature = "friendly-errors")]
-						Ok(None) => {
-							let mut heap = Vec::new();
-							for field in v.fields_ex(
-								true,
-								#[cfg(feature = "exp-preserve-order")]
-								false,
-							) {
-								let conf = strsim::jaro_winkler(&field as &str, &key as &str);
-								if conf < 0.8 {
-									continue;
-								}
-								heap.push((conf, field));
+		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
+			(Val::Obj(v), Val::Str(key)) => State::push(
+				CallLocation::new(loc),
+				|| format!("field <{key}> access"),
+				|| match v.get(key.clone()) {
+					Ok(Some(v)) => Ok(v),
+					#[cfg(not(feature = "friendly-errors"))]
+					Ok(None) => throw!(NoSuchField(key.clone(), vec![])),
+					#[cfg(feature = "friendly-errors")]
+					Ok(None) => {
+						let mut heap = Vec::new();
+						for field in v.fields_ex(
+							true,
+							#[cfg(feature = "exp-preserve-order")]
+							false,
+						) {
+							let conf = strsim::jaro_winkler(&field as &str, &key as &str);
+							if conf < 0.8 {
+								continue;
 							}
-							heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-
-							throw!(NoSuchField(
-								key.clone(),
-								heap.into_iter().map(|(_, v)| v).collect()
-							))
+							heap.push((conf, field));
 						}
-						Err(e) => Err(e),
-					},
-				)?,
-				(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
-					ValType::Obj,
-					ValType::Str,
-					n.value_type(),
-				)),
+						heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
-				(Val::Arr(v), Val::Num(n)) => {
-					if n.fract() > f64::EPSILON {
-						throw!(FractionalIndex)
+						throw!(NoSuchField(
+							key.clone(),
+							heap.into_iter().map(|(_, v)| v).collect()
+						))
 					}
-					v.get(s, n as usize)?
-						.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+					Err(e) => Err(e),
+				},
+			)?,
+			(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
+				ValType::Obj,
+				ValType::Str,
+				n.value_type(),
+			)),
+
+			(Val::Arr(v), Val::Num(n)) => {
+				if n.fract() > f64::EPSILON {
+					throw!(FractionalIndex)
 				}
-				(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
-				(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
-					ValType::Arr,
-					ValType::Num,
-					n.value_type(),
-				)),
-
-				(Val::Str(s), Val::Num(n)) => Val::Str({
-					let v: IStr = s
-						.chars()
-						.skip(n as usize)
-						.take(1)
-						.collect::<String>()
-						.into();
-					if v.is_empty() {
-						let size = s.chars().count();
-						throw!(StringBoundsError(n as usize, size))
-					}
-					v
-				}),
-				(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
-					ValType::Str,
-					ValType::Num,
-					n.value_type(),
-				)),
-
-				(v, _) => throw!(CantIndexInto(v.value_type())),
+				v.get(n as usize)?
+					.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
 			}
-		}
+			(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
+			(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
+				ValType::Arr,
+				ValType::Num,
+				n.value_type(),
+			)),
+
+			(Val::Str(s), Val::Num(n)) => Val::Str({
+				let v: IStr = s
+					.chars()
+					.skip(n as usize)
+					.take(1)
+					.collect::<String>()
+					.into();
+				if v.is_empty() {
+					let size = s.chars().count();
+					throw!(StringBoundsError(n as usize, size))
+				}
+				v
+			}),
+			(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
+				ValType::Str,
+				ValType::Num,
+				n.value_type(),
+			)),
+
+			(v, _) => throw!(CantIndexInto(v.value_type())),
+		},
 		LocalExpr(bindings, returned) => {
 			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
 				GcHashMap::with_capacity(bindings.len());
@@ -514,7 +487,7 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
 			let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
-			evaluate(s, ctx, &returned.clone())?
+			evaluate(ctx, &returned.clone())?
 		}
 		Arr(items) => {
 			let mut out = Vec::with_capacity(items.len());
@@ -527,8 +500,8 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 				}
 				impl ThunkValue for ArrayElement {
 					type Output = Val;
-					fn get(self: Box<Self>, s: State) -> Result<Val> {
-						evaluate(s, self.ctx, &self.item)
+					fn get(self: Box<Self>) -> Result<Val> {
+						evaluate(self.ctx, &self.item)
 					}
 				}
 				out.push(Thunk::new(tb!(ArrayElement {
@@ -540,36 +513,31 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		ArrComp(expr, comp_specs) => {
 			let mut out = Vec::new();
-			evaluate_comp(s.clone(), ctx, comp_specs, &mut |ctx| {
-				out.push(evaluate(s.clone(), ctx, expr)?);
+			evaluate_comp(ctx, comp_specs, &mut |ctx| {
+				out.push(evaluate(ctx, expr)?);
 				Ok(())
 			})?;
 			Val::Arr(ArrValue::Eager(Cc::new(out)))
 		}
-		Obj(body) => Val::Obj(evaluate_object(s, ctx, body)?),
+		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
 		ObjExtend(a, b) => evaluate_add_op(
-			s.clone(),
-			&evaluate(s.clone(), ctx.clone(), a)?,
-			&Val::Obj(evaluate_object(s, ctx, b)?),
+			&evaluate(ctx.clone(), a)?,
+			&Val::Obj(evaluate_object(ctx, b)?),
 		)?,
 		Apply(value, args, tailstrict) => {
-			evaluate_apply(s, ctx, value, args, CallLocation::new(loc), *tailstrict)?
+			evaluate_apply(ctx, value, args, CallLocation::new(loc), *tailstrict)?
 		}
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
 		}
 		AssertExpr(assert, returned) => {
-			evaluate_assert(s.clone(), ctx.clone(), assert)?;
-			evaluate(s, ctx, returned)?
+			evaluate_assert(ctx.clone(), assert)?;
+			evaluate(ctx, returned)?
 		}
 		ErrorStmt(e) => State::push(
 			CallLocation::new(loc),
 			|| "error statement".to_owned(),
-			|| {
-				throw!(RuntimeError(
-					evaluate(s.clone(), ctx, e)?.to_string(s.clone())?,
-				))
-			},
+			|| throw!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
 		IfElse {
 			cond,
@@ -579,12 +547,12 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 			if State::push(
 				CallLocation::new(loc),
 				|| "if condition".to_owned(),
-				|| bool::from_untyped(evaluate(s.clone(), ctx.clone(), &cond.0)?, s.clone()),
+				|| bool::from_untyped(evaluate(ctx.clone(), &cond.0)?),
 			)? {
-				evaluate(s, ctx, cond_then)?
+				evaluate(ctx, cond_then)?
 			} else {
 				match cond_else {
-					Some(v) => evaluate(s, ctx, v)?,
+					Some(v) => evaluate(ctx, v)?,
 					None => Val::Null,
 				}
 			}
@@ -592,7 +560,6 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Slice(value, desc) => {
 			fn parse_idx<T: Typed>(
 				loc: CallLocation<'_>,
-				s: State,
 				ctx: &Context,
 				expr: &Option<LocExpr>,
 				desc: &'static str,
@@ -601,24 +568,25 @@ pub fn evaluate(s: State, ctx: Context, expr: &LocExpr) -> Result<Val> {
 					Ok(Some(State::push(
 						loc,
 						|| format!("slice {desc}"),
-						|| T::from_untyped(evaluate(s.clone(), ctx.clone(), value)?, s.clone()),
+						|| T::from_untyped(evaluate(ctx.clone(), value)?),
 					)?))
 				} else {
 					Ok(None)
 				}
 			}
 
-			let indexable = evaluate(s.clone(), ctx.clone(), value)?;
+			let indexable = evaluate(ctx.clone(), value)?;
 			let loc = CallLocation::new(loc);
 
-			let start = parse_idx(loc, s.clone(), &ctx, &desc.start, "start")?;
-			let end = parse_idx(loc, s.clone(), &ctx, &desc.end, "end")?;
-			let step = parse_idx(loc, s.clone(), &ctx, &desc.step, "step")?;
+			let start = parse_idx(loc, &ctx, &desc.start, "start")?;
+			let end = parse_idx(loc, &ctx, &desc.end, "end")?;
+			let step = parse_idx(loc, &ctx, &desc.step, "step")?;
 
-			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?, s)?
+			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let tmp = loc.clone().0;
+			let s = ctx.state();
 			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
 			match i {
 				Import(_) => State::push(
