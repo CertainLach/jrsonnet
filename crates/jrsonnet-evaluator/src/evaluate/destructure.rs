@@ -32,7 +32,7 @@ pub fn destruct(
 		Destruct::Array { start, rest, end } => {
 			use jrsonnet_parser::DestructRest;
 
-			use crate::{throw, val::ArrValue};
+			use crate::val::ArrValue;
 
 			#[derive(Trace)]
 			struct DataThunk {
@@ -43,8 +43,8 @@ pub fn destruct(
 			impl ThunkValue for DataThunk {
 				type Output = ArrValue;
 
-				fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-					let v = self.parent.evaluate(s)?;
+				fn get(self: Box<Self>) -> Result<Self::Output> {
+					let v = self.parent.evaluate()?;
 					let arr = match v {
 						Val::Arr(a) => a,
 						_ => throw!("expected array"),
@@ -79,9 +79,9 @@ pub fn destruct(
 				impl ThunkValue for BaseThunk {
 					type Output = Val;
 
-					fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-						let full = self.full.evaluate(s.clone())?;
-						Ok(full.get(s, self.index)?.expect("length is checked"))
+					fn get(self: Box<Self>) -> Result<Self::Output> {
+						let full = self.full.evaluate()?;
+						Ok(full.get(self.index)?.expect("length is checked"))
 					}
 				}
 				for (i, d) in start.iter().enumerate() {
@@ -108,8 +108,8 @@ pub fn destruct(
 					impl ThunkValue for RestThunk {
 						type Output = Val;
 
-						fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-							let full = self.full.evaluate(s)?;
+						fn get(self: Box<Self>) -> Result<Self::Output> {
+							let full = self.full.evaluate()?;
 							let to = full.len() - self.end;
 							Ok(Val::Arr(full.slice(Some(self.start), Some(to), None)))
 						}
@@ -140,10 +140,10 @@ pub fn destruct(
 				impl ThunkValue for EndThunk {
 					type Output = Val;
 
-					fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-						let full = self.full.evaluate(s.clone())?;
+					fn get(self: Box<Self>) -> Result<Self::Output> {
+						let full = self.full.evaluate()?;
 						Ok(full
-							.get(s, full.len() - self.end + self.index)?
+							.get(full.len() - self.end + self.index)?
 							.expect("length is checked"))
 					}
 				}
@@ -163,7 +163,7 @@ pub fn destruct(
 		}
 		#[cfg(feature = "exp-destruct")]
 		Destruct::Object { fields, rest } => {
-			use crate::{obj::ObjValue, throw};
+			use crate::obj::ObjValue;
 
 			#[derive(Trace)]
 			struct DataThunk {
@@ -174,8 +174,8 @@ pub fn destruct(
 			impl ThunkValue for DataThunk {
 				type Output = ObjValue;
 
-				fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-					let v = self.parent.evaluate(s)?;
+				fn get(self: Box<Self>) -> Result<Self::Output> {
+					let v = self.parent.evaluate()?;
 					let obj = match v {
 						Val::Obj(o) => o,
 						_ => throw!("expected object"),
@@ -215,13 +215,13 @@ pub fn destruct(
 				impl ThunkValue for FieldThunk {
 					type Output = Val;
 
-					fn get(self: Box<Self>, s: State) -> Result<Self::Output> {
-						let full = self.full.evaluate(s.clone())?;
-						if let Some(field) = full.get(s.clone(), self.field)? {
+					fn get(self: Box<Self>) -> Result<Self::Output> {
+						let full = self.full.evaluate()?;
+						if let Some(field) = full.get(self.field)? {
 							Ok(field)
 						} else {
 							let (fctx, expr) = self.default.as_ref().expect("shape is checked");
-							Ok(evaluate(s, fctx.clone().unwrap(), &expr)?)
+							Ok(evaluate(fctx.clone().unwrap(), &expr)?)
 						}
 					}
 				}

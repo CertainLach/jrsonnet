@@ -255,9 +255,7 @@ pub fn intern_bytes(bytes: &[u8]) -> IBytes {
 		let mut pool = pool.borrow_mut();
 		let entry = pool.raw_entry_mut().from_key(bytes);
 		match entry {
-			hashbrown::hash_map::RawEntryMut::Occupied(mut i) => {
-				IBytes(i.get_key_value().0.clone())
-			}
+			hashbrown::hash_map::RawEntryMut::Occupied(i) => IBytes(i.get_key_value().0.clone()),
 			hashbrown::hash_map::RawEntryMut::Vacant(e) => {
 				let (k, _) = e.insert(Inner::new_bytes(bytes), ());
 				IBytes(k.clone())

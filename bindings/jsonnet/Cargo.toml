@@ -1,16 +1,16 @@
 [package]
 name = "libjsonnet"
 description = "Rust implementation of libjsonnet.so"
-version = "0.4.2"
+version.workspace = true
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2021"
 publish = false
 
 [dependencies]
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator", version = "0.4.2" }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser", version = "0.4.2" }
-jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib", version = "0.4.2" }
+jrsonnet-evaluator.workspace = true
+jrsonnet-parser.workspace = true
+jrsonnet-stdlib.workspace = true
 jrsonnet-gcmodule = { version = "0.3.4" }
 
 [lib]

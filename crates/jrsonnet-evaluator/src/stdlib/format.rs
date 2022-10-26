@@ -625,6 +625,7 @@ pub fn format_code(
 pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 	let codes = parse_codes(str)?;
 	let mut out = String::new();
+	let value_count = values.len();
 
 	for code in codes {
 		match code {
@@ -671,6 +672,13 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 				format_code(&mut out, value, &c, width, precision)?;
 			}
 		}
+	}
+
+	if !values.is_empty() {
+		throw!(
+			"too many values to format, expected {value_count}, got {}",
+			value_count + values.len()
+		)
 	}
 
 	Ok(out)

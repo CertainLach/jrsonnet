@@ -1,7 +1,7 @@
 [package]
 name = "jrsonnet-interner"
 description = "Jrsonnet string interning"
-version = "0.4.2"
+version.workspace = true
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2021"

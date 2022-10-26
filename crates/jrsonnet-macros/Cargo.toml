@@ -1,6 +1,6 @@
 [package]
 name = "jrsonnet-macros"
-version = "0.4.2"
+version.workspace = true
 edition = "2021"
 
 [lib]

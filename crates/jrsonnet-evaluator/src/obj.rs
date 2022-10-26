@@ -368,8 +368,14 @@ impl ObjValue {
 			.map_or(false, |v| v.is_visible())
 	}
 
-	pub fn iter(&self) -> impl Iterator<Item = (IStr, Result<Val>)> + '_ {
-		let fields = self.fields();
+	pub fn iter(
+		&self,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> impl Iterator<Item = (IStr, Result<Val>)> + '_ {
+		let fields = self.fields(
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		);
 		fields.into_iter().map(|field| {
 			(
 				field.clone(),
