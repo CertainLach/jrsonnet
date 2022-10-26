@@ -9,4 +9,4 @@ edition = "2021"
 [dependencies]
 jrsonnet-gcmodule = { version = "0.3.4" }
 
-peg = "0.8.0"
+peg = "0.8.1"

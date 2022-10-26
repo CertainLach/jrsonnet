@@ -1,10 +1,11 @@
 use std::{path::PathBuf, str::FromStr};
 
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::{error::Result, ManifestFormat, State};
 
 use crate::ConfigureState;
 
+#[derive(Clone, ValueEnum)]
 pub enum ManifestFormatName {
 	/// Expect string as output, and write them directly
 	String,
@@ -28,7 +29,7 @@ impl FromStr for ManifestFormatName {
 #[clap(next_help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
 	/// Output format, wraps resulting value to corresponding std.manifest call.
-	#[clap(long, short = 'f', default_value = "json", possible_values = &["json", "yaml"])]
+	#[clap(long, short = 'f', default_value = "json")]
 	format: ManifestFormatName,
 	/// Expect plain string as output.
 	/// Mutually exclusive with `--format`

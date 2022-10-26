@@ -10,40 +10,19 @@ pub struct TLAOpts {
 	/// Top level arguments will be passed to function before manifestification stage.
 	/// This is preferred to ExtVars method.
 	/// If [=data] is not set then it will be read from `name` env variable.
-	#[clap(
-		long,
-		short = 'A',
-		name = "name[=tla data]",
-		number_of_values = 1,
-		multiple_occurrences = true
-	)]
+	#[clap(long, short = 'A', name = "name[=tla data]", number_of_values = 1)]
 	tla_str: Vec<ExtStr>,
 	/// Read top level argument string from file.
 	/// See also `--tla-str`
-	#[clap(
-		long,
-		name = "name=tla path",
-		number_of_values = 1,
-		multiple_occurrences = true
-	)]
+	#[clap(long, name = "name=tla path", number_of_values = 1)]
 	tla_str_file: Vec<ExtFile>,
 	/// Add top level argument from code.
 	/// See also `--tla-str`
-	#[clap(
-		long,
-		name = "name[=tla source]",
-		number_of_values = 1,
-		multiple_occurrences = true
-	)]
+	#[clap(long, name = "name[=tla source]", number_of_values = 1)]
 	tla_code: Vec<ExtStr>,
 	/// Read top level argument code from file.
 	/// See also `--tla-str`
-	#[clap(
-		long,
-		name = "name=tla code path",
-		number_of_values = 1,
-		multiple_occurrences = true
-	)]
+	#[clap(long, name = "name=tla code path", number_of_values = 1)]
 	tla_code_file: Vec<ExtFile>,
 }
 impl ConfigureState for TLAOpts {

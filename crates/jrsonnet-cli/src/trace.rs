@@ -1,6 +1,4 @@
-use std::str::FromStr;
-
-use clap::Parser;
+use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::{
 	error::Result,
 	trace::{CompactFormat, ExplainingFormat, PathResolver},
@@ -9,31 +7,19 @@ use jrsonnet_evaluator::{
 
 use crate::ConfigureState;
 
-#[derive(PartialEq, Eq)]
+#[derive(PartialEq, Eq, ValueEnum, Clone)]
 pub enum TraceFormatName {
+	/// Only show `filename:line:column`
 	Compact,
+	/// Display source code with attached trace annotations
 	Explaining,
-}
-
-impl FromStr for TraceFormatName {
-	type Err = &'static str;
-	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		Ok(match s {
-			"compact" => TraceFormatName::Compact,
-			"explaining" => TraceFormatName::Explaining,
-			_ => return Err("no such format"),
-		})
-	}
 }
 
 #[derive(Parser)]
 #[clap(next_help_heading = "STACK TRACE VISUAL")]
 pub struct TraceOpts {
 	/// Format of stack traces' display in console.
-	/// `compact` format only shows `filename:line:column`s
-	/// while `explaining` displays source code with attached trace annotations
-	/// thus being more verbose.
-	#[clap(long, possible_values = &["compact", "explaining"])]
+	#[clap(long)]
 	trace_format: Option<TraceFormatName>,
 	/// Amount of stack trace elements to be displayed.
 	/// If set to `0` then full stack trace will be displayed.

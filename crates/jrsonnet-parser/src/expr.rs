@@ -190,6 +190,7 @@ impl ArgsDesc {
 	}
 }
 
+#[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, PartialEq, Eq, Trace)]
 pub enum DestructRest {

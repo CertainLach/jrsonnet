@@ -3,7 +3,7 @@ use std::{
 	io::{Read, Write},
 };
 
-use clap::{AppSettings, IntoApp, Parser};
+use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts};
 use jrsonnet_evaluator::{error::LocError, State};
@@ -42,10 +42,7 @@ struct InputOpts {
 }
 
 #[derive(Parser)]
-#[clap(
-	global_setting = AppSettings::DeriveDisplayOrder,
-	args_conflicts_with_subcommands = true,
-)]
+#[clap(args_conflicts_with_subcommands = true, disable_version_flag = true)]
 struct Opts {
 	#[clap(subcommand)]
 	sub: Option<SubOpts>,
