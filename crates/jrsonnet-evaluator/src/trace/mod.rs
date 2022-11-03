@@ -302,7 +302,8 @@ impl ExplainingFormat {
 					annotation_type: AnnotationType::Error,
 					range: (
 						start.offset - start.line_start_offset,
-						(end.offset - start.line_start_offset).min(source_fragment.len()),
+						(end.offset.saturating_sub(start.line_start_offset))
+							.min(source_fragment.len()),
 					),
 				}],
 			}],
