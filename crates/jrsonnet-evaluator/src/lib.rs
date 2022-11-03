@@ -98,7 +98,7 @@ pub trait Unbound: Trace {
 #[derive(Clone, Trace)]
 pub enum MaybeUnbound {
 	/// Value needs to be bound to `this`/`super`
-	Unbound(Cc<TraceBox<dyn Unbound<Bound = Thunk<Val>>>>),
+	Unbound(Cc<TraceBox<dyn Unbound<Bound = Val>>>),
 	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
@@ -110,10 +110,10 @@ impl Debug for MaybeUnbound {
 }
 impl MaybeUnbound {
 	/// Attach object context to value, if required
-	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Thunk<Val>> {
+	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
 		match self {
 			Self::Unbound(v) => v.bind(sup, this),
-			Self::Bound(v) => Ok(v.clone()),
+			Self::Bound(v) => Ok(v.evaluate()?),
 		}
 	}
 }

@@ -147,17 +147,13 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 					name: IStr,
 				}
 				impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
-					type Bound = Thunk<Val>;
-					fn bind(
-						&self,
-						sup: Option<ObjValue>,
-						this: Option<ObjValue>,
-					) -> Result<Thunk<Val>> {
-						Ok(Thunk::evaluated(evaluate_named(
+					type Bound = Val;
+					fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+						Ok(evaluate_named(
 							self.uctx.bind(sup, this)?,
 							&self.value,
 							self.name.clone(),
-						)?))
+						)?)
 					}
 				}
 
@@ -191,24 +187,18 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 					name: IStr,
 				}
 				impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
-					type Bound = Thunk<Val>;
-					fn bind(
-						&self,
-						sup: Option<ObjValue>,
-						this: Option<ObjValue>,
-					) -> Result<Thunk<Val>> {
-						Ok(Thunk::evaluated(evaluate_method(
+					type Bound = Val;
+					fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+						Ok(evaluate_method(
 							self.uctx.bind(sup, this)?,
 							self.name.clone(),
 							self.params.clone(),
 							self.value.clone(),
-						)))
+						))
 					}
 				}
 
-				let name = if let Some(name) = evaluate_field_name(ctx.clone(), name)? {
-					name
-				} else {
+				let Some(name) = evaluate_field_name(ctx.clone(), name)? else {
 					continue;
 				};
 
@@ -276,13 +266,13 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 							value: LocExpr,
 						}
 						impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
-							type Bound = Thunk<Val>;
+							type Bound = Val;
 							fn bind(
 								&self,
 								sup: Option<ObjValue>,
 								this: Option<ObjValue>,
-							) -> Result<Thunk<Val>> {
-								Ok(Thunk::evaluated(evaluate(
+							) -> Result<Val> {
+								Ok(evaluate(
 									self.uctx.bind(sup, this.clone())?.extend(
 										GcHashMap::new(),
 										None,
@@ -290,7 +280,7 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 										this,
 									),
 									&self.value,
-								)?))
+								)?)
 							}
 						}
 						builder

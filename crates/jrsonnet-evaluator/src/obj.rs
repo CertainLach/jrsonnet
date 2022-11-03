@@ -440,9 +440,7 @@ impl ObjValue {
 		}
 	}
 	fn evaluate_this(&self, v: &ObjMember, real_this: Self) -> Result<Val> {
-		v.invoke
-			.evaluate(self.0.sup.clone(), Some(real_this))?
-			.evaluate()
+		v.invoke.evaluate(self.0.sup.clone(), Some(real_this))
 	}
 
 	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
@@ -605,7 +603,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn thunk(self, value: Thunk<Val>) -> Result<()> {
 		self.binding(MaybeUnbound::Bound(value))
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) -> Result<()> {
+	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) -> Result<()> {
 		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)))
 	}
 	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
@@ -628,7 +626,7 @@ impl ObjMemberBuilder<ExtendBuilder<'_>> {
 	pub fn value(self, value: Val) {
 		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value)));
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Thunk<Val>>>) {
+	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) {
 		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));
 	}
 	pub fn binding(self, binding: MaybeUnbound) {
