@@ -344,10 +344,10 @@ impl State {
 		let mut file_cache = self.file_cache();
 		let mut file = file_cache.raw_entry_mut().from_key(&path);
 
-		let file = match file {
-			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
-			RawEntryMut::Vacant(_) => unreachable!("this file was just here!"),
+		let RawEntryMut::Occupied(file) = &mut file else {
+			unreachable!("this file was just here!")
 		};
+		let file = file.get_mut();
 		file.evaluating = false;
 		match res {
 			Ok(v) => {

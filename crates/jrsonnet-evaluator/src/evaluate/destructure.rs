@@ -45,9 +45,8 @@ pub fn destruct(
 
 				fn get(self: Box<Self>) -> Result<Self::Output> {
 					let v = self.parent.evaluate()?;
-					let arr = match v {
-						Val::Arr(a) => a,
-						_ => throw!("expected array"),
+					let Val::Arr(arr) = v else {
+						throw!("expected array");
 					};
 					if !self.has_rest {
 						if arr.len() != self.min_len {
@@ -176,9 +175,8 @@ pub fn destruct(
 
 				fn get(self: Box<Self>) -> Result<Self::Output> {
 					let v = self.parent.evaluate()?;
-					let obj = match v {
-						Val::Obj(o) => o,
-						_ => throw!("expected object"),
+					let Val::Obj(obj) = v else {
+						throw!("expected object");
 					};
 					for field in &self.field_names {
 						if !obj.has_field_ex(field.clone(), true) {

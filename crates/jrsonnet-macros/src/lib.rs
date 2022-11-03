@@ -50,25 +50,22 @@ fn type_is_path<'ty>(ty: &'ty Type, needed: &str) -> Option<&'ty PathArguments> 
 }
 
 fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
-	Ok(if let Some(args) = type_is_path(ty, "Option") {
-		// It should have only on angle-bracketed param ("<String>"):
-		let generic_arg = match args {
-			PathArguments::AngleBracketed(params) => params.args.iter().next().unwrap(),
-			_ => return Err(Error::new(args.span(), "missing option generic")),
-		};
-		// This argument must be a type:
-		match generic_arg {
-			GenericArgument::Type(ty) => Some(ty),
-			_ => {
-				return Err(Error::new(
-					generic_arg.span(),
-					"option generic should be a type",
-				))
-			}
-		}
-	} else {
-		None
-	})
+	let Some(args) = type_is_path(ty, "Option") else {
+		return Ok(None)
+	};
+	// It should have only on angle-bracketed param ("<String>"):
+	let PathArguments::AngleBracketed(params) = args else {
+		return Err(Error::new(args.span(), "missing option generic"));
+	};
+	let generic_arg = params.args.iter().next().unwrap();
+	// This argument must be a type:
+	let GenericArgument::Type(ty) = generic_arg else {
+		return Err(Error::new(
+			generic_arg.span(),
+			"option generic should be a type",
+		))
+	};
+	Ok(Some(ty))
 }
 
 struct Field {
@@ -137,9 +134,8 @@ enum ArgInfo {
 
 impl ArgInfo {
 	fn parse(name: &str, arg: &FnArg) -> Result<Self> {
-		let arg = match arg {
-			FnArg::Receiver(_) => unreachable!(),
-			FnArg::Typed(a) => a,
+		let FnArg::Typed(arg) = arg else {
+			unreachable!()
 		};
 		let ident = match &arg.pat as &Pat {
 			Pat::Ident(i) => Some(i.ident.clone()),
@@ -206,32 +202,27 @@ pub fn builtin(
 }
 
 fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
-	let result = match fun.sig.output {
-		ReturnType::Default => {
-			return Err(Error::new(
-				fun.sig.span(),
-				"builtin should return something",
-			))
-		}
-		ReturnType::Type(_, ref ty) => ty.clone(),
+	let ReturnType::Type(_, result) = &fun.sig.output else {
+		return Err(Error::new(
+			fun.sig.span(),
+			"builtin should return something",
+		))
 	};
-	let result_inner = if let Some(args) = type_is_path(&result, "Result") {
-		let generic_arg = match args {
-			PathArguments::AngleBracketed(params) => params.args.iter().next().unwrap(),
-			_ => return Err(Error::new(args.span(), "missing result generic")),
-		};
-		// This argument must be a type:
-		match generic_arg {
-			GenericArgument::Type(ty) => ty,
-			_ => {
-				return Err(Error::new(
-					generic_arg.span(),
-					"option generic should be a type",
-				))
-			}
-		}
-	} else {
+
+	let Some(args) = type_is_path(result, "Result") else {
 		return Err(Error::new(result.span(), "return value should be result"));
+
+	};
+	let PathArguments::AngleBracketed(params) = args else {
+		return Err(Error::new(args.span(), "missing result generic"));
+	};
+	let generic_arg = params.args.iter().next().unwrap();
+	// This argument must be a type:
+	let GenericArgument::Type(result_inner) = generic_arg else {
+		return Err(Error::new(
+			generic_arg.span(),
+			"option generic should be a type",
+		))
 	};
 
 	let name = fun.sig.ident.to_string();
@@ -471,9 +462,7 @@ struct TypedField {
 impl TypedField {
 	fn parse(field: &syn::Field) -> Result<Self> {
 		let attr = parse_attr::<TypedAttr, _>(&field.attrs, "typed")?.unwrap_or_default();
-		let ident = if let Some(ident) = field.ident.clone() {
-			ident
-		} else {
+		let Some(ident) = field.ident.clone() else {
 			return Err(Error::new(
 				field.span(),
 				"this field should appear in output object, but it has no visible name",
@@ -603,9 +592,8 @@ pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 }
 
 fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
-	let data = match &input.data {
-		syn::Data::Struct(s) => s,
-		_ => return Err(Error::new(input.span(), "only structs supported")),
+	let syn::Data::Struct(data) = &input.data else {
+		return Err(Error::new(input.span(), "only structs supported"));
 	};
 
 	let ident = &input.ident;

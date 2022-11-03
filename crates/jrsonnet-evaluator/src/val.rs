@@ -54,12 +54,8 @@ where
 			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
 			ThunkInner::Waiting(..) => (),
 		};
-		let value = if let ThunkInner::Waiting(value) =
-			std::mem::replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)
-		{
-			value
-		} else {
-			unreachable!()
+		let ThunkInner::Waiting(value) = std::mem::replace(&mut *self.0.borrow_mut(), ThunkInner::Pending) else {
+			unreachable!();
 		};
 		let new_value = match value.0.get() {
 			Ok(v) => v,
@@ -668,9 +664,8 @@ impl Val {
 
 	/// Expects value to be object, outputs (key, manifested value) pairs
 	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
-		let obj = match self {
-			Self::Obj(obj) => obj,
-			_ => throw!(MultiManifestOutputIsNotAObject),
+		let Self::Obj(obj) = self else {
+			throw!(MultiManifestOutputIsNotAObject);
 		};
 		let keys = obj.fields(
 			#[cfg(feature = "exp-preserve-order")]
@@ -689,9 +684,8 @@ impl Val {
 
 	/// Expects value to be array, outputs manifested values
 	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
-		let arr = match self {
-			Self::Arr(a) => a,
-			_ => throw!(StreamManifestOutputIsNotAArray),
+		let Self::Arr(arr) = self else {
+			throw!(StreamManifestOutputIsNotAArray);
 		};
 		let mut out = Vec::with_capacity(arr.len());
 		for i in arr.iter() {
@@ -703,9 +697,8 @@ impl Val {
 	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
 		Ok(match ty {
 			ManifestFormat::YamlStream(format) => {
-				let arr = match self {
-					Self::Arr(a) => a,
-					_ => throw!(StreamManifestOutputIsNotAArray),
+				let Self::Arr(arr) = self else {
+					throw!(StreamManifestOutputIsNotAArray)
 				};
 				let mut out = String::new();
 

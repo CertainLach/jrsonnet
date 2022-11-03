@@ -22,17 +22,15 @@ fn assert_negative() -> Result<()> {
 	s.with_stdlib();
 
 	{
-		let e = match s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null") {
-			Ok(_) => throw!("assertion should fail"),
-			Err(e) => e,
+		let Err(e) = s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null") else {
+			throw!("assertion should fail");
 		};
 		let e = s.stringify_err(&e);
 		ensure!(e.starts_with("assert failed: fail\n"));
 	}
 	{
-		let e = match s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)") {
-			Ok(_) => throw!("assertion should fail"),
-			Err(e) => e,
+		let Err(e) = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)") else {
+			throw!("assertion should fail")
 		};
 		let e = s.stringify_err(&e);
 		ensure!(e.starts_with("runtime error: Assertion failed. 1 != 2"))

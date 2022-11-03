@@ -162,9 +162,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 				}
 
 				let name = evaluate_field_name(ctx.clone(), name)?;
-				let name = if let Some(name) = name {
-					name
-				} else {
+				let Some(name) = name else {
 					continue;
 				};
 
