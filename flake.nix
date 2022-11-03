@@ -12,8 +12,8 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2022-10-22"; channel = "nightly"; }).default.override {
-          extensions = [ "rust-src" ];
+        rust = ((pkgs.rustChannelOf { date = "2022-11-02"; channel = "nightly"; }).default.override {
+          extensions = [ "rust-src" "miri" ];
         });
       in
       rec {
@@ -21,6 +21,7 @@
           nativeBuildInputs = with pkgs;[
             rust
             cargo-edit
+            lld
             hyperfine
             go-jsonnet
           ];
