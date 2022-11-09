@@ -17,6 +17,9 @@ exp-preserve-order = [
 ]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
+# Iteration over objects yields [key, value] elements
+exp-object-iteration = ["jrsonnet-evaluator/exp-object-iteration"]
+
 # std.thisFile support
 legacy-this-file = ["jrsonnet-cli/legacy-this-file"]
 

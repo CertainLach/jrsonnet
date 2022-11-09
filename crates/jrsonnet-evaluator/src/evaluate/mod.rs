@@ -66,8 +66,48 @@ pub fn evaluate_comp(
 			Val::Arr(list) => {
 				for item in list.iter_lazy() {
 					let fctx = Pending::new();
-					let mut new_bindings = GcHashMap::new();
+					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
 					destruct(var, item, fctx.clone(), &mut new_bindings)?;
+					let ctx = ctx
+						.clone()
+						.extend(new_bindings, None, None, None)
+						.into_future(fctx);
+
+					evaluate_comp(ctx, &specs[1..], callback)?;
+				}
+			}
+			#[cfg(feature = "exp-object-iteration")]
+			Val::Obj(obj) => {
+				for field in obj.fields(
+					// TODO: Should there be ability to preserve iteration order?
+					#[cfg(feature = "exp-preserve-order")]
+					false,
+				) {
+					#[derive(Trace)]
+					struct ObjectFieldThunk {
+						obj: ObjValue,
+						field: IStr,
+					}
+					impl ThunkValue for ObjectFieldThunk {
+						type Output = Val;
+
+						fn get(self: Box<Self>) -> Result<Self::Output> {
+							self.obj.get(self.field).transpose().expect(
+								"field exists, as field name was obtained from object.fields()",
+							)
+						}
+					}
+
+					let fctx = Pending::new();
+					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
+					let value = Thunk::evaluated(Val::Arr(ArrValue::Lazy(Cc::new(vec![
+						Thunk::evaluated(Val::Str(field.clone())),
+						Thunk::new(tb!(ObjectFieldThunk {
+							field: field.clone(),
+							obj: obj.clone(),
+						})),
+					]))));
+					destruct(var, value, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx
 						.clone()
 						.extend(new_bindings, None, None, None)
@@ -99,7 +139,8 @@ fn evaluate_object_locals(
 
 		fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Context> {
 			let fctx = Context::new_future();
-			let mut new_bindings = GcHashMap::new();
+			let mut new_bindings =
+				GcHashMap::with_capacity(self.locals.iter().map(BindSpec::capacity_hint).sum());
 			for b in self.locals.iter() {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
@@ -446,7 +487,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		},
 		LocalExpr(bindings, returned) => {
 			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
-				GcHashMap::with_capacity(bindings.len());
+				GcHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
 			let fctx = Context::new_future();
 			for b in bindings {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;

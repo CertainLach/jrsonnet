@@ -20,6 +20,9 @@ friendly-errors = ["strsim"]
 exp-preserve-order = []
 # Implements field destructuring
 exp-destruct = ["jrsonnet-parser/exp-destruct"]
+# Iteration over objects yields [key, value] elements
+exp-object-iteration = []
+
 # Improves performance, and implements some useful things using nightly-only features
 nightly = []
 
