@@ -208,6 +208,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 		}
 		FieldMember {
 			params: Some(params),
+			visibility,
 			value,
 			..
 		} => {
@@ -232,7 +233,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 
 			builder
 				.member(name.clone())
-				.hide()
+				.with_visibility(*visibility)
 				.with_location(value.1.clone())
 				.bindable(tb!(UnboundMethod {
 					uctx: uctx.clone(),
@@ -384,7 +385,6 @@ pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 	let LocExpr(expr, loc) = expr;
-	// let bp = with_state(|s| s.0.stop_at.borrow().clone());
 	Ok(match &**expr {
 		Literal(LiteralType::This) => {
 			Val::Obj(ctx.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
