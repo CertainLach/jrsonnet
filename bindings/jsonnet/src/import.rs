@@ -13,10 +13,12 @@ use std::{
 
 use jrsonnet_evaluator::{
 	error::{Error::*, Result},
-	throw, FileImportResolver, ImportResolver, State,
+	throw, FileImportResolver, ImportResolver,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
+
+use crate::VM;
 
 pub type JsonnetImportCallback = unsafe extern "C" fn(
 	ctx: *mut c_void,
@@ -100,25 +102,26 @@ impl ImportResolver for CallbackImportResolver {
 /// It should be safe to call `cb` using valid values with passed `ctx`
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_import_callback(
-	vm: &State,
+	vm: &VM,
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
 ) {
-	vm.set_import_resolver(Box::new(CallbackImportResolver {
-		cb,
-		ctx,
-		out: RefCell::new(HashMap::new()),
-	}))
+	vm.state
+		.set_import_resolver(Box::new(CallbackImportResolver {
+			cb,
+			ctx,
+			out: RefCell::new(HashMap::new()),
+		}))
 }
 
 /// # Safety
 ///
 /// `path` should be a NUL-terminated string
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_jpath_add(vm: &State, path: *const c_char) {
+pub unsafe extern "C" fn jsonnet_jpath_add(vm: &VM, path: *const c_char) {
 	let cstr = CStr::from_ptr(path);
 	let path = PathBuf::from(cstr.to_str().unwrap());
-	let any_resolver = vm.import_resolver();
+	let any_resolver = vm.state.import_resolver();
 	let resolver = any_resolver
 		.as_any()
 		.downcast_ref::<FileImportResolver>()

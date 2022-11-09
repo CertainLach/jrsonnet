@@ -5,7 +5,7 @@ use std::{
 	os::raw::{c_char, c_int},
 };
 
-use jrsonnet_evaluator::{State, Val};
+use jrsonnet_evaluator::Val;
 
 use crate::{import::jsonnet_import_callback, native::jsonnet_native_callback};
 
@@ -28,14 +28,14 @@ extern "C" {
 
 /// # Safety
 #[no_mangle]
-pub unsafe extern "C" fn jrsonnet_apply_static_import_callback(vm: &State, ctx: *mut c_void) {
+pub unsafe extern "C" fn jrsonnet_apply_static_import_callback(vm: &VM, ctx: *mut c_void) {
 	jsonnet_import_callback(vm, _jrsonnet_static_import_callback, ctx)
 }
 
 /// # Safety
 #[no_mangle]
 pub unsafe extern "C" fn jrsonnet_apply_static_native_callback(
-	vm: &State,
+	vm: &VM,
 	name: *const c_char,
 	ctx: *mut c_void,
 	raw_params: *const *const c_char,
@@ -44,7 +44,7 @@ pub unsafe extern "C" fn jrsonnet_apply_static_native_callback(
 }
 
 #[no_mangle]
-pub extern "C" fn jrsonnet_set_trace_format(vm: &State, format: u8) {
+pub extern "C" fn jrsonnet_set_trace_format(vm: &VM, format: u8) {
 	use jrsonnet_evaluator::trace::JsFormat;
 	match format {
 		1 => vm.set_trace_format(Box::new(JsFormat)),

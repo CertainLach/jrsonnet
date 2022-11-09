@@ -9,9 +9,11 @@ use jrsonnet_evaluator::{
 	function::builtin::{NativeCallback, NativeCallbackHandler},
 	tb,
 	typed::Typed,
-	IStr, State, Val,
+	IStr, Val,
 };
 use jrsonnet_gcmodule::Cc;
+
+use crate::VM;
 
 /// The returned `JsonnetJsonValue*` should be allocated with `jsonnet_realloc`. It will be cleaned up
 /// along with the objects rooted at `argv` by `libjsonnet` when no-longer needed. Return a string upon
@@ -70,7 +72,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// `raw_params` should point to a NULL-terminated array of NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_native_callback(
-	vm: &State,
+	vm: &VM,
 	name: *const c_char,
 	cb: JsonnetNativeCallback,
 	ctx: *const c_void,
@@ -92,7 +94,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		raw_params = raw_params.offset(1);
 	}
 
-	let any_resolver = vm.context_initializer();
+	let any_resolver = vm.state.context_initializer();
 	any_resolver
 		.as_any()
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()

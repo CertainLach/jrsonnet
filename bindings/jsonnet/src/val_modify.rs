@@ -4,8 +4,10 @@
 
 use std::{ffi::CStr, os::raw::c_char};
 
-use jrsonnet_evaluator::{val::ArrValue, State, Thunk, Val};
+use jrsonnet_evaluator::{val::ArrValue, Thunk, Val};
 use jrsonnet_gcmodule::Cc;
+
+use crate::VM;
 
 /// Adds value to the end of the array `arr`.
 ///
@@ -14,7 +16,7 @@ use jrsonnet_gcmodule::Cc;
 /// `arr` should be a pointer to array value allocated by make_array, or returned by other library call
 /// `val` should be a pointer to value allocated using this library
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, val: &Val) {
+pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &VM, arr: &mut Val, val: &Val) {
 	match arr {
 		Val::Arr(old) => {
 			let mut new = Vec::new();
@@ -39,7 +41,7 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &State, arr: &mut Val, v
 /// `name` should be NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_object_append(
-	_vm: &State,
+	_vm: &VM,
 	obj: &mut Val,
 	name: *const c_char,
 	val: &Val,
