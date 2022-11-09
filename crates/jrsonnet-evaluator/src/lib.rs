@@ -55,6 +55,7 @@ mod map;
 mod obj;
 pub mod stack;
 pub mod stdlib;
+mod tla;
 pub mod trace;
 pub mod typed;
 pub mod val;
@@ -81,7 +82,7 @@ pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
 use stack::check_depth;
-use trace::{CompactFormat, TraceFormat};
+pub use tla::apply_tla;
 pub use val::{ManifestFormat, Thunk, Val};
 
 /// Thunk without bound `super`/`this`
@@ -143,10 +144,6 @@ impl ContextInitializer for DummyContextInitializer {
 /// Dynamically reconfigurable evaluation settings
 #[derive(Trace)]
 pub struct EvaluationSettings {
-	/// Limits amount of stack trace items preserved
-	pub max_trace: usize,
-	/// TLA vars
-	pub tla_vars: HashMap<IStr, TlaArg>,
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
 	pub context_initializer: TraceBox<dyn ContextInitializer>,
@@ -160,19 +157,8 @@ pub struct EvaluationSettings {
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		Self {
-			max_trace: 20,
 			context_initializer: tb!(DummyContextInitializer),
-			tla_vars: HashMap::default(),
 			import_resolver: tb!(DummyImportResolver),
-			manifest_format: ManifestFormat::Json {
-				padding: 4,
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order: false,
-			},
-			trace_format: tb!(CompactFormat {
-				padding: 4,
-				resolver: trace::PathResolver::Absolute,
-			}),
 		}
 	}
 }
@@ -405,51 +391,6 @@ impl State {
 
 		f().with_description(frame_desc)
 	}
-
-	/// # Panics
-	/// In case of formatting failure
-	pub fn stringify_err(&self, e: &LocError) -> String {
-		let mut out = String::new();
-		self.settings()
-			.trace_format
-			.write_trace(&mut out, self, e)
-			.unwrap();
-		out
-	}
-
-	pub fn manifest(&self, val: Val) -> Result<IStr> {
-		Self::push_description(
-			|| "manifestification".to_string(),
-			|| val.manifest(&self.manifest_format()),
-		)
-	}
-	pub fn manifest_multi(&self, val: Val) -> Result<Vec<(IStr, IStr)>> {
-		val.manifest_multi(&self.manifest_format())
-	}
-	pub fn manifest_stream(&self, val: Val) -> Result<Vec<IStr>> {
-		val.manifest_stream(&self.manifest_format())
-	}
-
-	/// If passed value is function then call with set TLA
-	pub fn with_tla(&self, val: Val) -> Result<Val> {
-		Ok(match val {
-			Val::Func(func) => State::push_description(
-				|| "during TLA call".to_owned(),
-				|| {
-					func.evaluate(
-						self.create_default_context(Source::new_virtual(
-							"<tla>".into(),
-							IStr::empty(),
-						)),
-						CallLocation::native(),
-						&self.settings().tla_vars,
-						true,
-					)
-				},
-			)?,
-			v => v,
-		})
-	}
 }
 
 /// Internals
@@ -487,35 +428,6 @@ impl State {
 
 /// Settings utilities
 impl State {
-	pub fn add_tla(&self, name: IStr, value: Val) {
-		self.settings_mut()
-			.tla_vars
-			.insert(name, TlaArg::Val(value));
-	}
-	pub fn add_tla_str(&self, name: IStr, value: IStr) {
-		self.settings_mut()
-			.tla_vars
-			.insert(name, TlaArg::String(value));
-	}
-	pub fn add_tla_code(&self, name: IStr, code: &str) -> Result<()> {
-		let source_name = format!("<top-level-arg:{name}>");
-		let source = Source::new_virtual(source_name.into(), code.into());
-		let parsed = jrsonnet_parser::parse(
-			code,
-			&ParserSettings {
-				file_name: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			error: Box::new(e),
-		})?;
-		self.settings_mut()
-			.tla_vars
-			.insert(name, TlaArg::Code(parsed));
-		Ok(())
-	}
-
 	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
 	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {

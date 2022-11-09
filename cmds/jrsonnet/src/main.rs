@@ -5,8 +5,8 @@ use std::{
 
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
-use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts};
-use jrsonnet_evaluator::{error::LocError, State};
+use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts, TraceOpts};
+use jrsonnet_evaluator::{apply_tla, error::LocError, throw, ResultExt, State, Val};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -121,8 +121,8 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	let _guards = opts.general.configure(s)?;
-	opts.manifest.configure(s)?;
+	let (_stack_guard, tla, _gc_guard) = opts.general.configure(s)?;
+	let manifest_format = opts.manifest.configure(s)?;
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
@@ -136,7 +136,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		s.import(&input)?
 	};
 
-	let val = s.with_tla(val)?;
+	let val = apply_tla(s.clone(), &tla, val)?;
 
 	if let Some(multi) = opts.output.multi {
 		if opts.output.create_output_dirs {
