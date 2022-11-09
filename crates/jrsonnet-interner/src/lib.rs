@@ -200,6 +200,11 @@ impl From<String> for IStr {
 		s.as_str().into()
 	}
 }
+impl From<&String> for IStr {
+	fn from(s: &String) -> Self {
+		s.as_str().into()
+	}
+}
 impl From<&[u8]> for IBytes {
 	fn from(v: &[u8]) -> Self {
 		intern_bytes(v)

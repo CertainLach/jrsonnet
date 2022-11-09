@@ -121,7 +121,6 @@ enum ArgInfo {
 		is_option: bool,
 		name: Option<String>,
 		cfg_attrs: Vec<Attribute>,
-		// ident: Ident,
 	},
 	Lazy {
 		is_option: bool,
@@ -446,9 +445,6 @@ impl Parse for TypedAttr {
 				break;
 			}
 		}
-		// input.parse::<kw::rename>()?;
-		// input.parse::<Token![=]>()?;
-		// let rename = input.parse::<LitStr>()?.value();
 		Ok(out)
 	}
 }
