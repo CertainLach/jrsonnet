@@ -113,6 +113,97 @@ fn evaluate_object_locals(
 	UnboundLocals { fctx, locals }
 }
 
+pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
+	builder: &mut ObjValueBuilder,
+	ctx: Context,
+	uctx: B,
+	member: &FieldMember,
+) -> Result<()> {
+	match member {
+		FieldMember {
+			name,
+			plus,
+			params: None,
+			visibility,
+			value,
+		} => {
+			#[derive(Trace)]
+			struct UnboundValue<B: Trace> {
+				uctx: B,
+				value: LocExpr,
+				name: IStr,
+			}
+			impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
+				type Bound = Val;
+				fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+					Ok(evaluate_named(
+						self.uctx.bind(sup, this)?,
+						&self.value,
+						self.name.clone(),
+					)?)
+				}
+			}
+
+			let name = evaluate_field_name(ctx.clone(), name)?;
+			let Some(name) = name else {
+				return Ok(());
+			};
+
+			builder
+				.member(name.clone())
+				.with_add(*plus)
+				.with_visibility(*visibility)
+				.with_location(value.1.clone())
+				.bindable(tb!(UnboundValue {
+					uctx: uctx.clone(),
+					value: value.clone(),
+					name: name.clone()
+				}))?;
+		}
+		FieldMember {
+			name,
+			params: Some(params),
+			value,
+			..
+		} => {
+			#[derive(Trace)]
+			struct UnboundMethod<B: Trace> {
+				uctx: B,
+				value: LocExpr,
+				params: ParamsDesc,
+				name: IStr,
+			}
+			impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
+				type Bound = Val;
+				fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+					Ok(evaluate_method(
+						self.uctx.bind(sup, this)?,
+						self.name.clone(),
+						self.params.clone(),
+						self.value.clone(),
+					))
+				}
+			}
+
+			let Some(name) = evaluate_field_name(ctx.clone(), name)? else {
+				return Ok(());
+			};
+
+			builder
+				.member(name.clone())
+				.hide()
+				.with_location(value.1.clone())
+				.bindable(tb!(UnboundMethod {
+					uctx: uctx.clone(),
+					value: value.clone(),
+					params: params.clone(),
+					name: name.clone()
+				}))?;
+		}
+	}
+	Ok(())
+}
+
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<ObjValue> {
 	let mut builder = ObjValueBuilder::new();
@@ -133,87 +224,12 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 
 	for member in members.iter() {
 		match member {
-			Member::Field(FieldMember {
-				name,
-				plus,
-				params: None,
-				visibility,
-				value,
-			}) => {
-				#[derive(Trace)]
-				struct UnboundValue<B: Trace> {
-					uctx: B,
-					value: LocExpr,
-					name: IStr,
-				}
-				impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
-					type Bound = Val;
-					fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
-						Ok(evaluate_named(
-							self.uctx.bind(sup, this)?,
-							&self.value,
-							self.name.clone(),
-						)?)
-					}
-				}
-
-				let name = evaluate_field_name(ctx.clone(), name)?;
-				let Some(name) = name else {
-					continue;
-				};
-
-				builder
-					.member(name.clone())
-					.with_add(*plus)
-					.with_visibility(*visibility)
-					.with_location(value.1.clone())
-					.bindable(tb!(UnboundValue {
-						uctx: uctx.clone(),
-						value: value.clone(),
-						name: name.clone()
-					}))?;
+			Member::Field(field) => {
+				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), &field)?
 			}
-			Member::Field(FieldMember {
-				name,
-				params: Some(params),
-				value,
-				..
-			}) => {
-				#[derive(Trace)]
-				struct UnboundMethod<B: Trace> {
-					uctx: B,
-					value: LocExpr,
-					params: ParamsDesc,
-					name: IStr,
-				}
-				impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
-					type Bound = Val;
-					fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
-						Ok(evaluate_method(
-							self.uctx.bind(sup, this)?,
-							self.name.clone(),
-							self.params.clone(),
-							self.value.clone(),
-						))
-					}
-				}
-
-				let Some(name) = evaluate_field_name(ctx.clone(), name)? else {
-					continue;
-				};
-
-				builder
-					.member(name.clone())
-					.hide()
-					.with_location(value.1.clone())
-					.bindable(tb!(UnboundMethod {
-						uctx: uctx.clone(),
-						value: value.clone(),
-						params: params.clone(),
-						name: name.clone()
-					}))?;
+			Member::BindStmt(_) => {
+				// Already handled
 			}
-			Member::BindStmt(_) => {}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]
 				struct ObjectAssert<B: Trace> {
@@ -252,50 +268,11 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 			);
 			let mut ctxs = vec![];
 			evaluate_comp(ctx, &obj.compspecs, &mut |ctx| {
-				let key = evaluate(ctx.clone(), &obj.key)?;
 				let fctx = Context::new_future();
-				ctxs.push((ctx, fctx.clone()));
+				ctxs.push((ctx.clone(), fctx.clone()));
 				let uctx = evaluate_object_locals(fctx, locals.clone());
 
-				match key {
-					Val::Null => {}
-					Val::Str(n) => {
-						#[derive(Trace)]
-						struct UnboundValue<B: Trace> {
-							uctx: B,
-							value: LocExpr,
-						}
-						impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
-							type Bound = Val;
-							fn bind(
-								&self,
-								sup: Option<ObjValue>,
-								this: Option<ObjValue>,
-							) -> Result<Val> {
-								Ok(evaluate(
-									self.uctx.bind(sup, this.clone())?.extend(
-										GcHashMap::new(),
-										None,
-										None,
-										this,
-									),
-									&self.value,
-								)?)
-							}
-						}
-						builder
-							.member(n)
-							.with_location(obj.value.1.clone())
-							.with_add(obj.plus)
-							.bindable(tb!(UnboundValue {
-								uctx,
-								value: obj.value.clone(),
-							}))?;
-					}
-					v => throw!(FieldMustBeStringGot(v.value_type())),
-				}
-
-				Ok(())
+				evaluate_field_member(&mut builder, ctx, uctx, &obj.field)
 			})?;
 
 			let this = builder.build();

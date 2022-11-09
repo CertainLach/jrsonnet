@@ -268,9 +268,7 @@ pub enum CompSpec {
 #[derive(Debug, PartialEq, Trace)]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
-	pub key: LocExpr,
-	pub plus: bool,
-	pub value: LocExpr,
+	pub field: FieldMember,
 	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,
 }
