@@ -228,6 +228,39 @@ impl Destruct {
 			_ => None,
 		}
 	}
+	pub fn capacity_hint(&self) -> usize {
+		#[cfg(feature = "exp-destruct")]
+		fn cap_rest(rest: &Option<DestructRest>) -> usize {
+			match rest {
+				Some(DestructRest::Keep(_)) => 1,
+				Some(DestructRest::Drop) => 0,
+				None => 0,
+			}
+		}
+		match self {
+			Self::Full(_) => 1,
+			#[cfg(feature = "exp-destruct")]
+			Self::Skip => 0,
+			#[cfg(feature = "exp-destruct")]
+			Self::Array { start, rest, end } => {
+				start.iter().map(Destruct::capacity_hint).sum::<usize>()
+					+ end.iter().map(Destruct::capacity_hint).sum::<usize>()
+					+ cap_rest(rest)
+			}
+			#[cfg(feature = "exp-destruct")]
+			Self::Object { fields, rest } => {
+				let mut out = 0;
+				for (_, into, _) in fields {
+					match into {
+						Some(v) => out += v.capacity_hint(),
+						// Field is destructured to default name
+						None => out += 1,
+					}
+				}
+				out + cap_rest(rest)
+			}
+		}
+	}
 }
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
@@ -243,6 +276,14 @@ pub enum BindSpec {
 		params: ParamsDesc,
 		value: LocExpr,
 	},
+}
+impl BindSpec {
+	pub fn capacity_hint(&self) -> usize {
+		match self {
+			BindSpec::Field { into, .. } => into.capacity_hint(),
+			BindSpec::Function { .. } => 1,
+		}
+	}
 }
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]

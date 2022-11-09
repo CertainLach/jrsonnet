@@ -44,7 +44,8 @@ pub fn parse_function_call(
 	args: &dyn ArgsLike,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut passed_args = GcHashMap::with_capacity(params.len());
+	let mut passed_args =
+		GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 	if args.unnamed_len() > params.len() {
 		throw!(TooManyArgsFunctionHas(
 			params.len(),
@@ -83,8 +84,10 @@ pub fn parse_function_call(
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let fctx = Context::new_future();
-		let mut defaults =
-			GcHashMap::with_capacity(params.len() - filled_named - filled_positionals);
+		let mut defaults = GcHashMap::with_capacity(
+			params.iter().map(|p| p.0.capacity_hint()).sum::<usize>()
+				- filled_named - filled_positionals,
+		);
 
 		for (idx, param) in params.iter().enumerate().filter(|p| p.1 .1.is_some()) {
 			if let Some(name) = param.0.name() {
@@ -241,7 +244,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 
 	let fctx = Context::new_future();
 
-	let mut bindings = GcHashMap::new();
+	let mut bindings = GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {
