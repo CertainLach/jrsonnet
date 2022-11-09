@@ -4,28 +4,29 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	trace::{CompactFormat, PathResolver},
+	trace::{CompactFormat, TraceFormat},
 	FileImportResolver, State, Val,
 };
 use jrsonnet_stdlib::StateExt;
 
 mod common;
 
-fn run(root: &Path, file: &Path) {
+fn run(file: &Path) {
 	let s = State::default();
-	s.set_trace_format(CompactFormat {
-		resolver: PathResolver::Relative(root.to_owned()),
-		padding: 3,
-	});
 	s.with_stdlib();
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
+	let trace_format = CompactFormat::default();
 
 	match s.import(file) {
 		Ok(Val::Bool(true)) => {}
 		Ok(Val::Bool(false)) => panic!("test {} returned false", file.display()),
 		Ok(_) => panic!("test {} returned wrong type as result", file.display()),
-		Err(e) => panic!("test {} failed:\n{}", file.display(), s.stringify_err(&e)),
+		Err(e) => panic!(
+			"test {} failed:\n{}",
+			file.display(),
+			trace_format.format(&e).unwrap()
+		),
 	};
 }
 
@@ -40,7 +41,7 @@ fn test() -> io::Result<()> {
 			continue;
 		}
 
-		run(&root, &entry.path());
+		run(&entry.path());
 	}
 
 	Ok(())

@@ -4,34 +4,36 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	trace::{CompactFormat, PathResolver},
+	stdlib::manifest::JsonFormat,
+	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State,
 };
 use jrsonnet_stdlib::StateExt;
 
 mod common;
 
-fn run(root: &Path, file: &Path) -> String {
+fn run(file: &Path) -> String {
 	let s = State::default();
-	s.set_trace_format(CompactFormat {
-		resolver: PathResolver::Relative(root.to_owned()),
-		padding: 3,
-	});
 	s.with_stdlib();
 	common::with_test(&s);
 	s.set_import_resolver(Box::new(FileImportResolver::default()));
+	let trace_format = CompactFormat {
+		resolver: PathResolver::FileName,
+		max_trace: 20,
+		padding: 4,
+	};
 
 	let v = match s.import(file) {
 		Ok(v) => v,
-		Err(e) => return s.stringify_err(&e),
+		Err(e) => return trace_format.format(&e).unwrap(),
 	};
-	match v.to_json(
-		3,
+	match v.manifest(
+		JsonFormat::default(),
 		#[cfg(feature = "exp-preserve-order")]
 		false,
 	) {
 		Ok(v) => v.to_string(),
-		Err(e) => s.stringify_err(&e),
+		Err(e) => trace_format.format(&e).unwrap(),
 	}
 }
 
@@ -46,7 +48,7 @@ fn test() -> io::Result<()> {
 			continue;
 		}
 
-		let result = run(&root, &entry.path());
+		let result = run(&entry.path());
 
 		let mut golden_path = entry.path();
 		golden_path.set_extension("jsonnet.golden");
