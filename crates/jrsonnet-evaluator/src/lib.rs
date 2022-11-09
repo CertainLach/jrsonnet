@@ -63,16 +63,15 @@ pub mod val;
 use std::{
 	any::Any,
 	cell::{Ref, RefCell, RefMut},
-	collections::HashMap,
 	fmt::{self, Debug},
 	path::Path,
 };
 
 pub use ctx::*;
 pub use dynamic::*;
-use error::{Error::*, LocError, Result, ResultExt};
+pub use error::{Error::*, LocError, Result, ResultExt};
 pub use evaluate::*;
-use function::{CallLocation, TlaArg};
+use function::CallLocation;
 use gc::{GcHashMap, TraceBox};
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
@@ -305,7 +304,7 @@ impl State {
 				jrsonnet_parser::parse(
 					code,
 					&ParserSettings {
-						file_name: file_name.clone(),
+						source: file_name.clone(),
 					},
 				)
 				.map_err(|e| ImportSyntaxError {
@@ -411,7 +410,7 @@ impl State {
 		let parsed = jrsonnet_parser::parse(
 			&code,
 			&ParserSettings {
-				file_name: source.clone(),
+				source: source.clone(),
 			},
 		)
 		.map_err(|e| ImportSyntaxError {

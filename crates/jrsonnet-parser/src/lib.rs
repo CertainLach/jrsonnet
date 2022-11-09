@@ -14,7 +14,7 @@ pub use location::CodeLocation;
 pub use source::{Source, SourceDirectory, SourceFile, SourcePath, SourcePathT, SourceVirtual};
 
 pub struct ParserSettings {
-	pub file_name: Source,
+	pub source: Source,
 }
 
 macro_rules! expr_bin {
@@ -230,7 +230,7 @@ parser! {
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr
-			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.file_name.clone(), a as u32,b as u32)) }
+			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.source.clone(), a as u32,b as u32)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
 			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -293,7 +293,7 @@ parser! {
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= precedence! {
-				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.file_name.clone(), start as u32, end as u32)) }
+				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
@@ -351,7 +351,7 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 	let len = str.len();
 	LocExpr(
 		Rc::new(Expr::Str(str)),
-		ExprLocation(settings.file_name.clone(), 0, len as u32),
+		ExprLocation(settings.source.clone(), 0, len as u32),
 	)
 }
 
@@ -368,7 +368,7 @@ pub mod tests {
 			parse(
 				$s,
 				&ParserSettings {
-					file_name: Source::new_virtual("<test>".into(), IStr::empty()),
+					source: Source::new_virtual("<test>".into(), IStr::empty()),
 				},
 			)
 			.unwrap()
@@ -719,7 +719,7 @@ pub mod tests {
 		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
 		let expr = parse(
 			"{} { local x = 1, x: x } + {}",
-			&ParserSettings { file_name },
+			&ParserSettings { source: file_name },
 		)
 		.unwrap();
 		assert_eq!(
