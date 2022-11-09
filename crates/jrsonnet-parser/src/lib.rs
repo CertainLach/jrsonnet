@@ -208,7 +208,7 @@ parser! {
 		pub rule ifspec(s: &ParserSettings) -> IfSpecData
 			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
-			= keyword("for") _ id:id() _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
+			= keyword("for") _ id:destruct(s) _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
 		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
 			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
 		pub rule local_expr(s: &ParserSettings) -> Expr
@@ -620,7 +620,7 @@ pub mod tests {
 						16
 					),
 					vec![CompSpec::ForSpec(ForSpecData(
-						"x".into(),
+						Destruct::Full("x".into()),
 						el!(Var("arr".into()), 26, 29)
 					))]
 				),

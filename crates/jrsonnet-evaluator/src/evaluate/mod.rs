@@ -8,6 +8,7 @@ use jrsonnet_parser::{
 };
 use jrsonnet_types::ValType;
 
+use self::destructure::destruct;
 use crate::{
 	destructure::evaluate_dest,
 	error::Error::*,
@@ -63,12 +64,16 @@ pub fn evaluate_comp(
 		}
 		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => match evaluate(ctx.clone(), expr)? {
 			Val::Arr(list) => {
-				for item in list.iter() {
-					evaluate_comp(
-						ctx.clone().with_var(var.clone(), item?.clone()),
-						&specs[1..],
-						callback,
-					)?;
+				for item in list.iter_lazy() {
+					let fctx = Pending::new();
+					let mut new_bindings = GcHashMap::new();
+					destruct(var, item, fctx.clone(), &mut new_bindings)?;
+					let ctx = ctx
+						.clone()
+						.extend(new_bindings, None, None, None)
+						.into_future(fctx);
+
+					evaluate_comp(ctx, &specs[1..], callback)?;
 				}
 			}
 			_ => throw!(InComprehensionCanOnlyIterateOverArray),
@@ -78,6 +83,7 @@ pub fn evaluate_comp(
 }
 
 trait CloneableUnbound<T>: Unbound<Bound = T> + Clone {}
+impl<V, T> CloneableUnbound<T> for V where V: Unbound<Bound = T> + Clone {}
 
 fn evaluate_object_locals(
 	fctx: Pending<Context>,
@@ -88,7 +94,6 @@ fn evaluate_object_locals(
 		fctx: Pending<Context>,
 		locals: Rc<Vec<BindSpec>>,
 	}
-	impl CloneableUnbound<Context> for UnboundLocals {}
 	impl Unbound for UnboundLocals {
 		type Bound = Context;
 
@@ -117,15 +122,20 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 	builder: &mut ObjValueBuilder,
 	ctx: Context,
 	uctx: B,
-	member: &FieldMember,
+	field: &FieldMember,
 ) -> Result<()> {
-	match member {
+	let name = evaluate_field_name(ctx.clone(), &field.name)?;
+	let Some(name) = name else {
+		return Ok(());
+	};
+
+	match field {
 		FieldMember {
-			name,
 			plus,
 			params: None,
 			visibility,
 			value,
+			..
 		} => {
 			#[derive(Trace)]
 			struct UnboundValue<B: Trace> {
@@ -144,11 +154,6 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				}
 			}
 
-			let name = evaluate_field_name(ctx.clone(), name)?;
-			let Some(name) = name else {
-				return Ok(());
-			};
-
 			builder
 				.member(name.clone())
 				.with_add(*plus)
@@ -161,7 +166,6 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				}))?;
 		}
 		FieldMember {
-			name,
 			params: Some(params),
 			value,
 			..
@@ -184,10 +188,6 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 					))
 				}
 			}
-
-			let Some(name) = evaluate_field_name(ctx.clone(), name)? else {
-				return Ok(());
-			};
 
 			builder
 				.member(name.clone())
@@ -227,9 +227,6 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 			Member::Field(field) => {
 				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), &field)?
 			}
-			Member::BindStmt(_) => {
-				// Already handled
-			}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]
 				struct ObjectAssert<B: Trace> {
@@ -246,6 +243,9 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 					uctx: uctx.clone(),
 					assert: stmt.clone(),
 				}));
+			}
+			Member::BindStmt(_) => {
+				// Already handled
 			}
 		}
 	}

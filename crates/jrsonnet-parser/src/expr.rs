@@ -253,7 +253,7 @@ pub struct IfSpecData(pub LocExpr);
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, PartialEq, Trace)]
-pub struct ForSpecData(pub IStr, pub LocExpr);
+pub struct ForSpecData(pub Destruct, pub LocExpr);
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
