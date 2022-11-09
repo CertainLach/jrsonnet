@@ -149,10 +149,6 @@ pub struct EvaluationSettings {
 	pub context_initializer: TraceBox<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
 	pub import_resolver: TraceBox<dyn ImportResolver>,
-	/// Used in manifestification functions
-	pub manifest_format: ManifestFormat,
-	/// Used for bindings
-	pub trace_format: TraceBox<dyn TraceFormat>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
@@ -447,26 +443,5 @@ impl State {
 	}
 	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
 		Ref::map(self.settings(), |s| &*s.context_initializer)
-	}
-
-	pub fn manifest_format(&self) -> ManifestFormat {
-		self.settings().manifest_format.clone()
-	}
-	pub fn set_manifest_format(&self, format: ManifestFormat) {
-		self.settings_mut().manifest_format = format;
-	}
-
-	pub fn trace_format(&self) -> Ref<'_, dyn TraceFormat> {
-		Ref::map(self.settings(), |s| &*s.trace_format)
-	}
-	pub fn set_trace_format(&self, format: impl TraceFormat) {
-		self.settings_mut().trace_format = tb!(format);
-	}
-
-	pub fn max_trace(&self) -> usize {
-		self.settings().max_trace
-	}
-	pub fn set_max_trace(&self, trace: usize) {
-		self.settings_mut().max_trace = trace;
 	}
 }

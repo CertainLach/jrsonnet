@@ -93,7 +93,7 @@ fn main() {
 enum Error {
 	// Handled differently
 	#[error("evaluation error")]
-	Evaluation(jrsonnet_evaluator::error::LocError),
+	Evaluation(LocError),
 	#[error("io error")]
 	Io(#[from] std::io::Error),
 	#[error("input is not utf8 encoded")]
@@ -104,6 +104,11 @@ enum Error {
 impl From<LocError> for Error {
 	fn from(e: LocError) -> Self {
 		Self::Evaluation(e)
+	}
+}
+impl From<jrsonnet_evaluator::error::Error> for Error {
+	fn from(e: jrsonnet_evaluator::error::Error) -> Self {
+		Self::from(LocError::from(e))
 	}
 }
 
@@ -144,9 +149,17 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			dir.pop();
 			create_dir_all(dir)?;
 		}
-		for (file, data) in s.manifest_multi(val)?.iter() {
+		let Val::Obj(obj) = val else {
+			throw!("value should be object for --multi manifest, got {}", val.value_type())
+		};
+		for (field, data) in obj.iter(
+			#[cfg(feature = "exp-preserve-order")]
+			opts.manifest.preserve_order,
+		) {
+			let data = data.with_description(|| format!("getting field {field} for manifest"))?;
+
 			let mut path = multi.clone();
-			path.push(file as &str);
+			path.push(&field as &str);
 			if opts.output.create_output_dirs {
 				let mut dir = path.clone();
 				dir.pop();
@@ -154,7 +167,12 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			}
 			println!("{}", path.to_str().expect("path"));
 			let mut file = File::create(path)?;
-			writeln!(file, "{}", data)?;
+			writeln!(
+				file,
+				"{}",
+				data.manifest(&manifest_format)
+					.with_description(|| format!("manifesting {field}"))?
+			)?;
 		}
 	} else if let Some(path) = opts.output.output_file {
 		if opts.output.create_output_dirs {
@@ -163,9 +181,9 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			create_dir_all(dir)?;
 		}
 		let mut file = File::create(path)?;
-		writeln!(file, "{}", s.manifest(val)?)?;
+		writeln!(file, "{}", val.manifest(manifest_format)?)?;
 	} else {
-		let output = s.manifest(val)?;
+		let output = val.manifest(manifest_format)?;
 		if !output.is_empty() {
 			println!("{}", output);
 		}

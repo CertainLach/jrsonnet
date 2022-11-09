@@ -1,6 +1,8 @@
+use std::{borrow::Cow, fmt::Write};
+
 use crate::{
 	error::{Error::*, Result},
-	throw, State, Val,
+	throw, ManifestFormat, State, Val,
 };
 
 #[derive(PartialEq, Eq, Clone, Copy)]
@@ -16,16 +18,88 @@ pub enum ManifestType {
 	Minify,
 }
 
-pub struct ManifestJsonOptions<'s> {
-	pub padding: &'s str,
-	pub mtype: ManifestType,
-	pub newline: &'s str,
-	pub key_val_sep: &'s str,
+pub struct JsonFormat<'s> {
+	padding: Cow<'s, str>,
+	mtype: ManifestType,
+	newline: &'s str,
+	key_val_sep: &'s str,
 	#[cfg(feature = "exp-preserve-order")]
-	pub preserve_order: bool,
+	preserve_order: bool,
 }
 
-pub fn manifest_json_ex(val: &Val, options: &ManifestJsonOptions<'_>) -> Result<String> {
+impl<'s> JsonFormat<'s> {
+	// Minifying format
+	pub fn minify(#[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> Self {
+		Self {
+			padding: Cow::Borrowed(""),
+			mtype: ManifestType::Minify,
+			newline: "\n",
+			key_val_sep: ":",
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+	// Same format as std.toString
+	pub fn std_to_string() -> Self {
+		Self {
+			padding: Cow::Borrowed(""),
+			mtype: ManifestType::ToString,
+			newline: "\n",
+			key_val_sep: ": ",
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order: false,
+		}
+	}
+	pub fn std_to_json(
+		padding: String,
+		newline: &'s str,
+		key_val_sep: &'s str,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Self {
+		Self {
+			padding: Cow::Owned(padding),
+			mtype: ManifestType::Std,
+			newline,
+			key_val_sep,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+	// Same format as CLI manifestification
+	pub fn cli(
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Self {
+		if padding == 0 {
+			return Self::minify(
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			);
+		}
+		Self {
+			padding: Cow::Owned(" ".repeat(padding)),
+			mtype: ManifestType::Manifest,
+			newline: "\n",
+			key_val_sep: ": ",
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+}
+impl Default for JsonFormat<'static> {
+	fn default() -> Self {
+		Self {
+			padding: Cow::Borrowed("    "),
+			mtype: ManifestType::Manifest,
+			newline: "\n",
+			key_val_sep: ": ",
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order: false,
+		}
+	}
+}
+
+pub fn manifest_json_ex(val: &Val, options: &JsonFormat<'_>) -> Result<String> {
 	let mut out = String::new();
 	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
@@ -34,9 +108,8 @@ fn manifest_json_ex_buf(
 	val: &Val,
 	buf: &mut String,
 	cur_padding: &mut String,
-	options: &ManifestJsonOptions<'_>,
+	options: &JsonFormat<'_>,
 ) -> Result<()> {
-	use std::fmt::Write;
 	let mtype = options.mtype;
 	match val {
 		Val::Bool(v) => {
@@ -57,7 +130,7 @@ fn manifest_json_ex_buf(
 				}
 
 				let old_len = cur_padding.len();
-				cur_padding.push_str(options.padding);
+				cur_padding.push_str(&options.padding);
 				for (i, item) in items.iter().enumerate() {
 					if i != 0 {
 						buf.push(',');
@@ -97,7 +170,7 @@ fn manifest_json_ex_buf(
 				}
 
 				let old_len = cur_padding.len();
-				cur_padding.push_str(options.padding);
+				cur_padding.push_str(&options.padding);
 				for (i, field) in fields.into_iter().enumerate() {
 					if i != 0 {
 						buf.push(',');
@@ -138,6 +211,48 @@ fn manifest_json_ex_buf(
 	Ok(())
 }
 
+impl ManifestFormat for JsonFormat<'_> {
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
+		manifest_json_ex_buf(&val, buf, &mut String::new(), &self)
+	}
+}
+
+pub struct ToStringFormat;
+impl ManifestFormat for ToStringFormat {
+	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
+		JsonFormat::std_to_string().manifest_buf(val, out)
+	}
+}
+pub struct StringFormat;
+impl ManifestFormat for StringFormat {
+	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
+		let Val::Str(s) = val else {
+			throw!("output should be string for string manifest format, got {}", val.value_type())
+		};
+		out.write_str(&s).unwrap();
+		Ok(())
+	}
+}
+
+pub struct YamlStreamFormat<I>(pub I);
+impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
+	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
+		let Val::Arr(arr) = val else {
+			throw!("output should be array for yaml stream format, got {}", val.value_type())
+		};
+		if !arr.is_empty() {
+			for v in arr.iter() {
+				let v = v?;
+				out.push_str("---\n");
+				self.0.manifest_buf(v, out)?;
+				out.push('\n');
+			}
+			out.push_str("...");
+		}
+		Ok(())
+	}
+}
+
 pub fn escape_string_json(s: &str) -> String {
 	let mut buf = String::new();
 	escape_string_json_buf(s, &mut buf);
@@ -145,7 +260,6 @@ pub fn escape_string_json(s: &str) -> String {
 }
 
 fn escape_string_json_buf(s: &str, buf: &mut String) {
-	use std::fmt::Write;
 	buf.push('"');
 	for c in s.chars() {
 		match c {
@@ -165,32 +279,65 @@ fn escape_string_json_buf(s: &str, buf: &mut String) {
 	buf.push('"');
 }
 
-pub struct ManifestYamlOptions<'s> {
+pub struct YamlFormat<'s> {
 	/// Padding before fields, i.e
 	/// ```yaml
 	/// a:
 	///   b:
 	/// ## <- this
 	/// ```
-	pub padding: &'s str,
+	padding: Cow<'s, str>,
 	/// Padding before array elements in objects
 	/// ```yaml
 	/// a:
 	///   - 1
 	/// ## <- this
 	/// ```
-	pub arr_element_padding: &'s str,
+	arr_element_padding: Cow<'s, str>,
 	/// Should yaml keys appear unescaped, when possible
 	/// ```yaml
 	/// "safe_key": 1
 	/// # vs
 	/// safe_key: 1
 	/// ```
-	pub quote_keys: bool,
+	quote_keys: bool,
 	/// If true - then order of fields is preserved as written,
 	/// instead of sorting alphabetically
 	#[cfg(feature = "exp-preserve-order")]
-	pub preserve_order: bool,
+	preserve_order: bool,
+}
+impl YamlFormat<'_> {
+	pub fn cli(
+		padding: usize,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Self {
+		let padding = " ".repeat(padding);
+		Self {
+			padding: Cow::Owned(padding.clone()),
+			arr_element_padding: Cow::Owned(padding),
+			quote_keys: false,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+	pub fn std_to_yaml(
+		indent_array_in_object: bool,
+		quote_keys: bool,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> Self {
+		Self {
+			padding: Cow::Borrowed("  "),
+			arr_element_padding: Cow::Borrowed(if indent_array_in_object { "  " } else { "" }),
+			quote_keys,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+}
+impl ManifestFormat for YamlFormat<'_> {
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
+		manifest_yaml_ex_buf(&val, buf, &mut String::new(), self)
+	}
 }
 
 /// From <https://github.com/chyh1990/yaml-rust/blob/da52a68615f2ecdd6b7e4567019f280c433c1521/src/emitter.rs#L289>
@@ -221,7 +368,7 @@ fn yaml_needs_quotes(string: &str) -> bool {
 		|| string.parse::<f64>().is_ok()
 }
 
-pub fn manifest_yaml_ex(val: &Val, options: &ManifestYamlOptions<'_>) -> Result<String> {
+pub fn manifest_yaml_ex(val: &Val, options: &YamlFormat<'_>) -> Result<String> {
 	let mut out = String::new();
 	manifest_yaml_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
@@ -232,9 +379,8 @@ fn manifest_yaml_ex_buf(
 	val: &Val,
 	buf: &mut String,
 	cur_padding: &mut String,
-	options: &ManifestYamlOptions<'_>,
+	options: &YamlFormat<'_>,
 ) -> Result<()> {
-	use std::fmt::Write;
 	match val {
 		Val::Bool(v) => {
 			if *v {
@@ -252,7 +398,7 @@ fn manifest_yaml_ex_buf(
 				for line in s.split('\n') {
 					buf.push('\n');
 					buf.push_str(cur_padding);
-					buf.push_str(options.padding);
+					buf.push_str(&options.padding);
 					buf.push_str(line);
 				}
 			} else if !options.quote_keys && !yaml_needs_quotes(s) {
@@ -277,7 +423,7 @@ fn manifest_yaml_ex_buf(
 						Val::Arr(a) if !a.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
-							buf.push_str(options.padding);
+							buf.push_str(&options.padding);
 						}
 						_ => buf.push(' '),
 					}
@@ -288,7 +434,7 @@ fn manifest_yaml_ex_buf(
 					};
 					let prev_len = cur_padding.len();
 					if extra_padding {
-						cur_padding.push_str(options.padding);
+						cur_padding.push_str(&options.padding);
 					}
 					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
 					cur_padding.truncate(prev_len);
@@ -323,14 +469,14 @@ fn manifest_yaml_ex_buf(
 						Val::Arr(a) if !a.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
-							buf.push_str(options.arr_element_padding);
-							cur_padding.push_str(options.arr_element_padding);
+							buf.push_str(&options.arr_element_padding);
+							cur_padding.push_str(&options.arr_element_padding);
 						}
 						Val::Obj(o) if !o.is_empty() => {
 							buf.push('\n');
 							buf.push_str(cur_padding);
-							buf.push_str(options.padding);
-							cur_padding.push_str(options.padding);
+							buf.push_str(&options.padding);
+							cur_padding.push_str(&options.padding);
 						}
 						_ => buf.push(' '),
 					}

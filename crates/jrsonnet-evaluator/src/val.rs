@@ -1,4 +1,4 @@
-use std::{cell::RefCell, fmt::Debug, rc::Rc};
+use std::{cell::RefCell, fmt::Debug};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
@@ -8,9 +8,6 @@ use crate::{
 	error::{Error::*, LocError},
 	function::FuncVal,
 	gc::{GcHashMap, TraceBox},
-	stdlib::manifest::{
-		manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType, ManifestYamlOptions,
-	},
 	throw,
 	typed::BoundedUsize,
 	ObjValue, Result, Unbound, WeakObjValue,
@@ -122,32 +119,30 @@ impl<T: Trace> PartialEq for Thunk<T> {
 	}
 }
 
-#[derive(Clone, Trace)]
-pub enum ManifestFormat {
-	YamlStream(Box<ManifestFormat>),
-	Yaml {
-		padding: usize,
-		#[cfg(feature = "exp-preserve-order")]
-		preserve_order: bool,
-	},
-	Json {
-		padding: usize,
-		#[cfg(feature = "exp-preserve-order")]
-		preserve_order: bool,
-	},
-	ToString,
-	String,
+pub trait ManifestFormat {
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
+	fn manifest(&self, val: Val) -> Result<String> {
+		let mut out = String::new();
+		self.manifest_buf(val, &mut out)?;
+		Ok(out)
+	}
 }
-impl ManifestFormat {
-	#[cfg(feature = "exp-preserve-order")]
-	fn preserve_order(&self) -> bool {
-		match self {
-			ManifestFormat::YamlStream(s) => s.preserve_order(),
-			ManifestFormat::Yaml { preserve_order, .. } => *preserve_order,
-			ManifestFormat::Json { preserve_order, .. } => *preserve_order,
-			ManifestFormat::ToString => false,
-			ManifestFormat::String => false,
-		}
+impl<T> ManifestFormat for Box<T>
+where
+	T: ManifestFormat + ?Sized,
+{
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
+		let inner = &**self;
+		inner.manifest_buf(val, buf)
+	}
+}
+impl<T> ManifestFormat for &'_ T
+where
+	T: ManifestFormat + ?Sized,
+{
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
+		let inner = &**self;
+		inner.manifest_buf(val, buf)
 	}
 }
 
@@ -641,172 +636,25 @@ impl Val {
 		}
 	}
 
+	pub fn manifest(&self, format: impl ManifestFormat) -> Result<String> {
+		fn manifest_dyn(val: &Val, manifest: &dyn ManifestFormat) -> Result<String> {
+			manifest.manifest(val.clone())
+		}
+		manifest_dyn(self, &format)
+	}
+
 	pub fn to_string(&self) -> Result<IStr> {
 		Ok(match self {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
-			v => manifest_json_ex(
-				v,
-				&ManifestJsonOptions {
-					padding: "",
-					mtype: ManifestType::ToString,
-					newline: "\n",
-					key_val_sep: ": ",
-					#[cfg(feature = "exp-preserve-order")]
-					preserve_order: false,
-				},
-			)?
-			.into(),
+			_ => self
+				.manifest(crate::stdlib::manifest::ToStringFormat)
+				.map(IStr::from)?,
 		})
 	}
 
-	/// Expects value to be object, outputs (key, manifested value) pairs
-	pub fn manifest_multi(&self, ty: &ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
-		let Self::Obj(obj) = self else {
-			throw!(MultiManifestOutputIsNotAObject);
-		};
-		let keys = obj.fields(
-			#[cfg(feature = "exp-preserve-order")]
-			ty.preserve_order(),
-		);
-		let mut out = Vec::with_capacity(keys.len());
-		for key in keys {
-			let value = obj
-				.get(key.clone())?
-				.expect("item in object")
-				.manifest(ty)?;
-			out.push((key, value));
-		}
-		Ok(out)
-	}
-
-	/// Expects value to be array, outputs manifested values
-	pub fn manifest_stream(&self, ty: &ManifestFormat) -> Result<Vec<IStr>> {
-		let Self::Arr(arr) = self else {
-			throw!(StreamManifestOutputIsNotAArray);
-		};
-		let mut out = Vec::with_capacity(arr.len());
-		for i in arr.iter() {
-			out.push(i?.manifest(ty)?);
-		}
-		Ok(out)
-	}
-
-	pub fn manifest(&self, ty: &ManifestFormat) -> Result<IStr> {
-		Ok(match ty {
-			ManifestFormat::YamlStream(format) => {
-				let Self::Arr(arr) = self else {
-					throw!(StreamManifestOutputIsNotAArray)
-				};
-				let mut out = String::new();
-
-				match format as &ManifestFormat {
-					ManifestFormat::YamlStream(_) => throw!(StreamManifestOutputCannotBeRecursed),
-					ManifestFormat::String => throw!(StreamManifestCannotNestString),
-					_ => {}
-				};
-
-				if !arr.is_empty() {
-					for v in arr.iter() {
-						out.push_str("---\n");
-						out.push_str(&v?.manifest(format)?);
-						out.push('\n');
-					}
-					out.push_str("...");
-				}
-
-				out.into()
-			}
-			ManifestFormat::Yaml {
-				padding,
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order,
-			} => self.to_yaml(
-				*padding,
-				#[cfg(feature = "exp-preserve-order")]
-				*preserve_order,
-			)?,
-			ManifestFormat::Json {
-				padding,
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order,
-			} => self.to_json(
-				*padding,
-				#[cfg(feature = "exp-preserve-order")]
-				*preserve_order,
-			)?,
-			ManifestFormat::ToString => self.to_string()?,
-			ManifestFormat::String => match self {
-				Self::Str(s) => s.clone(),
-				_ => throw!(StringManifestOutputIsNotAString),
-			},
-		})
-	}
-
-	/// For manifestification
-	pub fn to_json(
-		&self,
-		padding: usize,
-		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
-	) -> Result<IStr> {
-		manifest_json_ex(
-			self,
-			&ManifestJsonOptions {
-				padding: &" ".repeat(padding),
-				mtype: if padding == 0 {
-					ManifestType::Minify
-				} else {
-					ManifestType::Manifest
-				},
-				newline: "\n",
-				key_val_sep: ": ",
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order,
-			},
-		)
-		.map(Into::into)
-	}
-
-	/// Calls `std.manifestJson`
-	pub fn to_std_json(
-		&self,
-		padding: usize,
-		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
-	) -> Result<Rc<str>> {
-		manifest_json_ex(
-			self,
-			&ManifestJsonOptions {
-				padding: &" ".repeat(padding),
-				mtype: ManifestType::Std,
-				newline: "\n",
-				key_val_sep: ": ",
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order,
-			},
-		)
-		.map(Into::into)
-	}
-
-	pub fn to_yaml(
-		&self,
-		padding: usize,
-		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
-	) -> Result<IStr> {
-		let padding = &" ".repeat(padding);
-		manifest_yaml_ex(
-			self,
-			&ManifestYamlOptions {
-				padding,
-				arr_element_padding: padding,
-				quote_keys: false,
-				#[cfg(feature = "exp-preserve-order")]
-				preserve_order,
-			},
-		)
-		.map(Into::into)
-	}
 	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {
 			Val::Str(s) => IndexableVal::Str(s),

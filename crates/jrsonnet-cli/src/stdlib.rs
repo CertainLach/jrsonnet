@@ -60,8 +60,6 @@ impl FromStr for ExtFile {
 pub struct StdOpts {
 	/// Disable standard library.
 	/// By default standard library will be available via global `std` variable.
-	/// Note that standard library will still be loaded
-	/// if chosen manifestification method is not `none`.
 	#[clap(long)]
 	no_stdlib: bool,
 	/// Add string external variable.

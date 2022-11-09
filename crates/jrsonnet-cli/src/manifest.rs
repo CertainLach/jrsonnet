@@ -1,7 +1,11 @@
 use std::{path::PathBuf, str::FromStr};
 
 use clap::{Parser, ValueEnum};
-use jrsonnet_evaluator::{error::Result, ManifestFormat, State};
+use jrsonnet_evaluator::{
+	error::Result,
+	stdlib::manifest::{JsonFormat, StringFormat, ToStringFormat, YamlFormat, YamlStreamFormat},
+	ManifestFormat, State,
+};
 
 use crate::ConfigureState;
 
@@ -36,7 +40,7 @@ pub struct ManifestOpts {
 	#[clap(long, short = 'S', conflicts_with = "format")]
 	string: bool,
 	/// Write output as YAML stream, can be used with --format json/yaml
-	#[clap(long, short = 'y')]
+	#[clap(long, short = 'y', conflicts_with = "string")]
 	yaml_stream: bool,
 	/// Number of spaces to pad output manifest with.
 	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml]
@@ -45,34 +49,35 @@ pub struct ManifestOpts {
 	/// Preserve order in object manifestification
 	#[cfg(feature = "exp-preserve-order")]
 	#[clap(long)]
-	exp_preserve_order: bool,
+	preserve_order: bool,
 }
 impl ConfigureState for ManifestOpts {
-	type Guards = ();
-	fn configure(&self, s: &State) -> Result<()> {
-		if self.string {
-			s.set_manifest_format(ManifestFormat::String);
+	type Guards = Box<dyn ManifestFormat>;
+	fn configure(&self, _s: &State) -> Result<Self::Guards> {
+		let format: Box<dyn ManifestFormat> = if self.string {
+			Box::new(StringFormat)
 		} else {
 			#[cfg(feature = "exp-preserve-order")]
-			let preserve_order = self.exp_preserve_order;
+			let preserve_order = self.preserve_order;
 			match self.format {
-				ManifestFormatName::String => s.set_manifest_format(ManifestFormat::String),
-				ManifestFormatName::Json => s.set_manifest_format(ManifestFormat::Json {
-					padding: self.line_padding.unwrap_or(3),
+				ManifestFormatName::String => Box::new(ToStringFormat),
+				ManifestFormatName::Json => Box::new(JsonFormat::cli(
+					self.line_padding.unwrap_or(3),
 					#[cfg(feature = "exp-preserve-order")]
 					preserve_order,
-				}),
-				ManifestFormatName::Yaml => s.set_manifest_format(ManifestFormat::Yaml {
-					padding: self.line_padding.unwrap_or(2),
+				)),
+				ManifestFormatName::Yaml => Box::new(YamlFormat::cli(
+					self.line_padding.unwrap_or(2),
 					#[cfg(feature = "exp-preserve-order")]
 					preserve_order,
-				}),
+				)),
 			}
-		}
-		if self.yaml_stream {
-			s.set_manifest_format(ManifestFormat::YamlStream(Box::new(s.manifest_format())))
-		}
-		Ok(())
+		};
+		Ok(if self.yaml_stream {
+			Box::new(YamlStreamFormat(format))
+		} else {
+			format
+		})
 	}
 }
 

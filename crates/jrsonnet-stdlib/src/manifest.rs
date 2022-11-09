@@ -1,10 +1,7 @@
 use jrsonnet_evaluator::{
 	error::Result,
 	function::builtin,
-	stdlib::manifest::{
-		escape_string_json, manifest_json_ex, manifest_yaml_ex, ManifestJsonOptions, ManifestType,
-		ManifestYamlOptions,
-	},
+	stdlib::manifest::{escape_string_json, JsonFormat, YamlFormat},
 	typed::Any,
 	IStr,
 };
@@ -24,17 +21,13 @@ pub fn builtin_manifest_json_ex(
 ) -> Result<String> {
 	let newline = newline.as_deref().unwrap_or("\n");
 	let key_val_sep = key_val_sep.as_deref().unwrap_or(": ");
-	manifest_json_ex(
-		&value.0,
-		&ManifestJsonOptions {
-			padding: &indent,
-			mtype: ManifestType::Std,
-			newline,
-			key_val_sep,
-			#[cfg(feature = "exp-preserve-order")]
-			preserve_order: preserve_order.unwrap_or(false),
-		},
-	)
+	value.0.manifest(JsonFormat::std_to_json(
+		indent.to_string(),
+		newline,
+		key_val_sep,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order.unwrap_or(false),
+	))
 }
 
 #[builtin]
@@ -44,18 +37,10 @@ pub fn builtin_manifest_yaml_doc(
 	quote_keys: Option<bool>,
 	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
 ) -> Result<String> {
-	manifest_yaml_ex(
-		&value.0,
-		&ManifestYamlOptions {
-			padding: "  ",
-			arr_element_padding: if indent_array_in_object.unwrap_or(false) {
-				"  "
-			} else {
-				""
-			},
-			quote_keys: quote_keys.unwrap_or(true),
-			#[cfg(feature = "exp-preserve-order")]
-			preserve_order: preserve_order.unwrap_or(false),
-		},
-	)
+	value.0.manifest(YamlFormat::std_to_yaml(
+		indent_array_in_object.unwrap_or(false),
+		quote_keys.unwrap_or(true),
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order.unwrap_or(false),
+	))
 }
