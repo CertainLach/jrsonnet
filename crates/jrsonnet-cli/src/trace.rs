@@ -1,7 +1,7 @@
 use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::{
 	error::Result,
-	trace::{CompactFormat, ExplainingFormat, PathResolver},
+	trace::{CompactFormat, ExplainingFormat, PathResolver, TraceFormat},
 	State,
 };
 
@@ -27,21 +27,25 @@ pub struct TraceOpts {
 	max_trace: usize,
 }
 impl ConfigureState for TraceOpts {
-	type Guards = ();
-	fn configure(&self, s: &State) -> Result<()> {
+	type Guards = Box<dyn TraceFormat>;
+	fn configure(&self, _s: &State) -> Result<Self::Guards> {
 		let resolver = PathResolver::new_cwd_fallback();
-		match self
+		let max_trace = self.max_trace;
+		let format: Box<dyn TraceFormat> = match self
 			.trace_format
 			.as_ref()
 			.unwrap_or(&TraceFormatName::Compact)
 		{
-			TraceFormatName::Compact => s.set_trace_format(CompactFormat {
+			TraceFormatName::Compact => Box::new(CompactFormat {
 				resolver,
 				padding: 4,
+				max_trace,
 			}),
-			TraceFormatName::Explaining => s.set_trace_format(ExplainingFormat { resolver }),
-		}
-		s.set_max_trace(self.max_trace);
-		Ok(())
+			TraceFormatName::Explaining => Box::new(ExplainingFormat {
+				resolver,
+				max_trace,
+			}),
+		};
+		Ok(format)
 	}
 }

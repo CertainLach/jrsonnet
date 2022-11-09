@@ -1,9 +1,12 @@
-use std::path::{Path, PathBuf};
+use std::{
+	any::Any,
+	path::{Path, PathBuf},
+};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{CodeLocation, Source};
 
-use crate::{error::Error, LocError, State};
+use crate::{error::Error, LocError};
 
 /// The way paths should be displayed
 #[derive(Clone, Trace)]
@@ -48,9 +51,15 @@ pub trait TraceFormat: Trace {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error>;
+	fn format(&self, error: &LocError) -> Result<String, std::fmt::Error> {
+		let mut out = String::new();
+		self.write_trace(&mut out, error)?;
+		Ok(out)
+	}
+	fn as_any(&self) -> &dyn Any;
+	fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 fn print_code_location(
@@ -81,14 +90,23 @@ fn print_code_location(
 #[derive(Trace)]
 pub struct CompactFormat {
 	pub resolver: PathResolver,
+	pub max_trace: usize,
 	pub padding: usize,
+}
+impl Default for CompactFormat {
+	fn default() -> Self {
+		Self {
+			resolver: PathResolver::Absolute,
+			max_trace: 20,
+			padding: 4,
+		}
+	}
 }
 
 impl TraceFormat for CompactFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -168,15 +186,24 @@ impl TraceFormat for CompactFormat {
 		}
 		Ok(())
 	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
+	}
 }
 
 #[derive(Trace)]
-pub struct JsFormat;
+pub struct JsFormat {
+	pub max_trace: usize,
+}
 impl TraceFormat for JsFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -201,6 +228,14 @@ impl TraceFormat for JsFormat {
 		}
 		Ok(())
 	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
+	}
 }
 
 /// rustc-like trace displaying
@@ -208,13 +243,13 @@ impl TraceFormat for JsFormat {
 #[derive(Trace)]
 pub struct ExplainingFormat {
 	pub resolver: PathResolver,
+	pub max_trace: usize,
 }
 #[cfg(feature = "explaining-traces")]
 impl TraceFormat for ExplainingFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		_s: &State,
 		error: &LocError,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
@@ -257,6 +292,14 @@ impl TraceFormat for ExplainingFormat {
 			}
 		}
 		Ok(())
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
 	}
 }
 

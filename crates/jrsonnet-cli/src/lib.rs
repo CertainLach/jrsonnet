@@ -76,9 +76,6 @@ pub struct GeneralOpts {
 	std: StdOpts,
 
 	#[clap(flatten)]
-	trace: TraceOpts,
-
-	#[clap(flatten)]
 	gc: GcOpts,
 }
 
@@ -90,7 +87,6 @@ impl ConfigureState for GeneralOpts {
 	);
 	fn configure(&self, s: &State) -> Result<Self::Guards> {
 		// Configure trace first, because tla-code/ext-code can throw
-		self.trace.configure(s)?;
 		let misc_guards = self.misc.configure(s)?;
 		let tla_guards = self.tla.configure(s)?;
 		self.std.configure(s)?;

@@ -51,6 +51,9 @@ struct Opts {
 	input: InputOpts,
 	#[clap(flatten)]
 	general: GeneralOpts,
+
+	#[clap(flatten)]
+	trace: TraceOpts,
 	#[clap(flatten)]
 	manifest: ManifestOpts,
 	#[clap(flatten)]
@@ -114,9 +117,15 @@ impl From<jrsonnet_evaluator::error::Error> for Error {
 
 fn main_catch(opts: Opts) -> bool {
 	let s = State::default();
+	let trace = opts
+		.trace
+		.configure(&s)
+		.expect("this configurator doesn't fail");
 	if let Err(e) = main_real(&s, opts) {
 		if let Error::Evaluation(e) = e {
-			eprintln!("{}", s.stringify_err(&e));
+			let mut out = String::new();
+			trace.write_trace(&mut out, &e).expect("format error");
+			eprintln!("{out}")
 		} else {
 			eprintln!("{}", e);
 		}

@@ -262,7 +262,6 @@ impl Display for LocError {
 			write!(f, "\t{}", el.desc)?;
 			if let Some(loc) = &el.location {
 				write!(f, "at {}", loc.0 .0 .0)?;
-				// loc.0
 				loc.0.map_source_locations(&[loc.1, loc.2]);
 			}
 			writeln!(f)?;
