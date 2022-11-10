@@ -194,7 +194,7 @@ parser! {
 			/ assertion:assertion(s) {expr::Member::AssertStmt(assertion)}
 			/ field:field(s) {expr::Member::Field(field)}
 		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
-			= pre_locals:(b: obj_local(s) comma() {b})* field:field(s) post_locals:(comma() b:obj_local(s) {b})* _ ("," _)? forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
+			= pre_locals:(b: obj_local(s) comma() {b})* &"[" field:field(s) post_locals:(comma() b:obj_local(s) {b})* _ ("," _)? forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
 				let mut compspecs = vec![CompSpec::ForSpec(forspec)];
 				compspecs.extend(others.unwrap_or_default());
 				expr::ObjBody::ObjComp(expr::ObjComp{
