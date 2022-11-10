@@ -17,8 +17,8 @@ use crate::{
 	tb, throw,
 	typed::Typed,
 	val::{ArrValue, CachedUnbound, IndexableVal, Thunk, ThunkValue},
-	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
-	Unbound, Val,
+	Context, GcHashMap, LocError, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
+	ResultExt, State, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -591,6 +591,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
+			let Expr::Str(path) = &*path.0 else {
+				throw!("computed imports are not supported")
+			};
 			let tmp = loc.clone().0;
 			let s = ctx.state();
 			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;

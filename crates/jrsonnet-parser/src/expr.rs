@@ -390,11 +390,11 @@ pub enum Expr {
 	LocalExpr(Vec<BindSpec>, LocExpr),
 
 	/// import "hello"
-	Import(IStr),
+	Import(LocExpr),
 	/// importStr "file.txt"
-	ImportStr(IStr),
+	ImportStr(LocExpr),
 	/// importBin "file.txt"
-	ImportBin(IStr),
+	ImportBin(LocExpr),
 	/// error "I'm broken"
 	ErrorStmt(LocExpr),
 	/// a(b, c)

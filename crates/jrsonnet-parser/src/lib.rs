@@ -257,9 +257,9 @@ parser! {
 			/ array_expr(s)
 			/ array_comp_expr(s)
 
-			/ keyword("importstr") _ path:string() {Expr::ImportStr(path.into())}
-			/ keyword("importbin") _ path:string() {Expr::ImportBin(path.into())}
-			/ keyword("import") _ path:string() {Expr::Import(path.into())}
+			/ keyword("importstr") _ path:expr(s) {Expr::ImportStr(path)}
+			/ keyword("importbin") _ path:expr(s) {Expr::ImportBin(path)}
+			/ keyword("import") _ path:expr(s) {Expr::Import(path)}
 
 			/ var_expr(s)
 			/ local_expr(s)
