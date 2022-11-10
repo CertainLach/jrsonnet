@@ -12,7 +12,7 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2022-11-02"; channel = "nightly"; }).default.override {
+        rust = ((pkgs.rustChannelOf { date = "2022-11-10"; channel = "nightly"; }).default.override {
           extensions = [ "rust-src" "miri" ];
         });
       in
@@ -24,6 +24,7 @@
             lld
             hyperfine
             go-jsonnet
+            valgrind
           ];
         };
       }

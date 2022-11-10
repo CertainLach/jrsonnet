@@ -21,3 +21,9 @@ codegen-units = 1
 debug = 0
 panic = "abort"
 strip = true
+
+[profile.releasedebug]
+inherits = "release"
+debug = 2
+panic = "unwind"
+strip = false
