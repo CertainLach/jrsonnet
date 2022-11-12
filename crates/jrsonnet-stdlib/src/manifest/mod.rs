@@ -1,10 +1,13 @@
+mod yaml;
+
 use jrsonnet_evaluator::{
 	error::Result,
 	function::builtin,
-	stdlib::manifest::{escape_string_json, JsonFormat, YamlFormat},
+	manifest::{escape_string_json, JsonFormat},
 	typed::Any,
 	IStr,
 };
+pub use yaml::YamlFormat;
 
 #[builtin]
 pub fn builtin_escape_string_json(str_: IStr) -> Result<String> {
