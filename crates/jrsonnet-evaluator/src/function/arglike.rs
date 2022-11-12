@@ -180,8 +180,8 @@ impl ArgsLike for ArgsDesc {
 	}
 }
 
-impl<A: ArgLike, S> sealed::Named for HashMap<IStr, A, S> {}
-impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
+impl<V: ArgLike, S> sealed::Named for HashMap<IStr, V, S> {}
+impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 	fn unnamed_len(&self) -> usize {
 		0
 	}
@@ -213,7 +213,7 @@ impl<A: ArgLike, S> ArgsLike for HashMap<IStr, A, S> {
 		}
 	}
 }
-impl<A, S> OptionalContext for HashMap<IStr, A, S> where A: ArgLike + OptionalContext {}
+impl<V, S> OptionalContext for HashMap<IStr, V, S> where V: ArgLike + OptionalContext {}
 
 impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 	fn unnamed_len(&self) -> usize {
@@ -239,7 +239,7 @@ impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		self.0.named_names(handler)
+		self.0.named_names(handler);
 	}
 }
 

@@ -29,7 +29,7 @@ macro_rules! ensure {
 macro_rules! ensure_val_eq {
 	($a:expr, $b:expr) => {{
 		if !::jrsonnet_evaluator::val::equals(&$a.clone(), &$b.clone())? {
-			use ::jrsonnet_evaluator::stdlib::manifest::JsonFormat;
+			use ::jrsonnet_evaluator::manifest::JsonFormat;
 			::jrsonnet_evaluator::throw!(
 				"assertion failed: a != b\na={:#?}\nb={:#?}",
 				$a.manifest(JsonFormat::default())?,

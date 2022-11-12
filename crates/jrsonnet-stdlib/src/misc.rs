@@ -1,7 +1,7 @@
 use std::{cell::RefCell, rc::Rc};
 
 use jrsonnet_evaluator::{
-	error::{Error::*, Result},
+	error::{ErrorKind::*, Result},
 	function::{builtin, ArgLike, CallLocation, FuncVal},
 	throw,
 	typed::{Any, Either2, Either4},

@@ -6,7 +6,7 @@ use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{error::Error::*, throw, typed::Typed, LocError, ObjValue, Result, Val};
+use crate::{error::ErrorKind::*, throw, typed::Typed, Error, ObjValue, Result, Val};
 
 #[derive(Debug, Clone, Error, Trace)]
 pub enum FormatError {
@@ -26,7 +26,7 @@ pub enum FormatError {
 	NoSuchFormatField(IStr),
 }
 
-impl From<FormatError> for LocError {
+impl From<FormatError> for Error {
 	fn from(e: FormatError) -> Self {
 		Self::new(Format(e))
 	}

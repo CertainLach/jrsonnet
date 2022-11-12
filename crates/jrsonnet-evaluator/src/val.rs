@@ -5,9 +5,10 @@ use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_types::ValType;
 
 use crate::{
-	error::{Error::*, LocError},
+	error::{Error, ErrorKind::*},
 	function::FuncVal,
 	gc::{GcHashMap, TraceBox},
+	manifest::{ManifestFormat, ToStringFormat},
 	throw,
 	typed::BoundedUsize,
 	ObjValue, Result, Unbound, WeakObjValue,
@@ -21,7 +22,7 @@ pub trait ThunkValue: Trace {
 #[derive(Trace)]
 enum ThunkInner<T: Trace> {
 	Computed(T),
-	Errored(LocError),
+	Errored(Error),
 	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
 	Pending,
 }
@@ -116,33 +117,6 @@ impl<T: Debug + Trace> Debug for Thunk<T> {
 impl<T: Trace> PartialEq for Thunk<T> {
 	fn eq(&self, other: &Self) -> bool {
 		Cc::ptr_eq(&self.0, &other.0)
-	}
-}
-
-pub trait ManifestFormat {
-	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
-	fn manifest(&self, val: Val) -> Result<String> {
-		let mut out = String::new();
-		self.manifest_buf(val, &mut out)?;
-		Ok(out)
-	}
-}
-impl<T> ManifestFormat for Box<T>
-where
-	T: ManifestFormat + ?Sized,
-{
-	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
-		let inner = &**self;
-		inner.manifest_buf(val, buf)
-	}
-}
-impl<T> ManifestFormat for &'_ T
-where
-	T: ManifestFormat + ?Sized,
-{
-	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
-		let inner = &**self;
-		inner.manifest_buf(val, buf)
 	}
 }
 
@@ -649,9 +623,7 @@ impl Val {
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
 			Self::Str(s) => s.clone(),
-			_ => self
-				.manifest(crate::stdlib::manifest::ToStringFormat)
-				.map(IStr::from)?,
+			_ => self.manifest(ToStringFormat).map(IStr::from)?,
 		})
 	}
 

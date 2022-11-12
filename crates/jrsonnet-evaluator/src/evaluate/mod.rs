@@ -11,14 +11,14 @@ use jrsonnet_types::ValType;
 use self::destructure::destruct;
 use crate::{
 	destructure::evaluate_dest,
-	error::Error::*,
+	error::ErrorKind::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	tb, throw,
 	typed::Typed,
 	val::{ArrValue, CachedUnbound, IndexableVal, Thunk, ThunkValue},
-	Context, GcHashMap, LocError, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, State, Unbound, Val,
+	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
+	Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -165,7 +165,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 	uctx: B,
 	field: &FieldMember,
 ) -> Result<()> {
-	let name = evaluate_field_name(ctx.clone(), &field.name)?;
+	let name = evaluate_field_name(ctx, &field.name)?;
 	let Some(name) = name else {
 		return Ok(());
 	};
@@ -187,11 +187,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
 				type Bound = Val;
 				fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
-					Ok(evaluate_named(
-						self.uctx.bind(sup, this)?,
-						&self.value,
-						self.name.clone(),
-					)?)
+					evaluate_named(self.uctx.bind(sup, this)?, &self.value, self.name.clone())
 				}
 			}
 
@@ -201,9 +197,9 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
 				.bindable(tb!(UnboundValue {
-					uctx: uctx.clone(),
+					uctx,
 					value: value.clone(),
-					name: name.clone()
+					name,
 				}))?;
 		}
 		FieldMember {
@@ -236,10 +232,10 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
 				.bindable(tb!(UnboundMethod {
-					uctx: uctx.clone(),
+					uctx,
 					value: value.clone(),
 					params: params.clone(),
-					name: name.clone()
+					name,
 				}))?;
 		}
 	}
@@ -267,7 +263,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 	for member in members.iter() {
 		match member {
 			Member::Field(field) => {
-				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), &field)?
+				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
 			}
 			Member::AssertStmt(stmt) => {
 				#[derive(Trace)]

@@ -12,10 +12,7 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::{
-	error::{
-		Error::{self, *},
-		Result,
-	},
+	error::{ErrorKind::*, Result},
 	throw,
 };
 
@@ -94,7 +91,7 @@ impl ImportResolver for FileImportResolver {
 		} else if let Some(d) = from.downcast_ref::<SourceDirectory>() {
 			d.path().to_owned()
 		} else if from.is_default() {
-			current_dir().map_err(|e| Error::ImportIo(e.to_string()))?
+			current_dir().map_err(|e| ImportIo(e.to_string()))?
 		} else {
 			unreachable!("resolver can't return this path")
 		};
@@ -122,7 +119,7 @@ impl ImportResolver for FileImportResolver {
 			Err(e) if e.kind() == ErrorKind::NotFound => {
 				throw!(AbsoluteImportFileNotFound(path.to_owned()))
 			}
-			Err(e) => throw!(Error::ImportIo(e.to_string())),
+			Err(e) => throw!(ImportIo(e.to_string())),
 		};
 		if meta.is_file() {
 			Ok(SourcePath::new(SourceFile::new(
@@ -141,7 +138,7 @@ impl ImportResolver for FileImportResolver {
 		let path = if let Some(f) = id.downcast_ref::<SourceFile>() {
 			f.path()
 		} else if id.downcast_ref::<SourceDirectory>().is_some() || id.is_default() {
-			throw!(Error::ImportIsADirectory(id.clone()))
+			throw!(ImportIsADirectory(id.clone()))
 		} else {
 			unreachable!("other types are not supported in resolve");
 		};

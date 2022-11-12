@@ -7,7 +7,7 @@ pub use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
 
 use crate::{
-	error::{Error, LocError, Result},
+	error::{Error, ErrorKind, Result},
 	State, Val,
 };
 
@@ -26,9 +26,9 @@ pub enum TypeError {
 	)]
 	BoundsFailed(f64, Option<f64>, Option<f64>),
 }
-impl From<TypeError> for LocError {
+impl From<TypeError> for Error {
 	fn from(e: TypeError) -> Self {
-		Error::TypeError(e.into()).into()
+		ErrorKind::TypeError(e.into()).into()
 	}
 }
 
@@ -39,9 +39,9 @@ impl From<TypeError> for TypeLocError {
 		Self(Box::new(e), ValuePathStack(Vec::new()))
 	}
 }
-impl From<TypeLocError> for LocError {
+impl From<TypeLocError> for Error {
 	fn from(e: TypeLocError) -> Self {
-		Error::TypeError(e).into()
+		ErrorKind::TypeError(e).into()
 	}
 }
 impl Display for TypeLocError {
@@ -92,7 +92,7 @@ fn push_type_description(
 	State::push_description(error_reason, || match item() {
 		Ok(_) => Ok(()),
 		Err(mut e) => {
-			if let Error::TypeError(e) = &mut e.error_mut() {
+			if let ErrorKind::TypeError(e) = &mut e.error_mut() {
 				(e.1).0.push(path());
 			}
 			Err(e)
@@ -218,7 +218,7 @@ impl CheckType for ComplexValType {
 							return Ok(());
 						}
 						Err(e) => match e.error() {
-							Error::TypeError(e) => errors.push(e.clone()),
+							ErrorKind::TypeError(e) => errors.push(e.clone()),
 							_ => return Err(e),
 						},
 					}
@@ -233,7 +233,7 @@ impl CheckType for ComplexValType {
 							return Ok(());
 						}
 						Err(e) => match e.error() {
-							Error::TypeError(e) => errors.push(e.clone()),
+							ErrorKind::TypeError(e) => errors.push(e.clone()),
 							_ => return Err(e),
 						},
 					}

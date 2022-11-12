@@ -12,7 +12,7 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	error::{Error::*, Result},
+	error::{ErrorKind::*, Result},
 	throw, FileImportResolver, ImportResolver,
 };
 use jrsonnet_gcmodule::Trace;

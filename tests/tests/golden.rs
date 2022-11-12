@@ -4,7 +4,7 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	stdlib::manifest::JsonFormat,
+	manifest::JsonFormat,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State,
 };

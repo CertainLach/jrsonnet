@@ -11,7 +11,7 @@ use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{Error::*, LocError},
+	error::{Error, ErrorKind::*},
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
@@ -115,7 +115,7 @@ enum CacheValue {
 	Cached(Val),
 	NotFound,
 	Pending,
-	Errored(LocError),
+	Errored(Error),
 }
 
 #[allow(clippy::module_name_repetitions)]

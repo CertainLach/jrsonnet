@@ -540,7 +540,7 @@ impl TypedField {
 			}
 		} else {
 			quote! {
-				<#ty>::from_untyped(obj.get(#name.into())?.ok_or_else(|| Error::NoSuchField(#name.into(), vec![]))?)?
+				<#ty>::from_untyped(obj.get(#name.into())?.ok_or_else(|| ErrorKind::NoSuchField(#name.into(), vec![]))?)?
 			}
 		};
 
@@ -638,19 +638,19 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			use ::jrsonnet_evaluator::{
 				typed::{ComplexValType, Typed, TypedObj, CheckType},
 				Val, State,
-				error::{LocError, Error, Result},
+				error::{ErrorKind, Result as JrResult},
 				ObjValueBuilder, ObjValue,
 			};
 
 			#typed
 
 			impl TypedObj for #ident {
-				fn serialize(self, out: &mut ObjValueBuilder) -> Result<(), LocError> {
+				fn serialize(self, out: &mut ObjValueBuilder) -> JrResult<()> {
 					#(#fields_serialize)*
 
 					Ok(())
 				}
-				fn parse(obj: &ObjValue) -> Result<Self, LocError> {
+				fn parse(obj: &ObjValue) -> JrResult<Self> {
 					Ok(Self {
 						#(#fields_parse)*
 					})

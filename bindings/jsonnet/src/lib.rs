@@ -1,3 +1,5 @@
+#![allow(clippy::box_default)]
+
 #[cfg(feature = "interop")]
 pub mod interop;
 
@@ -20,11 +22,11 @@ use jrsonnet_evaluator::{
 	apply_tla,
 	function::TlaArg,
 	gc::GcHashMap,
+	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
 	stack::set_stack_depth_limit,
-	stdlib::manifest::{JsonFormat, ToStringFormat},
 	tb, throw,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, IStr, ManifestFormat, Result, State, Val,
+	FileImportResolver, IStr, Result, State, Val,
 };
 
 /// WASM stub
@@ -193,7 +195,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 	let filename = parse_path(CStr::from_ptr(filename));
 	match vm
 		.state
-		.import(&filename)
+		.import(filename)
 		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
 		.and_then(|val| val.manifest(&vm.manifest_format))
 	{
@@ -286,7 +288,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 	let filename = parse_path(CStr::from_ptr(filename));
 	match vm
 		.state
-		.import(&filename)
+		.import(filename)
 		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
 		.and_then(|val| val_to_multi(val, &vm.manifest_format))
 	{

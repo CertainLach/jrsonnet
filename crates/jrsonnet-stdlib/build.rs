@@ -19,7 +19,7 @@ fn main() {
 	{
 		let out_dir = env::var("OUT_DIR").unwrap();
 		let dest_path = Path::new(&out_dir).join("stdlib.rs");
-		let mut f = File::create(&dest_path).unwrap();
+		let mut f = File::create(dest_path).unwrap();
 		f.write_all(
 			("#[allow(clippy::redundant_clone)]".to_owned() + &v.to_string())
 				.replace(';', ";\n")

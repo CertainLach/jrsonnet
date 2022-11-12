@@ -1,6 +1,6 @@
 use std::{cell::Cell, marker::PhantomData};
 
-use crate::error::{Error, LocError};
+use crate::error::{Error, ErrorKind};
 
 struct StackLimit {
 	max_stack_size: Cell<usize>,
@@ -22,14 +22,14 @@ thread_local! {
 }
 
 pub struct StackOverflowError;
-impl From<StackOverflowError> for Error {
+impl From<StackOverflowError> for ErrorKind {
 	fn from(_: StackOverflowError) -> Self {
-		Error::StackOverflow
+		ErrorKind::StackOverflow
 	}
 }
-impl From<StackOverflowError> for LocError {
+impl From<StackOverflowError> for Error {
 	fn from(_: StackOverflowError) -> Self {
-		Error::StackOverflow.into()
+		ErrorKind::StackOverflow.into()
 	}
 }
 

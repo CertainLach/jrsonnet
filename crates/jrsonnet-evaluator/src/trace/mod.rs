@@ -6,7 +6,7 @@ use std::{
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{CodeLocation, Source};
 
-use crate::{error::Error, LocError};
+use crate::{error::ErrorKind, Error};
 
 /// The way paths should be displayed
 #[derive(Clone, Trace)]
@@ -51,9 +51,9 @@ pub trait TraceFormat: Trace {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		error: &LocError,
+		error: &Error,
 	) -> Result<(), std::fmt::Error>;
-	fn format(&self, error: &LocError) -> Result<String, std::fmt::Error> {
+	fn format(&self, error: &Error) -> Result<String, std::fmt::Error> {
 		let mut out = String::new();
 		self.write_trace(&mut out, error)?;
 		Ok(out)
@@ -107,10 +107,10 @@ impl TraceFormat for CompactFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		error: &LocError,
+		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		if let Error::ImportSyntaxError { path, error } = error.error() {
+		if let ErrorKind::ImportSyntaxError { path, error } = error.error() {
 			use std::fmt::Write;
 
 			writeln!(out)?;
@@ -204,7 +204,7 @@ impl TraceFormat for JsFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		error: &LocError,
+		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
 		for item in &error.trace().0 {
@@ -250,10 +250,10 @@ impl TraceFormat for ExplainingFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
-		error: &LocError,
+		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		if let Error::ImportSyntaxError { path, error } = error.error() {
+		if let ErrorKind::ImportSyntaxError { path, error } = error.error() {
 			writeln!(out)?;
 			let offset = error.location.offset;
 			let location = path

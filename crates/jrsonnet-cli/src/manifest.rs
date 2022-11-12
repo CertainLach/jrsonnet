@@ -3,9 +3,10 @@ use std::{path::PathBuf, str::FromStr};
 use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::{
 	error::Result,
-	stdlib::manifest::{JsonFormat, StringFormat, ToStringFormat, YamlFormat, YamlStreamFormat},
-	ManifestFormat, State,
+	manifest::{JsonFormat, ManifestFormat, StringFormat, ToStringFormat, YamlStreamFormat},
+	State,
 };
+use jrsonnet_stdlib::YamlFormat;
 
 use crate::ConfigureState;
 

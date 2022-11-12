@@ -3,7 +3,7 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct, LocExpr, ParamsDesc};
 
 use crate::{
-	error::{Error::*, Result},
+	error::{ErrorKind::*, Result},
 	evaluate, evaluate_method, evaluate_named,
 	gc::GcHashMap,
 	tb, throw,

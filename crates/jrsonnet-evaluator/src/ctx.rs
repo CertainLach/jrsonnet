@@ -4,8 +4,8 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	error::Error::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, State, Thunk,
-	Val,
+	error::ErrorKind::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, State,
+	Thunk, Val,
 };
 
 #[derive(Trace)]

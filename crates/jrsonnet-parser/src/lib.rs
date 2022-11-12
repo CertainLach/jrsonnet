@@ -450,15 +450,23 @@ pub mod tests {
 	fn imports() {
 		assert_eq!(
 			parse!("import \"hello\""),
-			el!(Expr::Import("hello".into()), 0, 14),
+			el!(Expr::Import(el!(Expr::Str("hello".into()), 7, 14)), 0, 14),
 		);
 		assert_eq!(
 			parse!("importstr \"garnish.txt\""),
-			el!(Expr::ImportStr("garnish.txt".into()), 0, 23)
+			el!(
+				Expr::ImportStr(el!(Expr::Str("garnish.txt".into()), 10, 23)),
+				0,
+				23
+			)
 		);
 		assert_eq!(
 			parse!("importbin \"garnish.bin\""),
-			el!(Expr::ImportBin("garnish.bin".into()), 0, 23)
+			el!(
+				Expr::ImportBin(el!(Expr::Str("garnish.bin".into()), 10, 23)),
+				0,
+				23
+			)
 		);
 	}
 

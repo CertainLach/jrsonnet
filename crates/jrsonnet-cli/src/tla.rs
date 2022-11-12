@@ -1,6 +1,6 @@
 use clap::Parser;
 use jrsonnet_evaluator::{
-	error::{Error, Result},
+	error::{ErrorKind, Result},
 	function::TlaArg,
 	gc::GcHashMap,
 	IStr, State,
@@ -51,15 +51,15 @@ impl ConfigureState for TlaOpts {
 		{
 			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
 			out.insert(
-				(&name as &str).into(),
+				(name as &str).into(),
 				TlaArg::Code(
 					jrsonnet_parser::parse(
-						&code,
+						code,
 						&ParserSettings {
 							source: source.clone(),
 						},
 					)
-					.map_err(|e| Error::ImportSyntaxError {
+					.map_err(|e| ErrorKind::ImportSyntaxError {
 						path: source,
 						error: Box::new(e),
 					})?,

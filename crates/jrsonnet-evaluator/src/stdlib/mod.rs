@@ -7,7 +7,6 @@ use jrsonnet_interner::IStr;
 use crate::{error::Result, function::CallLocation, State, Val};
 
 pub mod format;
-pub mod manifest;
 
 pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 	State::push(

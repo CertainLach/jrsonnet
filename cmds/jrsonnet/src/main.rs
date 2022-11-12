@@ -6,7 +6,11 @@ use std::{
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts, TraceOpts};
-use jrsonnet_evaluator::{apply_tla, error::LocError, throw, ResultExt, State, Val};
+use jrsonnet_evaluator::{
+	apply_tla,
+	error::{Error as JrError, ErrorKind},
+	throw, ResultExt, State, Val,
+};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -96,7 +100,7 @@ fn main() {
 enum Error {
 	// Handled differently
 	#[error("evaluation error")]
-	Evaluation(LocError),
+	Evaluation(JrError),
 	#[error("io error")]
 	Io(#[from] std::io::Error),
 	#[error("input is not utf8 encoded")]
@@ -104,14 +108,14 @@ enum Error {
 	#[error("missing input argument")]
 	MissingInputArgument,
 }
-impl From<LocError> for Error {
-	fn from(e: LocError) -> Self {
+impl From<JrError> for Error {
+	fn from(e: JrError) -> Self {
 		Self::Evaluation(e)
 	}
 }
-impl From<jrsonnet_evaluator::error::Error> for Error {
-	fn from(e: jrsonnet_evaluator::error::Error) -> Self {
-		Self::from(LocError::from(e))
+impl From<ErrorKind> for Error {
+	fn from(e: ErrorKind) -> Self {
+		Self::from(JrError::from(e))
 	}
 }
 

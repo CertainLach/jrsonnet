@@ -74,7 +74,7 @@ type FunctionSignature = Vec<(Option<IStr>, bool)>;
 #[allow(missing_docs)]
 #[derive(Error, Debug, Clone, Trace)]
 #[non_exhaustive]
-pub enum Error {
+pub enum ErrorKind {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
 
@@ -211,14 +211,14 @@ pub enum Error {
 }
 
 #[cfg(feature = "anyhow-error")]
-impl From<anyhow::Error> for LocError {
+impl From<anyhow::Error> for Error {
 	fn from(e: anyhow::Error) -> Self {
-		Self::new(Error::Other(Rc::new(e)))
+		Self::new(ErrorKind::Other(Rc::new(e)))
 	}
 }
 
-impl From<Error> for LocError {
-	fn from(e: Error) -> Self {
+impl From<ErrorKind> for Error {
+	fn from(e: ErrorKind) -> Self {
 		Self::new(e)
 	}
 }
@@ -236,16 +236,16 @@ pub struct StackTraceElement {
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
 #[derive(Clone, Trace)]
-pub struct LocError(Box<(Error, StackTrace)>);
-impl LocError {
-	pub fn new(e: Error) -> Self {
+pub struct Error(Box<(ErrorKind, StackTrace)>);
+impl Error {
+	pub fn new(e: ErrorKind) -> Self {
 		Self(Box::new((e, StackTrace(vec![]))))
 	}
 
-	pub const fn error(&self) -> &Error {
+	pub const fn error(&self) -> &ErrorKind {
 		&(self.0).0
 	}
-	pub fn error_mut(&mut self) -> &mut Error {
+	pub fn error_mut(&mut self) -> &mut ErrorKind {
 		&mut (self.0).0
 	}
 	pub const fn trace(&self) -> &StackTrace {
@@ -255,7 +255,7 @@ impl LocError {
 		&mut (self.0).1
 	}
 }
-impl Display for LocError {
+impl Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
@@ -269,7 +269,7 @@ impl Display for LocError {
 		Ok(())
 	}
 }
-impl Debug for LocError {
+impl Debug for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_tuple("LocError").field(&self.0).finish()
 	}
@@ -294,7 +294,7 @@ impl ErrorSource for CallLocation<'_> {
 	}
 }
 
-pub type Result<V, E = LocError> = std::result::Result<V, E>;
+pub type Result<V, E = Error> = std::result::Result<V, E>;
 pub trait ResultExt: Sized {
 	#[must_use]
 	fn with_description<O: Into<String>>(self, msg: impl FnOnce() -> O) -> Self;
@@ -314,7 +314,7 @@ pub trait ResultExt: Sized {
 		self.with_description_src(src, || msg)
 	}
 }
-impl<T> ResultExt for Result<T, LocError> {
+impl<T> ResultExt for Result<T, Error> {
 	fn with_description<O: Into<String>>(mut self, msg: impl FnOnce() -> O) -> Self {
 		if let Err(e) = &mut self {
 			let trace = e.trace_mut();
@@ -348,9 +348,9 @@ macro_rules! throw {
 		return Err($w$(::$i)*$(($($tt)*))?.into())
 	};
 	($l:literal) => {
-		return Err($crate::error::Error::RuntimeError($l.into()).into())
+		return Err($crate::error::ErrorKind::RuntimeError($l.into()).into())
 	};
 	($l:literal, $($tt:tt)*) => {
-		return Err($crate::error::Error::RuntimeError(format!($l, $($tt)*).into()).into())
+		return Err($crate::error::ErrorKind::RuntimeError(format!($l, $($tt)*).into()).into())
 	};
 }

@@ -5,7 +5,7 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	error::{Error, LocError},
+	error::{Error, ErrorKind},
 	function::builtin::{NativeCallback, NativeCallbackHandler},
 	tb,
 	typed::Typed,
@@ -38,7 +38,7 @@ struct JsonnetNativeCallbackHandler {
 	cb: JsonnetNativeCallback,
 }
 impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
-	fn call(&self, args: &[Val]) -> Result<Val, LocError> {
+	fn call(&self, args: &[Val]) -> Result<Val, Error> {
 		let mut n_args = Vec::new();
 		for a in args {
 			n_args.push(Some(Box::new(a.clone())));
@@ -57,7 +57,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 			Ok(v)
 		} else {
 			let e = IStr::from_untyped(v).expect("error msg should be a string");
-			Err(Error::RuntimeError(e).into())
+			Err(ErrorKind::RuntimeError(e).into())
 		}
 	}
 }

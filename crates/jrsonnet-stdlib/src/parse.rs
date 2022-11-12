@@ -1,5 +1,5 @@
 use jrsonnet_evaluator::{
-	error::{Error::RuntimeError, Result},
+	error::{ErrorKind::RuntimeError, Result},
 	function::builtin,
 	typed::Any,
 	IStr, Val,

@@ -7,7 +7,7 @@ use jrsonnet_parser::{LocExpr, ParamsDesc};
 use super::{arglike::ArgsLike, builtin::BuiltinParam};
 use crate::{
 	destructure::destruct,
-	error::{Error::*, Result},
+	error::{ErrorKind::*, Result},
 	evaluate_named,
 	gc::GcHashMap,
 	tb, throw,

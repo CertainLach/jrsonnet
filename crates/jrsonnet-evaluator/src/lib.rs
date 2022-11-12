@@ -51,6 +51,7 @@ pub mod function;
 pub mod gc;
 mod import;
 mod integrations;
+pub mod manifest;
 mod map;
 mod obj;
 pub mod stack;
@@ -69,7 +70,7 @@ use std::{
 
 pub use ctx::*;
 pub use dynamic::*;
-pub use error::{Error::*, LocError, Result, ResultExt};
+pub use error::{Error, ErrorKind::*, Result, ResultExt};
 pub use evaluate::*;
 use function::CallLocation;
 use gc::{GcHashMap, TraceBox};
@@ -82,7 +83,7 @@ use jrsonnet_parser::*;
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;
-pub use val::{ManifestFormat, Thunk, Val};
+pub use val::{Thunk, Val};
 
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read

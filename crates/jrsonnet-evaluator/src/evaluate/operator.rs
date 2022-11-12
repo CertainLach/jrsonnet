@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
-	error::Error::*, evaluate, stdlib::std_format, throw, typed::Typed, val::equals, Context,
+	error::ErrorKind::*, evaluate, stdlib::std_format, throw, typed::Typed, val::equals, Context,
 	Result, Val,
 };
 

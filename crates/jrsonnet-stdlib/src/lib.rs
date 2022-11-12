@@ -5,7 +5,7 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	error::{Error::*, Result},
+	error::{ErrorKind::*, Result},
 	function::{builtin::Builtin, CallLocation, FuncVal, TlaArg},
 	gc::{GcHashMap, TraceBox},
 	tb,
@@ -101,6 +101,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("sort", builtin_sort::INST),
 		// Hash
 		("md5", builtin_md5::INST),
+		#[cfg(feature = "exp-more-hashes")]
+		("sha256", builtin_sha256::INST),
 		// Encoding
 		("encodeUTF8", builtin_encode_utf8::INST),
 		("decodeUTF8", builtin_decode_utf8::INST),
