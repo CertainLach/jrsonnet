@@ -45,8 +45,14 @@ struct InputOpts {
 	pub input: Option<String>,
 }
 
+/// Jsonnet commandline interpreter (Rust implementation)
 #[derive(Parser)]
-#[clap(args_conflicts_with_subcommands = true, disable_version_flag = true)]
+#[clap(
+	args_conflicts_with_subcommands = true,
+	disable_version_flag = true,
+	version,
+	author
+)]
 struct Opts {
 	#[clap(subcommand)]
 	sub: Option<SubOpts>,
