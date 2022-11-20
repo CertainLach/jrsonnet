@@ -46,7 +46,9 @@ cargo build --release
 
 There already are multiple implementations of this standard implemented in different languages: [C++](https://github.com/google/jsonnet), [Go](https://github.com/google/go-jsonnet/), [Scala](https://github.com/databricks/sjsonnet).
 
-This implementation shows performance better than all existing implementations. For more information see [benchmarks](#Benchmarks).
+This implementation shows performance better than all existing implementations. For more information see [benchmarks](./docs/benchmarks.md).
+
+Also, I wanted to experiment on new syntax features, and jrsonnet implements some of them. For more information see [features](./docs/features.md)
 
 In the end, it's always fun to implement something in Rust.
 
@@ -74,11 +76,3 @@ Jrsonnet provides a standard `libjsonnet.so` shared library and should work as d
 WASM bingings are also available, Java bindings (Both JNI and WASM compiled to .class) are in progress
 
 See [bindings](./bindings/) for more information.
-
-## Benchmarks
-
-This is the fastest implementation of jsonnet both according to official benchmarks and real-life cluster configuration templating speed.
-
-Official benchmark results are available [in this gist](https://gist.github.com/CertainLach/5770d7ad4836066f8e0bd91e823e451b) which may get updated sometimes. It shows tests against Golang, C++ and Scala implementations showing the best performance in all cases.
-
-You can generate this report via provided nix flake
