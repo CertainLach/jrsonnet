@@ -6,9 +6,7 @@ mod trace;
 use std::{env, marker::PhantomData, path::PathBuf};
 
 use clap::Parser;
-use jrsonnet_evaluator::{
-	error::Result, stack::StackDepthLimitOverrideGuard, FileImportResolver, State,
-};
+use jrsonnet_evaluator::{error::Result, stack::set_stack_depth_limit, FileImportResolver, State};
 use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
 pub use stdlib::*;
@@ -48,7 +46,7 @@ pub struct MiscOpts {
 	jpath: Vec<PathBuf>,
 }
 impl ConfigureState for MiscOpts {
-	type Guards = StackDepthLimitOverrideGuard;
+	type Guards = ();
 	fn configure(&self, s: &State) -> Result<Self::Guards> {
 		let mut library_paths = self.jpath.clone();
 		library_paths.reverse();
@@ -58,8 +56,8 @@ impl ConfigureState for MiscOpts {
 
 		s.set_import_resolver(Box::new(FileImportResolver::new(library_paths)));
 
-		let _depth_limit = jrsonnet_evaluator::stack::limit_stack_depth(self.max_stack);
-		Ok(_depth_limit)
+		set_stack_depth_limit(self.max_stack);
+		Ok(())
 	}
 }
 
@@ -81,17 +79,16 @@ pub struct GeneralOpts {
 
 impl ConfigureState for GeneralOpts {
 	type Guards = (
-		<MiscOpts as ConfigureState>::Guards,
 		<TlaOpts as ConfigureState>::Guards,
 		<GcOpts as ConfigureState>::Guards,
 	);
 	fn configure(&self, s: &State) -> Result<Self::Guards> {
 		// Configure trace first, because tla-code/ext-code can throw
-		let misc_guards = self.misc.configure(s)?;
+		self.misc.configure(s)?;
 		let tla_guards = self.tla.configure(s)?;
 		self.std.configure(s)?;
 		let gc_guards = self.gc.configure(s)?;
-		Ok((misc_guards, tla_guards, gc_guards))
+		Ok((tla_guards, gc_guards))
 	}
 }
 

@@ -389,7 +389,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
 				ctx.this()
 					.clone()
-					.expect("if super exists - then this should to"),
+					.expect("if super exists - then this should too"),
 			),
 		),
 		Literal(LiteralType::Dollar) => {
@@ -408,6 +408,21 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
+		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
+			let name = evaluate(ctx.clone(), index)?;
+			let Val::Str(name) = name else {
+				throw!(ValueIndexMustBeTypeGot(
+					ValType::Obj,
+					ValType::Str,
+					name.value_type(),
+				))
+			};
+			ctx.super_obj()
+				.clone()
+				.expect("no super found")
+				.get_for(name, ctx.this().clone().expect("no this found"))?
+				.expect("value not found")
+		}
 		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
 			(Val::Obj(v), Val::Str(key)) => State::push(
 				CallLocation::new(loc),

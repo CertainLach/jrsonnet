@@ -128,7 +128,7 @@ pub struct ObjValueInternals {
 	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<IStr, CacheValue>>,
+	value_cache: RefCell<GcHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
 }
 
 #[derive(Clone, Trace)]
@@ -387,7 +387,8 @@ impl ObjValue {
 
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions()?;
-		if let Some(v) = self.0.value_cache.borrow().get(&key) {
+		let cache_key = (key.clone(), None);
+		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
 				CacheValue::NotFound => None,
@@ -398,21 +399,48 @@ impl ObjValue {
 		self.0
 			.value_cache
 			.borrow_mut()
-			.insert(key.clone(), CacheValue::Pending);
+			.insert(cache_key.clone(), CacheValue::Pending);
 		let value = self
-			.get_raw(
-				key.clone(),
-				self.0.this.clone().unwrap_or_else(|| self.clone()),
-			)
+			.get_raw(key, self.0.this.clone().unwrap_or_else(|| self.clone()))
 			.map_err(|e| {
 				self.0
 					.value_cache
 					.borrow_mut()
-					.insert(key.clone(), CacheValue::Errored(e.clone()));
+					.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
 				e
 			})?;
 		self.0.value_cache.borrow_mut().insert(
-			key,
+			cache_key,
+			value
+				.as_ref()
+				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),
+		);
+		Ok(value)
+	}
+	pub fn get_for(&self, key: IStr, this: Self) -> Result<Option<Val>> {
+		self.run_assertions()?;
+		let cache_key = (key.clone(), Some(this.clone().downgrade()));
+		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
+			return Ok(match v {
+				CacheValue::Cached(v) => Some(v.clone()),
+				CacheValue::NotFound => None,
+				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+				CacheValue::Errored(e) => return Err(e.clone()),
+			});
+		}
+		self.0
+			.value_cache
+			.borrow_mut()
+			.insert(cache_key.clone(), CacheValue::Pending);
+		let value = self.get_raw(key, this).map_err(|e| {
+			self.0
+				.value_cache
+				.borrow_mut()
+				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
+			e
+		})?;
+		self.0.value_cache.borrow_mut().insert(
+			cache_key,
 			value
 				.as_ref()
 				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),

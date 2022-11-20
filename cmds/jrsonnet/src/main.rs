@@ -139,7 +139,7 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	let (_stack_guard, tla, _gc_guard) = opts.general.configure(s)?;
+	let (tla, _gc_guard) = opts.general.configure(s)?;
 	let manifest_format = opts.manifest.configure(s)?;
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
