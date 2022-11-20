@@ -347,7 +347,7 @@ impl ArrValue {
 			}
 			Self::Range(a, b) => {
 				let mut out = Vec::with_capacity(self.len());
-				for i in *a..*b {
+				for i in *a..=*b {
 					out.push(Val::Num(f64::from(i)));
 				}
 				Cc::new(out)

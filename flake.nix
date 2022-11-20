@@ -17,13 +17,29 @@
         });
       in
       rec {
+        packages = rec {
+          go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix { };
+          sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix { };
+          jsonnet = pkgs.callPackage ./nix/jsonnet.nix { };
+          # I didn't managed to build it, and nixpkgs version is marked as broken
+          # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
+          jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
+            rustPlatform = pkgs.makeRustPlatform {
+              rustc = rust;
+              cargo = rust;
+            };
+          };
+
+          benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
+            inherit go-jsonnet sjsonnet jsonnet jrsonnet;
+          };
+        };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;[
             rust
             cargo-edit
             lld
             hyperfine
-            go-jsonnet
             valgrind
           ];
         };
