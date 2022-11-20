@@ -253,7 +253,7 @@ impl ContextInitializer {
 				context.build()
 			},
 			#[cfg(feature = "legacy-this-file")]
-			stdlib_obj: stdlib_uncached(s, settings.clone()),
+			stdlib_obj: stdlib_uncached(settings.clone()),
 			settings,
 		}
 	}
@@ -318,17 +318,14 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 		builder
 			.member("thisFile".into())
 			.hide()
-			.value(
-				s,
-				Val::Str(match source.source_path().path() {
-					Some(p) => self.settings().path_resolver.resolve(p).into(),
-					None => source.source_path().to_string().into(),
-				}),
-			)
+			.value(Val::Str(match source.source_path().path() {
+				Some(p) => self.settings().path_resolver.resolve(p).into(),
+				None => source.source_path().to_string().into(),
+			}))
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = builder.build();
 
-		let mut context = ContextBuilder::with_capacity(1);
+		let mut context = ContextBuilder::with_capacity(s, 1);
 		context.bind(
 			"std".into(),
 			Thunk::evaluated(Val::Obj(stdlib_with_this_file)),

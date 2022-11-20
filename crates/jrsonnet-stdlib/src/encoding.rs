@@ -18,11 +18,11 @@ pub fn builtin_decode_utf8(arr: IBytes) -> Result<IStr> {
 }
 
 #[builtin]
-pub fn builtin_base64(input: Either![IBytes, IStr]) -> Result<String> {
+pub fn builtin_base64(input: Either![IStr, IBytes]) -> Result<String> {
 	use Either2::*;
 	Ok(match input {
-		A(a) => base64::encode(a.as_slice()),
-		B(l) => base64::encode(l.bytes().collect::<Vec<_>>()),
+		A(l) => base64::encode(l.as_bytes()),
+		B(a) => base64::encode(a.as_slice()),
 	})
 }
 
