@@ -1,4 +1,4 @@
-{ lib, buildGo119Module, fetchFromGitHub }:
+{ lib, buildGo119Module, fetchFromGitHub, makeWrapper }:
 
 buildGo119Module rec {
   pname = "go-jsonnet";
@@ -11,11 +11,13 @@ buildGo119Module rec {
     rev = "${version}";
     hash = "sha256-J+bGdbYo2Ch3ORYD57yJA4jiPiS8IYASZ6kJHhyaqeU=";
   };
-
   vendorHash = "sha256-j1fTOUpLx34TgzW94A/BctLrg9XoTtb3cBizhVJoEEI=";
+
+  buildInputs = [ makeWrapper ];
 
   postInstall = ''
     mv $out/bin/jsonnet $out/bin/go-jsonnet
+    wrapProgram $out/bin/go-jsonnet --add-flags "--max-stack 200000"
   '';
 
   doCheck = false;

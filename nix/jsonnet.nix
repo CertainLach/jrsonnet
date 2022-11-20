@@ -1,4 +1,4 @@
-{ stdenv, lib, jekyll, fetchFromGitHub }:
+{ stdenv, lib, jekyll, fetchFromGitHub, makeWrapper }:
 
 stdenv.mkDerivation rec {
   pname = "jsonnet";
@@ -15,8 +15,11 @@ stdenv.mkDerivation rec {
     "jsonnet"
   ];
 
+  buildInputs = [ makeWrapper ];
+
   installPhase = ''
     mkdir -p $out/bin
     cp jsonnet $out/bin/jsonnet
+    wrapProgram $out/bin/jsonnet --add-flags "--max-stack 200000"
   '';
 }
