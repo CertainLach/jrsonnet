@@ -95,7 +95,7 @@ pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
 #[builtin]
 pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
 	if raw.is_empty() {
-		throw!("Empty octal integer");
+		throw!("empty octal integer");
 	}
 
 	parse_nat::<8>(raw.as_str())
@@ -104,7 +104,7 @@ pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
 #[builtin]
 pub fn builtin_parse_hex(raw: IStr) -> Result<f64> {
 	if raw.is_empty() {
-		throw!("Empty hexadecimal integer");
+		throw!("empty hexadecimal integer");
 	}
 
 	parse_nat::<16>(raw.as_str())
