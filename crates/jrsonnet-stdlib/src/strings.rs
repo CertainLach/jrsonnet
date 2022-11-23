@@ -50,10 +50,6 @@ pub fn builtin_ascii_lower(str: IStr) -> Result<String> {
 	Ok(str.to_ascii_lowercase())
 }
 
-pub fn repeat(what: Either![IStr, ArrValue], count: i32) {
-	joi
-}
-
 #[builtin]
 pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 	if pat.is_empty() || str.is_empty() || pat.len() > str.len() {
@@ -81,19 +77,18 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 
 #[builtin]
 pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
-	let mut chars = raw.chars();
-	if let Some(first_char) = chars.next() {
-		if first_char == '-' {
-			let remaining = chars.as_str();
-			if remaining.is_empty() {
-				throw!("Integer only consists of a minus");
-			}
-			parse_nat::<10>(remaining).map(|value| -value)
-		} else {
-			parse_nat::<10>(raw.as_str())
+	if let Some(raw) = raw.strip_prefix('-') {
+		if raw.is_empty() {
+			throw!("integer only consists of a minus")
 		}
+
+		parse_nat::<10>(raw).map(|value| -value)
 	} else {
-		throw!("Empty decimal integer",);
+		if raw.is_empty() {
+			throw!("empty integer")
+		}
+
+		parse_nat::<10>(raw.as_str())
 	}
 }
 
