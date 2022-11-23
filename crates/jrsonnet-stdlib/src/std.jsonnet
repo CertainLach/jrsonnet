@@ -25,42 +25,6 @@
   stringChars(str)::
     std.makeArray(std.length(str), function(i) str[i]),
 
-  local parse_nat(str, base) =
-    assert base > 0 && base <= 16 : 'integer base %d invalid' % base;
-    // These codepoints are in ascending order:
-    local zero_code = std.codepoint('0');
-    local upper_a_code = std.codepoint('A');
-    local lower_a_code = std.codepoint('a');
-    local addDigit(aggregate, char) =
-      local code = std.codepoint(char);
-      local digit = if code >= lower_a_code then
-        code - lower_a_code + 10
-      else if code >= upper_a_code then
-        code - upper_a_code + 10
-      else
-        code - zero_code;
-      assert digit >= 0 && digit < base : '%s is not a base %d integer' % [str, base];
-      base * aggregate + digit;
-    std.foldl(addDigit, std.stringChars(str), 0),
-
-  parseInt(str)::
-    assert std.isString(str) : 'Expected string, got ' + std.type(str);
-    assert std.length(str) > 0 && str != '-' : 'Not an integer: "%s"' % [str];
-    if str[0] == '-' then
-      -parse_nat(str[1:], 10)
-    else
-      parse_nat(str, 10),
-
-  parseOctal(str)::
-    assert std.isString(str) : 'Expected string, got ' + std.type(str);
-    assert std.length(str) > 0 : 'Not an octal number: ""';
-    parse_nat(str, 8),
-
-  parseHex(str)::
-    assert std.isString(str) : 'Expected string, got ' + std.type(str);
-    assert std.length(str) > 0 : 'Not hexadecimal: ""';
-    parse_nat(str, 16),
-
   split(str, c):: std.splitLimit(str, c, -1),
 
   repeat(what, count)::
