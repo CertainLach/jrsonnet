@@ -50,6 +50,10 @@ pub fn builtin_ascii_lower(str: IStr) -> Result<String> {
 	Ok(str.to_ascii_lowercase())
 }
 
+pub fn repeat(what: Either![IStr, ArrValue], count: i32) {
+	joi
+}
+
 #[builtin]
 pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 	if pat.is_empty() || str.is_empty() || pat.len() > str.len() {
@@ -89,7 +93,7 @@ pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
 			parse_nat::<10>(raw.as_str())
 		}
 	} else {
-		throw!("Empty decimal integer \"{}\"", raw);
+		throw!("Empty decimal integer",);
 	}
 }
 
@@ -145,7 +149,7 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 		if digit < BASE {
 			Ok(base * aggregate + digit as f64)
 		} else {
-			throw!("\"{raw}\" is not a base {BASE} integer",);
+			throw!("{raw:?} is not a base {BASE} integer",);
 		}
 	})
 }
