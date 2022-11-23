@@ -82,21 +82,21 @@ pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
 		if first_char == '-' {
 			let remaining = chars.as_str();
 			if remaining.is_empty() {
-				throw!("Not an integer: \"{}\"", raw);
+				throw!("Integer only consists of a minus");
 			}
 			parse_nat::<10>(remaining).map(|value| -value)
 		} else {
 			parse_nat::<10>(raw.as_str())
 		}
 	} else {
-		throw!("Not an integer: \"{}\"", raw);
+		throw!("Empty decimal integer \"{}\"", raw);
 	}
 }
 
 #[builtin]
 pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
 	if raw.is_empty() {
-		throw!("Not an octal number: \"\"");
+		throw!("Empty octal integer");
 	}
 
 	parse_nat::<8>(raw.as_str())
@@ -105,7 +105,7 @@ pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
 #[builtin]
 pub fn builtin_parse_hex(raw: IStr) -> Result<f64> {
 	if raw.is_empty() {
-		throw!("Not hexadecimal: \"\"");
+		throw!("Empty hexadecimal integer");
 	}
 
 	parse_nat::<16>(raw.as_str())
@@ -145,7 +145,7 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 		if digit < BASE {
 			Ok(base * aggregate + digit as f64)
 		} else {
-			throw!("{raw} is not a base {BASE} integer",);
+			throw!("\"{raw}\" is not a base {BASE} integer",);
 		}
 	})
 }
