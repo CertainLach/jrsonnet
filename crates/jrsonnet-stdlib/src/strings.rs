@@ -154,10 +154,26 @@ mod tests {
 	use super::*;
 
 	#[test]
+	fn parse_nat_base_8() {
+		assert_eq!(parse_nat::<8>("0").unwrap(), 0.);
+		assert_eq!(parse_nat::<8>("5").unwrap(), 5.);
+		assert_eq!(parse_nat::<8>("32").unwrap(), 0o32 as f64);
+		assert_eq!(parse_nat::<8>("761").unwrap(), 0o761 as f64);
+	}
+
+	#[test]
 	fn parse_nat_base_10() {
 		assert_eq!(parse_nat::<10>("0").unwrap(), 0.);
 		assert_eq!(parse_nat::<10>("3").unwrap(), 3.);
-		assert_eq!(parse_nat::<10>("27").unwrap(), 10. * 2. + 7.);
-		assert_eq!(parse_nat::<10>("123").unwrap(), 10. * (10. * 1. + 2.) + 3.);
+		assert_eq!(parse_nat::<10>("27").unwrap(), 27.);
+		assert_eq!(parse_nat::<10>("123").unwrap(), 123.);
+	}
+
+	#[test]
+	fn parse_nat_base_16() {
+		assert_eq!(parse_nat::<16>("0").unwrap(), 0.);
+		assert_eq!(parse_nat::<16>("A").unwrap(), 10.);
+		assert_eq!(parse_nat::<16>("a9").unwrap(), 0xA9 as f64);
+		assert_eq!(parse_nat::<16>("BbC").unwrap(), 0xBBC as f64);
 	}
 }
