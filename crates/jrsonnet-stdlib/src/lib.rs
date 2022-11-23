@@ -128,6 +128,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("asciiUpper", builtin_ascii_upper::INST),
 		("asciiLower", builtin_ascii_lower::INST),
 		("findSubstr", builtin_find_substr::INST),
+		("parseInt", builtin_parse_int::INST),
+		("parseOctal", builtin_parse_octal::INST),
+		("parseHex", builtin_parse_hex::INST),
 		// Misc
 		("length", builtin_length::INST),
 		("startsWith", builtin_starts_with::INST),
@@ -312,7 +315,7 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 		out.build()
 	}
 	#[cfg(feature = "legacy-this-file")]
-	fn initialize(&self, s: State, source: Source) -> jrsonnet_evaluator::Context {
+	fn initialize(&self, s: State, source: Source) -> Context {
 		let mut builder = ObjValueBuilder::new();
 		builder.with_super(self.stdlib_obj.clone());
 		builder
