@@ -1,6 +1,7 @@
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::builtin,
+	throw,
 	typed::{Either2, VecVal, M1},
 	val::ArrValue,
 	Either, IStr, Val,
@@ -72,4 +73,92 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 		}
 	}
 	Ok(out.into())
+}
+
+#[builtin]
+pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
+	let mut chars = raw.chars();
+	if let Some(first_char) = chars.next() {
+		if first_char == '-' {
+			let remaining = chars.as_str();
+			if remaining.is_empty() {
+				throw!("Not an integer: \"{}\"", raw);
+			}
+			parse_nat::<10>(remaining).map(|value| -value)
+		} else {
+			parse_nat::<10>(raw.as_str())
+		}
+	} else {
+		throw!("Not an integer: \"{}\"", raw);
+	}
+}
+
+#[builtin]
+pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
+	if raw.is_empty() {
+		throw!("Not an octal number: \"\"");
+	}
+
+	parse_nat::<8>(raw.as_str())
+}
+
+#[builtin]
+pub fn builtin_parse_hex(raw: IStr) -> Result<f64> {
+	if raw.is_empty() {
+		throw!("Not hexadecimal: \"\"");
+	}
+
+	parse_nat::<16>(raw.as_str())
+}
+
+fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
+	debug_assert!(
+		1 <= BASE && BASE <= 16,
+		"integer base should be between 1 and 16"
+	);
+
+	const ZERO_CODE: u32 = '0' as u32;
+	const UPPER_A_CODE: u32 = 'A' as u32;
+	const LOWER_A_CODE: u32 = 'a' as u32;
+
+	#[inline]
+	fn checked_sub_if(condition: bool, lhs: u32, rhs: u32) -> Option<u32> {
+		if condition {
+			lhs.checked_sub(rhs)
+		} else {
+			None
+		}
+	}
+
+	let base = BASE as f64;
+
+	raw.chars().try_fold(0f64, |aggregate, digit| {
+		let digit = digit as u32;
+		let digit = if let Some(digit) = checked_sub_if(BASE > 10, digit, LOWER_A_CODE) {
+			digit + 10
+		} else if let Some(digit) = checked_sub_if(BASE > 10, digit, UPPER_A_CODE) {
+			digit + 10
+		} else {
+			digit.checked_sub(ZERO_CODE).unwrap_or(BASE)
+		};
+
+		if digit < BASE {
+			Ok(base * aggregate + digit as f64)
+		} else {
+			throw!("{raw} is not a base {BASE} integer",);
+		}
+	})
+}
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	#[test]
+	fn parse_nat_base_10() {
+		assert_eq!(parse_nat::<10>("0").unwrap(), 0.);
+		assert_eq!(parse_nat::<10>("3").unwrap(), 3.);
+		assert_eq!(parse_nat::<10>("27").unwrap(), 10. * 2. + 7.);
+		assert_eq!(parse_nat::<10>("123").unwrap(), 10. * (10. * 1. + 2.) + 3.);
+	}
 }
