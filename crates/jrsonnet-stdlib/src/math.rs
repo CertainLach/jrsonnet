@@ -21,22 +21,6 @@ pub fn builtin_min(x: f64, y: f64) -> Result<f64> {
 }
 
 #[builtin]
-pub fn builtin_clamp(x: f64, min_val: f64, max_val: f64) -> Result<f64> {
-	debug_assert!(x.is_finite(), "jsonnet number are always finite");
-	debug_assert!(min_val.is_finite(), "jsonnet number are always finite");
-	debug_assert!(max_val.is_finite(), "jsonnet number are always finite");
-
-	// `f64::clamp` should noe be used here since it requires extra checks to guarantee NaN-safety
-	Ok(if x < min_val {
-		min_val
-	} else if x > max_val {
-		max_val
-	} else {
-		x
-	})
-}
-
-#[builtin]
 pub fn builtin_modulo(a: f64, b: f64) -> Result<f64> {
 	Ok(a % b)
 }
