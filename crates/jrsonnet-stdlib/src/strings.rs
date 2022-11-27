@@ -76,38 +76,38 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 }
 
 #[builtin]
-pub fn builtin_parse_int(raw: IStr) -> Result<f64> {
-	if let Some(raw) = raw.strip_prefix('-') {
+pub fn builtin_parse_int(str: IStr) -> Result<f64> {
+	if let Some(raw) = str.strip_prefix('-') {
 		if raw.is_empty() {
 			throw!("integer only consists of a minus")
 		}
 
 		parse_nat::<10>(raw).map(|value| -value)
 	} else {
-		if raw.is_empty() {
+		if str.is_empty() {
 			throw!("empty integer")
 		}
 
-		parse_nat::<10>(raw.as_str())
+		parse_nat::<10>(str.as_str())
 	}
 }
 
 #[builtin]
-pub fn builtin_parse_octal(raw: IStr) -> Result<f64> {
-	if raw.is_empty() {
+pub fn builtin_parse_octal(str: IStr) -> Result<f64> {
+	if str.is_empty() {
 		throw!("empty octal integer");
 	}
 
-	parse_nat::<8>(raw.as_str())
+	parse_nat::<8>(str.as_str())
 }
 
 #[builtin]
-pub fn builtin_parse_hex(raw: IStr) -> Result<f64> {
-	if raw.is_empty() {
+pub fn builtin_parse_hex(str: IStr) -> Result<f64> {
+	if str.is_empty() {
 		throw!("empty hexadecimal integer");
 	}
 
-	parse_nat::<16>(raw.as_str())
+	parse_nat::<16>(str.as_str())
 }
 
 fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
