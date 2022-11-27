@@ -1,23 +1,23 @@
 use jrsonnet_evaluator::{error::Result, function::builtin, typed::PositiveF64};
 
 #[builtin]
-pub fn builtin_abs(x: f64) -> Result<f64> {
-	Ok(x.abs())
+pub fn builtin_abs(n: f64) -> Result<f64> {
+	Ok(n.abs())
 }
 
 #[builtin]
-pub fn builtin_sign(x: f64) -> Result<f64> {
-	Ok(if x == 0. { 0. } else { x.signum() })
+pub fn builtin_sign(n: f64) -> Result<f64> {
+	Ok(if n == 0. { 0. } else { n.signum() })
 }
 
 #[builtin]
-pub fn builtin_max(x: f64, y: f64) -> Result<f64> {
-	Ok(x.max(y))
+pub fn builtin_max(a: f64, b: f64) -> Result<f64> {
+	Ok(a.max(b))
 }
 
 #[builtin]
-pub fn builtin_min(x: f64, y: f64) -> Result<f64> {
-	Ok(x.min(y))
+pub fn builtin_min(a: f64, b: f64) -> Result<f64> {
+	Ok(a.min(b))
 }
 
 #[builtin]
