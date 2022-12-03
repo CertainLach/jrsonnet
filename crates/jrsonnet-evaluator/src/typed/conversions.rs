@@ -11,7 +11,7 @@ use crate::{
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	throw,
 	typed::CheckType,
-	val::IndexableVal,
+	val::{IndexableVal, StrValue},
 	ObjValue, ObjValueBuilder, Val,
 };
 
@@ -187,13 +187,13 @@ impl Typed for IStr {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Str);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(value))
+		Ok(Val::Str(StrValue::Flat(value)))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Str(s) => Ok(s),
+			Val::Str(s) => Ok(s.into_flat()),
 			_ => unreachable!(),
 		}
 	}
@@ -203,7 +203,7 @@ impl Typed for String {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Str);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(value.into()))
+		Ok(Val::Str(StrValue::Flat(value.into())))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -219,13 +219,13 @@ impl Typed for char {
 	const TYPE: &'static ComplexValType = &ComplexValType::Char;
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(value.to_string().into()))
+		Ok(Val::Str(StrValue::Flat(value.to_string().into())))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Str(s) => Ok(s.chars().next().unwrap()),
+			Val::Str(s) => Ok(s.into_flat().chars().next().unwrap()),
 			_ => unreachable!(),
 		}
 	}
@@ -480,7 +480,7 @@ impl Typed for IndexableVal {
 
 	fn into_untyped(value: Self) -> Result<Val> {
 		match value {
-			IndexableVal::Str(s) => Ok(Val::Str(s)),
+			IndexableVal::Str(s) => Ok(Val::Str(StrValue::Flat(s))),
 			IndexableVal::Arr(a) => Ok(Val::Arr(a)),
 		}
 	}

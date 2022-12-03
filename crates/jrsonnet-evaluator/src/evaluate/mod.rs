@@ -17,7 +17,7 @@ use crate::{
 	function::{CallLocation, FuncDesc, FuncVal},
 	tb, throw,
 	typed::Typed,
-	val::{CachedUnbound, IndexableVal, Thunk, ThunkValue},
+	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
 	Unbound, Val,
 };
@@ -36,7 +36,7 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 		}
 	}
 	Some(match &*expr.0 {
-		Expr::Str(s) => Val::Str(s.clone()),
+		Expr::Str(s) => Val::Str(StrValue::Flat(s.clone())),
 		Expr::Num(n) => Val::Num(*n),
 		Expr::Literal(LiteralType::False) => Val::Bool(false),
 		Expr::Literal(LiteralType::True) => Val::Bool(true),
@@ -135,7 +135,7 @@ pub fn evaluate_comp(
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(Cc::new(vec![
-						Thunk::evaluated(Val::Str(field.clone())),
+						Thunk::evaluated(Val::Str(StrValue::Flat(field.clone()))),
 						Thunk::new(tb!(ObjectFieldThunk {
 							field: field.clone(),
 							obj: obj.clone(),
@@ -436,7 +436,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(ctx, e)?,
-		Str(v) => Val::Str(v.clone()),
+		Str(v) => Val::Str(StrValue::Flat(v.clone())),
 		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
@@ -457,14 +457,14 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			ctx.super_obj()
 				.clone()
 				.expect("no super found")
-				.get_for(name, ctx.this().clone().expect("no this found"))?
+				.get_for(name.into_flat(), ctx.this().clone().expect("no this found"))?
 				.expect("value not found")
 		}
 		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
 			(Val::Obj(v), Val::Str(key)) => State::push(
 				CallLocation::new(loc),
 				|| format!("field <{key}> access"),
-				|| match v.get(key.clone()) {
+				|| match v.get(key.clone().into_flat()) {
 					Ok(Some(v)) => Ok(v),
 					#[cfg(not(feature = "friendly-errors"))]
 					Ok(None) => throw!(NoSuchField(key.clone(), vec![])),
@@ -476,7 +476,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 							#[cfg(feature = "exp-preserve-order")]
 							false,
 						) {
-							let conf = strsim::jaro_winkler(&field as &str, &key as &str);
+							let conf = strsim::jaro_winkler(
+								&field as &str,
+								&key.clone().into_flat() as &str,
+							);
 							if conf < 0.8 {
 								continue;
 							}
@@ -485,7 +488,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
 						throw!(NoSuchField(
-							key.clone(),
+							key.clone().into_flat(),
 							heap.into_iter().map(|(_, v)| v).collect()
 						))
 					}
@@ -505,7 +508,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				v.get(n as usize)?
 					.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
 			}
-			(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n)),
+			(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n.into_flat())),
 			(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
 				ValType::Arr,
 				ValType::Num,
@@ -514,16 +517,18 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 
 			(Val::Str(s), Val::Num(n)) => Val::Str({
 				let v: IStr = s
+					.clone()
+					.into_flat()
 					.chars()
 					.skip(n as usize)
 					.take(1)
 					.collect::<String>()
 					.into();
 				if v.is_empty() {
-					let size = s.chars().count();
+					let size = s.into_flat().chars().count();
 					throw!(StringBoundsError(n as usize, size))
 				}
-				v
+				StrValue::Flat(v)
 			}),
 			(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
 				ValType::Str,
@@ -654,7 +659,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					|| format!("import {:?}", path.clone()),
 					|| s.import_resolved(resolved_path),
 				)?,
-				ImportStr(_) => Val::Str(s.import_resolved_str(resolved_path)?),
+				ImportStr(_) => Val::Str(StrValue::Flat(s.import_resolved_str(resolved_path)?)),
 				ImportBin(_) => Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}

@@ -320,15 +320,19 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	}
 	#[cfg(feature = "legacy-this-file")]
 	fn initialize(&self, s: State, source: Source) -> Context {
+		use jrsonnet_evaluator::val::StrValue;
+
 		let mut builder = ObjValueBuilder::new();
 		builder.with_super(self.stdlib_obj.clone());
 		builder
 			.member("thisFile".into())
 			.hide()
-			.value(Val::Str(match source.source_path().path() {
-				Some(p) => self.settings().path_resolver.resolve(p).into(),
-				None => source.source_path().to_string().into(),
-			}))
+			.value(Val::Str(StrValue::Flat(
+				match source.source_path().path() {
+					Some(p) => self.settings().path_resolver.resolve(p).into(),
+					None => source.source_path().to_string().into(),
+				},
+			)))
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = builder.build();
 

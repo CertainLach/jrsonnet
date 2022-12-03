@@ -4,7 +4,13 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
 use crate::{
-	error::Result, evaluate, gc::GcHashMap, tb, typed::Typed, val::ThunkValue, Context, Thunk, Val,
+	error::Result,
+	evaluate,
+	gc::GcHashMap,
+	tb,
+	typed::Typed,
+	val::{StrValue, ThunkValue},
+	Context, Thunk, Val,
 };
 
 /// Marker for arguments, which can be evaluated with context set to None
@@ -59,7 +65,7 @@ pub enum TlaArg {
 impl ArgLike for TlaArg {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		match self {
-			TlaArg::String(s) => Ok(Thunk::evaluated(Val::Str(s.clone()))),
+			TlaArg::String(s) => Ok(Thunk::evaluated(Val::Str(StrValue::Flat(s.clone())))),
 			TlaArg::Code(code) => Ok(if tailstrict {
 				Thunk::evaluated(evaluate(ctx, code)?)
 			} else {

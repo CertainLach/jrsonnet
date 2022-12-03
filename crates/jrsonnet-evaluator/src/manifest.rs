@@ -147,7 +147,7 @@ fn manifest_json_ex_buf(
 			}
 		}
 		Val::Null => buf.push_str("null"),
-		Val::Str(s) => escape_string_json_buf(s, buf),
+		Val::Str(s) => escape_string_json_buf(&s.clone().into_flat(), buf),
 		Val::Num(n) => write!(buf, "{n}").unwrap(),
 		Val::Arr(items) => {
 			buf.push('[');
@@ -256,7 +256,7 @@ impl ManifestFormat for StringFormat {
 		let Val::Str(s) = val else {
 			throw!("output should be string for string manifest format, got {}", val.value_type())
 		};
-		out.write_str(&s).unwrap();
+		write!(out, "{s}").unwrap();
 		Ok(())
 	}
 }

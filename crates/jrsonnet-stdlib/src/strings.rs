@@ -3,7 +3,7 @@ use jrsonnet_evaluator::{
 	function::builtin,
 	throw,
 	typed::{Either2, VecVal, M1},
-	val::ArrValue,
+	val::{ArrValue, StrValue},
 	Either, IStr, Val,
 };
 use jrsonnet_gcmodule::Cc;
@@ -34,9 +34,12 @@ pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> 
 	Ok(VecVal(Cc::new(match maxsplits {
 		A(n) => str
 			.splitn(n + 1, &c as &str)
-			.map(|s| Val::Str(s.into()))
+			.map(|s| Val::Str(StrValue::Flat(s.into())))
 			.collect(),
-		B(_) => str.split(&c as &str).map(|s| Val::Str(s.into())).collect(),
+		B(_) => str
+			.split(&c as &str)
+			.map(|s| Val::Str(StrValue::Flat(s.into())))
+			.collect(),
 	})))
 }
 

@@ -1,5 +1,9 @@
 use jrsonnet_evaluator::{
-	error::Result, function::builtin, typed::VecVal, val::Val, IStr, ObjValue,
+	error::Result,
+	function::builtin,
+	typed::VecVal,
+	val::{StrValue, Val},
+	IStr, ObjValue,
 };
 use jrsonnet_gcmodule::Cc;
 
@@ -17,7 +21,10 @@ pub fn builtin_object_fields_ex(
 		preserve_order,
 	);
 	Ok(VecVal(Cc::new(
-		out.into_iter().map(Val::Str).collect::<Vec<_>>(),
+		out.into_iter()
+			.map(StrValue::Flat)
+			.map(Val::Str)
+			.collect::<Vec<_>>(),
 	)))
 }
 

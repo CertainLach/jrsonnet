@@ -589,6 +589,7 @@ pub fn format_code(
 					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
 			),
 			Val::Str(s) => {
+				let s = s.into_flat();
 				if s.chars().count() != 1 {
 					throw!("%c expected 1 char string, got {}", s.chars().count(),);
 				}

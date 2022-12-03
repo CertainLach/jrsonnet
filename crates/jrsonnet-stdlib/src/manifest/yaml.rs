@@ -118,6 +118,7 @@ fn manifest_yaml_ex_buf(
 		}
 		Val::Null => buf.push_str("null"),
 		Val::Str(s) => {
+			let s = s.clone().into_flat();
 			if s.is_empty() {
 				buf.push_str("\"\"");
 			} else if let Some(s) = s.strip_suffix('\n') {
@@ -128,10 +129,10 @@ fn manifest_yaml_ex_buf(
 					buf.push_str(&options.padding);
 					buf.push_str(line);
 				}
-			} else if !options.quote_keys && !yaml_needs_quotes(s) {
-				buf.push_str(s);
+			} else if !options.quote_keys && !yaml_needs_quotes(&s) {
+				buf.push_str(&s);
 			} else {
-				escape_string_json_buf(s, buf);
+				escape_string_json_buf(&s, buf);
 			}
 		}
 		Val::Num(n) => write!(buf, "{}", *n).unwrap(),

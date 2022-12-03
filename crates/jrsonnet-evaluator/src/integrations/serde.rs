@@ -7,7 +7,7 @@ use serde::{
 	Deserialize, Serialize,
 };
 
-use crate::{arr::ArrValue, error::Result, ObjValueBuilder, State, Val};
+use crate::{arr::ArrValue, error::Result, val::StrValue, ObjValueBuilder, State, Val};
 
 impl<'de> Deserialize<'de> for Val {
 	fn deserialize<D>(deserializer: D) -> Result<Val, D::Error>
@@ -49,7 +49,7 @@ impl<'de> Deserialize<'de> for Val {
 			where
 				E: serde::de::Error,
 			{
-				Ok(Val::Str(v.into()))
+				Ok(Val::Str(StrValue::Flat(v.into())))
 			}
 
 			// visit_num! {
@@ -152,7 +152,7 @@ impl Serialize for Val {
 		match self {
 			Val::Bool(v) => serializer.serialize_bool(*v),
 			Val::Null => serializer.serialize_none(),
-			Val::Str(s) => serializer.serialize_str(s),
+			Val::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
 			Val::Num(n) => serializer.serialize_f64(*n),
 			Val::Arr(arr) => {
 				let mut seq = serializer.serialize_seq(Some(arr.len()))?;

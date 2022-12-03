@@ -1,4 +1,9 @@
-use std::{cell::RefCell, fmt::Debug, mem::replace};
+use std::{
+	cell::RefCell,
+	fmt::{self, Debug, Display},
+	mem::replace,
+	rc::Rc,
+};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
@@ -117,7 +122,7 @@ impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 }
 
 impl<T: Debug + Trace> Debug for Thunk<T> {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "Lazy")
 	}
 }
@@ -187,6 +192,87 @@ impl IndexableVal {
 	}
 }
 
+#[derive(Debug, Clone, Trace)]
+pub enum StrValue {
+	Flat(IStr),
+	Tree(Rc<(StrValue, StrValue, usize)>),
+}
+impl StrValue {
+	pub fn concat(a: StrValue, b: StrValue) -> Self {
+		if a.is_empty() {
+			b
+		} else if b.is_empty() {
+			a
+		} else {
+			let len = a.len() + b.len();
+			Self::Tree(Rc::new((a, b, len)))
+		}
+	}
+	pub fn into_flat(self) -> IStr {
+		match self {
+			StrValue::Flat(f) => f,
+			StrValue::Tree(_) => {
+				let mut buf = String::new();
+				self.into_flat_buf(&mut buf);
+				buf.into()
+			}
+		}
+	}
+	fn into_flat_buf(&self, out: &mut String) {
+		match self {
+			StrValue::Flat(f) => out.push_str(f),
+			StrValue::Tree(t) => {
+				t.0.into_flat_buf(out);
+				t.1.into_flat_buf(out);
+			}
+		}
+	}
+	pub fn len(&self) -> usize {
+		match self {
+			StrValue::Flat(v) => v.len(),
+			StrValue::Tree(t) => t.2,
+		}
+	}
+	pub fn is_empty(&self) -> bool {
+		match self {
+			Self::Flat(v) => v.is_empty(),
+			_ => false,
+		}
+	}
+}
+impl Display for StrValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			StrValue::Flat(v) => write!(f, "{v}"),
+			StrValue::Tree(t) => {
+				write!(f, "{}", t.0)?;
+				write!(f, "{}", t.1)
+			}
+		}
+	}
+}
+impl PartialEq for StrValue {
+	fn eq(&self, other: &Self) -> bool {
+		let a = self.clone().into_flat();
+		let b = other.clone().into_flat();
+		a == b
+	}
+}
+impl Eq for StrValue {}
+impl PartialOrd for StrValue {
+	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+		let a = self.clone().into_flat();
+		let b = other.clone().into_flat();
+		Some(a.cmp(&b))
+	}
+}
+impl Ord for StrValue {
+	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+		self.partial_cmp(other)
+			.expect("partial_cmp always returns Some")
+	}
+}
+
 /// Represents any valid Jsonnet value.
 #[derive(Debug, Clone, Trace)]
 pub enum Val {
@@ -195,7 +281,7 @@ pub enum Val {
 	/// Represents a Jsonnet null value.
 	Null,
 	/// Represents a Jsonnet string.
-	Str(IStr),
+	Str(StrValue),
 	/// Represents a Jsonnet number.
 	/// Should be finite, and not NaN
 	/// This restriction isn't enforced by enum, as enum field can't be marked as private
@@ -208,10 +294,12 @@ pub enum Val {
 	Func(FuncVal),
 }
 
+static_assertions::assert_eq_size!(Val, [u8; 24]);
+
 impl From<IndexableVal> for Val {
 	fn from(v: IndexableVal) -> Self {
 		match v {
-			IndexableVal::Str(s) => Self::Str(s),
+			IndexableVal::Str(s) => Self::Str(StrValue::Flat(s)),
 			IndexableVal::Arr(a) => Self::Arr(a),
 		}
 	}
@@ -232,7 +320,7 @@ impl Val {
 	}
 	pub fn as_str(&self) -> Option<IStr> {
 		match self {
-			Self::Str(s) => Some(s.clone()),
+			Self::Str(s) => Some(s.clone().into_flat()),
 			_ => None,
 		}
 	}
@@ -295,14 +383,14 @@ impl Val {
 			Self::Bool(true) => "true".into(),
 			Self::Bool(false) => "false".into(),
 			Self::Null => "null".into(),
-			Self::Str(s) => s.clone(),
+			Self::Str(s) => s.clone().into_flat(),
 			_ => self.manifest(ToStringFormat).map(IStr::from)?,
 		})
 	}
 
 	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {
-			Val::Str(s) => IndexableVal::Str(s),
+			Val::Str(s) => IndexableVal::Str(s.into_flat()),
 			Val::Arr(arr) => IndexableVal::Arr(arr),
 			_ => throw!(ValueIsNotIndexable(self.value_type())),
 		})

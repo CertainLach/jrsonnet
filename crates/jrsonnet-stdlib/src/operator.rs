@@ -7,7 +7,7 @@ use jrsonnet_evaluator::{
 	operator::evaluate_mod_op,
 	stdlib::std_format,
 	typed::{Any, Either, Either2},
-	val::{equals, primitive_equals},
+	val::{equals, primitive_equals, StrValue},
 	IStr, Val,
 };
 
@@ -17,7 +17,7 @@ pub fn builtin_mod(a: Either![f64, IStr], b: Any) -> Result<Any> {
 	Ok(Any(evaluate_mod_op(
 		&match a {
 			A(v) => Val::Num(v),
-			B(s) => Val::Str(s),
+			B(s) => Val::Str(StrValue::Flat(s)),
 		},
 		&b.0,
 	)?))
@@ -35,5 +35,5 @@ pub fn builtin_equals(a: Any, b: Any) -> Result<bool> {
 
 #[builtin]
 pub fn builtin_format(str: IStr, vals: Any) -> Result<String> {
-	std_format(str, vals.0)
+	std_format(&str, vals.0)
 }

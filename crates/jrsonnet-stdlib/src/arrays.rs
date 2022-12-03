@@ -37,12 +37,13 @@ pub fn builtin_flatmap(
 	func: NativeFn<((Either![String, Any],), Any)>,
 	arr: IndexableVal,
 ) -> Result<IndexableVal> {
+	use std::fmt::Write;
 	match arr {
 		IndexableVal::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
 				match func(Either2::A(c.to_string()))?.0 {
-					Val::Str(o) => out.push_str(&o),
+					Val::Str(o) => write!(out, "{o}").unwrap(),
 					Val::Null => continue,
 					_ => throw!("in std.join all items should be strings"),
 				};
@@ -101,6 +102,7 @@ pub fn builtin_range(from: i32, to: i32) -> Result<ArrValue> {
 
 #[builtin]
 pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
+	use std::fmt::Write;
 	Ok(match sep {
 		IndexableVal::Arr(joiner_items) => {
 			let mut out = Vec::new();
@@ -141,7 +143,7 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 						out += &sep;
 					}
 					first = false;
-					out += &item;
+					write!(out, "{item}").unwrap()
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {

@@ -3,8 +3,14 @@ use std::cmp::Ordering;
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
-	arr::ArrValue, error::ErrorKind::*, evaluate, stdlib::std_format, throw, typed::Typed,
-	val::equals, Context, Result, Val,
+	arr::ArrValue,
+	error::ErrorKind::*,
+	evaluate,
+	stdlib::std_format,
+	throw,
+	typed::Typed,
+	val::{equals, StrValue},
+	Context, Result, Val,
 };
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
@@ -25,15 +31,21 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Str(a), Str(b)) if a.is_empty() => Val::Str(b.clone()),
 		(Str(a), Str(b)) if b.is_empty() => Val::Str(a.clone()),
-		(Str(v1), Str(v2)) => Str(((**v1).to_owned() + v2).into()),
+		(Str(v1), Str(v2)) => Str(StrValue::concat(v1.clone(), v2.clone())),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
-		(Num(a), Str(b)) => Str(format!("{a}{b}").into()),
-		(Str(a), Num(b)) => Str(format!("{a}{b}").into()),
+		(Num(a), Str(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
+		(Str(a), Num(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
 
-		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::Str(o.clone().to_string()?),
-		(Str(a), o) => Str(format!("{a}{}", o.clone().to_string()?).into()),
-		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string()?).into()),
+		(Str(a), o) | (o, Str(a)) if a.is_empty() => {
+			Val::Str(StrValue::Flat(o.clone().to_string()?))
+		}
+		(Str(a), o) => Str(StrValue::Flat(
+			format!("{a}{}", o.clone().to_string()?).into(),
+		)),
+		(o, Str(a)) => Str(StrValue::Flat(
+			format!("{}{a}", o.clone().to_string()?).into(),
+		)),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => Val::Arr(ArrValue::extended(a.clone(), b.clone())),
@@ -56,7 +68,9 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 			}
 			Ok(Num(a % b))
 		}
-		(Str(str), vals) => String::into_untyped(std_format(str.clone(), vals.clone())?),
+		(Str(str), vals) => {
+			String::into_untyped(std_format(&str.clone().into_flat(), vals.clone())?)
+		}
 		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mod,
 			a.value_type(),
@@ -120,10 +134,10 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(a, Lte, b) => Bool(evaluate_compare_op(a, b, Lte)?.is_le()),
 		(a, Gte, b) => Bool(evaluate_compare_op(a, b, Gte)?.is_ge()),
 
-		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
+		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone().into_flat(), true)),
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
-		(Str(v1), Mul, Num(v2)) => Str(v1.repeat(*v2 as usize).into()),
+		(Str(v1), Mul, Num(v2)) => Str(StrValue::Flat(v1.to_string().repeat(*v2 as usize).into())),
 
 		// Bool X Bool
 		(Bool(a), And, Bool(b)) => Bool(*a && *b),
