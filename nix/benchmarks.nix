@@ -94,7 +94,7 @@ stdenv.mkDerivation {
         echo >> $out
         echo "\`\`\`jsonnet" >> $out
         ${if pathIsGenerator then "echo \"// Generator source\" >> $out" else ""}
-        cat ${if omitSource then "// Omitted: too large" else path} >> $out
+        ${if omitSource then "echo \"// Omitted: too large\" >> $out" else "cat ${path} >> $out"}
         echo >> $out
         echo "\`\`\`" >> $out
         echo "</details>" >> $out
@@ -149,7 +149,7 @@ stdenv.mkDerivation {
 
       echo >> $out
       echo "## Real world" >> $out
-      ${mkBench {name = "Graalvm CI"; path = "${graalvmBench}/ci.jsonnet"; skipCpp = skipSlow;}}
+      ${mkBench {name = "Graalvm CI"; path = "${graalvmBench}/ci.jsonnet"; skipCpp = "takes longer than a hour";}}
       ${mkBench {name = "Kube-prometheus manifests"; vendor = "${kubePrometheusBench}/vendor"; path = "${kubePrometheusBench}/example.jsonnet"; skipCpp = skipSlow;}}
 
       echo >> $out
