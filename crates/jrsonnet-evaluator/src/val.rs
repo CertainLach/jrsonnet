@@ -199,31 +199,37 @@ pub enum StrValue {
 }
 impl StrValue {
 	pub fn concat(a: StrValue, b: StrValue) -> Self {
+		// TODO: benchmark for an optimal value, currently just a arbitrary choice
+		const STRING_EXTEND_THRESHOLD: usize = 100;
+
 		if a.is_empty() {
 			b
 		} else if b.is_empty() {
 			a
+		} else if a.len() + b.len() < STRING_EXTEND_THRESHOLD {
+			Self::Flat(format!("{a}{b}").into())
 		} else {
 			let len = a.len() + b.len();
 			Self::Tree(Rc::new((a, b, len)))
 		}
 	}
 	pub fn into_flat(self) -> IStr {
+		#[cold]
+		fn write_buf(s: &StrValue, out: &mut String) {
+			match s {
+				StrValue::Flat(f) => out.push_str(f),
+				StrValue::Tree(t) => {
+					write_buf(&t.0, out);
+					write_buf(&t.1, out);
+				}
+			}
+		}
 		match self {
 			StrValue::Flat(f) => f,
 			StrValue::Tree(_) => {
-				let mut buf = String::new();
-				self.into_flat_buf(&mut buf);
+				let mut buf = String::with_capacity(self.len());
+				write_buf(&self, &mut buf);
 				buf.into()
-			}
-		}
-	}
-	fn into_flat_buf(&self, out: &mut String) {
-		match self {
-			StrValue::Flat(f) => out.push_str(f),
-			StrValue::Tree(t) => {
-				t.0.into_flat_buf(out);
-				t.1.into_flat_buf(out);
 			}
 		}
 	}
@@ -236,7 +242,8 @@ impl StrValue {
 	pub fn is_empty(&self) -> bool {
 		match self {
 			Self::Flat(v) => v.is_empty(),
-			_ => false,
+			// Can't create non-flat empty string
+			Self::Tree(_) => false,
 		}
 	}
 }

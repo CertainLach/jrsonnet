@@ -24,13 +24,9 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	})
 }
 
-/// Arbitrary threshold
-
 pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	Ok(match (a, b) {
-		(Str(a), Str(b)) if a.is_empty() => Val::Str(b.clone()),
-		(Str(a), Str(b)) if b.is_empty() => Val::Str(a.clone()),
 		(Str(v1), Str(v2)) => Str(StrValue::concat(v1.clone(), v2.clone())),
 
 		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
