@@ -24,7 +24,7 @@ exp-destruct = ["jrsonnet-parser/exp-destruct"]
 exp-object-iteration = []
 
 # Improves performance, and implements some useful things using nightly-only features
-nightly = []
+nightly = ["hashbrown/nightly"]
 
 [dependencies]
 jrsonnet-interner.workspace = true

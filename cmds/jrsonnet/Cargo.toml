@@ -23,6 +23,8 @@ exp-object-iteration = ["jrsonnet-evaluator/exp-object-iteration"]
 # std.thisFile support
 legacy-this-file = ["jrsonnet-cli/legacy-this-file"]
 
+nightly = ["jrsonnet-evaluator/nightly"]
+
 [dependencies]
 jrsonnet-evaluator.workspace = true
 jrsonnet-parser.workspace = true
