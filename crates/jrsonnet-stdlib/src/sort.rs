@@ -50,13 +50,12 @@ fn get_sort_type<T>(
 }
 
 /// * `key_getter` - None, if identity sort required
-pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<Cc<Vec<Val>>> {
+pub fn sort(ctx: Context, mut values: Vec<Val>, key_getter: FuncVal) -> Result<Vec<Val>> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
 	if key_getter.is_identity() {
 		// Fast path, identity key getter
-		let mut values = (*values).clone();
 		let sort_type = get_sort_type(&mut values, |k| k)?;
 		match sort_type {
 			SortKeyType::Number => values.sort_unstable_by_key(|v| match v {
@@ -69,7 +68,7 @@ pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<C
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Cc::new(values))
+		Ok(values)
 	} else {
 		// Slow path, user provided key getter
 		let mut vk = Vec::with_capacity(values.len());
@@ -96,7 +95,7 @@ pub fn sort(ctx: Context, values: Cc<Vec<Val>>, key_getter: FuncVal) -> Result<C
 			}),
 			SortKeyType::Unknown => unreachable!(),
 		};
-		Ok(Cc::new(vk.into_iter().map(|v| v.0).collect()))
+		Ok(vk.into_iter().map(|v| v.0).collect())
 	}
 }
 
@@ -106,9 +105,9 @@ pub fn builtin_sort(ctx: Context, arr: ArrValue, keyF: Option<FuncVal>) -> Resul
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	Ok(ArrValue::eager(super::sort::sort(
+	Ok(ArrValue::eager(Cc::new(super::sort::sort(
 		ctx,
-		arr.evaluatedcc()?,
+		arr.iter().collect::<Result<Vec<_>>>()?,
 		keyF.unwrap_or_else(FuncVal::identity),
-	)?))
+	)?)))
 }

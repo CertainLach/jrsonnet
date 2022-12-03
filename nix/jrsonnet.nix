@@ -1,4 +1,12 @@
-{ lib, fetchFromGitHub, rustPlatform, runCommand, makeWrapper }:
+{ lib
+, fetchFromGitHub
+, rustPlatform
+, runCommand
+, makeWrapper
+, withNightlyFeatures ? false
+}:
+
+with lib;
 
 let
   filteredSrc = builtins.path {
@@ -18,10 +26,12 @@ in
 rustPlatform.buildRustPackage rec {
   inherit src;
   pname = "jrsonnet";
-  version = "git";
+  version = "current${optionalString withNightlyFeatures "-nightly"}";
 
-  cargoTestFlags = [ "--features=mimalloc,legacy-this-file,nightly" ];
-  cargoBuildFlags = [ "--features=mimalloc,legacy-this-file,nightly" ];
+  cargoTestFlags = [
+    "--features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}"
+  ];
+  cargoBuildFlags = cargoTestFlags;
 
   buildInputs = [ makeWrapper ];
 

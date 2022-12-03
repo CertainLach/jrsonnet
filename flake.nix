@@ -3,7 +3,11 @@
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
     flake-utils.url = "github:numtide/flake-utils";
-    rust-overlay.url = "github:oxalica/rust-overlay";
+    rust-overlay = {
+      url = "github:oxalica/rust-overlay";
+      inputs.nixpkgs.follows = "nixpkgs";
+      inputs.flake-utils.follows = "flake-utils";
+    };
   };
   outputs = { nixpkgs, flake-utils, rust-overlay, ... }:
     flake-utils.lib.eachDefaultSystem (system:
@@ -12,7 +16,7 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2022-11-10"; channel = "nightly"; }).default.override {
+        rust = ((pkgs.rustChannelOf { date = "2022-11-19"; channel = "nightly"; }).default.override {
           extensions = [ "rust-src" "miri" ];
         });
       in
@@ -29,6 +33,13 @@
               cargo = rust;
             };
           };
+          jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
+            rustPlatform = pkgs.makeRustPlatform {
+              rustc = rust;
+              cargo = rust;
+            };
+            withNightlyFeatures = true;
+          };
           jrsonnet-release = pkgs.callPackage ./nix/jrsonnet-release.nix {
             rustPlatform = pkgs.makeRustPlatform {
               rustc = rust;
@@ -37,29 +48,48 @@
           };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            inherit go-jsonnet sjsonnet jsonnet;
+            jrsonnetVariants = [
+              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet-nightly; name = "current-nightly"; }
+            ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            inherit go-jsonnet sjsonnet jsonnet;
             quick = true;
+            jrsonnetVariants = [
+              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet-nightly; name = "current-nightly"; }
+            ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
-            againstRelease = true;
+            inherit go-jsonnet sjsonnet jsonnet;
+            jrsonnetVariants = [
+              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet-nightly; name = "current-nightly"; }
+              { drv = jrsonnet-release; name = "before-str-extend"; }
+            ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            inherit go-jsonnet sjsonnet jsonnet;
             quick = true;
-            againstRelease = true;
+            jrsonnetVariants = [
+              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet-nightly; name = "current-nightly"; }
+              { drv = jrsonnet-release; name = "before-str-extend"; }
+            ];
           };
         };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;[
             rust
             cargo-edit
+            cargo-asm
             lld
             hyperfine
             valgrind
+            kcachegrind
+            graphviz
           ];
         };
       }

@@ -278,19 +278,19 @@ impl Typed for Any {
 }
 
 /// Specialization, provides faster `TryFrom<VecVal>` for Val
-pub struct VecVal(pub Cc<Vec<Val>>);
+pub struct VecVal(pub Vec<Val>);
 
 impl Typed for VecVal {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::eager(value.0)))
+		Ok(Val::Arr(ArrValue::eager(Cc::new(value.0))))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Arr(a) => Ok(Self(a.evaluatedcc()?)),
+			Val::Arr(a) => Ok(Self(a.iter().collect::<Result<Vec<_>>>()?)),
 			_ => unreachable!(),
 		}
 	}

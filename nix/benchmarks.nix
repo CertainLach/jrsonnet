@@ -4,15 +4,16 @@
 , cacert
 , stdenv
 , fetchFromGitHub
-, jrsonnet
-, jrsonnet-release
 , go-jsonnet
 , sjsonnet
 , jsonnet
 , hyperfine
 , quick ? false
-, againstRelease ? false
+, jrsonnetVariants
 }:
+
+with lib;
+
 let
   jsonnetBench = fetchFromGitHub {
     rev = "v0.19.1";
@@ -65,13 +66,12 @@ stdenv.mkDerivation {
   unpackPhase = "true";
 
   buildInputs = [
-    jrsonnet
     go-jsonnet
     sjsonnet
     jsonnet
 
     hyperfine
-  ] ++ (if againstRelease then [ jrsonnet-release ] else [ ]);
+  ];
 
   installPhase =
     let
@@ -81,47 +81,48 @@ stdenv.mkDerivation {
         echo >> $out
         echo "### ${name}" >> $out
         echo >> $out
-        ${if skipGo != "" then ''
+        ${optionalString (skipGo != "") ''
           echo "> Note: No results for Go, ${skipGo}" >> $out
           echo >> $out
-        '' else ""}
-        ${if skipScala != "" then ''
+        ''}
+        ${optionalString (skipScala != "") ''
           echo "> Note: No results for Scala, ${skipScala}" >> $out
           echo >> $out
-        '' else ""}
-        ${if skipCpp != "" then ''
+        ''}
+        ${optionalString (skipCpp != "") ''
           echo "> Note: No results for C++, ${skipCpp}" >> $out
           echo >> $out
-        '' else ""}
-        ${if !quick then ''
+        ''}
+        ${optionalString (!quick && !omitSource) ''
           echo "<details>" >> $out
           echo "<summary>Source</summary>" >> $out
           echo >> $out
           echo "\`\`\`jsonnet" >> $out
-          ${if pathIsGenerator then "echo \"// Generator source\" >> $out" else ""}
-          ${if omitSource then "echo \"// Omitted: too large\" >> $out" else "cat ${path} >> $out"}
+          ${optionalString pathIsGenerator "echo \"// Generator source\" >> $out"}
+          cat ${path} >> $out
           echo >> $out
           echo "\`\`\`" >> $out
           echo "</details>" >> $out
           echo >> $out
-        '' else ""}
+        ''}
         path=${path}
-        ${if pathIsGenerator then ''
-          jrsonnet $path > generated.jsonnet
+        ${optionalString pathIsGenerator ''
+          go-jsonnet $path > generated.jsonnet
           path=generated.jsonnet
-        '' else ""}
-        hyperfine -N -w4 --output=pipe --style=basic --export-markdown result.md \
-          "jrsonnet $path ${if vendor != "" then "-J${vendor}" else ""}" -n "Rust" \
-          ${if againstRelease then "\"jrsonnet-release $path ${if vendor != "" then "-J${vendor}" else ""}\" -n \"Rust (released)\"" else "" } \
-          ${if skipGo == "" then "\"go-jsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"Go\"" else "" } \
-          ${if skipScala == "" then "\"sjsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"Scala\"" else "" } \
-          ${if skipCpp == "" then "\"jsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"C++\"" else "" }
+        ''}
+        hyperfine -N -w4 -m20 --output=pipe --style=basic --export-markdown result.md \
+          ${concatStringsSep " " (forEach jrsonnetVariants (variant:
+            "\"${variant.drv}/bin/jrsonnet $path ${optionalString (vendor != "") "-J${vendor}"}\" -n \"Rust (${variant.name})\""
+          ))} \
+          ${optionalString (skipGo == "") "\"go-jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Go\""} \
+          ${optionalString (skipScala == "") "\"sjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Scala\""} \
+          ${optionalString (skipCpp == "") "\"jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"C++\""}
         cat result.md >> $out
       '';
     in
     ''
       touch $out
-      ${if !quick then ''
+      ${optionalString (!quick) ''
         cat ${./benchmarks.md} >> $out
         echo >> $out
 
@@ -156,43 +157,43 @@ stdenv.mkDerivation {
         echo >> $out
 
         echo >> $out
-      '' else ""}
+      ''}
       echo "## Real world" >> $out
-      ${mkBench {name = "Graalvm CI"; path = "${graalvmBench}/ci.jsonnet"; skipCpp = "takes longer than a hour";}}
-      ${mkBench {name = "Kube-prometheus manifests"; vendor = "${kubePrometheusBench}/vendor"; path = "${kubePrometheusBench}/example.jsonnet"; skipCpp = skipSlow;}}
+      ${mkBench {name = "Graalvm CI"; path = "${graalvmBench}/ci.jsonnet"; skipCpp = "takes longer than a hour"; skipGo = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "Kube-prometheus manifests"; vendor = "${kubePrometheusBench}/vendor"; path = "${kubePrometheusBench}/example.jsonnet"; skipCpp = skipSlow; skipGo = skipSlow; skipScala = skipSlow;}}
 
       echo >> $out
       echo "## Benchmarks from C++ jsonnet (/perf_tests)" >> $out
-      ${mkBench {name = "Large string join"; path = "${jsonnetBench}/perf_tests/large_string_join.jsonnet";}}
-      ${mkBench {name = "Large string template"; omitSource = true; path = "${jsonnetBench}/perf_tests/large_string_template.jsonnet"; skipGo = "fails with os stack size exhausion"; skipCpp = skipSlow;}}
-      ${mkBench {name = "Realistic 1"; path = "${jsonnetBench}/perf_tests/realistic1.jsonnet"; skipGo = skipSlow; skipCpp = skipSlow;}}
-      ${mkBench {name = "Realistic 2"; path = "${jsonnetBench}/perf_tests/realistic2.jsonnet"; skipGo = skipSlow; skipCpp = skipSlow;}}
+      ${mkBench {name = "Large string join"; path = "${jsonnetBench}/perf_tests/large_string_join.jsonnet"; skipScala = skipSlow;}}
+      ${mkBench {name = "Large string template"; omitSource = true; path = "${jsonnetBench}/perf_tests/large_string_template.jsonnet"; skipGo = "fails with os stack size exhausion"; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "Realistic 1"; path = "${jsonnetBench}/perf_tests/realistic1.jsonnet"; skipGo = skipSlow; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "Realistic 2"; path = "${jsonnetBench}/perf_tests/realistic2.jsonnet"; skipGo = skipSlow; skipCpp = skipSlow; skipScala = skipSlow;}}
 
       echo >> $out
       echo "## Benchmarks from C++ jsonnet (/benchmarks)" >> $out
-      ${mkBench {name = "Tail call"; path = "${jsonnetBench}/benchmarks/bench.01.jsonnet";}}
-      ${mkBench {name = "Inheritance recursion"; path = "${jsonnetBench}/benchmarks/bench.02.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "Simple recursive call"; path = "${jsonnetBench}/benchmarks/bench.03.jsonnet";}}
-      ${mkBench {name = "Foldl string concat"; path = "${jsonnetBench}/benchmarks/bench.04.jsonnet";}}
+      ${mkBench {name = "Tail call"; path = "${jsonnetBench}/benchmarks/bench.01.jsonnet"; skipScala = skipSlow;}}
+      ${mkBench {name = "Inheritance recursion"; path = "${jsonnetBench}/benchmarks/bench.02.jsonnet"; skipCpp = skipSlow; skipGo = skipSlow;}}
+      ${mkBench {name = "Simple recursive call"; path = "${jsonnetBench}/benchmarks/bench.03.jsonnet"; skipScala = skipSlow; skipGo = skipSlow;}}
+      ${mkBench {name = "Foldl string concat"; path = "${jsonnetBench}/benchmarks/bench.04.jsonnet"; skipCpp = skipSlow; skipScala = skipSlow;}}
       ${mkBench {name = "Array sorts"; path = "${jsonnetBench}/benchmarks/bench.06.jsonnet"; skipScala = "std.reverse is not implemented"; skipCpp = skipSlow;}}
-      ${mkBench {name = "Lazy array"; path = "${jsonnetBench}/benchmarks/bench.07.jsonnet";}}
-      ${mkBench {name = "Inheritance function recursion"; path = "${jsonnetBench}/benchmarks/bench.08.jsonnet";}}
-      ${mkBench {name = "String strips"; path = "${jsonnetBench}/benchmarks/bench.09.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "Big object"; path = "${jsonnetBench}/benchmarks/gen_big_object.jsonnet"; pathIsGenerator = true;}}
+      ${mkBench {name = "Lazy array"; path = "${jsonnetBench}/benchmarks/bench.07.jsonnet"; skipGo = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "Inheritance function recursion"; path = "${jsonnetBench}/benchmarks/bench.08.jsonnet"; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "String strips"; path = "${jsonnetBench}/benchmarks/bench.09.jsonnet"; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "Big object"; path = "${jsonnetBench}/benchmarks/gen_big_object.jsonnet"; pathIsGenerator = true; skipScala = skipSlow;}}
 
       echo >> $out
       echo "## Benchmarks from Go jsonnet (builtins)" >> $out
-      ${mkBench {name = "std.base64"; path = "${goJsonnetBench}/base64.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "std.base64Decode"; path = "${goJsonnetBench}/base64Decode.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "std.base64DecodeBytes"; path = "${goJsonnetBench}/base64DecodeBytes.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "std.base64 (byte array)"; path = "${goJsonnetBench}/base64_byte_array.jsonnet"; skipCpp = skipSlow;}}
-      ${mkBench {name = "std.foldl"; path = "${goJsonnetBench}/foldl.jsonnet";}}
-      ${mkBench {name = "std.manifestJsonEx"; path = "${goJsonnetBench}/manifestJsonEx.jsonnet";}}
-      ${mkBench {name = "std.manifestTomlEx"; path = "${goJsonnetBench}/manifestTomlEx.jsonnet"; skipScala = "std.manifestTomlEx is not implemented";}}
-      ${mkBench {name = "std.parseInt"; path = "${goJsonnetBench}/parseInt.jsonnet";}}
-      ${mkBench {name = "std.reverse"; path = "${goJsonnetBench}/reverse.jsonnet"; skipScala = "std.reverse is not implemented";}}
-      ${mkBench {name = "std.substr"; path = "${goJsonnetBench}/substr.jsonnet";}}
+      ${mkBench {name = "std.base64"; path = "${goJsonnetBench}/base64.jsonnet"; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "std.base64Decode"; path = "${goJsonnetBench}/base64Decode.jsonnet"; skipCpp = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "std.base64DecodeBytes"; path = "${goJsonnetBench}/base64DecodeBytes.jsonnet"; skipCpp = skipSlow; skipGo = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "std.base64 (byte array)"; path = "${goJsonnetBench}/base64_byte_array.jsonnet"; skipCpp = skipSlow; skipGo = skipSlow; skipScala = skipSlow;}}
+      ${mkBench {name = "std.foldl"; path = "${goJsonnetBench}/foldl.jsonnet"; skipScala = skipSlow;}}
+      ${mkBench {name = "std.manifestJsonEx"; path = "${goJsonnetBench}/manifestJsonEx.jsonnet"; skipScala = skipSlow; skipCpp = skipSlow;}}
+      ${mkBench {name = "std.manifestTomlEx"; path = "${goJsonnetBench}/manifestTomlEx.jsonnet"; skipScala = "std.manifestTomlEx is not implemented"; skipCpp=skipSlow;}}
+      ${mkBench {name = "std.parseInt"; path = "${goJsonnetBench}/parseInt.jsonnet"; skipScala = skipSlow; skipCpp = skipSlow;}}
+      ${mkBench {name = "std.reverse"; path = "${goJsonnetBench}/reverse.jsonnet"; skipScala = "std.reverse is not implemented"; skipCpp = skipSlow; skipGo = skipSlow;}}
+      ${mkBench {name = "std.substr"; path = "${goJsonnetBench}/substr.jsonnet"; skipScala = skipSlow;}}
       ${mkBench {name = "Comparsion for array"; path = "${goJsonnetBench}/comparison.jsonnet"; skipScala = "array comparsion is not implemented"; skipCpp = skipSlow;}}
-      ${mkBench {name = "Comparsion for primitives"; path = "${goJsonnetBench}/comparison2.jsonnet"; skipCpp = "can't run: uses up to 192GB of RAM";}}
+      ${mkBench {name = "Comparsion for primitives"; path = "${goJsonnetBench}/comparison2.jsonnet"; skipCpp = "can't run: uses up to 192GB of RAM"; skipGo = skipSlow; skipScala = skipSlow;}}
     '';
 }

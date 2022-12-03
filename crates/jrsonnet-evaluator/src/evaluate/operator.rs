@@ -96,16 +96,37 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 		(Str(a), Str(b)) => a.cmp(b),
 		(Num(a), Num(b)) => a.partial_cmp(b).expect("jsonnet numbers are non NaN"),
 		(Arr(a), Arr(b)) => {
-			let ai = a.iter();
-			let bi = b.iter();
-
-			for (a, b) in ai.zip(bi) {
-				let ord = evaluate_compare_op(&a?, &b?, op)?;
-				if !ord.is_eq() {
-					return Ok(ord);
+			if let (Some(ai), Some(bi)) = (a.iter_cheap(), b.iter_cheap()) {
+				for (a, b) in ai.zip(bi) {
+					let ord = evaluate_compare_op(&a, &b, op)?;
+					if !ord.is_eq() {
+						return Ok(ord);
+					}
 				}
-			}
+			} else {
+				{
+					let ai = a.iter();
+					let bi = b.iter();
 
+					for (a, b) in ai.zip(bi) {
+						let ord = evaluate_compare_op(&a?, &b?, op)?;
+						if !ord.is_eq() {
+							return Ok(ord);
+						}
+					}
+				}
+				// {
+				// 	let ai = a.iter_expl();
+				// 	let bi = b.iter_expl();
+
+				// 	for (a, b) in ai.zip(bi) {
+				// 		let ord = evaluate_compare_op(&a?, &b?, op)?;
+				// 		if !ord.is_eq() {
+				// 			return Ok(ord);
+				// 		}
+				// 	}
+				// }
+			}
 			a.len().cmp(&b.len())
 		}
 		(_, _) => throw!(BinaryOperatorDoesNotOperateOnValues(

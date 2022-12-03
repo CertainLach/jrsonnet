@@ -6,7 +6,6 @@ use jrsonnet_evaluator::{
 	val::{ArrValue, StrValue},
 	Either, IStr, Val,
 };
-use jrsonnet_gcmodule::Cc;
 
 #[builtin]
 pub const fn builtin_codepoint(str: char) -> Result<u32> {
@@ -31,7 +30,7 @@ pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> 
 #[builtin]
 pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> Result<VecVal> {
 	use Either2::*;
-	Ok(VecVal(Cc::new(match maxsplits {
+	Ok(VecVal(match maxsplits {
 		A(n) => str
 			.splitn(n + 1, &c as &str)
 			.map(|s| Val::Str(StrValue::Flat(s.into())))
@@ -40,7 +39,7 @@ pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> 
 			.split(&c as &str)
 			.map(|s| Val::Str(StrValue::Flat(s.into())))
 			.collect(),
-	})))
+	}))
 }
 
 #[builtin]

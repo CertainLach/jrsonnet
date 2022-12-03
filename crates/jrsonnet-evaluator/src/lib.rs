@@ -1,6 +1,5 @@
 //! jsonnet interpreter implementation
-#![cfg_attr(feature = "nightly", feature(thread_local))]
-#![feature(type_alias_impl_trait)]
+#![cfg_attr(feature = "nightly", feature(thread_local, type_alias_impl_trait))]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(
 	clippy::all,
