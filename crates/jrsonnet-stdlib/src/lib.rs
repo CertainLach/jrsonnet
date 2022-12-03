@@ -121,6 +121,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("escapeStringJson", builtin_escape_string_json::INST),
 		("manifestJsonEx", builtin_manifest_json_ex::INST),
 		("manifestYamlDoc", builtin_manifest_yaml_doc::INST),
+		("manifestTomlEx", builtin_manifest_toml_ex::INST),
 		// Parsing
 		("parseJson", builtin_parse_json::INST),
 		("parseYaml", builtin_parse_yaml::INST),

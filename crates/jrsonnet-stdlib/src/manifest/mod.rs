@@ -1,3 +1,4 @@
+mod toml;
 mod yaml;
 
 use jrsonnet_evaluator::{
@@ -5,8 +6,9 @@ use jrsonnet_evaluator::{
 	function::builtin,
 	manifest::{escape_string_json, JsonFormat},
 	typed::Any,
-	IStr,
+	IStr, ObjValue, Val,
 };
+pub use toml::TomlFormat;
 pub use yaml::YamlFormat;
 
 #[builtin]
@@ -43,6 +45,19 @@ pub fn builtin_manifest_yaml_doc(
 	value.0.manifest(YamlFormat::std_to_yaml(
 		indent_array_in_object.unwrap_or(false),
 		quote_keys.unwrap_or(true),
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order.unwrap_or(false),
+	))
+}
+
+#[builtin]
+pub fn builtin_manifest_toml_ex(
+	value: ObjValue,
+	indent: IStr,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> Result<String> {
+	Val::Obj(value).manifest(TomlFormat::std_to_toml(
+		indent.to_string(),
 		#[cfg(feature = "exp-preserve-order")]
 		preserve_order.unwrap_or(false),
 	))

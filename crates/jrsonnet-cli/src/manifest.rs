@@ -1,4 +1,4 @@
-use std::{path::PathBuf, str::FromStr};
+use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::{
@@ -6,7 +6,7 @@ use jrsonnet_evaluator::{
 	manifest::{JsonFormat, ManifestFormat, StringFormat, ToStringFormat, YamlStreamFormat},
 	State,
 };
-use jrsonnet_stdlib::YamlFormat;
+use jrsonnet_stdlib::{TomlFormat, YamlFormat};
 
 use crate::ConfigureState;
 
@@ -16,18 +16,7 @@ pub enum ManifestFormatName {
 	String,
 	Json,
 	Yaml,
-}
-
-impl FromStr for ManifestFormatName {
-	type Err = &'static str;
-	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		Ok(match s {
-			"string" => ManifestFormatName::String,
-			"json" => ManifestFormatName::Json,
-			"yaml" => ManifestFormatName::Yaml,
-			_ => return Err("no such format"),
-		})
-	}
+	Toml,
 }
 
 #[derive(Parser)]
@@ -44,7 +33,7 @@ pub struct ManifestOpts {
 	#[clap(long, short = 'y', conflicts_with = "string")]
 	yaml_stream: bool,
 	/// Number of spaces to pad output manifest with.
-	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml]
+	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml/toml]
 	#[clap(long)]
 	line_padding: Option<usize>,
 	/// Preserve order in object manifestification
@@ -68,6 +57,11 @@ impl ConfigureState for ManifestOpts {
 					preserve_order,
 				)),
 				ManifestFormatName::Yaml => Box::new(YamlFormat::cli(
+					self.line_padding.unwrap_or(2),
+					#[cfg(feature = "exp-preserve-order")]
+					preserve_order,
+				)),
+				ManifestFormatName::Toml => Box::new(TomlFormat::cli(
 					self.line_padding.unwrap_or(2),
 					#[cfg(feature = "exp-preserve-order")]
 					preserve_order,
