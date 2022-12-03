@@ -3,14 +3,15 @@
 
 rustPlatform.buildRustPackage rec {
   pname = "jrsonnet";
-  version = "5f0f8de9f52f961e2ff162e0a3fd4ca20a275f1d";
+  version = "d32fe45b8ed28fb39b5359a704922922368af1c0";
 
   src = fetchFromGitHub {
     owner = "CertainLach";
     repo = pname;
     rev = version;
-    hash = lib.fakeHash;
+    hash = "sha256-R9Xt36bYS5upVDzt8hEifwmfocXpJbIKwvxkoJNEGVc=";
   };
+  cargoHash = "sha256-V+KGWeNlUnelofaGzufNPLGDyxazoFrjZ/n391VYYws=";
 
   cargoTestFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
   cargoBuildFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];

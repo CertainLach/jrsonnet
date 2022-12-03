@@ -5,11 +5,13 @@
 , stdenv
 , fetchFromGitHub
 , jrsonnet
+, jrsonnet-release
 , go-jsonnet
 , sjsonnet
 , jsonnet
 , hyperfine
 , quick ? false
+, againstRelease ? false
 }:
 let
   jsonnetBench = fetchFromGitHub {
@@ -53,7 +55,9 @@ let
         ${jsonnet-bundler}/bin/jb install
       '';
 
-  skipSlow = if quick then "slow benchmark" else "";
+  # Removes outsiders from the output
+  # Useful when comparing performance of different jrsonnet releases
+  skipSlow = if quick then "slow benchmark, but only quick requested" else "";
 in
 stdenv.mkDerivation {
   name = "benchmarks";
@@ -67,7 +71,7 @@ stdenv.mkDerivation {
     jsonnet
 
     hyperfine
-  ];
+  ] ++ (if againstRelease then [ jrsonnet-release ] else [ ]);
 
   installPhase =
     let
@@ -89,23 +93,26 @@ stdenv.mkDerivation {
           echo "> Note: No results for C++, ${skipCpp}" >> $out
           echo >> $out
         '' else ""}
-        echo "<details>" >> $out
-        echo "<summary>Source</summary>" >> $out
-        echo >> $out
-        echo "\`\`\`jsonnet" >> $out
-        ${if pathIsGenerator then "echo \"// Generator source\" >> $out" else ""}
-        ${if omitSource then "echo \"// Omitted: too large\" >> $out" else "cat ${path} >> $out"}
-        echo >> $out
-        echo "\`\`\`" >> $out
-        echo "</details>" >> $out
-        echo >> $out
+        ${if !quick then ''
+          echo "<details>" >> $out
+          echo "<summary>Source</summary>" >> $out
+          echo >> $out
+          echo "\`\`\`jsonnet" >> $out
+          ${if pathIsGenerator then "echo \"// Generator source\" >> $out" else ""}
+          ${if omitSource then "echo \"// Omitted: too large\" >> $out" else "cat ${path} >> $out"}
+          echo >> $out
+          echo "\`\`\`" >> $out
+          echo "</details>" >> $out
+          echo >> $out
+        '' else ""}
         path=${path}
         ${if pathIsGenerator then ''
           jrsonnet $path > generated.jsonnet
           path=generated.jsonnet
         '' else ""}
-        hyperfine -N ${if quick then "-r1" else ""} --output=pipe --style=basic --export-markdown result.md \
+        hyperfine -N -w4 --output=pipe --style=basic --export-markdown result.md \
           "jrsonnet $path ${if vendor != "" then "-J${vendor}" else ""}" -n "Rust" \
+          ${if againstRelease then "\"jrsonnet-release $path ${if vendor != "" then "-J${vendor}" else ""}\" -n \"Rust (released)\"" else "" } \
           ${if skipGo == "" then "\"go-jsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"Go\"" else "" } \
           ${if skipScala == "" then "\"sjsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"Scala\"" else "" } \
           ${if skipCpp == "" then "\"jsonnet $path ${if vendor != "" then "-J ${vendor}" else ""}\" -n \"C++\"" else "" }
@@ -114,40 +121,42 @@ stdenv.mkDerivation {
     in
     ''
       touch $out
-      cat ${./benchmarks.md} >> $out
-      echo >> $out
+      ${if !quick then ''
+        cat ${./benchmarks.md} >> $out
+        echo >> $out
 
-      echo "<details>" >> $out
-      echo "<summary>Tested versions</summary>" >> $out
-      echo >> $out
-      echo Rust: git as $(date +'%d.%m.%Y' -u) >> $out
-      echo >> $out
-      echo "\`\`\`" >> $out
-      jrsonnet --help >> $out
-      echo "\`\`\`" >> $out
-      echo >> $out
-      echo Go: $(go-jsonnet --version) >> $out
-      echo >> $out
-      echo "\`\`\`" >> $out
-      go-jsonnet --help >> $out
-      echo "\`\`\`" >> $out
-      echo >> $out
-      echo C++: $(jsonnet --version) >> $out
-      echo >> $out
-      echo "\`\`\`" >> $out
-      jsonnet --help >> $out
-      echo "\`\`\`" >> $out
-      echo >> $out
-      echo Scala: >> $out
-      echo >> $out
-      echo "\`\`\`" >> $out
-      sjsonnet 2>> $out || true
-      echo "\`\`\`" >> $out
-      echo >> $out
-      echo "</details>" >> $out
-      echo >> $out
+        echo "<details>" >> $out
+        echo "<summary>Tested versions</summary>" >> $out
+        echo >> $out
+        echo Rust: git as $(date +'%d.%m.%Y' -u) >> $out
+        echo >> $out
+        echo "\`\`\`" >> $out
+        jrsonnet --help >> $out
+        echo "\`\`\`" >> $out
+        echo >> $out
+        echo Go: $(go-jsonnet --version) >> $out
+        echo >> $out
+        echo "\`\`\`" >> $out
+        go-jsonnet --help >> $out
+        echo "\`\`\`" >> $out
+        echo >> $out
+        echo C++: $(jsonnet --version) >> $out
+        echo >> $out
+        echo "\`\`\`" >> $out
+        jsonnet --help >> $out
+        echo "\`\`\`" >> $out
+        echo >> $out
+        echo Scala: >> $out
+        echo >> $out
+        echo "\`\`\`" >> $out
+        sjsonnet 2>> $out || true
+        echo "\`\`\`" >> $out
+        echo >> $out
+        echo "</details>" >> $out
+        echo >> $out
 
-      echo >> $out
+        echo >> $out
+      '' else ""}
       echo "## Real world" >> $out
       ${mkBench {name = "Graalvm CI"; path = "${graalvmBench}/ci.jsonnet"; skipCpp = "takes longer than a hour";}}
       ${mkBench {name = "Kube-prometheus manifests"; vendor = "${kubePrometheusBench}/vendor"; path = "${kubePrometheusBench}/example.jsonnet"; skipCpp = skipSlow;}}

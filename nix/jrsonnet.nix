@@ -20,8 +20,8 @@ rustPlatform.buildRustPackage rec {
   pname = "jrsonnet";
   version = "git";
 
-  cargoTestFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
-  cargoBuildFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
+  cargoTestFlags = [ "--features=mimalloc,legacy-this-file,nightly" ];
+  cargoBuildFlags = [ "--features=mimalloc,legacy-this-file,nightly" ];
 
   buildInputs = [ makeWrapper ];
 

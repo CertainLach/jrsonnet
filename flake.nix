@@ -29,9 +29,28 @@
               cargo = rust;
             };
           };
+          jrsonnet-release = pkgs.callPackage ./nix/jrsonnet-release.nix {
+            rustPlatform = pkgs.makeRustPlatform {
+              rustc = rust;
+              cargo = rust;
+            };
+          };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet jrsonnet;
+            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+          };
+          benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
+            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            quick = true;
+          };
+          benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
+            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            againstRelease = true;
+          };
+          benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
+            inherit go-jsonnet sjsonnet jsonnet jrsonnet jrsonnet-release;
+            quick = true;
+            againstRelease = true;
           };
         };
         devShell = pkgs.mkShell {
