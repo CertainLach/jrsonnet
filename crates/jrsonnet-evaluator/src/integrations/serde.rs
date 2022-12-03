@@ -7,7 +7,7 @@ use serde::{
 	Deserialize, Serialize,
 };
 
-use crate::{error::Result, val::ArrValue, ObjValueBuilder, State, Val};
+use crate::{arr::ArrValue, error::Result, ObjValueBuilder, State, Val};
 
 impl<'de> Deserialize<'de> for Val {
 	fn deserialize<D>(deserializer: D) -> Result<Val, D::Error>
@@ -77,7 +77,7 @@ impl<'de> Deserialize<'de> for Val {
 			where
 				E: serde::de::Error,
 			{
-				Ok(Val::Arr(ArrValue::Bytes(v.into())))
+				Ok(Val::Arr(ArrValue::bytes(v.into())))
 			}
 
 			fn visit_none<E>(self) -> Result<Self::Value, E>
@@ -117,7 +117,7 @@ impl<'de> Deserialize<'de> for Val {
 					out.push(val);
 				}
 
-				Ok(Val::Arr(ArrValue::Eager(Cc::new(out))))
+				Ok(Val::Arr(ArrValue::eager(Cc::new(out))))
 			}
 
 			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>

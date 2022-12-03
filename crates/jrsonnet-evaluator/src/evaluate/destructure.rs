@@ -32,7 +32,7 @@ pub fn destruct(
 		Destruct::Array { start, rest, end } => {
 			use jrsonnet_parser::DestructRest;
 
-			use crate::val::ArrValue;
+			use crate::arr::ArrValue;
 
 			#[derive(Trace)]
 			struct DataThunk {
@@ -110,7 +110,10 @@ pub fn destruct(
 						fn get(self: Box<Self>) -> Result<Self::Output> {
 							let full = self.full.evaluate()?;
 							let to = full.len() - self.end;
-							Ok(Val::Arr(full.slice(Some(self.start), Some(to), None)))
+							Ok(Val::Arr(
+								full.slice(Some(self.start), Some(to), None)
+									.expect("arguments checked"),
+							))
 						}
 					}
 

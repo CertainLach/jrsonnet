@@ -1,5 +1,6 @@
 //! jsonnet interpreter implementation
 #![cfg_attr(feature = "nightly", feature(thread_local))]
+#![feature(type_alias_impl_trait)]
 #![deny(unsafe_op_in_unsafe_fn)]
 #![warn(
 	clippy::all,
@@ -43,6 +44,7 @@
 // For jrsonnet-macros
 extern crate self as jrsonnet_evaluator;
 
+mod arr;
 mod ctx;
 mod dynamic;
 pub mod error;

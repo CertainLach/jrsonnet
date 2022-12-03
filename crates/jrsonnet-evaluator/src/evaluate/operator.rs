@@ -3,8 +3,8 @@ use std::cmp::Ordering;
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
-	error::ErrorKind::*, evaluate, stdlib::std_format, throw, typed::Typed, val::equals, Context,
-	Result, Val,
+	arr::ArrValue, error::ErrorKind::*, evaluate, stdlib::std_format, throw, typed::Typed,
+	val::equals, Context, Result, Val,
 };
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
@@ -17,6 +17,8 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
+
+/// Arbitrary threshold
 
 pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
@@ -34,12 +36,8 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(o, Str(a)) => Str(format!("{}{a}", o.clone().to_string()?).into()),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
-		(Arr(a), Arr(b)) => {
-			let mut out = Vec::with_capacity(a.len() + b.len());
-			out.extend(a.iter_lazy());
-			out.extend(b.iter_lazy());
-			Arr(out.into())
-		}
+		(Arr(a), Arr(b)) => Val::Arr(ArrValue::extended(a.clone(), b.clone())),
+
 		(Num(v1), Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
@@ -82,7 +80,7 @@ pub fn evaluate_binary_op_special(
 	})
 }
 
-pub fn evaluate_compare_op(a: &Val, op: BinaryOpType, b: &Val) -> Result<Ordering> {
+pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Ordering> {
 	use Val::*;
 	Ok(match (a, b) {
 		(Str(a), Str(b)) => a.cmp(b),
@@ -92,7 +90,7 @@ pub fn evaluate_compare_op(a: &Val, op: BinaryOpType, b: &Val) -> Result<Orderin
 			let bi = b.iter();
 
 			for (a, b) in ai.zip(bi) {
-				let ord = evaluate_compare_op(&a?, op, &b?)?;
+				let ord = evaluate_compare_op(&a?, &b?, op)?;
 				if !ord.is_eq() {
 					return Ok(ord);
 				}
@@ -117,10 +115,10 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(a, Eq, b) => Bool(equals(a, b)?),
 		(a, Neq, b) => Bool(!equals(a, b)?),
 
-		(a, Lt, b) => Bool(evaluate_compare_op(a, Lt, b)?.is_lt()),
-		(a, Gt, b) => Bool(evaluate_compare_op(a, Gt, b)?.is_gt()),
-		(a, Lte, b) => Bool(evaluate_compare_op(a, Lte, b)?.is_le()),
-		(a, Gte, b) => Bool(evaluate_compare_op(a, Gte, b)?.is_ge()),
+		(a, Lt, b) => Bool(evaluate_compare_op(a, b, Lt)?.is_lt()),
+		(a, Gt, b) => Bool(evaluate_compare_op(a, b, Gt)?.is_gt()),
+		(a, Lte, b) => Bool(evaluate_compare_op(a, b, Lte)?.is_le()),
+		(a, Gte, b) => Bool(evaluate_compare_op(a, b, Gte)?.is_ge()),
 
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone(), true)),
 		(a, Mod, b) => evaluate_mod_op(a, b)?,

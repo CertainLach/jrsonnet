@@ -14,7 +14,7 @@ pub fn std_format(str: IStr, vals: Val) -> Result<String> {
 		|| format!("std.format of {str}"),
 		|| {
 			Ok(match vals {
-				Val::Arr(vals) => format_arr(&str, &vals.evaluated()?)?,
+				Val::Arr(vals) => format_arr(&str, &vals.evaluatedcc()?)?,
 				Val::Obj(obj) => format_obj(&str, &obj)?,
 				o => format_arr(&str, &[o])?,
 			})

@@ -77,7 +77,7 @@ pub fn builtin_starts_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue
 			} else if b.len() == a.len() {
 				return equals(&Val::Arr(a), &Val::Arr(b));
 			} else {
-				for (a, b) in a.slice(None, Some(b.len()), None).iter().zip(b.iter()) {
+				for (a, b) in a.iter().take(b.len()).zip(b.iter()) {
 					let a = a?;
 					let b = b?;
 					if !equals(&a, &b)? {
@@ -103,11 +103,7 @@ pub fn builtin_ends_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue])
 				return equals(&Val::Arr(a), &Val::Arr(b));
 			} else {
 				let a_len = a.len();
-				for (a, b) in a
-					.slice(Some(a_len - b.len()), None, None)
-					.iter()
-					.zip(b.iter())
-				{
+				for (a, b) in a.iter().skip(a_len - b.len()).zip(b.iter()) {
 					let a = a?;
 					let b = b?;
 					if !equals(&a, &b)? {

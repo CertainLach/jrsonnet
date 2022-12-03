@@ -50,7 +50,7 @@ pub struct ManifestOpts {
 	/// Preserve order in object manifestification
 	#[cfg(feature = "exp-preserve-order")]
 	#[clap(long)]
-	preserve_order: bool,
+	pub preserve_order: bool,
 }
 impl ConfigureState for ManifestOpts {
 	type Guards = Box<dyn ManifestFormat>;

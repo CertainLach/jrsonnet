@@ -28,8 +28,8 @@ pub fn builtin_slice(
 }
 
 #[builtin]
-pub fn builtin_map(func: NativeFn<((Any,), Any)>, arr: ArrValue) -> Result<ArrValue> {
-	arr.map(|val| Ok(func(Any(val))?.0))
+pub fn builtin_map(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
+	Ok(arr.map(func))
 }
 
 #[builtin]
@@ -94,9 +94,9 @@ pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
 #[builtin]
 pub fn builtin_range(from: i32, to: i32) -> Result<ArrValue> {
 	if to < from {
-		return Ok(ArrValue::new_eager());
+		return Ok(ArrValue::empty());
 	}
-	Ok(ArrValue::new_range(from, to))
+	Ok(ArrValue::range_inclusive(from, to))
 }
 
 #[builtin]

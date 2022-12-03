@@ -6,11 +6,12 @@ pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
+	arr::ArrValue,
 	error::Result,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	throw,
 	typed::CheckType,
-	val::{ArrValue, IndexableVal},
+	val::IndexableVal,
 	ObjValue, ObjValueBuilder, Val,
 };
 
@@ -29,6 +30,8 @@ pub trait Typed: Sized {
 	fn into_untyped(typed: Self) -> Result<Val>;
 	fn from_untyped(untyped: Val) -> Result<Self>;
 }
+
+const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
 
 macro_rules! impl_int {
 	($($ty:ty)*) => {$(
@@ -155,12 +158,11 @@ impl Typed for PositiveF64 {
 	}
 }
 impl Typed for usize {
-	// It is possible to store 54 bits of precision in f64, but leaving u32::MAX here for compatibility
 	const TYPE: &'static ComplexValType =
-		&ComplexValType::BoundedNumber(Some(0.0), Some(u32::MAX as f64));
+		&ComplexValType::BoundedNumber(Some(0.0), Some(MAX_SAFE_INTEGER));
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		if value > u32::MAX as Self {
+		if value > MAX_SAFE_INTEGER as Self {
 			throw!("number is too large")
 		}
 		Ok(Val::Num(value as f64))
@@ -282,13 +284,13 @@ impl Typed for VecVal {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::Eager(value.0)))
+		Ok(Val::Arr(ArrValue::eager(value.0)))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Arr(a) => Ok(Self(a.evaluated()?)),
+			Val::Arr(a) => Ok(Self(a.evaluatedcc()?)),
 			_ => unreachable!(),
 		}
 	}
@@ -300,12 +302,12 @@ impl Typed for IBytes {
 		&ComplexValType::ArrayRef(&ComplexValType::BoundedNumber(Some(0.0), Some(255.0)));
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::Bytes(value)))
+		Ok(Val::Arr(ArrValue::bytes(value)))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		if let Val::Arr(ArrValue::Bytes(bytes)) = value {
-			return Ok(bytes);
+			return Ok(bytes.0);
 		}
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {

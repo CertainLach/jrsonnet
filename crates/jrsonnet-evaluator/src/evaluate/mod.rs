@@ -10,18 +10,52 @@ use jrsonnet_types::ValType;
 
 use self::destructure::destruct;
 use crate::{
+	arr::ArrValue,
 	destructure::evaluate_dest,
 	error::ErrorKind::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	tb, throw,
 	typed::Typed,
-	val::{ArrValue, CachedUnbound, IndexableVal, Thunk, ThunkValue},
+	val::{CachedUnbound, IndexableVal, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
 	Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
+
+pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
+	fn is_trivial(expr: &LocExpr) -> bool {
+		match &*expr.0 {
+			Expr::Str(_)
+			| Expr::Num(_)
+			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
+			Expr::Arr(a) => a.iter().all(is_trivial),
+			Expr::Parened(e) => is_trivial(e),
+			_ => false,
+		}
+	}
+	Some(match &*expr.0 {
+		Expr::Str(s) => Val::Str(s.clone()),
+		Expr::Num(n) => Val::Num(*n),
+		Expr::Literal(LiteralType::False) => Val::Bool(false),
+		Expr::Literal(LiteralType::True) => Val::Bool(true),
+		Expr::Literal(LiteralType::Null) => Val::Null,
+		Expr::Arr(n) => {
+			if n.iter().any(|e| !is_trivial(e)) {
+				return None;
+			}
+			Val::Arr(ArrValue::eager(Cc::new(
+				n.iter()
+					.map(evaluate_trivial)
+					.map(|e| e.expect("checked trivial"))
+					.collect(),
+			)))
+		}
+		Expr::Parened(e) => evaluate_trivial(e)?,
+		_ => return None,
+	})
+}
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
@@ -100,7 +134,7 @@ pub fn evaluate_comp(
 
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
-					let value = Thunk::evaluated(Val::Arr(ArrValue::Lazy(Cc::new(vec![
+					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(Cc::new(vec![
 						Thunk::evaluated(Val::Str(field.clone())),
 						Thunk::new(tb!(ObjectFieldThunk {
 							field: field.clone(),
@@ -380,6 +414,9 @@ pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 #[allow(clippy::too_many_lines)]
 pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
+	if let Some(trivial) = evaluate_trivial(&expr) {
+		return Ok(trivial);
+	}
 	let LocExpr(expr, loc) = expr;
 	Ok(match &**expr {
 		Literal(LiteralType::This) => {
@@ -507,9 +544,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate(ctx, &returned.clone())?
 		}
 		Arr(items) => {
-			let mut out = Vec::with_capacity(items.len());
-			for item in items {
-				// TODO: Implement ArrValue::Lazy with same context for every element?
+			if items.is_empty() {
+				Val::Arr(ArrValue::empty())
+			} else if items.len() == 1 {
 				#[derive(Trace)]
 				struct ArrayElement {
 					ctx: Context,
@@ -521,12 +558,15 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						evaluate(self.ctx, &self.item)
 					}
 				}
-				out.push(Thunk::new(tb!(ArrayElement {
-					ctx: ctx.clone(),
-					item: item.clone(),
-				})));
+				Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(tb!(
+					ArrayElement {
+						ctx,
+						item: items[0].clone(),
+					}
+				))])))
+			} else {
+				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
 			}
-			Val::Arr(out.into())
 		}
 		ArrComp(expr, comp_specs) => {
 			let mut out = Vec::new();
@@ -534,7 +574,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				out.push(evaluate(ctx, expr)?);
 				Ok(())
 			})?;
-			Val::Arr(ArrValue::Eager(Cc::new(out)))
+			Val::Arr(ArrValue::eager(Cc::new(out)))
 		}
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
 		ObjExtend(a, b) => evaluate_add_op(
@@ -615,7 +655,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					|| s.import_resolved(resolved_path),
 				)?,
 				ImportStr(_) => Val::Str(s.import_resolved_str(resolved_path)?),
-				ImportBin(_) => Val::Arr(ArrValue::Bytes(s.import_resolved_bin(resolved_path)?)),
+				ImportBin(_) => Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}
 		}

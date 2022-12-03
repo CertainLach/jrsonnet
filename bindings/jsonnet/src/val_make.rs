@@ -46,7 +46,7 @@ pub extern "C" fn jsonnet_json_make_null(_vm: &VM) -> *mut Val {
 /// Assign elements with [`jsonnet_json_array_append`].
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_array(_vm: &VM) -> *mut Val {
-	Box::into_raw(Box::new(Val::Arr(ArrValue::Eager(Cc::new(Vec::new())))))
+	Box::into_raw(Box::new(Val::Arr(ArrValue::eager(Cc::new(Vec::new())))))
 }
 
 /// Make a `JsonnetJsonValue` representing an object.

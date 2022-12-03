@@ -106,9 +106,9 @@ pub fn builtin_sort(ctx: Context, arr: ArrValue, keyF: Option<FuncVal>) -> Resul
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	Ok(ArrValue::Eager(super::sort::sort(
+	Ok(ArrValue::eager(super::sort::sort(
 		ctx,
-		arr.evaluated()?,
+		arr.evaluatedcc()?,
 		keyF.unwrap_or_else(FuncVal::identity),
 	)?))
 }
