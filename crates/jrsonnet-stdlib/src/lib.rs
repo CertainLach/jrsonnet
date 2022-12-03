@@ -63,6 +63,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("isFunction", builtin_is_function::INST),
 		// Arrays
 		("makeArray", builtin_make_array::INST),
+		("repeat", builtin_repeat::INST),
 		("slice", builtin_slice::INST),
 		("map", builtin_map::INST),
 		("flatMap", builtin_flatmap::INST),

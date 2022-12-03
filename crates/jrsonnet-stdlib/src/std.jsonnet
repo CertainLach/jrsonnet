@@ -27,13 +27,6 @@
 
   split(str, c):: std.splitLimit(str, c, -1),
 
-  repeat(what, count)::
-    local joiner =
-      if std.isString(what) then ''
-      else if std.isArray(what) then []
-      else error 'std.repeat first argument must be an array or a string';
-    std.join(joiner, std.makeArray(count, function(i) what)),
-
   mapWithIndex(func, arr)::
     if !std.isFunction(func) then
       error ('std.mapWithIndex first param must be function, got ' + std.type(func))

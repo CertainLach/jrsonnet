@@ -740,6 +740,96 @@ impl ArrayLike for MappedArray {
 }
 // impl MappedArray
 
+#[derive(Trace, Debug)]
+pub struct RepeatedArrayInner {
+	data: ArrValue,
+	repeats: usize,
+	total_len: usize,
+}
+#[derive(Trace, Debug, Clone)]
+pub struct RepeatedArray(Cc<RepeatedArrayInner>);
+impl RepeatedArray {
+	pub fn new(data: ArrValue, repeats: usize) -> Option<Self> {
+		let total_len = data.len().checked_mul(repeats)?;
+		Some(Self(Cc::new(RepeatedArrayInner {
+			data,
+			repeats,
+			total_len,
+		})))
+	}
+	pub fn is_cheap(&self) -> bool {
+		self.0.data.is_cheap()
+	}
+}
+
+type RepeatedArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
+type RepeatedArrayLazyIter<'t> =
+	impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
+type RepeatedArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
+impl ArrayLike for RepeatedArray {
+	type Iter<'t> = RepeatedArrayIter<'t>;
+	type IterLazy<'t> = RepeatedArrayLazyIter<'t>;
+	type IterCheap<'t> = RepeatedArrayCheapIter<'t>;
+
+	fn len(&self) -> usize {
+		self.0.total_len
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		if index > self.0.total_len {
+			return Ok(None);
+		}
+		self.0.data.get(index % self.0.data.len())
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		if index > self.0.total_len {
+			return None;
+		}
+		self.0.data.get_lazy(index % self.0.data.len())
+	}
+
+	fn get_cheap(&self, index: usize) -> Option<Val> {
+		if index > self.0.total_len {
+			return None;
+		}
+		self.0.data.get_cheap(index % self.0.data.len())
+	}
+
+	fn evaluated(&self) -> Result<Vec<Val>> {
+		let mut data = self.0.data.evaluated()?;
+		let data_range = 0..data.len();
+		for _ in 1..self.0.repeats {
+			data.extend_from_within(data_range.clone());
+		}
+		Ok(data)
+	}
+
+	fn iter(&self) -> RepeatedArrayIter<'_> {
+		(0..self.0.total_len)
+			.map(|i| self.get(i))
+			.map(Result::transpose)
+			.map(Option::unwrap)
+	}
+
+	fn iter_lazy(&self) -> RepeatedArrayLazyIter<'_> {
+		(0..self.0.total_len)
+			.map(|i| self.get_lazy(i))
+			.map(Option::unwrap)
+	}
+
+	fn iter_cheap(&self) -> Option<RepeatedArrayCheapIter<'_>> {
+		if !self.0.data.is_cheap() {
+			return None;
+		}
+		Some(
+			(0..self.0.total_len)
+				.map(|i| self.get_cheap(i))
+				.map(Option::unwrap),
+		)
+	}
+}
+
 macro_rules! impl_iter_enum {
 	($n:ident => $v:ident) => {
 		pub enum $n<'t> {
@@ -752,6 +842,7 @@ macro_rules! impl_iter_enum {
 			Extended(Box<<ExtendedArray as ArrayLike>::$v<'t>>),
 			Reverse(Box<<ReverseArray as ArrayLike>::$v<'t>>),
 			Mapped(Box<<MappedArray as ArrayLike>::$v<'t>>),
+			Repeated(Box<<RepeatedArray as ArrayLike>::$v<'t>>),
 		}
 	};
 }
@@ -768,6 +859,7 @@ macro_rules! pass {
 			Self::Extended(e) => e.$m($($ident)*),
 			Self::Reverse(e) => e.$m($($ident)*),
 			Self::Mapped(e) => e.$m($($ident)*),
+			Self::Repeated(e) => e.$m($($ident)*),
 		}
 	};
 }
@@ -785,6 +877,7 @@ macro_rules! pass_iter_call {
 			ArrValue::Extended(e) => $e::Extended(Box::new($($wrap!)?(e.$c()))),
 			ArrValue::Reverse(e) => $e::Reverse(Box::new($($wrap!)?(e.$c()))),
 			ArrValue::Mapped(e) => $e::Mapped(Box::new($($wrap!)?(e.$c()))),
+			ArrValue::Repeated(e) => $e::Repeated(Box::new($($wrap!)?(e.$c()))),
 		}
 	};
 }
@@ -827,6 +920,7 @@ macro_rules! impl_iter {
 					}
 					Self::Reverse(e) => e.len(),
 					Self::Mapped(e) => e.len(),
+					Self::Repeated(e) => e.len(),
 				}
 			}
 		}

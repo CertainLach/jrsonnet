@@ -12,7 +12,9 @@ use self::{
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{evaluate, gc::TraceBox, typed::Any, Context, ContextBuilder, Result, Val};
+use crate::{
+	evaluate, evaluate_trivial, gc::TraceBox, typed::Any, Context, ContextBuilder, Result, Val,
+};
 
 pub mod arglike;
 pub mod builtin;
@@ -79,6 +81,10 @@ impl FuncDesc {
 		tailstrict: bool,
 	) -> Result<Context> {
 		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
+	}
+
+	pub fn evaluate_trivial(&self) -> Option<Val> {
+		evaluate_trivial(&self.body)
 	}
 }
 
@@ -200,5 +206,12 @@ impl FuncVal {
 	/// Identity function value.
 	pub const fn identity() -> Self {
 		Self::Id
+	}
+
+	pub fn evaluate_trivial(&self) -> Option<Val> {
+		match self {
+			FuncVal::Normal(n) => n.evaluate_trivial(),
+			_ => None,
+		}
 	}
 }

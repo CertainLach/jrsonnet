@@ -32,6 +32,8 @@ pub enum ArrValue {
 	Reverse(Box<ReverseArray>),
 	/// Returned by `std.map` call
 	Mapped(MappedArray),
+	/// Returned by `std.repeat` call
+	Repeated(RepeatedArray),
 }
 
 impl ArrValue {
@@ -49,6 +51,10 @@ impl ArrValue {
 
 	pub fn eager(values: Cc<Vec<Val>>) -> Self {
 		Self::Eager(EagerArray(values))
+	}
+
+	pub fn repeated(data: ArrValue, repeats: usize) -> Option<Self> {
+		Some(Self::Repeated(RepeatedArray::new(data, repeats)?))
 	}
 
 	pub fn bytes(bytes: IBytes) -> Self {
@@ -76,7 +82,11 @@ impl ArrValue {
 		// TODO: benchmark for an optimal value, currently just a arbitrary choice
 		const ARR_EXTEND_THRESHOLD: usize = 100;
 
-		if a.len() + b.len() > ARR_EXTEND_THRESHOLD {
+		if a.is_empty() {
+			b
+		} else if b.is_empty() {
+			a
+		} else if a.len() + b.len() > ARR_EXTEND_THRESHOLD {
 			Self::Extended(Cc::new(ExtendedArray::new(a, b)))
 		} else if let (Some(a), Some(b)) = (a.iter_cheap(), b.iter_cheap()) {
 			let mut out = Vec::with_capacity(a.len() + b.len());
@@ -189,10 +199,8 @@ impl ArrValue {
 			(ArrValue::Lazy(a), ArrValue::Lazy(b)) => Cc::ptr_eq(&a.0, &b.0),
 			(ArrValue::Expr(a), ArrValue::Expr(b)) => Cc::ptr_eq(&a.0, &b.0),
 			(ArrValue::Eager(a), ArrValue::Eager(b)) => Cc::ptr_eq(&a.0, &b.0),
-			(ArrValue::Extended(a), ArrValue::Extended(b)) => Cc::ptr_eq(&a, &b),
+			(ArrValue::Extended(a), ArrValue::Extended(b)) => Cc::ptr_eq(a, b),
 			(ArrValue::Range(a), ArrValue::Range(b)) => a == b,
-			(ArrValue::Slice(_), ArrValue::Slice(_)) => false,
-			(ArrValue::Reverse(_), ArrValue::Reverse(_)) => false,
 			_ => false,
 		}
 	}
@@ -203,6 +211,7 @@ impl ArrValue {
 			ArrValue::Extended(v) => v.a.is_cheap() && v.b.is_cheap(),
 			ArrValue::Slice(r) => r.inner.is_cheap(),
 			ArrValue::Reverse(i) => i.0.is_cheap(),
+			ArrValue::Repeated(v) => v.is_cheap(),
 			ArrValue::Expr(_) | ArrValue::Lazy(_) | ArrValue::Mapped(_) => false,
 		}
 	}

@@ -1,20 +1,38 @@
 use jrsonnet_evaluator::{
-	error::Result,
+	error::{ErrorKind::RuntimeError, Result},
 	function::{builtin, FuncVal},
 	throw,
-	typed::{Any, BoundedUsize, Either2, NativeFn, Typed, VecVal},
-	val::{equals, ArrValue, IndexableVal},
+	typed::{Any, BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
+	val::{equals, ArrValue, IndexableVal, StrValue},
 	Either, IStr, Val,
 };
 use jrsonnet_gcmodule::Cc;
 
 #[builtin]
-pub fn builtin_make_array(sz: usize, func: NativeFn<((f64,), Any)>) -> Result<VecVal> {
-	let mut out = Vec::with_capacity(sz);
-	for i in 0..sz {
-		out.push(func(i as f64)?.0);
+pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
+	if *sz == 0 {
+		return Ok(ArrValue::empty());
 	}
-	Ok(VecVal(Cc::new(out)))
+	if let Some(trivial) = func.evaluate_trivial() {
+		let mut out = Vec::with_capacity(*sz as usize);
+		for _ in 0..*sz {
+			out.push(trivial.clone())
+		}
+		Ok(ArrValue::eager(Cc::new(out)))
+	} else {
+		Ok(ArrValue::range_exclusive(0, *sz).map(func))
+	}
+}
+
+#[builtin]
+pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Any> {
+	Ok(Any(match what {
+		Either2::A(s) => Val::Str(StrValue::Flat(s.repeat(count).into())),
+		Either2::B(arr) => Val::Arr(
+			ArrValue::repeated(arr, count)
+				.ok_or_else(|| RuntimeError("repeated length overflow".into()))?,
+		),
+	}))
 }
 
 #[builtin]
