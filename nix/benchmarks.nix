@@ -129,12 +129,6 @@ stdenv.mkDerivation {
         echo "<details>" >> $out
         echo "<summary>Tested versions</summary>" >> $out
         echo >> $out
-        echo Rust: git as $(date +'%d.%m.%Y' -u) >> $out
-        echo >> $out
-        echo "\`\`\`" >> $out
-        jrsonnet --help >> $out
-        echo "\`\`\`" >> $out
-        echo >> $out
         echo Go: $(go-jsonnet --version) >> $out
         echo >> $out
         echo "\`\`\`" >> $out

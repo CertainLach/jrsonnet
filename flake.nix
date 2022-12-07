@@ -51,7 +51,6 @@
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
               { drv = jrsonnet; name = "current"; }
-              { drv = jrsonnet-nightly; name = "current-nightly"; }
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
@@ -59,7 +58,6 @@
             quick = true;
             jrsonnetVariants = [
               { drv = jrsonnet; name = "current"; }
-              { drv = jrsonnet-nightly; name = "current-nightly"; }
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
