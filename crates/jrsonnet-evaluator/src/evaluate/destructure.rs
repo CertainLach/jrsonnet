@@ -128,8 +128,7 @@ pub fn destruct(
 						new_bindings,
 					)?;
 				}
-				Some(DestructRest::Drop) => {}
-				None => {}
+				Some(DestructRest::Drop) | None => {}
 			}
 
 			{
@@ -202,7 +201,7 @@ pub fn destruct(
 				.collect();
 			let full = Thunk::new(tb!(DataThunk {
 				parent,
-				field_names: field_names.clone(),
+				field_names,
 				has_rest: rest.is_some()
 			}));
 
@@ -222,7 +221,7 @@ pub fn destruct(
 							Ok(field)
 						} else {
 							let (fctx, expr) = self.default.as_ref().expect("shape is checked");
-							Ok(evaluate(fctx.clone().unwrap(), &expr)?)
+							Ok(evaluate(fctx.clone().unwrap(), expr)?)
 						}
 					}
 				}

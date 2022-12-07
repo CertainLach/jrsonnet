@@ -44,6 +44,8 @@
 extern crate self as jrsonnet_evaluator;
 
 mod arr;
+#[cfg(feature = "async-import")]
+pub mod async_import;
 mod ctx;
 mod dynamic;
 pub mod error;
@@ -188,6 +190,18 @@ impl FileData {
 			evaluating: false,
 		}
 	}
+	pub(crate) fn get_string(&mut self) -> Option<IStr> {
+		if self.string.is_none() {
+			self.string = Some(
+				self.bytes
+					.as_ref()
+					.expect("either string or bytes should be set")
+					.clone()
+					.cast_str()?,
+			);
+		}
+		Some(self.string.clone().expect("just set"))
+	}
 }
 
 #[derive(Default, Trace)]
@@ -223,20 +237,9 @@ impl State {
 				.1
 			}
 		};
-		if let Some(str) = &file.string {
-			return Ok(str.clone());
-		}
-		if file.string.is_none() {
-			file.string = Some(
-				file.bytes
-					.as_ref()
-					.expect("either string or bytes should be set")
-					.clone()
-					.cast_str()
-					.ok_or_else(|| ImportBadFileUtf8(path.clone()))?,
-			);
-		}
-		Ok(file.string.as_ref().expect("just set").clone())
+		Ok(file
+			.get_string()
+			.ok_or_else(|| ImportBadFileUtf8(path.clone()))?)
 	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_bin(&self, path: SourcePath) -> Result<IBytes> {
@@ -288,23 +291,14 @@ impl State {
 		if let Some(val) = &file.evaluated {
 			return Ok(val.clone());
 		}
-		if file.string.is_none() {
-			file.string = Some(
-				std::str::from_utf8(
-					file.bytes
-						.as_ref()
-						.expect("either string or bytes should be set"),
-				)
-				.map_err(|_| ImportBadFileUtf8(path.clone()))?
-				.into(),
-			);
-		}
-		let code = file.string.as_ref().expect("just set");
+		let code = file
+			.get_string()
+			.ok_or_else(|| ImportBadFileUtf8(path.clone()))?;
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
 				jrsonnet_parser::parse(
-					code,
+					&code,
 					&ParserSettings {
 						source: file_name.clone(),
 					},
