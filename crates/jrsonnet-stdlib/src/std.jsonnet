@@ -25,6 +25,13 @@
   stringChars(str)::
     std.makeArray(std.length(str), function(i) str[i]),
 
+  splitLimitR(str, c, maxsplits)::
+    if maxsplits == -1 then
+      std.splitLimit(str, c, -1)
+    else
+      local revStr(str) = std.join('', std.reverse(std.stringChars(str)));
+      std.map(function(e) revStr(e), std.reverse(std.splitLimit(revStr(str), revStr(c), maxsplits))),
+
   split(str, c):: std.splitLimit(str, c, -1),
 
   mapWithIndex(func, arr)::
@@ -121,18 +128,29 @@
         ch;
     std.foldl(function(a, b) a + trans(b), std.stringChars(str), ''),
 
+  local xml_escapes = {
+    '<': '&lt;',
+    '>': '&gt;',
+    '&': '&amp;',
+    '"': '&quot;',
+    "'": '&apos;',
+  },
+
+  escapeStringXML(str_)::
+    local str = std.toString(str_);
+    std.join('', [std.get(xml_escapes, ch, ch) for ch in std.stringChars(str)]),
+
   manifestJson(value):: std.manifestJsonEx(value, '    ') tailstrict,
 
   manifestJsonMinified(value):: std.manifestJsonEx(value, '', '', ':'),
 
-  manifestYamlStream(value, indent_array_in_object=false, c_document_end=true)::
+  manifestYamlStream(value, indent_array_in_object=false, c_document_end=true, quote_keys=true)::
     if !std.isArray(value) then
       error 'manifestYamlStream only takes arrays, got ' + std.type(value)
     else
       '---\n' + std.join(
-        '\n---\n', [std.manifestYamlDoc(e, indent_array_in_object) for e in value]
+        '\n---\n', [std.manifestYamlDoc(e, indent_array_in_object, quote_keys) for e in value]
       ) + if c_document_end then '\n...\n' else '\n',
-
 
   manifestPython(v)::
     if std.isObject(v) then
