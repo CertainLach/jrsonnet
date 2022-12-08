@@ -2,19 +2,19 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::builtin,
 	throw,
-	typed::{Either2, VecVal, M1},
+	typed::{Either2, M1},
 	val::{ArrValue, StrValue},
 	Either, IStr, Val,
 };
 
 #[builtin]
-pub const fn builtin_codepoint(str: char) -> Result<u32> {
-	Ok(str as u32)
+pub const fn builtin_codepoint(str: char) -> u32 {
+	str as u32
 }
 
 #[builtin]
-pub fn builtin_substr(str: IStr, from: usize, len: usize) -> Result<String> {
-	Ok(str.chars().skip(from).take(len).collect())
+pub fn builtin_substr(str: IStr, from: usize, len: usize) -> String {
+	str.chars().skip(from).take(len).collect()
 }
 
 #[builtin]
@@ -23,14 +23,14 @@ pub fn builtin_char(n: u32) -> Result<char> {
 }
 
 #[builtin]
-pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
-	Ok(str.replace(&from as &str, &to as &str))
+pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
+	str.replace(&from as &str, &to as &str)
 }
 
 #[builtin]
-pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> Result<VecVal> {
+pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> ArrValue {
 	use Either2::*;
-	Ok(VecVal(match maxsplits {
+	match maxsplits {
 		A(n) => str
 			.splitn(n + 1, &c as &str)
 			.map(|s| Val::Str(StrValue::Flat(s.into())))
@@ -39,23 +39,23 @@ pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> 
 			.split(&c as &str)
 			.map(|s| Val::Str(StrValue::Flat(s.into())))
 			.collect(),
-	}))
+	}
 }
 
 #[builtin]
-pub fn builtin_ascii_upper(str: IStr) -> Result<String> {
-	Ok(str.to_ascii_uppercase())
+pub fn builtin_ascii_upper(str: IStr) -> String {
+	str.to_ascii_uppercase()
 }
 
 #[builtin]
-pub fn builtin_ascii_lower(str: IStr) -> Result<String> {
-	Ok(str.to_ascii_lowercase())
+pub fn builtin_ascii_lower(str: IStr) -> String {
+	str.to_ascii_lowercase()
 }
 
 #[builtin]
-pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
+pub fn builtin_find_substr(pat: IStr, str: IStr) -> ArrValue {
 	if pat.is_empty() || str.is_empty() || pat.len() > str.len() {
-		return Ok(ArrValue::empty());
+		return ArrValue::empty();
 	}
 
 	let str = str.as_str();
@@ -74,7 +74,7 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> Result<ArrValue> {
 			out.push(Val::Num(ch_idx as f64))
 		}
 	}
-	Ok(out.into())
+	out.into()
 }
 
 #[builtin]

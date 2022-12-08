@@ -2,11 +2,10 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::RuntimeError, Result},
 	function::{builtin, FuncVal},
 	throw,
-	typed::{Any, BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
+	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal, StrValue},
 	Either, IStr, Val,
 };
-use jrsonnet_gcmodule::Cc;
 
 #[builtin]
 pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
@@ -18,21 +17,21 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 		for _ in 0..*sz {
 			out.push(trivial.clone())
 		}
-		Ok(ArrValue::eager(Cc::new(out)))
+		Ok(ArrValue::eager(out))
 	} else {
 		Ok(ArrValue::range_exclusive(0, *sz).map(func))
 	}
 }
 
 #[builtin]
-pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Any> {
-	Ok(Any(match what {
+pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Val> {
+	Ok(match what {
 		Either2::A(s) => Val::Str(StrValue::Flat(s.repeat(count).into())),
 		Either2::B(arr) => Val::Arr(
 			ArrValue::repeated(arr, count)
 				.ok_or_else(|| RuntimeError("repeated length overflow".into()))?,
 		),
-	}))
+	})
 }
 
 #[builtin]
@@ -41,8 +40,8 @@ pub fn builtin_slice(
 	index: Option<BoundedUsize<0, { i32::MAX as usize }>>,
 	end: Option<BoundedUsize<0, { i32::MAX as usize }>>,
 	step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
-) -> Result<Any> {
-	indexable.slice(index, end, step).map(Val::from).map(Any)
+) -> Result<Val> {
+	indexable.slice(index, end, step).map(Val::from)
 }
 
 #[builtin]
@@ -52,7 +51,7 @@ pub fn builtin_map(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 
 #[builtin]
 pub fn builtin_flatmap(
-	func: NativeFn<((Either![String, Any],), Any)>,
+	func: NativeFn<((Either![String, Val],), Val)>,
 	arr: IndexableVal,
 ) -> Result<IndexableVal> {
 	use std::fmt::Write;
@@ -60,7 +59,7 @@ pub fn builtin_flatmap(
 		IndexableVal::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
-				match func(Either2::A(c.to_string()))?.0 {
+				match func(Either2::A(c.to_string()))? {
 					Val::Str(o) => write!(out, "{o}").unwrap(),
 					Val::Null => continue,
 					_ => throw!("in std.join all items should be strings"),
@@ -72,7 +71,7 @@ pub fn builtin_flatmap(
 			let mut out = Vec::new();
 			for el in a.iter() {
 				let el = el?;
-				match func(Either2::B(Any(el)))?.0 {
+				match func(Either2::B(el))? {
 					Val::Arr(o) => {
 						for oe in o.iter() {
 							out.push(oe?);
@@ -89,25 +88,25 @@ pub fn builtin_flatmap(
 
 #[builtin]
 pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(Any(val.clone()),))?))
+	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),))?))
 }
 
 #[builtin]
-pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
-	let mut acc = init.0;
+pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+	let mut acc = init;
 	for i in arr.iter() {
-		acc = func.evaluate_simple(&(Any(acc), Any(i?)))?;
+		acc = func.evaluate_simple(&(acc, i?))?;
 	}
-	Ok(Any(acc))
+	Ok(acc)
 }
 
 #[builtin]
-pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Any) -> Result<Any> {
-	let mut acc = init.0;
+pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+	let mut acc = init;
 	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&(Any(i?), Any(acc)))?;
+		acc = func.evaluate_simple(&(i?, acc))?;
 	}
-	Ok(Any(acc))
+	Ok(acc)
 }
 
 #[builtin]
@@ -175,8 +174,8 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 }
 
 #[builtin]
-pub fn builtin_reverse(value: ArrValue) -> Result<ArrValue> {
-	Ok(value.reversed())
+pub fn builtin_reverse(arr: ArrValue) -> ArrValue {
+	arr.reversed()
 }
 
 #[builtin]
@@ -202,16 +201,16 @@ pub fn builtin_all(arr: ArrValue) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
+pub fn builtin_member(arr: IndexableVal, x: Val) -> Result<bool> {
 	match arr {
 		IndexableVal::Str(str) => {
-			let x: IStr = IStr::from_untyped(x.0)?;
+			let x: IStr = IStr::from_untyped(x)?;
 			Ok(!x.is_empty() && str.contains(&*x))
 		}
 		IndexableVal::Arr(a) => {
 			for item in a.iter() {
 				let item = item?;
-				if equals(&item, &x.0)? {
+				if equals(&item, &x)? {
 					return Ok(true);
 				}
 			}
@@ -221,10 +220,10 @@ pub fn builtin_member(arr: IndexableVal, x: Any) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_count(arr: Vec<Any>, v: Any) -> Result<usize> {
+pub fn builtin_count(arr: ArrValue, x: Val) -> Result<usize> {
 	let mut count = 0;
-	for item in &arr {
-		if equals(&item.0, &v.0)? {
+	for item in arr.iter() {
+		if equals(&item?, &x)? {
 			count += 1;
 		}
 	}

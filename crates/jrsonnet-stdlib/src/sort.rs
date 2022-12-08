@@ -2,11 +2,9 @@ use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, CallLocation, FuncVal},
 	throw,
-	typed::Any,
 	val::ArrValue,
 	Context, Val,
 };
-use jrsonnet_gcmodule::Cc;
 
 #[derive(Copy, Clone)]
 enum SortKeyType {
@@ -78,7 +76,7 @@ pub fn sort(ctx: Context, mut values: Vec<Val>, key_getter: FuncVal) -> Result<V
 				key_getter.evaluate(
 					ctx.clone(),
 					CallLocation::native(),
-					&(Any(value.clone()),),
+					&(value.clone(),),
 					true,
 				)?,
 			));
@@ -105,9 +103,9 @@ pub fn builtin_sort(ctx: Context, arr: ArrValue, keyF: Option<FuncVal>) -> Resul
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	Ok(ArrValue::eager(Cc::new(super::sort::sort(
+	Ok(ArrValue::eager(super::sort::sort(
 		ctx,
 		arr.iter().collect::<Result<Vec<_>>>()?,
 		keyF.unwrap_or_else(FuncVal::identity),
-	)?)))
+	)?))
 }

@@ -116,12 +116,11 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
 ) {
-	vm.state
-		.set_import_resolver(Box::new(CallbackImportResolver {
-			cb,
-			ctx,
-			out: RefCell::new(HashMap::new()),
-		}))
+	vm.state.set_import_resolver(CallbackImportResolver {
+		cb,
+		ctx,
+		out: RefCell::new(HashMap::new()),
+	})
 }
 
 /// # Safety

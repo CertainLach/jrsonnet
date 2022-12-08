@@ -294,7 +294,6 @@ where
 		path: handler.resolve(path.as_ref()).await?,
 		parse: true,
 	}];
-	// let mut resolved = HashMap::<(SourcePath, IStr), (SourcePath, bool)>::new();
 	while let Some(job) = queue.pop() {
 		match job {
 			Job::LoadFile { path, parse } => {
@@ -349,8 +348,8 @@ where
 			}
 		}
 	}
-	s.set_import_resolver(Box::new(ResolvedImportResolver {
+	s.set_import_resolver(ResolvedImportResolver {
 		resolved: RefCell::new(resolved),
-	}));
+	});
 	Ok(())
 }

@@ -3,11 +3,9 @@ mod common;
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
-	tb,
 	typed::Typed,
 	ContextBuilder, State, Thunk, Val,
 };
-use jrsonnet_gcmodule::Cc;
 use jrsonnet_stdlib::StateExt;
 
 #[builtin]
@@ -63,7 +61,7 @@ fn curried_add(this: &curried_add, b: u32) -> Result<u32> {
 
 #[builtin]
 fn curry_add(a: u32) -> Result<FuncVal> {
-	Ok(FuncVal::Builtin(Cc::new(tb!(curried_add { a }))))
+	Ok(FuncVal::builtin(curried_add { a }))
 }
 
 #[test]

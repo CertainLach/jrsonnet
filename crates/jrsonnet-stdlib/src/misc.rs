@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{builtin, ArgLike, CallLocation, FuncVal},
 	throw,
-	typed::{Any, Either2, Either4},
+	typed::{Either2, Either4},
 	val::{equals, ArrValue},
 	Context, Either, IStr, ObjValue, Thunk, Val,
 };
@@ -12,45 +12,41 @@ use jrsonnet_evaluator::{
 use crate::{extvar_source, Settings};
 
 #[builtin]
-pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> Result<usize> {
+pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> usize {
 	use Either4::*;
-	Ok(match x {
+	match x {
 		A(x) => x.chars().count(),
 		B(x) => x.len(),
 		C(x) => x.len(),
 		D(f) => f.params_len(),
-	})
+	}
 }
 
 #[builtin(fields(
 	settings: Rc<RefCell<Settings>>,
 ))]
-pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Any> {
+pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Val> {
 	let ctx = ctx.state().create_default_context(extvar_source(&x, ""));
-	Ok(Any(this
-		.settings
+	this.settings
 		.borrow()
 		.ext_vars
 		.get(&x)
 		.cloned()
 		.ok_or_else(|| UndefinedExternalVariable(x))?
 		.evaluate_arg(ctx, true)?
-		.evaluate()?))
+		.evaluate()
 }
 
 #[builtin(fields(
 	settings: Rc<RefCell<Settings>>,
 ))]
-pub fn builtin_native(this: &builtin_native, name: IStr) -> Result<Any> {
-	Ok(Any(this
-		.settings
+pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
+	this.settings
 		.borrow()
 		.ext_natives
-		.get(&name)
+		.get(&x)
 		.cloned()
-		.map_or(Val::Null, |v| {
-			Val::Func(FuncVal::Builtin(v.clone()))
-		})))
+		.map_or(Val::Null, |v| Val::Func(FuncVal::Builtin(v.clone())))
 }
 
 #[builtin(fields(
@@ -61,9 +57,9 @@ pub fn builtin_trace(
 	loc: CallLocation,
 	str: IStr,
 	rest: Thunk<Val>,
-) -> Result<Any> {
+) -> Result<Val> {
 	this.settings.borrow().trace_printer.print_trace(loc, str);
-	Ok(Any(rest.evaluate()?))
+	rest.evaluate()
 }
 
 #[allow(clippy::comparison_chain)]

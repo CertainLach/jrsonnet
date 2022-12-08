@@ -15,7 +15,7 @@ fn run(file: &Path) {
 	let s = State::default();
 	s.with_stdlib();
 	common::with_test(&s);
-	s.set_import_resolver(Box::new(FileImportResolver::default()));
+	s.set_import_resolver(FileImportResolver::default());
 	let trace_format = CompactFormat::default();
 
 	match s.import(file) {

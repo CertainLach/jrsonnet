@@ -155,23 +155,21 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	builder
 		.member("extVar".into())
 		.hide()
-		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_ext_var {
-			settings: settings.clone()
-		})))))
+		.value(Val::Func(FuncVal::builtin(builtin_ext_var {
+			settings: settings.clone(),
+		})))
 		.expect("no conflict");
 	builder
 		.member("native".into())
 		.hide()
-		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_native {
-			settings: settings.clone()
-		})))))
+		.value(Val::Func(FuncVal::builtin(builtin_native {
+			settings: settings.clone(),
+		})))
 		.expect("no conflict");
 	builder
 		.member("trace".into())
 		.hide()
-		.value(Val::Func(FuncVal::Builtin(Cc::new(tb!(builtin_trace {
-			settings
-		})))))
+		.value(Val::Func(FuncVal::builtin(builtin_trace { settings })))
 		.expect("no conflict");
 
 	builder
@@ -301,8 +299,10 @@ impl ContextInitializer {
 			.insert(name.into(), TlaArg::Code(parsed));
 		Ok(())
 	}
-	pub fn add_native(&self, name: IStr, cb: Cc<TraceBox<dyn Builtin>>) {
-		self.settings_mut().ext_natives.insert(name, cb);
+	pub fn add_native(&self, name: IStr, cb: impl Builtin) {
+		self.settings_mut()
+			.ext_natives
+			.insert(name, Cc::new(tb!(cb)));
 	}
 }
 impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {

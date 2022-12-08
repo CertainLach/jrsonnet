@@ -1,3 +1,5 @@
+use std::borrow::Cow;
+
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
@@ -53,13 +55,47 @@ fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 	Ok(true)
 }
 
+#[builtin]
+fn param_names(fun: FuncVal) -> Vec<String> {
+	match fun {
+		FuncVal::Id => vec!["x".to_string()],
+		FuncVal::Normal(func) => func
+			.params
+			.iter()
+			.map(|p| p.0.name().unwrap_or_else(|| "<unnamed>".into()).to_string())
+			.collect(),
+		FuncVal::StaticBuiltin(b) => b
+			.params()
+			.iter()
+			.map(|p| {
+				p.name
+					.as_ref()
+					.unwrap_or(&Cow::Borrowed("<unnamed>"))
+					.to_string()
+			})
+			.collect(),
+		FuncVal::Builtin(b) => b
+			.params()
+			.iter()
+			.map(|p| {
+				p.name
+					.as_ref()
+					.unwrap_or(&Cow::Borrowed("<unnamed>"))
+					.to_string()
+			})
+			.collect(),
+	}
+}
+
 #[allow(dead_code)]
 pub fn with_test(s: &State) {
 	let mut bobj = ObjValueBuilder::new();
 	bobj.member("assertThrow".into())
 		.hide()
-		.value(Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)))
-		.expect("no error");
+		.value_unchecked(Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)));
+	bobj.member("paramNames".into())
+		.hide()
+		.value_unchecked(Val::Func(FuncVal::StaticBuiltin(param_names::INST)));
 
 	s.add_global("test".into(), Thunk::evaluated(Val::Obj(bobj.build())))
 }

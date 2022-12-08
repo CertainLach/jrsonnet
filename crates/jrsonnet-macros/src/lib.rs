@@ -192,35 +192,24 @@ pub fn builtin(
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let attr = parse_macro_input!(attr as BuiltinAttrs);
-	let item: ItemFn = parse_macro_input!(item);
+	let item_fn = item.clone();
+	let item_fn: ItemFn = parse_macro_input!(item_fn);
 
-	match builtin_inner(attr, item) {
+	match builtin_inner(attr, item_fn, item.into()) {
 		Ok(v) => v.into(),
 		Err(e) => e.into_compile_error().into(),
 	}
 }
 
-fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
+fn builtin_inner(
+	attr: BuiltinAttrs,
+	fun: ItemFn,
+	item: proc_macro2::TokenStream,
+) -> syn::Result<TokenStream> {
 	let ReturnType::Type(_, result) = &fun.sig.output else {
 		return Err(Error::new(
 			fun.sig.span(),
 			"builtin should return something",
-		))
-	};
-
-	let Some(args) = type_is_path(result, "Result") else {
-		return Err(Error::new(result.span(), "return value should be result"));
-
-	};
-	let PathArguments::AngleBracketed(params) = args else {
-		return Err(Error::new(args.span(), "missing result generic"));
-	};
-	let generic_arg = params.args.iter().next().unwrap();
-	// This argument must be a type:
-	let GenericArgument::Type(result_inner) = generic_arg else {
-		return Err(Error::new(
-			generic_arg.span(),
-			"option generic should be a type",
 		))
 	};
 
@@ -355,7 +344,8 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 	};
 
 	Ok(quote! {
-		#fun
+		#item
+
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
 		#[derive(Clone, jrsonnet_gcmodule::Trace #static_derive_copy)]
@@ -388,8 +378,7 @@ fn builtin_inner(attr: BuiltinAttrs, fun: ItemFn) -> syn::Result<TokenStream> {
 					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#pass)*);
-					let result = result?;
-					<#result_inner>::into_untyped(result)
+					<_ as Typed>::into_result(result)
 				}
 			}
 		};

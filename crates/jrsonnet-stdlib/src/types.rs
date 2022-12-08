@@ -1,31 +1,31 @@
-use jrsonnet_evaluator::{error::Result, function::builtin, typed::Any, IStr, Val};
+use jrsonnet_evaluator::{function::builtin, IStr, Val};
 
 #[builtin]
-pub fn builtin_type(v: Any) -> Result<IStr> {
-	Ok(v.0.value_type().name().into())
+pub fn builtin_type(x: Val) -> IStr {
+	x.value_type().name().into()
 }
 
 #[builtin]
-pub fn builtin_is_string(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Str(_)))
+pub fn builtin_is_string(v: Val) -> bool {
+	matches!(v, Val::Str(_))
 }
 #[builtin]
-pub fn builtin_is_number(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Num(_)))
+pub fn builtin_is_number(v: Val) -> bool {
+	matches!(v, Val::Num(_))
 }
 #[builtin]
-pub fn builtin_is_boolean(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Bool(_)))
+pub fn builtin_is_boolean(v: Val) -> bool {
+	matches!(v, Val::Bool(_))
 }
 #[builtin]
-pub fn builtin_is_object(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Obj(_)))
+pub fn builtin_is_object(v: Val) -> bool {
+	matches!(v, Val::Obj(_))
 }
 #[builtin]
-pub fn builtin_is_array(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Arr(_)))
+pub fn builtin_is_array(v: Val) -> bool {
+	matches!(v, Val::Arr(_))
 }
 #[builtin]
-pub fn builtin_is_function(v: Any) -> Result<bool> {
-	Ok(matches!(v.0, Val::Func(_)))
+pub fn builtin_is_function(v: Val) -> bool {
+	matches!(v, Val::Func(_))
 }

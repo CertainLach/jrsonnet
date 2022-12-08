@@ -13,7 +13,10 @@ use crate::VM;
 #[no_mangle]
 pub extern "C" fn jsonnet_json_extract_string(_vm: &VM, v: &Val) -> *mut c_char {
 	match v {
-		Val::Str(s) => CString::new(s as &str).unwrap().into_raw(),
+		Val::Str(s) => {
+			let s = s.clone().into_flat();
+			CString::new(s.as_str()).unwrap().into_raw()
+		}
 		_ => std::ptr::null_mut(),
 	}
 }

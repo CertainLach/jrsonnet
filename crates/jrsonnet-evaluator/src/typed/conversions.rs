@@ -29,6 +29,14 @@ pub trait Typed: Sized {
 	const TYPE: &'static ComplexValType;
 	fn into_untyped(typed: Self) -> Result<Val>;
 	fn from_untyped(untyped: Val) -> Result<Self>;
+
+	/// Hack to make builtins be able to return non-result values, and make macros able to convert those values to result
+	/// This method returns identity in impl Typed for Result, and should not be overriden
+	#[doc(hidden)]
+	fn into_result(typed: Self) -> Result<Val> {
+		let value = Self::into_untyped(typed)?;
+		Ok(value)
+	}
 }
 
 const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
@@ -238,61 +246,54 @@ where
 	const TYPE: &'static ComplexValType = &ComplexValType::ArrayRef(T::TYPE);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		let mut o = Vec::with_capacity(value.len());
-		for i in value {
-			o.push(T::into_untyped(i)?);
-		}
-		Ok(Val::Arr(o.into()))
+		Ok(Val::Arr(
+			value
+				.into_iter()
+				.map(T::into_untyped)
+				.collect::<Result<ArrValue>>()?,
+		))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
-		<Self as Typed>::TYPE.check(&value)?;
-		match value {
-			Val::Arr(a) => {
-				let mut o = Self::with_capacity(a.len());
-				for i in a.iter() {
-					o.push(T::from_untyped(i?)?);
-				}
-				Ok(o)
-			}
-			_ => unreachable!(),
-		}
+		let Val::Arr(a) = value else {
+			<Self as Typed>::TYPE.check(&value)?;
+			unreachable!("typecheck should fail")
+		};
+		a.iter()
+			.map(|r| r.and_then(T::from_untyped))
+			.collect::<Result<Vec<T>>>()
 	}
 }
 
-/// To be used in Vec<Any>
-/// Regular Val can't be used here, because it has wrong `TryFrom::Error` type
-#[derive(Clone)]
-pub struct Any(pub Val);
-
-impl Typed for Any {
+impl Typed for Val {
 	const TYPE: &'static ComplexValType = &ComplexValType::Any;
 
-	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(value.0)
+	fn into_untyped(typed: Self) -> Result<Val> {
+		Ok(typed)
 	}
-
-	fn from_untyped(value: Val) -> Result<Self> {
-		Ok(Self(value))
+	fn from_untyped(untyped: Val) -> Result<Self> {
+		Ok(untyped)
 	}
 }
 
-/// Specialization, provides faster `TryFrom<VecVal>` for Val
-pub struct VecVal(pub Vec<Val>);
+// Hack
+#[doc(hidden)]
+impl<T> Typed for Result<T>
+where
+	T: Typed,
+{
+	const TYPE: &'static ComplexValType = &ComplexValType::Any;
 
-impl Typed for VecVal {
-	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
-
-	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::eager(Cc::new(value.0))))
+	fn into_untyped(_typed: Self) -> Result<Val> {
+		panic!("do not use this conversion")
 	}
 
-	fn from_untyped(value: Val) -> Result<Self> {
-		<Self as Typed>::TYPE.check(&value)?;
-		match value {
-			Val::Arr(a) => Ok(Self(a.iter().collect::<Result<Vec<_>>>()?)),
-			_ => unreachable!(),
-		}
+	fn from_untyped(_untyped: Val) -> Result<Self> {
+		panic!("do not use this conversion")
+	}
+
+	fn into_result(typed: Self) -> Result<Val> {
+		typed.map(T::into_untyped)?
 	}
 }
 

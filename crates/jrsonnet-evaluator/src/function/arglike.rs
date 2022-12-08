@@ -7,7 +7,6 @@ use crate::{
 	error::Result,
 	evaluate,
 	gc::GcHashMap,
-	tb,
 	typed::Typed,
 	val::{StrValue, ThunkValue},
 	Context, Thunk, Val,
@@ -37,10 +36,10 @@ impl ArgLike for &LocExpr {
 		Ok(if tailstrict {
 			Thunk::evaluated(evaluate(ctx, self)?)
 		} else {
-			Thunk::new(tb!(EvaluateThunk {
+			Thunk::new(EvaluateThunk {
 				ctx,
 				expr: (*self).clone(),
-			}))
+			})
 		})
 	}
 }
@@ -69,10 +68,10 @@ impl ArgLike for TlaArg {
 			TlaArg::Code(code) => Ok(if tailstrict {
 				Thunk::evaluated(evaluate(ctx, code)?)
 			} else {
-				Thunk::new(tb!(EvaluateThunk {
+				Thunk::new(EvaluateThunk {
 					ctx,
 					expr: code.clone(),
-				}))
+				})
 			}),
 			TlaArg::Val(val) => Ok(Thunk::evaluated(val.clone())),
 		}
@@ -128,7 +127,6 @@ impl ArgsLike for Vec<Val> {
 	}
 	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
 }
-impl OptionalContext for Vec<Val> {}
 
 impl ArgsLike for ArgsDesc {
 	fn unnamed_len(&self) -> usize {
@@ -147,10 +145,10 @@ impl ArgsLike for ArgsDesc {
 				if tailstrict {
 					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
-					Thunk::new(tb!(EvaluateThunk {
+					Thunk::new(EvaluateThunk {
 						ctx: ctx.clone(),
 						expr: arg.clone(),
-					}))
+					})
 				},
 			)?;
 		}
@@ -169,10 +167,10 @@ impl ArgsLike for ArgsDesc {
 				if tailstrict {
 					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
-					Thunk::new(tb!(EvaluateThunk {
+					Thunk::new(EvaluateThunk {
 						ctx: ctx.clone(),
 						expr: arg.clone(),
-					}))
+					})
 				},
 			)?;
 		}

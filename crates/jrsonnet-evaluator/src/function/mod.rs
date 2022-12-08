@@ -12,9 +12,7 @@ use self::{
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{
-	evaluate, evaluate_trivial, gc::TraceBox, typed::Any, Context, ContextBuilder, Result, Val,
-};
+use crate::{evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result, Val};
 
 pub mod arglike;
 pub mod builtin;
@@ -116,6 +114,9 @@ impl Debug for FuncVal {
 }
 
 impl FuncVal {
+	pub fn builtin(builtin: impl Builtin) -> Self {
+		Self::Builtin(Cc::new(tb!(builtin)))
+	}
 	/// Amount of non-default required arguments
 	pub fn params_len(&self) -> usize {
 		match self {
@@ -148,8 +149,8 @@ impl FuncVal {
 			Self::Id => {
 				#[allow(clippy::unnecessary_wraps)]
 				#[builtin]
-				const fn builtin_id(v: Any) -> Result<Any> {
-					Ok(v)
+				const fn builtin_id(x: Val) -> Val {
+					x
 				}
 				static ID: &builtin_id = &builtin_id {};
 

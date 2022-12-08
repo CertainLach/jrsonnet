@@ -39,16 +39,16 @@ impl Context {
 			.expect("used state from dummy context")
 	}
 
-	pub fn dollar(&self) -> &Option<ObjValue> {
-		&self.0.dollar
+	pub fn dollar(&self) -> Option<&ObjValue> {
+		self.0.dollar.as_ref()
 	}
 
-	pub fn this(&self) -> &Option<ObjValue> {
-		&self.0.this
+	pub fn this(&self) -> Option<&ObjValue> {
+		self.0.this.as_ref()
 	}
 
-	pub fn super_obj(&self) -> &Option<ObjValue> {
-		&self.0.sup
+	pub fn super_obj(&self) -> Option<&ObjValue> {
+		self.0.sup.as_ref()
 	}
 
 	#[cfg(not(feature = "friendly-errors"))]
@@ -130,12 +130,6 @@ impl Context {
 		}))
 	}
 }
-
-// impl Default for Context {
-// 	fn default() -> Self {
-// 		Self::new()
-// 	}
-// }
 
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {

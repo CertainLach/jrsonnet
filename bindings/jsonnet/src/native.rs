@@ -7,11 +7,9 @@ use std::{
 use jrsonnet_evaluator::{
 	error::{Error, ErrorKind},
 	function::builtin::{NativeCallback, NativeCallbackHandler},
-	tb,
 	typed::Typed,
 	IStr, Val,
 };
-use jrsonnet_gcmodule::Cc;
 
 use crate::VM;
 
@@ -102,9 +100,6 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		.add_native(
 			name,
 			#[allow(deprecated)]
-			Cc::new(tb!(NativeCallback::new(
-				params,
-				tb!(JsonnetNativeCallbackHandler { ctx, cb }),
-			))),
+			NativeCallback::new(params, JsonnetNativeCallbackHandler { ctx, cb }),
 		)
 }

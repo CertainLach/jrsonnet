@@ -55,8 +55,8 @@ impl ArrValue {
 		Self::Lazy(LazyArray(thunks))
 	}
 
-	pub fn eager(values: Cc<Vec<Val>>) -> Self {
-		Self::Eager(EagerArray(values))
+	pub fn eager(values: Vec<Val>) -> Self {
+		Self::Eager(EagerArray(Cc::new(values)))
 	}
 
 	pub fn repeated(data: ArrValue, repeats: usize) -> Option<Self> {
@@ -81,7 +81,7 @@ impl ArrValue {
 				out.push(i);
 			};
 		}
-		Ok(Self::eager(Cc::new(out)))
+		Ok(Self::eager(out))
 	}
 
 	pub fn extended(a: ArrValue, b: ArrValue) -> Self {
@@ -98,7 +98,7 @@ impl ArrValue {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a);
 			out.extend(b);
-			Self::eager(Cc::new(out))
+			Self::eager(out)
 		} else {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a.iter_lazy());
@@ -235,12 +235,17 @@ impl ArrValue {
 }
 impl From<Vec<Val>> for ArrValue {
 	fn from(value: Vec<Val>) -> Self {
-		Self::eager(Cc::new(value))
+		Self::eager(value)
 	}
 }
 impl From<Vec<Thunk<Val>>> for ArrValue {
 	fn from(value: Vec<Thunk<Val>>) -> Self {
 		Self::lazy(Cc::new(value))
+	}
+}
+impl FromIterator<Val> for ArrValue {
+	fn from_iter<T: IntoIterator<Item = Val>>(iter: T) -> Self {
+		Self::eager(iter.into_iter().collect())
 	}
 }
 

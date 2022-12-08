@@ -6,7 +6,7 @@ use crate::{
 	error::{ErrorKind::*, Result},
 	evaluate, evaluate_method, evaluate_named,
 	gc::GcHashMap,
-	tb, throw,
+	throw,
 	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
@@ -63,11 +63,11 @@ pub fn destruct(
 				}
 			}
 
-			let full = Thunk::new(tb!(DataThunk {
+			let full = Thunk::new(DataThunk {
 				min_len: start.len() + end.len(),
 				has_rest: rest.is_some(),
 				parent,
-			}));
+			});
 
 			{
 				#[derive(Trace)]
@@ -86,10 +86,10 @@ pub fn destruct(
 				for (i, d) in start.iter().enumerate() {
 					destruct(
 						d,
-						Thunk::new(tb!(BaseThunk {
+						Thunk::new(BaseThunk {
 							full: full.clone(),
 							index: i,
-						})),
+						}),
 						fctx.clone(),
 						new_bindings,
 					)?;
@@ -119,11 +119,11 @@ pub fn destruct(
 
 					destruct(
 						&Destruct::Full(v.clone()),
-						Thunk::new(tb!(RestThunk {
+						Thunk::new(RestThunk {
 							full: full.clone(),
 							start: start.len(),
 							end: end.len(),
-						})),
+						}),
 						fctx.clone(),
 						new_bindings,
 					)?;
@@ -151,11 +151,11 @@ pub fn destruct(
 				for (i, d) in end.iter().enumerate() {
 					destruct(
 						d,
-						Thunk::new(tb!(EndThunk {
+						Thunk::new(EndThunk {
 							full: full.clone(),
 							index: i,
 							end: end.len(),
-						})),
+						}),
 						fctx.clone(),
 						new_bindings,
 					)?;
@@ -199,11 +199,11 @@ pub fn destruct(
 				.filter(|f| f.2.is_none())
 				.map(|f| f.0.clone())
 				.collect();
-			let full = Thunk::new(tb!(DataThunk {
+			let full = Thunk::new(DataThunk {
 				parent,
 				field_names,
-				has_rest: rest.is_some()
-			}));
+				has_rest: rest.is_some(),
+			});
 
 			for (field, d, default) in fields {
 				#[derive(Trace)]
@@ -225,11 +225,11 @@ pub fn destruct(
 						}
 					}
 				}
-				let value = Thunk::new(tb!(FieldThunk {
+				let value = Thunk::new(FieldThunk {
 					full: full.clone(),
 					field: field.clone(),
 					default: default.clone().map(|e| (fctx.clone(), e)),
-				}));
+				});
 				if let Some(d) = d {
 					destruct(d, value, fctx.clone(), new_bindings)?;
 				} else {
@@ -268,11 +268,11 @@ pub fn evaluate_dest(
 					)
 				}
 			}
-			let data = Thunk::new(tb!(EvaluateThunkValue {
+			let data = Thunk::new(EvaluateThunkValue {
 				name: into.name(),
 				fctx: fctx.clone(),
 				expr: value.clone(),
-			}));
+			});
 			destruct(into, data, fctx, new_bindings)?;
 		}
 		BindSpec::Function {
@@ -302,12 +302,12 @@ pub fn evaluate_dest(
 
 			let old = new_bindings.insert(
 				name.clone(),
-				Thunk::new(tb!(MethodThunk {
+				Thunk::new(MethodThunk {
 					fctx,
 					name: name.clone(),
 					params: params.clone(),
-					value: value.clone()
-				})),
+					value: value.clone(),
+				}),
 			);
 			if old.is_some() {
 				throw!(DuplicateLocalVar(name.clone()))

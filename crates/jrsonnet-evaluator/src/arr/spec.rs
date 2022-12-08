@@ -7,10 +7,10 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
 
-use super::{ArrValue, ArrayLikeIter};
+use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, tb, typed::Any,
-	val::ThunkValue, Context, Error, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, val::ThunkValue,
+	Context, Error, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Sized + Into<ArrValue> {
@@ -75,7 +75,7 @@ impl SliceArray {
 	}
 
 	#[cfg(not(feature = "nightly"))]
-	fn iter_cheap(&self) -> Option<impl ArrayLikeIter<Val> + '_> {
+	fn iter_cheap(&self) -> Option<impl crate::arr::ArrayLikeIter<Val> + '_> {
 		Some(
 			self.inner
 				.iter_cheap()?
@@ -300,10 +300,10 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
 		};
 
-		Some(Thunk::new(tb!(ArrayElement {
+		Some(Thunk::new(ArrayElement {
 			arr_thunk: self.clone(),
 			index,
-		})))
+		}))
 	}
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
@@ -748,7 +748,7 @@ impl ArrayLike for MappedArray {
 			.get(index)
 			.transpose()
 			.expect("index checked")
-			.and_then(|r| self.0.mapper.evaluate_simple(&(Any(r),)));
+			.and_then(|r| self.0.mapper.evaluate_simple(&(r,)));
 
 		let new_value = match val {
 			Ok(v) => v,
@@ -787,10 +787,10 @@ impl ArrayLike for MappedArray {
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
 		};
 
-		Some(Thunk::new(tb!(ArrayElement {
+		Some(Thunk::new(ArrayElement {
 			arr_thunk: self.clone(),
 			index,
-		})))
+		}))
 	}
 
 	fn get_cheap(&self, _index: usize) -> Option<Val> {

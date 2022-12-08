@@ -15,7 +15,7 @@ use crate::{
 	error::ErrorKind::*,
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
-	tb, throw,
+	throw,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
@@ -45,12 +45,12 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 			if n.iter().any(|e| !is_trivial(e)) {
 				return None;
 			}
-			Val::Arr(ArrValue::eager(Cc::new(
+			Val::Arr(ArrValue::eager(
 				n.iter()
 					.map(evaluate_trivial)
 					.map(|e| e.expect("checked trivial"))
 					.collect(),
-			)))
+			))
 		}
 		Expr::Parened(e) => evaluate_trivial(e)?,
 		_ => return None,
@@ -136,10 +136,10 @@ pub fn evaluate_comp(
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(Cc::new(vec![
 						Thunk::evaluated(Val::Str(StrValue::Flat(field.clone()))),
-						Thunk::new(tb!(ObjectFieldThunk {
+						Thunk::new(ObjectFieldThunk {
 							field: field.clone(),
 							obj: obj.clone(),
-						})),
+						}),
 					]))));
 					destruct(var, value, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx
@@ -180,7 +180,7 @@ fn evaluate_object_locals(
 			}
 
 			let ctx = self.fctx.unwrap();
-			let new_dollar = ctx.dollar().clone().or_else(|| this.clone());
+			let new_dollar = ctx.dollar().cloned().or_else(|| this.clone());
 
 			let ctx = ctx
 				.extend(new_bindings, new_dollar, sup, this)
@@ -230,11 +230,11 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.with_add(*plus)
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
-				.bindable(tb!(UnboundValue {
+				.bindable(UnboundValue {
 					uctx,
 					value: value.clone(),
 					name,
-				}))?;
+				})?;
 		}
 		FieldMember {
 			params: Some(params),
@@ -265,12 +265,12 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.member(name.clone())
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
-				.bindable(tb!(UnboundMethod {
+				.bindable(UnboundMethod {
 					uctx,
 					value: value.clone(),
 					params: params.clone(),
 					name,
-				}))?;
+				})?;
 		}
 	}
 	Ok(())
@@ -311,10 +311,10 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 						evaluate_assert(ctx, &self.assert)
 					}
 				}
-				builder.assert(tb!(ObjectAssert {
+				builder.assert(ObjectAssert {
 					uctx: uctx.clone(),
 					assert: stmt.clone(),
-				}));
+				});
 			}
 			Member::BindStmt(_) => {
 				// Already handled
@@ -420,17 +420,17 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	let LocExpr(expr, loc) = expr;
 	Ok(match &**expr {
 		Literal(LiteralType::This) => {
-			Val::Obj(ctx.this().clone().ok_or(CantUseSelfOutsideOfObject)?)
+			Val::Obj(ctx.this().ok_or(CantUseSelfOutsideOfObject)?.clone())
 		}
 		Literal(LiteralType::Super) => Val::Obj(
-			ctx.super_obj().clone().ok_or(NoSuperFound)?.with_this(
+			ctx.super_obj().ok_or(NoSuperFound)?.with_this(
 				ctx.this()
-					.clone()
-					.expect("if super exists - then this should too"),
+					.expect("if super exists - then this should too")
+					.clone(),
 			),
 		),
 		Literal(LiteralType::Dollar) => {
-			Val::Obj(ctx.dollar().clone().ok_or(NoTopLevelObjectFound)?)
+			Val::Obj(ctx.dollar().ok_or(NoTopLevelObjectFound)?.clone())
 		}
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
@@ -455,9 +455,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				))
 			};
 			ctx.super_obj()
-				.clone()
 				.expect("no super found")
-				.get_for(name.into_flat(), ctx.this().clone().expect("no this found"))?
+				.get_for(name.into_flat(), ctx.this().expect("no this found").clone())?
 				.expect("value not found")
 		}
 		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
@@ -563,12 +562,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						evaluate(self.ctx, &self.item)
 					}
 				}
-				Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(tb!(
-					ArrayElement {
-						ctx,
-						item: items[0].clone(),
-					}
-				))])))
+				Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(ArrayElement {
+					ctx,
+					item: items[0].clone(),
+				})])))
 			} else {
 				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
 			}
@@ -579,7 +576,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				out.push(evaluate(ctx, expr)?);
 				Ok(())
 			})?;
-			Val::Arr(ArrValue::eager(Cc::new(out)))
+			Val::Arr(ArrValue::eager(out))
 		}
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
 		ObjExtend(a, b) => evaluate_add_op(
@@ -623,7 +620,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			fn parse_idx<T: Typed>(
 				loc: CallLocation<'_>,
 				ctx: &Context,
-				expr: &Option<LocExpr>,
+				expr: Option<&LocExpr>,
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
@@ -640,9 +637,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let indexable = evaluate(ctx.clone(), value)?;
 			let loc = CallLocation::new(loc);
 
-			let start = parse_idx(loc, &ctx, &desc.start, "start")?;
-			let end = parse_idx(loc, &ctx, &desc.end, "end")?;
-			let step = parse_idx(loc, &ctx, &desc.step, "step")?;
+			let start = parse_idx(loc, &ctx, desc.start.as_ref(), "start")?;
+			let end = parse_idx(loc, &ctx, desc.end.as_ref(), "end")?;
+			let step = parse_idx(loc, &ctx, desc.step.as_ref(), "step")?;
 
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}

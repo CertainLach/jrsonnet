@@ -15,7 +15,7 @@ use crate::{
 	function::FuncVal,
 	gc::{GcHashMap, TraceBox},
 	manifest::{ManifestFormat, ToStringFormat},
-	throw,
+	tb, throw,
 	typed::BoundedUsize,
 	ObjValue, Result, Unbound, WeakObjValue,
 };
@@ -41,8 +41,8 @@ impl<T: Trace> Thunk<T> {
 	pub fn evaluated(val: T) -> Self {
 		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
 	}
-	pub fn new(f: TraceBox<dyn ThunkValue<Output = T>>) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Waiting(f))))
+	pub fn new(f: impl ThunkValue<Output = T> + 'static) -> Self {
+		Self(Cc::new(RefCell::new(ThunkInner::Waiting(tb!(f)))))
 	}
 	pub fn errored(e: Error) -> Self {
 		Self(Cc::new(RefCell::new(ThunkInner::Errored(e))))

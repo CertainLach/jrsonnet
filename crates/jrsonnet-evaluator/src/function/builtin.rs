@@ -3,7 +3,7 @@ use std::borrow::Cow;
 use jrsonnet_gcmodule::Trace;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{error::Result, gc::TraceBox, Context, Val};
+use crate::{error::Result, gc::TraceBox, tb, Context, Val};
 
 pub type BuiltinParamName = Cow<'static, str>;
 
@@ -42,10 +42,7 @@ pub struct NativeCallback {
 }
 impl NativeCallback {
 	#[deprecated = "prefer using builtins directly, use this interface only for bindings"]
-	pub fn new(
-		params: Vec<Cow<'static, str>>,
-		handler: TraceBox<dyn NativeCallbackHandler>,
-	) -> Self {
+	pub fn new(params: Vec<Cow<'static, str>>, handler: impl NativeCallbackHandler) -> Self {
 		Self {
 			params: params
 				.into_iter()
@@ -54,7 +51,7 @@ impl NativeCallback {
 					has_default: false,
 				})
 				.collect(),
-			handler,
+			handler: tb!(handler),
 		}
 	}
 }

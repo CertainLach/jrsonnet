@@ -15,7 +15,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	tb, throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -538,8 +538,8 @@ impl ObjValueBuilder {
 		self
 	}
 
-	pub fn assert(&mut self, assertion: TraceBox<dyn ObjectAssertion>) -> &mut Self {
-		self.assertions.push(assertion);
+	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
+		self.assertions.push(tb!(assertion));
 		self
 	}
 	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder<'_>> {
@@ -631,8 +631,8 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn thunk(self, value: Thunk<Val>) -> Result<()> {
 		self.binding(MaybeUnbound::Bound(value))
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) -> Result<()> {
-		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)))
+	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {
+		self.binding(MaybeUnbound::Unbound(Cc::new(tb!(bindable))))
 	}
 	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);

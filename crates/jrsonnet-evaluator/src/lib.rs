@@ -433,10 +433,13 @@ impl State {
 	pub fn import_resolver(&self) -> Ref<'_, dyn ImportResolver> {
 		Ref::map(self.settings(), |s| &*s.import_resolver)
 	}
-	pub fn set_import_resolver(&self, resolver: Box<dyn ImportResolver>) {
-		self.settings_mut().import_resolver = TraceBox(resolver);
+	pub fn set_import_resolver(&self, resolver: impl ImportResolver) {
+		self.settings_mut().import_resolver = tb!(resolver);
 	}
 	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
 		Ref::map(self.settings(), |s| &*s.context_initializer)
+	}
+	pub fn set_context_initializer(&self, initializer: impl ContextInitializer) {
+		self.settings_mut().context_initializer = tb!(initializer);
 	}
 }

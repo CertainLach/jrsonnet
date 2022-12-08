@@ -5,8 +5,10 @@ use std::{
 	os::raw::{c_char, c_double, c_int},
 };
 
-use jrsonnet_evaluator::{val::ArrValue, ObjValue, Val};
-use jrsonnet_gcmodule::Cc;
+use jrsonnet_evaluator::{
+	val::{ArrValue, StrValue},
+	ObjValue, Val,
+};
 
 use crate::VM;
 
@@ -19,7 +21,7 @@ use crate::VM;
 pub unsafe extern "C" fn jsonnet_json_make_string(_vm: &VM, val: *const c_char) -> *mut Val {
 	let val = CStr::from_ptr(val);
 	let val = val.to_str().expect("string is not utf-8");
-	Box::into_raw(Box::new(Val::Str(val.into())))
+	Box::into_raw(Box::new(Val::Str(StrValue::Flat(val.into()))))
 }
 
 /// Convert the given double to a `JsonnetJsonValue`.
@@ -46,7 +48,7 @@ pub extern "C" fn jsonnet_json_make_null(_vm: &VM) -> *mut Val {
 /// Assign elements with [`jsonnet_json_array_append`].
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_array(_vm: &VM) -> *mut Val {
-	Box::into_raw(Box::new(Val::Arr(ArrValue::eager(Cc::new(Vec::new())))))
+	Box::into_raw(Box::new(Val::Arr(ArrValue::eager(Vec::new()))))
 }
 
 /// Make a `JsonnetJsonValue` representing an object.

@@ -6,34 +6,34 @@ use jrsonnet_evaluator::{
 	function::builtin,
 	operator::evaluate_mod_op,
 	stdlib::std_format,
-	typed::{Any, Either, Either2},
+	typed::{Either, Either2},
 	val::{equals, primitive_equals, StrValue},
 	IStr, Val,
 };
 
 #[builtin]
-pub fn builtin_mod(a: Either![f64, IStr], b: Any) -> Result<Any> {
+pub fn builtin_mod(a: Either![f64, IStr], b: Val) -> Result<Val> {
 	use Either2::*;
-	Ok(Any(evaluate_mod_op(
+	evaluate_mod_op(
 		&match a {
 			A(v) => Val::Num(v),
 			B(s) => Val::Str(StrValue::Flat(s)),
 		},
-		&b.0,
-	)?))
+		&b,
+	)
 }
 
 #[builtin]
-pub fn builtin_primitive_equals(a: Any, b: Any) -> Result<bool> {
-	primitive_equals(&a.0, &b.0)
+pub fn builtin_primitive_equals(x: Val, y: Val) -> Result<bool> {
+	primitive_equals(&x, &y)
 }
 
 #[builtin]
-pub fn builtin_equals(a: Any, b: Any) -> Result<bool> {
-	equals(&a.0, &b.0)
+pub fn builtin_equals(a: Val, b: Val) -> Result<bool> {
+	equals(&a, &b)
 }
 
 #[builtin]
-pub fn builtin_format(str: IStr, vals: Any) -> Result<String> {
-	std_format(&str, vals.0)
+pub fn builtin_format(str: IStr, vals: Val) -> Result<String> {
+	std_format(&str, vals)
 }

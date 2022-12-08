@@ -10,7 +10,7 @@ use crate::{
 	error::{ErrorKind::*, Result},
 	evaluate_named,
 	gc::GcHashMap,
-	tb, throw,
+	throw,
 	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
@@ -100,11 +100,11 @@ pub fn parse_function_call(
 
 			destruct(
 				&param.0,
-				Thunk::new(tb!(EvaluateNamedThunk {
+				Thunk::new(EvaluateNamedThunk {
 					ctx: fctx.clone(),
 					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: param.1.clone().expect("default exists"),
-				})),
+				}),
 				fctx.clone(),
 				&mut defaults,
 			)?;
@@ -250,21 +250,21 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		if let Some(v) = &param.1 {
 			destruct(
 				&param.0.clone(),
-				Thunk::new(tb!(EvaluateNamedThunk {
+				Thunk::new(EvaluateNamedThunk {
 					ctx: fctx.clone(),
 					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
 					value: v.clone(),
-				})),
+				}),
 				fctx.clone(),
 				&mut bindings,
 			)?;
 		} else {
 			destruct(
 				&param.0,
-				Thunk::new(tb!(DependsOnUnbound(
+				Thunk::new(DependsOnUnbound(
 					param.0.name().unwrap_or_else(|| "<destruct>".into()),
-					params.clone()
-				))),
+					params.clone(),
+				)),
 				fctx.clone(),
 				&mut bindings,
 			)?;

@@ -1,6 +1,5 @@
 use std::borrow::Cow;
 
-use jrsonnet_gcmodule::Cc;
 use serde::{
 	de::Visitor,
 	ser::{Error, SerializeMap, SerializeSeq},
@@ -117,7 +116,7 @@ impl<'de> Deserialize<'de> for Val {
 					out.push(val);
 				}
 
-				Ok(Val::Arr(ArrValue::eager(Cc::new(out))))
+				Ok(Val::Arr(ArrValue::eager(out)))
 			}
 
 			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>

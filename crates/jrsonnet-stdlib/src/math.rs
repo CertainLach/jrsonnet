@@ -1,88 +1,92 @@
-use jrsonnet_evaluator::{error::Result, function::builtin, typed::PositiveF64};
+use jrsonnet_evaluator::{function::builtin, typed::PositiveF64};
 
 #[builtin]
-pub fn builtin_abs(n: f64) -> Result<f64> {
-	Ok(n.abs())
+pub fn builtin_abs(n: f64) -> f64 {
+	n.abs()
 }
 
 #[builtin]
-pub fn builtin_sign(n: f64) -> Result<f64> {
-	Ok(if n == 0. { 0. } else { n.signum() })
+pub fn builtin_sign(n: f64) -> f64 {
+	if n == 0. {
+		0.
+	} else {
+		n.signum()
+	}
 }
 
 #[builtin]
-pub fn builtin_max(a: f64, b: f64) -> Result<f64> {
-	Ok(a.max(b))
+pub fn builtin_max(a: f64, b: f64) -> f64 {
+	a.max(b)
 }
 
 #[builtin]
-pub fn builtin_min(a: f64, b: f64) -> Result<f64> {
-	Ok(a.min(b))
+pub fn builtin_min(a: f64, b: f64) -> f64 {
+	a.min(b)
 }
 
 #[builtin]
-pub fn builtin_modulo(a: f64, b: f64) -> Result<f64> {
-	Ok(a % b)
+pub fn builtin_modulo(x: f64, y: f64) -> f64 {
+	x % y
 }
 
 #[builtin]
-pub fn builtin_floor(x: f64) -> Result<f64> {
-	Ok(x.floor())
+pub fn builtin_floor(x: f64) -> f64 {
+	x.floor()
 }
 
 #[builtin]
-pub fn builtin_ceil(x: f64) -> Result<f64> {
-	Ok(x.ceil())
+pub fn builtin_ceil(x: f64) -> f64 {
+	x.ceil()
 }
 
 #[builtin]
-pub fn builtin_log(n: f64) -> Result<f64> {
-	Ok(n.ln())
+pub fn builtin_log(x: f64) -> f64 {
+	x.ln()
 }
 
 #[builtin]
-pub fn builtin_pow(x: f64, n: f64) -> Result<f64> {
-	Ok(x.powf(n))
+pub fn builtin_pow(x: f64, n: f64) -> f64 {
+	x.powf(n)
 }
 
 #[builtin]
-pub fn builtin_sqrt(x: PositiveF64) -> Result<f64> {
-	Ok(x.0.sqrt())
+pub fn builtin_sqrt(x: PositiveF64) -> f64 {
+	x.0.sqrt()
 }
 
 #[builtin]
-pub fn builtin_sin(x: f64) -> Result<f64> {
-	Ok(x.sin())
+pub fn builtin_sin(x: f64) -> f64 {
+	x.sin()
 }
 
 #[builtin]
-pub fn builtin_cos(x: f64) -> Result<f64> {
-	Ok(x.cos())
+pub fn builtin_cos(x: f64) -> f64 {
+	x.cos()
 }
 
 #[builtin]
-pub fn builtin_tan(x: f64) -> Result<f64> {
-	Ok(x.tan())
+pub fn builtin_tan(x: f64) -> f64 {
+	x.tan()
 }
 
 #[builtin]
-pub fn builtin_asin(x: f64) -> Result<f64> {
-	Ok(x.asin())
+pub fn builtin_asin(x: f64) -> f64 {
+	x.asin()
 }
 
 #[builtin]
-pub fn builtin_acos(x: f64) -> Result<f64> {
-	Ok(x.acos())
+pub fn builtin_acos(x: f64) -> f64 {
+	x.acos()
 }
 
 #[builtin]
-pub fn builtin_atan(x: f64) -> Result<f64> {
-	Ok(x.atan())
+pub fn builtin_atan(x: f64) -> f64 {
+	x.atan()
 }
 
 #[builtin]
-pub fn builtin_exp(x: f64) -> Result<f64> {
-	Ok(x.exp())
+pub fn builtin_exp(x: f64) -> f64 {
+	x.exp()
 }
 
 fn frexp(s: f64) -> (f64, i16) {
@@ -97,11 +101,11 @@ fn frexp(s: f64) -> (f64, i16) {
 }
 
 #[builtin]
-pub fn builtin_mantissa(x: f64) -> Result<f64> {
-	Ok(frexp(x).0)
+pub fn builtin_mantissa(x: f64) -> f64 {
+	frexp(x).0
 }
 
 #[builtin]
-pub fn builtin_exponent(x: f64) -> Result<i16> {
-	Ok(frexp(x).1)
+pub fn builtin_exponent(x: f64) -> i16 {
+	frexp(x).1
 }
