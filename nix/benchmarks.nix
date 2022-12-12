@@ -112,7 +112,7 @@ stdenv.mkDerivation {
         ''}
         hyperfine -N -w4 -m20 --output=pipe --style=basic --export-markdown result.md \
           ${concatStringsSep " " (forEach jrsonnetVariants (variant:
-            "\"${variant.drv}/bin/jrsonnet $path ${optionalString (vendor != "") "-J${vendor}"}\" -n \"Rust (${variant.name})\""
+            "\"${variant.drv}/bin/jrsonnet $path ${optionalString (vendor != "") "-J${vendor}"}\" -n \"Rust${if variant.name != "" then " (${variant.name})" else ""}\""
           ))} \
           ${optionalString (skipGo == "") "\"go-jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Go\""} \
           ${optionalString (skipScala == "") "\"sjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Scala\""} \

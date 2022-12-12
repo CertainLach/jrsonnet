@@ -50,14 +50,14 @@
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet; name = ""; }
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             quick = true;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = "current"; }
+              { drv = jrsonnet; name = ""; }
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
