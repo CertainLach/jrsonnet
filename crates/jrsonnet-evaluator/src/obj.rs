@@ -472,6 +472,12 @@ impl ObjValue {
 	}
 
 	fn run_assertions_raw(&self, real_this: &Self) -> Result<()> {
+		if self.0.assertions.is_empty() {
+			if let Some(super_obj) = &self.0.sup {
+				super_obj.run_assertions_raw(real_this)?;
+			}
+			return Ok(());
+		}
 		if self.0.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.0.assertions.iter() {
 				if let Err(e) = assertion.run(self.0.sup.clone(), Some(real_this.clone())) {
