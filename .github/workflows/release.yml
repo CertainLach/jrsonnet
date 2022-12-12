@@ -103,6 +103,9 @@ jobs:
             name: jrsonnet-darwin-amd64
     runs-on: ${{ matrix.os }}
     steps:
+      - name: Fetch apt repo updates
+        run: sudo apt update
+
       - name: Install stable toolchain
         uses: actions-rs/toolchain@v1
         with:
