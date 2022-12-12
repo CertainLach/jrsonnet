@@ -104,6 +104,7 @@ jobs:
     runs-on: ${{ matrix.os }}
     steps:
       - name: Fetch apt repo updates
+        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         run: sudo apt update
 
       - name: Install stable toolchain
