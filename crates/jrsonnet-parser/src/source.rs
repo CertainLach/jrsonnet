@@ -33,8 +33,8 @@ macro_rules! any_ext_impl {
 		}
 		fn dyn_eq(&self, other: &dyn $T) -> bool {
 			let Some(other) = other.as_any().downcast_ref::<Self>() else {
-						return false
-					};
+												return false
+											};
 			let this = <Self as $T>::as_any(self)
 				.downcast_ref::<Self>()
 				.expect("restricted by impl");
@@ -260,7 +260,6 @@ impl SourcePathT for SourceVirtual {
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
-static_assertions::assert_eq_size!(Source, *const ());
 
 impl Trace for Source {
 	fn trace(&self, _tracer: &mut Tracer) {}

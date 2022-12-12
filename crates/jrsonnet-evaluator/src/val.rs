@@ -301,6 +301,7 @@ pub enum Val {
 	Func(FuncVal),
 }
 
+#[cfg(target_pointer_width = "64")]
 static_assertions::assert_eq_size!(Val, [u8; 24]);
 
 impl From<IndexableVal> for Val {
