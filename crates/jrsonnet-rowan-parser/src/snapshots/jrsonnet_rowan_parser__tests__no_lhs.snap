@@ -9,7 +9,7 @@ SOURCE_FILE@0..2
   WHITESPACE@1..2 " "
 ===
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 0..0 }
-LocatedSyntaxError { error: Unexpected { expected: Unnamed(EOF), found: PLUS }, range: 0..1 }
+LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([EOF])), found: PLUS }, range: 0..1 }
 ===
   x syntax error
    ,----

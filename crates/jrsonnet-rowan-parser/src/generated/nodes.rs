@@ -643,20 +643,10 @@ impl MemberAssertStmt {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MemberField {
+pub struct MemberFieldNormal {
 	pub(crate) syntax: SyntaxNode,
 }
-impl MemberField {
-	pub fn field(&self) -> Option<Field> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FieldNormal {
-	pub(crate) syntax: SyntaxNode,
-}
-impl FieldNormal {
+impl MemberFieldNormal {
 	pub fn field_name(&self) -> Option<FieldName> {
 		support::child(&self.syntax)
 	}
@@ -672,10 +662,10 @@ impl FieldNormal {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct FieldMethod {
+pub struct MemberFieldMethod {
 	pub(crate) syntax: SyntaxNode,
 }
-impl FieldMethod {
+impl MemberFieldMethod {
 	pub fn field_name(&self) -> Option<FieldName> {
 		support::child(&self.syntax)
 	}
@@ -955,13 +945,8 @@ pub enum Bind {
 pub enum Member {
 	MemberBindStmt(MemberBindStmt),
 	MemberAssertStmt(MemberAssertStmt),
-	MemberField(MemberField),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Field {
-	FieldNormal(FieldNormal),
-	FieldMethod(FieldMethod),
+	MemberFieldNormal(MemberFieldNormal),
+	MemberFieldMethod(MemberFieldMethod),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1134,6 +1119,7 @@ pub struct ParsingError {
 pub enum ParsingErrorKind {
 	ErrorMissingToken,
 	ErrorUnexpectedToken,
+	ErrorCustom,
 }
 impl AstNode for SourceFile {
 	fn can_cast(kind: SyntaxKind) -> bool {
@@ -1780,9 +1766,9 @@ impl AstNode for MemberAssertStmt {
 		&self.syntax
 	}
 }
-impl AstNode for MemberField {
+impl AstNode for MemberFieldNormal {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == MEMBER_FIELD
+		kind == MEMBER_FIELD_NORMAL
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1795,24 +1781,9 @@ impl AstNode for MemberField {
 		&self.syntax
 	}
 }
-impl AstNode for FieldNormal {
+impl AstNode for MemberFieldMethod {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == FIELD_NORMAL
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for FieldMethod {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == FIELD_METHOD
+		kind == MEMBER_FIELD_METHOD
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -2352,15 +2323,22 @@ impl From<MemberAssertStmt> for Member {
 		Member::MemberAssertStmt(node)
 	}
 }
-impl From<MemberField> for Member {
-	fn from(node: MemberField) -> Member {
-		Member::MemberField(node)
+impl From<MemberFieldNormal> for Member {
+	fn from(node: MemberFieldNormal) -> Member {
+		Member::MemberFieldNormal(node)
+	}
+}
+impl From<MemberFieldMethod> for Member {
+	fn from(node: MemberFieldMethod) -> Member {
+		Member::MemberFieldMethod(node)
 	}
 }
 impl AstNode for Member {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			MEMBER_BIND_STMT | MEMBER_ASSERT_STMT | MEMBER_FIELD => true,
+			MEMBER_BIND_STMT | MEMBER_ASSERT_STMT | MEMBER_FIELD_NORMAL | MEMBER_FIELD_METHOD => {
+				true
+			}
 			_ => false,
 		}
 	}
@@ -2368,7 +2346,8 @@ impl AstNode for Member {
 		let res = match syntax.kind() {
 			MEMBER_BIND_STMT => Member::MemberBindStmt(MemberBindStmt { syntax }),
 			MEMBER_ASSERT_STMT => Member::MemberAssertStmt(MemberAssertStmt { syntax }),
-			MEMBER_FIELD => Member::MemberField(MemberField { syntax }),
+			MEMBER_FIELD_NORMAL => Member::MemberFieldNormal(MemberFieldNormal { syntax }),
+			MEMBER_FIELD_METHOD => Member::MemberFieldMethod(MemberFieldMethod { syntax }),
 			_ => return None,
 		};
 		Some(res)
@@ -2377,39 +2356,8 @@ impl AstNode for Member {
 		match self {
 			Member::MemberBindStmt(it) => &it.syntax,
 			Member::MemberAssertStmt(it) => &it.syntax,
-			Member::MemberField(it) => &it.syntax,
-		}
-	}
-}
-impl From<FieldNormal> for Field {
-	fn from(node: FieldNormal) -> Field {
-		Field::FieldNormal(node)
-	}
-}
-impl From<FieldMethod> for Field {
-	fn from(node: FieldMethod) -> Field {
-		Field::FieldMethod(node)
-	}
-}
-impl AstNode for Field {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		match kind {
-			FIELD_NORMAL | FIELD_METHOD => true,
-			_ => false,
-		}
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let res = match syntax.kind() {
-			FIELD_NORMAL => Field::FieldNormal(FieldNormal { syntax }),
-			FIELD_METHOD => Field::FieldMethod(FieldMethod { syntax }),
-			_ => return None,
-		};
-		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Field::FieldNormal(it) => &it.syntax,
-			Field::FieldMethod(it) => &it.syntax,
+			Member::MemberFieldNormal(it) => &it.syntax,
+			Member::MemberFieldMethod(it) => &it.syntax,
 		}
 	}
 }
@@ -2914,7 +2862,7 @@ impl AstToken for ParsingError {
 impl ParsingErrorKind {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			ERROR_MISSING_TOKEN | ERROR_UNEXPECTED_TOKEN => true,
+			ERROR_MISSING_TOKEN | ERROR_UNEXPECTED_TOKEN | ERROR_CUSTOM => true,
 			_ => false,
 		}
 	}
@@ -2922,6 +2870,7 @@ impl ParsingErrorKind {
 		let res = match kind {
 			ERROR_MISSING_TOKEN => Self::ErrorMissingToken,
 			ERROR_UNEXPECTED_TOKEN => Self::ErrorUnexpectedToken,
+			ERROR_CUSTOM => Self::ErrorCustom,
 			_ => return None,
 		};
 		Some(res)
@@ -2958,11 +2907,6 @@ impl std::fmt::Display for Bind {
 	}
 }
 impl std::fmt::Display for Member {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for Field {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -3197,17 +3141,12 @@ impl std::fmt::Display for MemberAssertStmt {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for MemberField {
+impl std::fmt::Display for MemberFieldNormal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for FieldNormal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for FieldMethod {
+impl std::fmt::Display for MemberFieldMethod {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

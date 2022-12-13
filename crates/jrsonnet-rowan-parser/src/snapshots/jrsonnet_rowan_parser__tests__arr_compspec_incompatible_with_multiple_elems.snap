@@ -1,0 +1,49 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "[a for a in [1, 2, 3], b]\n"
+---
+SOURCE_FILE@0..26
+  EXPR_ARRAY@0..25
+    L_BRACK@0..1 "["
+    EXPR_VAR@1..2
+      NAME@1..2
+        IDENT@1..2 "a"
+    WHITESPACE@2..3 " "
+    ERROR_CUSTOM@3..21
+      FOR_SPEC@3..21
+        FOR_KW@3..6 "for"
+        WHITESPACE@6..7 " "
+        NAME@7..8
+          IDENT@7..8 "a"
+        WHITESPACE@8..9 " "
+        IN_KW@9..11 "in"
+        WHITESPACE@11..12 " "
+        EXPR_ARRAY@12..21
+          L_BRACK@12..13 "["
+          EXPR_NUMBER@13..14
+            FLOAT@13..14 "1"
+          COMMA@14..15 ","
+          WHITESPACE@15..16 " "
+          EXPR_NUMBER@16..17
+            FLOAT@16..17 "2"
+          COMMA@17..18 ","
+          WHITESPACE@18..19 " "
+          EXPR_NUMBER@19..20
+            FLOAT@19..20 "3"
+          R_BRACK@20..21 "]"
+    COMMA@21..22 ","
+    WHITESPACE@22..23 " "
+    EXPR_VAR@23..24
+      NAME@23..24
+        IDENT@23..24 "b"
+    R_BRACK@24..25 "]"
+  WHITESPACE@25..26 "\n"
+===
+LocatedSyntaxError { error: Custom { error: "compspec may only be used if there is only one array element" }, range: 3..21 }
+===
+  x syntax error
+   ,----
+ 1 | [a for a in [1, 2, 3], b]
+   :    ^^^^^^^^^|^^^^^^^^
+   :             `-- compspec may only be used if there is only one array element
+   `----

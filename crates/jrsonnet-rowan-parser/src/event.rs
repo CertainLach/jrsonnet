@@ -1,4 +1,4 @@
-use std::mem;
+use std::{mem, num::NonZeroUsize};
 
 use rowan::{GreenNodeBuilder, Language, TextRange, TextSize};
 
@@ -9,7 +9,7 @@ use crate::{
 	AstToken, JsonnetLanguage, SyntaxKind,
 };
 
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum Event {
 	/// Used for unfinished markers
 	Pending,
@@ -18,22 +18,18 @@ pub enum Event {
 		kind: SyntaxKind,
 		/// If marker is preceded or wrapped - instead of reordering events, we
 		/// insert start event in the end of events Vec instead, and store relative offset to this event here
-		forward_parent: Option<usize>,
+		forward_parent: Option<NonZeroUsize>,
 	},
 	/// Eat token
-	Token {
-		kind: SyntaxKind,
-	},
+	Token { kind: SyntaxKind },
 	/// Push token, but do not eat anything,
-	VirtualToken {
-		kind: SyntaxKind,
-	},
+	VirtualToken { kind: SyntaxKind },
 	/// Position of finished node
 	Finish {
 		/// Same as forward_parent of Start, but for wrapping
-		wrapper: Option<usize>,
+		wrapper: Option<NonZeroUsize>,
+		error: Option<Box<SyntaxError>>,
 	},
-	Error(SyntaxError),
 	/// Used for dropped markers and other things
 	Noop,
 }
@@ -74,7 +70,6 @@ impl<'i> Sink<'i> {
 		let mut eat_start_whitespace = false;
 		let mut depth = 0;
 		let mut error_starts_at = Vec::new();
-		let mut error_last_range = None;
 		for idx in 0..self.events.len() {
 			match mem::replace(&mut self.events[idx], Event::Noop) {
 				Event::Start {
@@ -84,7 +79,6 @@ impl<'i> Sink<'i> {
 					if depth != 0 {
 						self.skip_whitespace();
 					}
-					error_last_range = None;
 					let mut kinds = vec![kind];
 
 					let mut idx = idx;
@@ -94,7 +88,7 @@ impl<'i> Sink<'i> {
 					// of that, and of that, etc. until we reach a StartNode event without a forward
 					// parent.
 					while let Some(fp) = forward_parent {
-						idx += fp;
+						idx += fp.get();
 
 						forward_parent = if let Event::Start {
 							kind,
@@ -123,7 +117,6 @@ impl<'i> Sink<'i> {
 					if eat_start_whitespace {
 						self.skip_whitespace();
 					}
-					error_last_range = None;
 					self.token(kind);
 					eat_start_whitespace = true;
 				}
@@ -131,31 +124,43 @@ impl<'i> Sink<'i> {
 					if eat_start_whitespace {
 						self.skip_whitespace();
 					}
-					error_last_range = None;
 					self.virtual_token(kind);
 					eat_start_whitespace = false;
 				}
-				Event::Finish { wrapper } => {
+				Event::Finish { wrapper, error } => {
 					if depth == 1 {
 						self.skip_whitespace();
 					}
-					error_last_range = Some((
+					let range = (
 						error_starts_at.pop().expect("starts == finishes"),
 						self.text_offset(),
-					));
+					);
+					if let Some(error) = error {
+						self.errors.push(LocatedSyntaxError {
+							error: *error,
+							range: TextRange::new(range.0, range.1),
+						})
+					}
 					self.builder.finish_node();
 					depth -= 1;
 					let mut idx = idx;
 					let mut wrapper = wrapper;
 					while let Some(w) = wrapper {
-						idx += w;
-						wrapper = if let Event::Finish { wrapper } =
+						idx += w.get();
+						wrapper = if let Event::Finish { wrapper, error } =
 							mem::replace(&mut self.events[idx], Event::Noop)
 						{
-							error_last_range = Some((
+							let range = (
 								error_starts_at.pop().expect("starts == finishes"),
 								self.text_offset(),
-							));
+							);
+							if let Some(error) = error {
+								self.errors.push(LocatedSyntaxError {
+									error: *error,
+									range: TextRange::new(range.0, range.1),
+								})
+							}
+
 							if depth == 1 {
 								self.skip_whitespace();
 							}
@@ -170,15 +175,6 @@ impl<'i> Sink<'i> {
 				}
 				Event::Pending => panic!("pending event should not appear in finished events"),
 				Event::Noop => {}
-				Event::Error(error) => {
-					let (start, end) = error_last_range
-						.take()
-						.expect("expected error event right after closed node");
-					self.errors.push(LocatedSyntaxError {
-						error,
-						range: TextRange::new(start, end),
-					});
-				}
 			}
 		}
 

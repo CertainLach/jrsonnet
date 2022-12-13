@@ -1,0 +1,52 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "local\n\ta(x) = x,\n\ta = function(x) x,\n; c\n"
+---
+SOURCE_FILE@0..41
+  EXPR_LOCAL@0..40
+    LOCAL_KW@0..5 "local"
+    WHITESPACE@5..7 "\n\t"
+    BIND_FUNCTION@7..15
+      NAME@7..8
+        IDENT@7..8 "a"
+      PARAMS_DESC@8..11
+        L_PAREN@8..9 "("
+        PARAM@9..10
+          DESTRUCT_FULL@9..10
+            NAME@9..10
+              IDENT@9..10 "x"
+        R_PAREN@10..11 ")"
+      WHITESPACE@11..12 " "
+      ASSIGN@12..13 "="
+      WHITESPACE@13..14 " "
+      EXPR_VAR@14..15
+        NAME@14..15
+          IDENT@14..15 "x"
+    COMMA@15..16 ","
+    WHITESPACE@16..18 "\n\t"
+    BIND_FUNCTION@18..35
+      NAME@18..19
+        IDENT@18..19 "a"
+      WHITESPACE@19..20 " "
+      ASSIGN@20..21 "="
+      WHITESPACE@21..22 " "
+      FUNCTION_KW@22..30 "function"
+      PARAMS_DESC@30..33
+        L_PAREN@30..31 "("
+        PARAM@31..32
+          DESTRUCT_FULL@31..32
+            NAME@31..32
+              IDENT@31..32 "x"
+        R_PAREN@32..33 ")"
+      WHITESPACE@33..34 " "
+      EXPR_VAR@34..35
+        NAME@34..35
+          IDENT@34..35 "x"
+    COMMA@35..36 ","
+    WHITESPACE@36..37 "\n"
+    SEMI@37..38 ";"
+    WHITESPACE@38..39 " "
+    EXPR_VAR@39..40
+      NAME@39..40
+        IDENT@39..40 "c"
+  WHITESPACE@40..41 "\n"

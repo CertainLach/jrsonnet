@@ -3,7 +3,7 @@
 use event::Sink;
 use generated::nodes::{SourceFile, Trivia};
 use lex::lex;
-use parser::{LocatedSyntaxError, Parser, SyntaxError};
+use parser::{LocatedSyntaxError, Parser};
 pub use rowan;
 
 mod ast;

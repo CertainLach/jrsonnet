@@ -1,0 +1,35 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "[a, for a in [1, 2, 3]]\n"
+---
+SOURCE_FILE@0..24
+  EXPR_ARRAY_COMP@0..23
+    L_BRACK@0..1 "["
+    EXPR_VAR@1..2
+      NAME@1..2
+        IDENT@1..2 "a"
+    COMMA@2..3 ","
+    WHITESPACE@3..4 " "
+    FOR_SPEC@4..22
+      FOR_KW@4..7 "for"
+      WHITESPACE@7..8 " "
+      NAME@8..9
+        IDENT@8..9 "a"
+      WHITESPACE@9..10 " "
+      IN_KW@10..12 "in"
+      WHITESPACE@12..13 " "
+      EXPR_ARRAY@13..22
+        L_BRACK@13..14 "["
+        EXPR_NUMBER@14..15
+          FLOAT@14..15 "1"
+        COMMA@15..16 ","
+        WHITESPACE@16..17 " "
+        EXPR_NUMBER@17..18
+          FLOAT@17..18 "2"
+        COMMA@18..19 ","
+        WHITESPACE@19..20 " "
+        EXPR_NUMBER@20..21
+          FLOAT@20..21 "3"
+        R_BRACK@21..22 "]"
+    R_BRACK@22..23 "]"
+  WHITESPACE@23..24 "\n"

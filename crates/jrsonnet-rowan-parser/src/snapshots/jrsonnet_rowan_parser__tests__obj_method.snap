@@ -1,0 +1,49 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "{\n\ta(x): x,\n\ta: function(x) x,\n}\n"
+---
+SOURCE_FILE@0..33
+  EXPR_OBJECT@0..32
+    OBJ_BODY_MEMBER_LIST@0..32
+      L_BRACE@0..1 "{"
+      WHITESPACE@1..3 "\n\t"
+      MEMBER_FIELD_METHOD@3..10
+        FIELD_NAME_FIXED@3..4
+          NAME@3..4
+            IDENT@3..4 "a"
+        PARAMS_DESC@4..7
+          L_PAREN@4..5 "("
+          PARAM@5..6
+            DESTRUCT_FULL@5..6
+              NAME@5..6
+                IDENT@5..6 "x"
+          R_PAREN@6..7 ")"
+        COLON@7..8 ":"
+        WHITESPACE@8..9 " "
+        EXPR_VAR@9..10
+          NAME@9..10
+            IDENT@9..10 "x"
+      COMMA@10..11 ","
+      WHITESPACE@11..13 "\n\t"
+      MEMBER_FIELD_METHOD@13..29
+        FIELD_NAME_FIXED@13..14
+          NAME@13..14
+            IDENT@13..14 "a"
+        COLON@14..15 ":"
+        WHITESPACE@15..16 " "
+        FUNCTION_KW@16..24 "function"
+        PARAMS_DESC@24..27
+          L_PAREN@24..25 "("
+          PARAM@25..26
+            DESTRUCT_FULL@25..26
+              NAME@25..26
+                IDENT@25..26 "x"
+          R_PAREN@26..27 ")"
+        WHITESPACE@27..28 " "
+        EXPR_VAR@28..29
+          NAME@28..29
+            IDENT@28..29 "x"
+      COMMA@29..30 ","
+      WHITESPACE@30..31 "\n"
+      R_BRACE@31..32 "}"
+  WHITESPACE@32..33 "\n"

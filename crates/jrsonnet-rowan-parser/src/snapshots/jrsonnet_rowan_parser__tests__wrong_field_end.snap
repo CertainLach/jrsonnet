@@ -2,37 +2,47 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "{\n\ta: 1;\n\tb: 2;\n}\n"
 ---
-SOURCE_FILE@0..11
-  EXPR_OBJECT@0..8
-    OBJ_BODY_MEMBER_LIST@0..8
+SOURCE_FILE@0..18
+  EXPR_OBJECT@0..17
+    OBJ_BODY_MEMBER_LIST@0..17
       L_BRACE@0..1 "{"
       WHITESPACE@1..3 "\n\t"
-      MEMBER_FIELD@3..7
-        FIELD_NORMAL@3..7
-          FIELD_NAME_FIXED@3..4
-            NAME@3..4
-              IDENT@3..4 "a"
-          COLON@4..5 ":"
-          WHITESPACE@5..6 " "
-          EXPR_NUMBER@6..7
-            FLOAT@6..7 "1"
+      MEMBER_FIELD_NORMAL@3..7
+        FIELD_NAME_FIXED@3..4
+          NAME@3..4
+            IDENT@3..4 "a"
+        COLON@4..5 ":"
+        WHITESPACE@5..6 " "
+        EXPR_NUMBER@6..7
+          FLOAT@6..7 "1"
       ERROR_UNEXPECTED_TOKEN@7..8
         SEMI@7..8 ";"
-  WHITESPACE@8..10 "\n\t"
-  ERROR_UNEXPECTED_TOKEN@10..11
-    IDENT@10..11 "b"
+      WHITESPACE@8..10 "\n\t"
+      MEMBER_FIELD_NORMAL@10..14
+        FIELD_NAME_FIXED@10..11
+          NAME@10..11
+            IDENT@10..11 "b"
+        COLON@11..12 ":"
+        WHITESPACE@12..13 " "
+        EXPR_NUMBER@13..14
+          FLOAT@13..14 "2"
+      ERROR_UNEXPECTED_TOKEN@14..15
+        SEMI@14..15 ";"
+      WHITESPACE@15..16 "\n"
+      R_BRACE@16..17 "}"
+  WHITESPACE@17..18 "\n"
 ===
-LocatedSyntaxError { error: Unexpected { expected: Unnamed(R_BRACE), found: SEMI }, range: 7..8 }
-LocatedSyntaxError { error: Unexpected { expected: Unnamed(EOF), found: IDENT }, range: 10..11 }
+LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }, range: 7..8 }
+LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }, range: 14..15 }
 ===
   x syntax error
    ,-[1:1]
  1 | {
  2 |     a: 1;
    :         |
-   :         `-- expected R_BRACE, found SEMI
+   :         `-- expected comma, found SEMI
  3 |     b: 2;
-   :     |
-   :     `-- expected EOF, found IDENT
+   :         |
+   :         `-- expected comma, found SEMI
  4 | }
    `----

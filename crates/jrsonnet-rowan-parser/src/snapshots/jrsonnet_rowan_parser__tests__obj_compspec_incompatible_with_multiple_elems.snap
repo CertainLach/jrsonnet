@@ -1,0 +1,58 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "{a:1 for a in [1, 2, 3], b:1}\n"
+---
+SOURCE_FILE@0..30
+  EXPR_OBJECT@0..29
+    OBJ_BODY_MEMBER_LIST@0..29
+      L_BRACE@0..1 "{"
+      MEMBER_FIELD_NORMAL@1..4
+        FIELD_NAME_FIXED@1..2
+          NAME@1..2
+            IDENT@1..2 "a"
+        COLON@2..3 ":"
+        EXPR_NUMBER@3..4
+          FLOAT@3..4 "1"
+      WHITESPACE@4..5 " "
+      ERROR_CUSTOM@5..23
+        FOR_SPEC@5..23
+          FOR_KW@5..8 "for"
+          WHITESPACE@8..9 " "
+          NAME@9..10
+            IDENT@9..10 "a"
+          WHITESPACE@10..11 " "
+          IN_KW@11..13 "in"
+          WHITESPACE@13..14 " "
+          EXPR_ARRAY@14..23
+            L_BRACK@14..15 "["
+            EXPR_NUMBER@15..16
+              FLOAT@15..16 "1"
+            COMMA@16..17 ","
+            WHITESPACE@17..18 " "
+            EXPR_NUMBER@18..19
+              FLOAT@18..19 "2"
+            COMMA@19..20 ","
+            WHITESPACE@20..21 " "
+            EXPR_NUMBER@21..22
+              FLOAT@21..22 "3"
+            R_BRACK@22..23 "]"
+      COMMA@23..24 ","
+      WHITESPACE@24..25 " "
+      MEMBER_FIELD_NORMAL@25..28
+        FIELD_NAME_FIXED@25..26
+          NAME@25..26
+            IDENT@25..26 "b"
+        COLON@26..27 ":"
+        EXPR_NUMBER@27..28
+          FLOAT@27..28 "1"
+      R_BRACE@28..29 "}"
+  WHITESPACE@29..30 "\n"
+===
+LocatedSyntaxError { error: Custom { error: "compspec may only be used if there is only one array element" }, range: 5..23 }
+===
+  x syntax error
+   ,----
+ 1 | {a:1 for a in [1, 2, 3], b:1}
+   :      ^^^^^^^^^|^^^^^^^^
+   :               `-- compspec may only be used if there is only one array element
+   `----

@@ -194,29 +194,25 @@ ObjLocalPreComma =
 
 MemberBindStmt = ObjLocal
 MemberAssertStmt = Assertion
-MemberField = Field
-Member =
-    MemberBindStmt
-|   MemberAssertStmt
-|   MemberField
-
-ObjLocal =
-    'local'
-    Bind
-
-FieldNormal =
+MemberFieldNormal =
     FieldName
     '+'?
     Visibility
     Expr
-FieldMethod =
+MemberFieldMethod =
     FieldName
     ParamsDesc
     Visibility
     Expr
-Field =
-    FieldNormal
-|   FieldMethod
+Member =
+    MemberBindStmt
+|   MemberAssertStmt
+|   MemberFieldNormal
+|   MemberFieldMethod
+
+ObjLocal =
+    'local'
+    Bind
 
 FieldNameFixed =
     id:Name
@@ -374,3 +370,4 @@ Trivia =
 ParsingError =
     'ERROR_MISSING_TOKEN!'
 |   'ERROR_UNEXPECTED_TOKEN!'
+|   'ERROR_CUSTOM!'

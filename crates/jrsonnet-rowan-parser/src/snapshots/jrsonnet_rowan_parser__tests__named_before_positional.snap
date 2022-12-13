@@ -3,59 +3,68 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "a(1, 2, b=4, 3, 5, k = 12, 6)\n"
 ---
 SOURCE_FILE@0..30
-  EXPR_APPLY@0..30
+  EXPR_APPLY@0..29
     EXPR_VAR@0..1
-      IDENT@0..1 "a"
-    L_PAREN@1..2 "("
-    ARG@2..3
-      EXPR_NUMBER@2..3
-        NUMBER@2..3 "1"
-    COMMA@3..4 ","
-    WHITESPACE@4..5 " "
-    ARG@5..6
-      EXPR_NUMBER@5..6
-        NUMBER@5..6 "2"
-    COMMA@6..7 ","
-    WHITESPACE@7..8 " "
-    ARG@8..11
-      IDENT@8..9 "b"
-      ASSIGN@9..10 "="
-      EXPR_NUMBER@10..11
-        NUMBER@10..11 "4"
-    COMMA@11..12 ","
-    WHITESPACE@12..13 " "
-    ERROR@13..28
-      ARG@13..14
-        EXPR_NUMBER@13..14
-          NUMBER@13..14 "3"
+      NAME@0..1
+        IDENT@0..1 "a"
+    ARGS_DESC@1..29
+      L_PAREN@1..2 "("
+      ARG@2..3
+        EXPR_NUMBER@2..3
+          FLOAT@2..3 "1"
+      COMMA@3..4 ","
+      WHITESPACE@4..5 " "
+      ARG@5..6
+        EXPR_NUMBER@5..6
+          FLOAT@5..6 "2"
+      COMMA@6..7 ","
+      WHITESPACE@7..8 " "
+      ARG@8..11
+        NAME@8..9
+          IDENT@8..9 "b"
+        ASSIGN@9..10 "="
+        EXPR_NUMBER@10..11
+          FLOAT@10..11 "4"
+      COMMA@11..12 ","
+      WHITESPACE@12..13 " "
+      ERROR_CUSTOM@13..14
+        ARG@13..14
+          EXPR_NUMBER@13..14
+            FLOAT@13..14 "3"
       COMMA@14..15 ","
       WHITESPACE@15..16 " "
-      ARG@16..17
-        EXPR_NUMBER@16..17
-          NUMBER@16..17 "5"
+      ERROR_CUSTOM@16..17
+        ARG@16..17
+          EXPR_NUMBER@16..17
+            FLOAT@16..17 "5"
       COMMA@17..18 ","
       WHITESPACE@18..19 " "
       ARG@19..25
-        IDENT@19..20 "k"
+        NAME@19..20
+          IDENT@19..20 "k"
         WHITESPACE@20..21 " "
         ASSIGN@21..22 "="
         WHITESPACE@22..23 " "
         EXPR_NUMBER@23..25
-          NUMBER@23..25 "12"
+          FLOAT@23..25 "12"
       COMMA@25..26 ","
       WHITESPACE@26..27 " "
-      ARG@27..28
-        EXPR_NUMBER@27..28
-          NUMBER@27..28 "6"
-    R_PAREN@28..29 ")"
-    WHITESPACE@29..30 "\n"
+      ERROR_CUSTOM@27..28
+        ARG@27..28
+          EXPR_NUMBER@27..28
+            FLOAT@27..28 "6"
+      R_PAREN@28..29 ")"
+  WHITESPACE@29..30 "\n"
 ===
-Custom { error: "positional arguments can't be placed after named", range: 13..28 }
+LocatedSyntaxError { error: Custom { error: "can't use positional arguments after named" }, range: 13..14 }
+LocatedSyntaxError { error: Custom { error: "can't use positional arguments after named" }, range: 16..17 }
+LocatedSyntaxError { error: Custom { error: "can't use positional arguments after named" }, range: 27..28 }
 ===
   x syntax error
    ,----
  1 | a(1, 2, b=4, 3, 5, k = 12, 6)
-   :              ^^^^^^^|^^^^^^^
-   :                     `-- positional arguments can't be placed after named
+   :              |  |          |
+   :              |  |          `-- can't use positional arguments after named
+   :              |  `-- can't use positional arguments after named
+   :              `-- can't use positional arguments after named
    `----
-

@@ -33,7 +33,7 @@ SOURCE_FILE@0..25
     ERROR_MISSING_TOKEN@25..25
     ERROR_MISSING_TOKEN@25..25
 ===
-LocatedSyntaxError { error: Missing { expected: Unnamed(SEMI) }, range: 25..25 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA])) }, range: 25..25 }
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 25..25 }
 ===
   x syntax error
@@ -42,5 +42,5 @@ LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 25
  3 | 1
    :   ^^
    :   |`-- missing expression
-   :   `-- missing SEMI
+   :   `-- missing L_BRACK, L_PAREN, L_BRACE, SEMI, DOT or COMMA
    `----

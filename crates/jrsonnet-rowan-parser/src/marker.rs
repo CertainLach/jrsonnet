@@ -1,7 +1,12 @@
-use drop_bomb::DropBomb;
-use rowan::TextRange;
+use std::num::NonZeroUsize;
 
-use crate::{event::Event, parser::Parser, SyntaxKind};
+use drop_bomb::DropBomb;
+
+use crate::{
+	event::Event,
+	parser::{ExpectedSyntax, Parser, SyntaxError},
+	SyntaxKind,
+};
 
 pub struct Ranger {
 	pub pos: usize,
@@ -38,7 +43,12 @@ impl Marker {
 			bomb: DropBomb::new("marked dropped while not completed"),
 		}
 	}
-	pub fn complete(mut self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+	fn complete_raw(
+		mut self,
+		p: &mut Parser,
+		kind: SyntaxKind,
+		error: Option<SyntaxError>,
+	) -> CompletedMarker {
 		self.bomb.defuse();
 		assert!(
 			!kind.is_enum(),
@@ -50,7 +60,7 @@ impl Marker {
 		// 	"{kind:?} should be only emitted by lexer, not used directly"
 		// );
 		let event_at_pos = &mut p.events[self.start_event_idx];
-		assert_eq!(*event_at_pos, Event::Pending);
+		assert!(matches!(event_at_pos, Event::Pending));
 
 		*event_at_pos = Event::Start {
 			kind,
@@ -58,7 +68,10 @@ impl Marker {
 		};
 
 		let finish_event_idx = p.events.len();
-		p.events.push(Event::Finish { wrapper: None });
+		p.events.push(Event::Finish {
+			wrapper: None,
+			error: error.map(Box::new),
+		});
 		p.entered -= 1;
 		p.clear_outdated_hints();
 		CompletedMarker {
@@ -66,10 +79,42 @@ impl Marker {
 			finish_event_idx,
 		}
 	}
+	pub fn complete(mut self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+		self.complete_raw(p, kind, None)
+	}
+	pub fn complete_error(mut self, p: &mut Parser, msg: impl AsRef<str>) -> CompletedMarker {
+		self.complete_raw(
+			p,
+			SyntaxKind::ERROR_CUSTOM,
+			Some(SyntaxError::Custom {
+				error: msg.as_ref().to_owned(),
+			}),
+		)
+	}
+	pub fn complete_missing(mut self, p: &mut Parser, expected: ExpectedSyntax) -> CompletedMarker {
+		self.complete_raw(
+			p,
+			SyntaxKind::ERROR_MISSING_TOKEN,
+			Some(SyntaxError::Missing { expected }),
+		)
+	}
+	pub fn complete_unexpected(
+		mut self,
+		p: &mut Parser,
+		expected: ExpectedSyntax,
+		found: SyntaxKind,
+	) -> CompletedMarker {
+		self.complete_raw(
+			p,
+			SyntaxKind::ERROR_UNEXPECTED_TOKEN,
+			Some(SyntaxError::Unexpected { expected, found }),
+		)
+	}
+
 	pub fn forget(mut self, p: &mut Parser) {
 		self.bomb.defuse();
 		let event_at_pos = &mut p.events[self.start_event_idx];
-		assert_eq!(*event_at_pos, Event::Pending);
+		assert!(matches!(event_at_pos, Event::Pending));
 
 		*event_at_pos = Event::Noop;
 		p.entered -= 1;
@@ -85,7 +130,9 @@ impl CompletedMarker {
 		let new_m = p.start();
 		match &mut p.events[self.start_event_idx] {
 			Event::Start { forward_parent, .. } => {
-				*forward_parent = Some(new_m.start_event_idx - self.start_event_idx);
+				*forward_parent = Some(
+					NonZeroUsize::new(new_m.start_event_idx - self.start_event_idx).expect("!= 0"),
+				);
 			}
 			_ => unreachable!(),
 		}
@@ -93,23 +140,48 @@ impl CompletedMarker {
 		new_m
 	}
 	/// Create new node around existing marker, not counting anything that comes after it
-	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+	fn wrap_raw(
+		self,
+		p: &mut Parser,
+		kind: SyntaxKind,
+		error: Option<SyntaxError>,
+	) -> CompletedMarker {
 		let new_m = p.start();
 		match &mut p.events[self.start_event_idx] {
 			Event::Start { forward_parent, .. } => {
-				*forward_parent = Some(new_m.start_event_idx - self.start_event_idx);
+				*forward_parent = Some(
+					NonZeroUsize::new(new_m.start_event_idx - self.start_event_idx).expect("!= 0"),
+				);
 			}
 			_ => unreachable!(),
 		}
 
-		let completed = new_m.complete(p, kind);
+		let completed = new_m.complete_raw(p, kind, error);
 
 		match &mut p.events[self.finish_event_idx] {
-			Event::Finish { wrapper } => {
-				*wrapper = Some(completed.finish_event_idx - self.finish_event_idx);
+			Event::Finish {
+				wrapper,
+				error: _error,
+			} => {
+				*wrapper = Some(
+					NonZeroUsize::new(completed.finish_event_idx - self.finish_event_idx)
+						.expect("!= 0"),
+				);
 			}
 			_ => unreachable!(),
 		}
 		completed
+	}
+	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+		self.wrap_raw(p, kind, None)
+	}
+	pub fn wrap_error(self, p: &mut Parser, msg: impl AsRef<str>) -> CompletedMarker {
+		self.wrap_raw(
+			p,
+			SyntaxKind::ERROR_CUSTOM,
+			Some(SyntaxError::Custom {
+				error: msg.as_ref().to_owned(),
+			}),
+		)
 	}
 }
