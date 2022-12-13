@@ -2,10 +2,10 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b\n"
 ---
-SOURCE_FILE@0..13
-  EXPR_FUNCTION@0..13
+SOURCE_FILE@0..14
+  EXPR_FUNCTION@0..14
     FUNCTION_KW@0..8 "function"
-    PARAMS_DESC@8..13
+    PARAMS_DESC@8..14
       L_PAREN@8..9 "("
       PARAM@9..10
         DESTRUCT_FULL@9..10
@@ -17,15 +17,17 @@ SOURCE_FILE@0..13
         DESTRUCT_FULL@12..13
           NAME@12..13
             IDENT@12..13 "b"
+      WHITESPACE@13..14 "\n"
+      ERROR_MISSING_TOKEN@14..14
+    ERROR_MISSING_TOKEN@14..14
 ===
-Missing { expected: Unnamed(R_PAREN), offset: 13 }
-Missing { expected: Named("value"), offset: 13 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(R_PAREN) }, range: 14..14 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 14..14 }
 ===
   x syntax error
    ,----
  1 | function(a, b
-   :              ^
-   :              |`-- missing value
-   :              `-- missing R_PAREN
+   :               ^^
+   :               |`-- missing expression
+   :               `-- missing R_PAREN
    `----
-

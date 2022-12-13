@@ -83,6 +83,7 @@
             rust
             cargo-edit
             cargo-asm
+            cargo-watch
             lld
             hyperfine
             valgrind

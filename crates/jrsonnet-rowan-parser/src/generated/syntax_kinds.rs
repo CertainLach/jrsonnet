@@ -179,8 +179,11 @@ pub enum SyntaxKind {
 	FOR_KW,
 	#[token("assert")]
 	ASSERT_KW,
+	ERROR_MISSING_TOKEN,
+	ERROR_UNEXPECTED_TOKEN,
+	#[doc = r" Also acts as __LAST_TOKEN"]
 	#[error]
-	ERROR,
+	LEXING_ERROR,
 	SOURCE_FILE,
 	EXPR_BINARY,
 	LHS_EXPR,
@@ -258,6 +261,7 @@ pub enum SyntaxKind {
 	IMPORT_KIND,
 	VISIBILITY,
 	TRIVIA,
+	PARSING_ERROR,
 	#[doc(hidden)]
 	__LAST,
 }
@@ -279,7 +283,7 @@ impl SyntaxKind {
 		match self {
 			EXPR | OBJ_BODY | COMP_SPEC | BIND | MEMBER | FIELD | FIELD_NAME | DESTRUCT
 			| DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR | LITERAL | TEXT | NUMBER
-			| IMPORT_KIND | VISIBILITY | TRIVIA => true,
+			| IMPORT_KIND | VISIBILITY | TRIVIA | PARSING_ERROR => true,
 			_ => false,
 		}
 	}

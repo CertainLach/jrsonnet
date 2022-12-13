@@ -16,7 +16,7 @@ use crate::{
 
 pub struct Parse {
 	pub green_node: GreenNode,
-	pub errors: Vec<SyntaxError>,
+	pub errors: Vec<LocatedSyntaxError>,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
@@ -53,51 +53,41 @@ pub enum SyntaxError {
 	Unexpected {
 		expected: ExpectedSyntax,
 		found: SyntaxKind,
-		range: TextRange,
 	},
 	Missing {
 		expected: ExpectedSyntax,
-		offset: TextSize,
 	},
 	Custom {
 		error: String,
-		range: TextRange,
 	},
 	Hint {
 		error: String,
-		range: TextRange,
 	},
 }
 
-impl From<SyntaxError> for LabeledSpan {
-	fn from(val: SyntaxError) -> Self {
-		match val {
-			SyntaxError::Unexpected {
-				expected,
-				found,
-				range,
-			} => LabeledSpan::new_with_span(
+#[derive(Debug)]
+pub struct LocatedSyntaxError {
+	pub error: SyntaxError,
+	pub range: TextRange,
+}
+
+impl From<LocatedSyntaxError> for LabeledSpan {
+	fn from(val: LocatedSyntaxError) -> Self {
+		let span = SourceSpan::new(
+			SourceOffset::from(usize::from(val.range.start())),
+			SourceOffset::from(usize::from(val.range.end() - val.range.start())),
+		);
+		dbg!(&val);
+		match val.error {
+			SyntaxError::Unexpected { expected, found } => LabeledSpan::new_with_span(
 				Some(format!("expected {}, found {:?}", expected, found)),
-				SourceSpan::new(
-					SourceOffset::from(usize::from(range.start())),
-					SourceOffset::from(usize::from(range.end() - range.start())),
-				),
+				span,
 			),
-			SyntaxError::Missing { expected, offset } => LabeledSpan::new_with_span(
-				Some(format!("missing {}", expected)),
-				SourceSpan::new(
-					SourceOffset::from(usize::from(offset)),
-					SourceOffset::from(0),
-				),
-			),
-			SyntaxError::Custom { error, range } | SyntaxError::Hint { error, range } => {
-				LabeledSpan::new_with_span(
-					Some(error),
-					SourceSpan::new(
-						SourceOffset::from(usize::from(range.start())),
-						SourceOffset::from(usize::from(range.end() - range.start())),
-					),
-				)
+			SyntaxError::Missing { expected } => {
+				LabeledSpan::new_with_span(Some(format!("missing {}", expected)), span)
+			}
+			SyntaxError::Custom { error } | SyntaxError::Hint { error } => {
+				LabeledSpan::new_with_span(Some(error), span)
 			}
 		}
 	}
@@ -180,17 +170,17 @@ impl Parser {
 	pub(crate) fn error_with_recovery_set(
 		&mut self,
 		recovery_set: SyntaxKindSet,
-	) -> Option<CompletedMarker> {
+	) -> CompletedMarker {
 		self.error_with_recovery_set_no_default(recovery_set.union(DEFAULT_RECOVERY_SET))
 	}
-	pub fn error_with_no_skip(&mut self) -> Option<CompletedMarker> {
+	pub fn error_with_no_skip(&mut self) -> CompletedMarker {
 		self.error_with_recovery_set_no_default(SyntaxKindSet::ALL)
 	}
 
 	pub fn error_with_recovery_set_no_default(
 		&mut self,
 		recovery_set: SyntaxKindSet,
-	) -> Option<CompletedMarker> {
+	) -> CompletedMarker {
 		let expected_syntax = self
 			.expected_syntax
 			.take()
@@ -200,30 +190,29 @@ impl Parser {
 
 		if self.at_end() || self.at_ts(recovery_set) {
 			// let range = self
-			// 	.previous_token()
-			// 	.map(|t| t.range)
+			// 	.offset
 			// 	.unwrap_or_else(|| TextRange::at(TextSize::from(0), TextSize::from(0)));
-
-			// self.events.push(Event::Error(SyntaxError::Missing {
-			// 	expected: expected_syntax,
-			// 	offset: range.end(),
-			// }));
-			return None;
+			let m = self.start();
+			let m = m.complete(self, ERROR_MISSING_TOKEN);
+			self.events.push(Event::Error(SyntaxError::Missing {
+				expected: expected_syntax,
+			}));
+			return m;
 		}
 
 		let current_token = self.current();
 
-		// self.events.push(Event::Error(SyntaxError::Unexpected {
-		// 	expected: expected_syntax,
-		// 	found: current_token.kind,
-		// 	range: current_token.range,
-		// }));
-		self.clear_expected_syntaxes();
 		self.last_error_token = self.offset;
 
 		let m = self.start();
 		self.bump();
-		Some(m.complete(self, SyntaxKind::ERROR))
+		let m = m.complete(self, ERROR_UNEXPECTED_TOKEN);
+		self.events.push(Event::Error(SyntaxError::Unexpected {
+			expected: expected_syntax,
+			found: current_token,
+		}));
+		self.clear_expected_syntaxes();
+		m
 	}
 	fn bump_assert(&mut self, kind: SyntaxKind) {
 		assert!(self.at(kind), "expected {:?}", kind);
@@ -326,14 +315,20 @@ enum ExpectedSyntaxTrackingState {
 	Unnamed,
 }
 
-fn expr(p: &mut Parser) -> Option<CompletedMarker> {
-	expr_binding_power(p, 0)
+fn expr(p: &mut Parser) -> CompletedMarker {
+	match expr_binding_power(p, 0) {
+		Ok(m) => m,
+		Err(m) => m,
+	}
 }
-fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<CompletedMarker> {
+fn expr_binding_power(
+	p: &mut Parser,
+	minimum_binding_power: u8,
+) -> Result<CompletedMarker, CompletedMarker> {
 	let mut lhs = lhs(p)?;
 
 	while let Some(op) = BinaryOperatorKind::cast(p.current())
-		.or_else(|| p.at(T!['{']).then(|| BinaryOperatorKind::MetaObjectApply))
+		.or_else(|| p.at(T!['{']).then_some(BinaryOperatorKind::MetaObjectApply))
 	{
 		let (left_binding_power, right_binding_power) = op.binding_power();
 		if left_binding_power < minimum_binding_power {
@@ -346,7 +341,7 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 		}
 
 		let m = lhs.wrap(p, LHS_EXPR).precede(p);
-		let parsed_rhs = expr_binding_power(p, right_binding_power).is_some();
+		let parsed_rhs = expr_binding_power(p, right_binding_power).is_ok();
 		lhs = m.complete(
 			p,
 			if op == BinaryOperatorKind::MetaObjectApply {
@@ -360,7 +355,7 @@ fn expr_binding_power(p: &mut Parser, minimum_binding_power: u8) -> Option<Compl
 			break;
 		}
 	}
-	Some(lhs)
+	Ok(lhs)
 }
 fn compspec(p: &mut Parser) {
 	assert!(p.at(T![for]) || p.at(T![if]));
@@ -461,7 +456,7 @@ fn field(p: &mut Parser) {
 fn assertion(p: &mut Parser) {
 	let m = p.start();
 	p.bump_assert(T![assert]);
-	expr(p).map(|c| c.wrap(p, LHS_EXPR));
+	expr(p).wrap(p, LHS_EXPR);
 	if p.at(T![:]) {
 		p.bump();
 		expr(p);
@@ -625,20 +620,20 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 		p.bump();
 		// End
 		if !p.at(T![']']) {
-			expr(p).map(|c| c.wrap(p, SLICE_DESC_END));
+			expr(p).wrap(p, SLICE_DESC_END);
 		}
 		if p.at(T![:]) {
 			p.bump();
 			// Step
 			if !p.at(T![']']) {
-				expr(p).map(|c| c.wrap(p, SLICE_DESC_STEP));
+				expr(p).wrap(p, SLICE_DESC_STEP);
 			}
 		}
 	} else if p.at(T![::]) {
 		p.bump();
 		// End
 		if !p.at(T![']']) {
-			expr(p).map(|c| c.wrap(p, SLICE_DESC_END));
+			expr(p).wrap(p, SLICE_DESC_END);
 		}
 	} else {
 		// It was not a slice
@@ -650,7 +645,7 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 	m.complete(p, SLICE_DESC);
 	true
 }
-fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
+fn lhs(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 	let mut lhs = lhs_basic(p)?;
 
 	loop {
@@ -677,7 +672,7 @@ fn lhs(p: &mut Parser) -> Option<CompletedMarker> {
 		}
 	}
 
-	Some(lhs)
+	Ok(lhs)
 }
 fn name(p: &mut Parser) {
 	let m = p.start();
@@ -713,6 +708,7 @@ fn obj_local(p: &mut Parser) {
 }
 fn destruct(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
+	let _ex = p.expected_syntax_name("destruction specifier");
 	if p.at(T![?]) {
 		p.bump();
 		m.complete(p, DESTRUCT_SKIP)
@@ -773,7 +769,8 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 		name(p);
 		m.complete(p, DESTRUCT_FULL)
 	} else {
-		m.complete(p, ERROR)
+		m.forget(p);
+		p.error_with_recovery_set(TS![; , '}', '(', :])
 	}
 }
 fn bind(p: &mut Parser) {
@@ -782,6 +779,13 @@ fn bind(p: &mut Parser) {
 		name(p);
 		params_desc(p);
 		p.expect(T![=]);
+		expr(p);
+		m.complete(p, BIND_FUNCTION)
+	} else if p.at(IDENT) && p.nth_at(1, T![=]) && p.nth_at(2, T![function]) {
+		name(p);
+		p.expect(T![=]);
+		p.expect(T![function]);
+		params_desc(p);
 		expr(p);
 		m.complete(p, BIND_FUNCTION)
 	} else {
@@ -803,9 +807,9 @@ fn literal(p: &mut Parser) {
 	assert!(Literal::can_cast(p.current()));
 	p.bump();
 }
-fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
-	let _e = p.expected_syntax_name("value");
-	Some(if Literal::can_cast(p.current()) {
+fn lhs_basic(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
+	let _e = p.expected_syntax_name("expression");
+	Ok(if Literal::can_cast(p.current()) {
 		let m = p.start();
 		literal(p);
 		m.complete(p, EXPR_LITERAL)
@@ -841,10 +845,10 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		p.bump();
 		expr(p);
 		p.expect(T![then]);
-		expr(p).map(|c| c.wrap(p, TRUE_EXPR));
+		expr(p).wrap(p, TRUE_EXPR);
 		if p.at(T![else]) {
 			p.bump();
-			expr(p).map(|c| c.wrap(p, FALSE_EXPR));
+			expr(p).wrap(p, FALSE_EXPR);
 		}
 		m.complete(p, EXPR_IF_THEN_ELSE)
 	} else if p.at(T!['[']) {
@@ -897,7 +901,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 
 		let m = p.start();
 		p.bump();
-		expr_binding_power(p, right_binding_power);
+		let _ = expr_binding_power(p, right_binding_power);
 		m.complete(p, EXPR_UNARY)
 	} else if p.at(T!['(']) {
 		let m = p.start();
@@ -906,8 +910,7 @@ fn lhs_basic(p: &mut Parser) -> Option<CompletedMarker> {
 		p.expect(T![')']);
 		m.complete(p, EXPR_PARENED)
 	} else {
-		p.error_with_recovery_set(TS![]);
-		return None;
+		return Err(p.error_with_no_skip());
 	})
 }
 

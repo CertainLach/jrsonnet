@@ -3,37 +3,44 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b = ) a + b\n"
 ---
 SOURCE_FILE@0..24
-  EXPR_FUNCTION@0..24
+  EXPR_FUNCTION@0..23
     FUNCTION_KW@0..8 "function"
-    PARAMS_DESC@8..18
+    PARAMS_DESC@8..17
       L_PAREN@8..9 "("
       PARAM@9..10
-        IDENT@9..10 "a"
+        DESTRUCT_FULL@9..10
+          NAME@9..10
+            IDENT@9..10 "a"
       COMMA@10..11 ","
       WHITESPACE@11..12 " "
       PARAM@12..16
-        IDENT@12..13 "b"
+        DESTRUCT_FULL@12..13
+          NAME@12..13
+            IDENT@12..13 "b"
         WHITESPACE@13..14 " "
         ASSIGN@14..15 "="
         WHITESPACE@15..16 " "
+        ERROR_MISSING_TOKEN@16..16
       R_PAREN@16..17 ")"
-      WHITESPACE@17..18 " "
-    EXPR_BINARY@18..24
-      EXPR_VAR@18..20
-        IDENT@18..19 "a"
-        WHITESPACE@19..20 " "
+    WHITESPACE@17..18 " "
+    EXPR_BINARY@18..23
+      LHS_EXPR@18..19
+        EXPR_VAR@18..19
+          NAME@18..19
+            IDENT@18..19 "a"
+      WHITESPACE@19..20 " "
       PLUS@20..21 "+"
       WHITESPACE@21..22 " "
-      EXPR_VAR@22..24
-        IDENT@22..23 "b"
-        WHITESPACE@23..24 "\n"
+      EXPR_VAR@22..23
+        NAME@22..23
+          IDENT@22..23 "b"
+  WHITESPACE@23..24 "\n"
 ===
-Missing { expected: Named("value"), offset: 15 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 16..16 }
 ===
   x syntax error
    ,----
  1 | function(a, b = ) a + b
-   :                ^
-   :                `-- missing value
+   :                 ^
+   :                 `-- missing expression
    `----
-

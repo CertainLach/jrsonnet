@@ -7,6 +7,7 @@ default-members = ["cmds/jrsonnet"]
 jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0" }
 jrsonnet-macros = { path = "./crates/jrsonnet-macros", version = "0.5.0" }
 jrsonnet-parser = { path = "./crates/jrsonnet-parser", version = "0.5.0" }
+jrsonnet-rowan-parser = { path = "./crates/jrsonnet-rowan-parser", version = "0.5.0" }
 jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0" }
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0" }

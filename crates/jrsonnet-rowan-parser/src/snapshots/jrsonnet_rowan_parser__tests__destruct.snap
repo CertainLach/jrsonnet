@@ -1,0 +1,255 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "local [a, b, c] = arr;\nlocal [a, ...] = arr_rest;\nlocal [..., a] = rest_arr;\nlocal [...] = rest_in_arr;\nlocal [a, ...n] = arr_rest_n;\nlocal [...n, a] = rest_arr_n;\nlocal [...n] = rest_in_arr_n;\n\nlocal {a, b, c} = obj;\nlocal {a, b, c, ...} = obj_rest;\nlocal {a, b, c, ...n} = obj_rest_n;\n\nnull\n"
+---
+SOURCE_FILE@0..293
+  EXPR_LOCAL@0..292
+    LOCAL_KW@0..5 "local"
+    WHITESPACE@5..6 " "
+    BIND_DESTRUCT@6..21
+      DESTRUCT_ARRAY@6..15
+        L_BRACK@6..7 "["
+        DESTRUCT_FULL@7..8
+          NAME@7..8
+            IDENT@7..8 "a"
+        COMMA@8..9 ","
+        WHITESPACE@9..10 " "
+        DESTRUCT_FULL@10..11
+          NAME@10..11
+            IDENT@10..11 "b"
+        COMMA@11..12 ","
+        WHITESPACE@12..13 " "
+        DESTRUCT_FULL@13..14
+          NAME@13..14
+            IDENT@13..14 "c"
+        R_BRACK@14..15 "]"
+      WHITESPACE@15..16 " "
+      ASSIGN@16..17 "="
+      WHITESPACE@17..18 " "
+      EXPR_VAR@18..21
+        NAME@18..21
+          IDENT@18..21 "arr"
+    SEMI@21..22 ";"
+    WHITESPACE@22..23 "\n"
+    EXPR_LOCAL@23..292
+      LOCAL_KW@23..28 "local"
+      WHITESPACE@28..29 " "
+      BIND_DESTRUCT@29..48
+        DESTRUCT_ARRAY@29..37
+          L_BRACK@29..30 "["
+          DESTRUCT_FULL@30..31
+            NAME@30..31
+              IDENT@30..31 "a"
+          COMMA@31..32 ","
+          WHITESPACE@32..33 " "
+          DESTRUCT_REST@33..36
+            DOTDOTDOT@33..36 "..."
+          R_BRACK@36..37 "]"
+        WHITESPACE@37..38 " "
+        ASSIGN@38..39 "="
+        WHITESPACE@39..40 " "
+        EXPR_VAR@40..48
+          NAME@40..48
+            IDENT@40..48 "arr_rest"
+      SEMI@48..49 ";"
+      WHITESPACE@49..50 "\n"
+      EXPR_LOCAL@50..292
+        LOCAL_KW@50..55 "local"
+        WHITESPACE@55..56 " "
+        BIND_DESTRUCT@56..75
+          DESTRUCT_ARRAY@56..64
+            L_BRACK@56..57 "["
+            DESTRUCT_REST@57..60
+              DOTDOTDOT@57..60 "..."
+            COMMA@60..61 ","
+            WHITESPACE@61..62 " "
+            DESTRUCT_FULL@62..63
+              NAME@62..63
+                IDENT@62..63 "a"
+            R_BRACK@63..64 "]"
+          WHITESPACE@64..65 " "
+          ASSIGN@65..66 "="
+          WHITESPACE@66..67 " "
+          EXPR_VAR@67..75
+            NAME@67..75
+              IDENT@67..75 "rest_arr"
+        SEMI@75..76 ";"
+        WHITESPACE@76..77 "\n"
+        EXPR_LOCAL@77..292
+          LOCAL_KW@77..82 "local"
+          WHITESPACE@82..83 " "
+          BIND_DESTRUCT@83..102
+            DESTRUCT_ARRAY@83..88
+              L_BRACK@83..84 "["
+              DESTRUCT_REST@84..87
+                DOTDOTDOT@84..87 "..."
+              R_BRACK@87..88 "]"
+            WHITESPACE@88..89 " "
+            ASSIGN@89..90 "="
+            WHITESPACE@90..91 " "
+            EXPR_VAR@91..102
+              NAME@91..102
+                IDENT@91..102 "rest_in_arr"
+          SEMI@102..103 ";"
+          WHITESPACE@103..104 "\n"
+          EXPR_LOCAL@104..292
+            LOCAL_KW@104..109 "local"
+            WHITESPACE@109..110 " "
+            BIND_DESTRUCT@110..132
+              DESTRUCT_ARRAY@110..119
+                L_BRACK@110..111 "["
+                DESTRUCT_FULL@111..112
+                  NAME@111..112
+                    IDENT@111..112 "a"
+                COMMA@112..113 ","
+                WHITESPACE@113..114 " "
+                DESTRUCT_REST@114..118
+                  DOTDOTDOT@114..117 "..."
+                  IDENT@117..118 "n"
+                R_BRACK@118..119 "]"
+              WHITESPACE@119..120 " "
+              ASSIGN@120..121 "="
+              WHITESPACE@121..122 " "
+              EXPR_VAR@122..132
+                NAME@122..132
+                  IDENT@122..132 "arr_rest_n"
+            SEMI@132..133 ";"
+            WHITESPACE@133..134 "\n"
+            EXPR_LOCAL@134..292
+              LOCAL_KW@134..139 "local"
+              WHITESPACE@139..140 " "
+              BIND_DESTRUCT@140..162
+                DESTRUCT_ARRAY@140..149
+                  L_BRACK@140..141 "["
+                  DESTRUCT_REST@141..145
+                    DOTDOTDOT@141..144 "..."
+                    IDENT@144..145 "n"
+                  COMMA@145..146 ","
+                  WHITESPACE@146..147 " "
+                  DESTRUCT_FULL@147..148
+                    NAME@147..148
+                      IDENT@147..148 "a"
+                  R_BRACK@148..149 "]"
+                WHITESPACE@149..150 " "
+                ASSIGN@150..151 "="
+                WHITESPACE@151..152 " "
+                EXPR_VAR@152..162
+                  NAME@152..162
+                    IDENT@152..162 "rest_arr_n"
+              SEMI@162..163 ";"
+              WHITESPACE@163..164 "\n"
+              EXPR_LOCAL@164..292
+                LOCAL_KW@164..169 "local"
+                WHITESPACE@169..170 " "
+                BIND_DESTRUCT@170..192
+                  DESTRUCT_ARRAY@170..176
+                    L_BRACK@170..171 "["
+                    DESTRUCT_REST@171..175
+                      DOTDOTDOT@171..174 "..."
+                      IDENT@174..175 "n"
+                    R_BRACK@175..176 "]"
+                  WHITESPACE@176..177 " "
+                  ASSIGN@177..178 "="
+                  WHITESPACE@178..179 " "
+                  EXPR_VAR@179..192
+                    NAME@179..192
+                      IDENT@179..192 "rest_in_arr_n"
+                SEMI@192..193 ";"
+                WHITESPACE@193..195 "\n\n"
+                EXPR_LOCAL@195..292
+                  LOCAL_KW@195..200 "local"
+                  WHITESPACE@200..201 " "
+                  BIND_DESTRUCT@201..216
+                    DESTRUCT_OBJECT@201..210
+                      L_BRACE@201..202 "{"
+                      DESTRUCT_OBJECT_FIELD@202..203
+                        NAME@202..203
+                          IDENT@202..203 "a"
+                      COMMA@203..204 ","
+                      WHITESPACE@204..205 " "
+                      DESTRUCT_OBJECT_FIELD@205..206
+                        NAME@205..206
+                          IDENT@205..206 "b"
+                      COMMA@206..207 ","
+                      WHITESPACE@207..208 " "
+                      DESTRUCT_OBJECT_FIELD@208..209
+                        NAME@208..209
+                          IDENT@208..209 "c"
+                      R_BRACE@209..210 "}"
+                    WHITESPACE@210..211 " "
+                    ASSIGN@211..212 "="
+                    WHITESPACE@212..213 " "
+                    EXPR_VAR@213..216
+                      NAME@213..216
+                        IDENT@213..216 "obj"
+                  SEMI@216..217 ";"
+                  WHITESPACE@217..218 "\n"
+                  EXPR_LOCAL@218..292
+                    LOCAL_KW@218..223 "local"
+                    WHITESPACE@223..224 " "
+                    BIND_DESTRUCT@224..249
+                      DESTRUCT_OBJECT@224..238
+                        L_BRACE@224..225 "{"
+                        DESTRUCT_OBJECT_FIELD@225..226
+                          NAME@225..226
+                            IDENT@225..226 "a"
+                        COMMA@226..227 ","
+                        WHITESPACE@227..228 " "
+                        DESTRUCT_OBJECT_FIELD@228..229
+                          NAME@228..229
+                            IDENT@228..229 "b"
+                        COMMA@229..230 ","
+                        WHITESPACE@230..231 " "
+                        DESTRUCT_OBJECT_FIELD@231..232
+                          NAME@231..232
+                            IDENT@231..232 "c"
+                        COMMA@232..233 ","
+                        WHITESPACE@233..234 " "
+                        DESTRUCT_REST@234..237
+                          DOTDOTDOT@234..237 "..."
+                        R_BRACE@237..238 "}"
+                      WHITESPACE@238..239 " "
+                      ASSIGN@239..240 "="
+                      WHITESPACE@240..241 " "
+                      EXPR_VAR@241..249
+                        NAME@241..249
+                          IDENT@241..249 "obj_rest"
+                    SEMI@249..250 ";"
+                    WHITESPACE@250..251 "\n"
+                    EXPR_LOCAL@251..292
+                      LOCAL_KW@251..256 "local"
+                      WHITESPACE@256..257 " "
+                      BIND_DESTRUCT@257..285
+                        DESTRUCT_OBJECT@257..272
+                          L_BRACE@257..258 "{"
+                          DESTRUCT_OBJECT_FIELD@258..259
+                            NAME@258..259
+                              IDENT@258..259 "a"
+                          COMMA@259..260 ","
+                          WHITESPACE@260..261 " "
+                          DESTRUCT_OBJECT_FIELD@261..262
+                            NAME@261..262
+                              IDENT@261..262 "b"
+                          COMMA@262..263 ","
+                          WHITESPACE@263..264 " "
+                          DESTRUCT_OBJECT_FIELD@264..265
+                            NAME@264..265
+                              IDENT@264..265 "c"
+                          COMMA@265..266 ","
+                          WHITESPACE@266..267 " "
+                          DESTRUCT_REST@267..271
+                            DOTDOTDOT@267..270 "..."
+                            IDENT@270..271 "n"
+                          R_BRACE@271..272 "}"
+                        WHITESPACE@272..273 " "
+                        ASSIGN@273..274 "="
+                        WHITESPACE@274..275 " "
+                        EXPR_VAR@275..285
+                          NAME@275..285
+                            IDENT@275..285 "obj_rest_n"
+                      SEMI@285..286 ";"
+                      WHITESPACE@286..288 "\n\n"
+                      EXPR_LITERAL@288..292
+                        NULL_KW@288..292 "null"
+  WHITESPACE@292..293 "\n"
+

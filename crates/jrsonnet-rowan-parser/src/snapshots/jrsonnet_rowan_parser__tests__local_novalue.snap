@@ -3,24 +3,29 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "local a =\n"
 ---
 SOURCE_FILE@0..10
-  LOCAL_KW@0..10
+  EXPR_LOCAL@0..10
     LOCAL_KW@0..5 "local"
     WHITESPACE@5..6 " "
-    IDENT@6..7 "a"
-    WHITESPACE@7..8 " "
-    ASSIGN@8..9 "="
-    WHITESPACE@9..10 "\n"
+    BIND_DESTRUCT@6..10
+      DESTRUCT_FULL@6..7
+        NAME@6..7
+          IDENT@6..7 "a"
+      WHITESPACE@7..8 " "
+      ASSIGN@8..9 "="
+      WHITESPACE@9..10 "\n"
+      ERROR_MISSING_TOKEN@10..10
+    ERROR_MISSING_TOKEN@10..10
+    ERROR_MISSING_TOKEN@10..10
 ===
-Missing { expected: Named("value"), offset: 9 }
-Missing { expected: Unnamed(SEMI), offset: 9 }
-Missing { expected: Named("value"), offset: 9 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(SEMI) }, range: 10..10 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
 ===
   x syntax error
    ,----
  1 | local a =
-   :          ^
-   :          `-- missing value
-   :          |`-- missing SEMI
-   :          `-- missing value
+   :           ^^^
+   :           `-- missing expression
+   :           |`-- missing SEMI
+   :           `-- missing expression
    `----
-

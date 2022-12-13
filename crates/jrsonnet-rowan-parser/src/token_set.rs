@@ -45,7 +45,7 @@ macro_rules! TS {
 #[test]
 fn sanity() {
 	assert!(
-		(SyntaxKind::ERROR as u32) < 127,
+		(SyntaxKind::LEXING_ERROR as u32) < 127,
 		"can't keep KindSet as bitset"
 	);
 }

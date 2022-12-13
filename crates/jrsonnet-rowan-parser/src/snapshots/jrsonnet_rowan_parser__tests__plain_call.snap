@@ -2,7 +2,7 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "std.substr(a, 0, std.length(b)) == b\n"
 ---
-SOURCE_FILE@0..36
+SOURCE_FILE@0..37
   EXPR_BINARY@0..36
     LHS_EXPR@0..31
       EXPR_APPLY@0..31
@@ -49,4 +49,5 @@ SOURCE_FILE@0..36
     EXPR_VAR@35..36
       NAME@35..36
         IDENT@35..36 "b"
+  WHITESPACE@36..37 "\n"
 

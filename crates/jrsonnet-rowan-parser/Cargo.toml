@@ -1,6 +1,6 @@
 [package]
 name = "jrsonnet-rowan-parser"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
@@ -9,7 +9,7 @@ backtrace = "0.3.63"
 drop_bomb = "0.1.5"
 indoc = "1.0"
 logos = "0.12"
-miette = { version = "4.2", features = ["fancy"] }
+miette = { version = "5.5.0", features = ["fancy"] }
 rowan = "0.15"
 text-size = "1.1"
 thiserror = "1.0"
@@ -19,4 +19,3 @@ backtrace = "0.3.63"
 indoc = "1.0"
 insta = "1.15"
 anyhow = "1.0"
-jrsonnet-stdlib = { path = "../jrsonnet-stdlib" }

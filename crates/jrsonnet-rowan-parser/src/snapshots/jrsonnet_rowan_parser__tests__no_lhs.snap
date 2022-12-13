@@ -3,17 +3,18 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "+ 2\n"
 ---
 SOURCE_FILE@0..2
-  PLUS@0..1 "+"
+  ERROR_MISSING_TOKEN@0..0
+  ERROR_UNEXPECTED_TOKEN@0..1
+    PLUS@0..1 "+"
   WHITESPACE@1..2 " "
 ===
-Missing { expected: Named("value"), offset: 0 }
-Custom { error: "unexpected input after expression", range: 0..1 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 0..0 }
+LocatedSyntaxError { error: Unexpected { expected: Unnamed(EOF), found: PLUS }, range: 0..1 }
 ===
   x syntax error
    ,----
  1 | + 2
-   : ^
-   : |`-- unexpected input after expression
-   : `-- missing value
+   : ^|
+   : |`-- expected EOF, found PLUS
+   : `-- missing expression
    `----
-

@@ -53,8 +53,17 @@ fn process(text: &str) -> String {
 		for err in &errors {
 			writeln!(out, "{:?}", err).unwrap();
 		}
+		let mut code = text.to_string();
+
+		// Prettier errors at EOF position
+		if code.ends_with('\n') {
+			code.truncate(code.len() - 1);
+			code += " ";
+		}
+		code += " ";
+
 		let diag = MyDiagnostic {
-			code: text.to_string(),
+			code,
 			spans: errors.into_iter().map(|e| e.into()).collect(),
 		};
 
@@ -64,9 +73,16 @@ fn process(text: &str) -> String {
 		});
 
 		write!(out, "===").unwrap();
-		handler.render_report(&mut out, &diag).unwrap();
+		handler
+			.render_report(&mut out, &diag)
+			.expect("fmt error?..");
 	}
-	out
+	out.split('\n')
+		.map(|s| s.trim_end().to_string())
+		.collect::<Vec<String>>()
+		.join("\n")
+		.trim_end()
+		.to_string()
 }
 macro_rules! mk_test {
 		($($name:ident => $test:expr)+) => {$(
@@ -165,11 +181,16 @@ mk_test!(
 		|||
 		hello
 	"
+
+	unexpected_destruct => "
+		local * = 1;
+		a
+	"
 );
 
 #[test]
 fn stdlib() {
-	let src = jrsonnet_stdlib::STDLIB_STR;
+	let src = include_str!("../../jrsonnet-stdlib/src/std.jsonnet");
 	let result = process(src);
 	insta::assert_snapshot!("stdlib", result, src);
 }

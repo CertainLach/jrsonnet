@@ -3,7 +3,7 @@
 use event::Sink;
 use generated::nodes::{SourceFile, Trivia};
 use lex::lex;
-use parser::{Parser, SyntaxError};
+use parser::{LocatedSyntaxError, Parser, SyntaxError};
 pub use rowan;
 
 mod ast;
@@ -23,7 +23,7 @@ pub use generated::{nodes, syntax_kinds::SyntaxKind};
 pub use language::*;
 pub use token_set::SyntaxKindSet;
 
-pub fn parse(input: &str) -> (SourceFile, Vec<SyntaxError>) {
+pub fn parse(input: &str) -> (SourceFile, Vec<LocatedSyntaxError>) {
 	let lexemes = lex(input);
 	let kinds = lexemes
 		.iter()
