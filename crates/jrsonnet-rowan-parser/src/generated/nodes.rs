@@ -1123,6 +1123,18 @@ pub enum TriviaKind {
 	SingleLineHashComment,
 	SingleLineSlashComment,
 }
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ParsingError {
+	syntax: SyntaxToken,
+	kind: ParsingErrorKind,
+}
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
+pub enum ParsingErrorKind {
+	ErrorMissingToken,
+	ErrorUnexpectedToken,
+}
 impl AstNode for SourceFile {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == SOURCE_FILE
@@ -2883,6 +2895,44 @@ impl Trivia {
 	}
 }
 impl std::fmt::Display for Trivia {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl AstToken for ParsingError {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		ParsingErrorKind::can_cast(kind)
+	}
+	fn cast(syntax: SyntaxToken) -> Option<Self> {
+		let kind = ParsingErrorKind::cast(syntax.kind())?;
+		Some(ParsingError { syntax, kind })
+	}
+	fn syntax(&self) -> &SyntaxToken {
+		&self.syntax
+	}
+}
+impl ParsingErrorKind {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			ERROR_MISSING_TOKEN | ERROR_UNEXPECTED_TOKEN => true,
+			_ => false,
+		}
+	}
+	pub fn cast(kind: SyntaxKind) -> Option<Self> {
+		let res = match kind {
+			ERROR_MISSING_TOKEN => Self::ErrorMissingToken,
+			ERROR_UNEXPECTED_TOKEN => Self::ErrorUnexpectedToken,
+			_ => return None,
+		};
+		Some(res)
+	}
+}
+impl ParsingError {
+	pub fn kind(&self) -> ParsingErrorKind {
+		self.kind
+	}
+}
+impl std::fmt::Display for ParsingError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

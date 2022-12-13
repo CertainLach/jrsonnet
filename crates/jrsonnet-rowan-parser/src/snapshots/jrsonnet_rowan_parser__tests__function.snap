@@ -2,7 +2,7 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b = 1) a + b\n"
 ---
-SOURCE_FILE@0..24
+SOURCE_FILE@0..25
   EXPR_FUNCTION@0..24
     FUNCTION_KW@0..8 "function"
     PARAMS_DESC@8..18
@@ -35,4 +35,5 @@ SOURCE_FILE@0..24
       EXPR_VAR@23..24
         NAME@23..24
           IDENT@23..24 "b"
+  WHITESPACE@24..25 "\n"
 

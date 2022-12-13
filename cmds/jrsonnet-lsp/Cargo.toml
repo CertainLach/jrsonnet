@@ -1,12 +1,12 @@
 [package]
 name = "jrsonnet-lsp"
-version = "0.1.0"
+version.workspace = true
 edition = "2021"
 
 [dependencies]
 anyhow = "1.0.48"
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator" }
-jrsonnet-rowan-parser = { path = "../../crates/jrsonnet-rowan-parser" }
+jrsonnet-evaluator.workspace = true
+jrsonnet-rowan-parser.workspace = true
 lsp-server = "0.6.0"
 lsp-types = "0.93.0"
 serde = "1.0.130"

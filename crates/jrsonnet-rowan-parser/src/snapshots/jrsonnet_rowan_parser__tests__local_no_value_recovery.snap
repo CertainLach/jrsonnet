@@ -3,37 +3,44 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "local a =\nlocal b = 3;\n1\n"
 ---
 SOURCE_FILE@0..25
-  LOCAL_KW@0..25
+  EXPR_LOCAL@0..25
     LOCAL_KW@0..5 "local"
     WHITESPACE@5..6 " "
-    IDENT@6..7 "a"
-    WHITESPACE@7..8 " "
-    ASSIGN@8..9 "="
-    WHITESPACE@9..10 "\n"
-    LOCAL_KW@10..25
-      LOCAL_KW@10..15 "local"
-      WHITESPACE@15..16 " "
-      IDENT@16..17 "b"
-      WHITESPACE@17..18 " "
-      ASSIGN@18..19 "="
-      WHITESPACE@19..20 " "
-      EXPR_NUMBER@20..21
-        NUMBER@20..21 "3"
-      SEMI@21..22 ";"
-      WHITESPACE@22..23 "\n"
-      EXPR_NUMBER@23..25
-        NUMBER@23..24 "1"
-        WHITESPACE@24..25 "\n"
+    BIND_DESTRUCT@6..24
+      DESTRUCT_FULL@6..7
+        NAME@6..7
+          IDENT@6..7 "a"
+      WHITESPACE@7..8 " "
+      ASSIGN@8..9 "="
+      WHITESPACE@9..10 "\n"
+      EXPR_LOCAL@10..24
+        LOCAL_KW@10..15 "local"
+        WHITESPACE@15..16 " "
+        BIND_DESTRUCT@16..21
+          DESTRUCT_FULL@16..17
+            NAME@16..17
+              IDENT@16..17 "b"
+          WHITESPACE@17..18 " "
+          ASSIGN@18..19 "="
+          WHITESPACE@19..20 " "
+          EXPR_NUMBER@20..21
+            FLOAT@20..21 "3"
+        SEMI@21..22 ";"
+        WHITESPACE@22..23 "\n"
+        EXPR_NUMBER@23..24
+          FLOAT@23..24 "1"
+    WHITESPACE@24..25 "\n"
+    ERROR_MISSING_TOKEN@25..25
+    ERROR_MISSING_TOKEN@25..25
 ===
-Missing { expected: Unnamed(SEMI), offset: 24 }
-Missing { expected: Named("value"), offset: 24 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(SEMI) }, range: 25..25 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 25..25 }
 ===
   x syntax error
    ,-[2:1]
  2 | local b = 3;
  3 | 1
-   :  ^
-   :  |`-- missing value
-   :  `-- missing SEMI
+   :   ^^
+   :   |`-- missing expression
+   :   `-- missing SEMI
    `----
-

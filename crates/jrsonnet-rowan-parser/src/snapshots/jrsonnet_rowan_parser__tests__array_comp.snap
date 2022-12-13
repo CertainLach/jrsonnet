@@ -2,7 +2,7 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "[a for a in [1, 2, 3]]\n"
 ---
-SOURCE_FILE@0..22
+SOURCE_FILE@0..23
   EXPR_ARRAY_COMP@0..22
     L_BRACK@0..1 "["
     EXPR_VAR@1..2
@@ -31,4 +31,5 @@ SOURCE_FILE@0..22
           FLOAT@19..20 "3"
         R_BRACK@20..21 "]"
     R_BRACK@21..22 "]"
+  WHITESPACE@22..23 "\n"
 

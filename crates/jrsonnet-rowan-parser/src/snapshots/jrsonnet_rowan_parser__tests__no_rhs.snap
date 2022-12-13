@@ -2,21 +2,22 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "a +\n"
 ---
-SOURCE_FILE@0..3
-  EXPR_BINARY@0..3
+SOURCE_FILE@0..4
+  EXPR_BINARY@0..4
     LHS_EXPR@0..1
       EXPR_VAR@0..1
         NAME@0..1
           IDENT@0..1 "a"
     WHITESPACE@1..2 " "
     PLUS@2..3 "+"
+    WHITESPACE@3..4 "\n"
+    ERROR_MISSING_TOKEN@4..4
 ===
-Missing { expected: Named("value"), offset: 3 }
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 4..4 }
 ===
   x syntax error
    ,----
  1 | a +
-   :    ^
-   :    `-- missing value
+   :     ^
+   :     `-- missing expression
    `----
-

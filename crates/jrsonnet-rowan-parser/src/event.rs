@@ -1,11 +1,11 @@
 use std::mem;
 
-use rowan::{GreenNodeBuilder, Language};
+use rowan::{GreenNodeBuilder, Language, TextRange, TextSize};
 
 use crate::{
 	lex::Lexeme,
 	nodes::Trivia,
-	parser::{Parse, SyntaxError},
+	parser::{LocatedSyntaxError, Parse, SyntaxError},
 	AstToken, JsonnetLanguage, SyntaxKind,
 };
 
@@ -43,7 +43,7 @@ pub(super) struct Sink<'i> {
 	lexemes: &'i [Lexeme<'i>],
 	offset: usize,
 	events: Vec<Event>,
-	pub errors: Vec<SyntaxError>,
+	pub errors: Vec<LocatedSyntaxError>,
 }
 
 impl<'i> Sink<'i> {
@@ -57,9 +57,24 @@ impl<'i> Sink<'i> {
 		}
 	}
 
+	fn text_offset(&self) -> TextSize {
+		if self.offset == 0 {
+			return 0.into();
+		};
+		if let Some(lex) = self.lexemes.get(self.offset) {
+			lex.range.start()
+		} else if let Some(lex) = self.lexemes.get(self.offset - 1) {
+			lex.range.end()
+		} else {
+			panic!("hard oob")
+		}
+	}
+
 	pub(super) fn finish(mut self) -> Parse {
 		let mut eat_start_whitespace = false;
 		let mut depth = 0;
+		let mut error_starts_at = Vec::new();
+		let mut error_last_range = None;
 		for idx in 0..self.events.len() {
 			match mem::replace(&mut self.events[idx], Event::Noop) {
 				Event::Start {
@@ -69,6 +84,7 @@ impl<'i> Sink<'i> {
 					if depth != 0 {
 						self.skip_whitespace();
 					}
+					error_last_range = None;
 					let mut kinds = vec![kind];
 
 					let mut idx = idx;
@@ -98,6 +114,7 @@ impl<'i> Sink<'i> {
 						if depth == 1 {
 							self.skip_whitespace();
 						}
+						error_starts_at.push(self.text_offset());
 					}
 
 					eat_start_whitespace = false;
@@ -106,6 +123,7 @@ impl<'i> Sink<'i> {
 					if eat_start_whitespace {
 						self.skip_whitespace();
 					}
+					error_last_range = None;
 					self.token(kind);
 					eat_start_whitespace = true;
 				}
@@ -113,6 +131,7 @@ impl<'i> Sink<'i> {
 					if eat_start_whitespace {
 						self.skip_whitespace();
 					}
+					error_last_range = None;
 					self.virtual_token(kind);
 					eat_start_whitespace = false;
 				}
@@ -120,6 +139,10 @@ impl<'i> Sink<'i> {
 					if depth == 1 {
 						self.skip_whitespace();
 					}
+					error_last_range = Some((
+						error_starts_at.pop().expect("starts == finishes"),
+						self.text_offset(),
+					));
 					self.builder.finish_node();
 					depth -= 1;
 					let mut idx = idx;
@@ -129,6 +152,10 @@ impl<'i> Sink<'i> {
 						wrapper = if let Event::Finish { wrapper } =
 							mem::replace(&mut self.events[idx], Event::Noop)
 						{
+							error_last_range = Some((
+								error_starts_at.pop().expect("starts == finishes"),
+								self.text_offset(),
+							));
 							if depth == 1 {
 								self.skip_whitespace();
 							}
@@ -143,8 +170,14 @@ impl<'i> Sink<'i> {
 				}
 				Event::Pending => panic!("pending event should not appear in finished events"),
 				Event::Noop => {}
-				Event::Error(e) => {
-					self.errors.push(e);
+				Event::Error(error) => {
+					let (start, end) = error_last_range
+						.take()
+						.expect("expected error event right after closed node");
+					self.errors.push(LocatedSyntaxError {
+						error,
+						range: TextRange::new(start, end),
+					});
 				}
 			}
 		}

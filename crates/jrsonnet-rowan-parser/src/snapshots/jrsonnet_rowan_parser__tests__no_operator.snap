@@ -2,14 +2,15 @@
 source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "2 2\n"
 ---
-SOURCE_FILE@0..3
+SOURCE_FILE@0..4
   EXPR_NUMBER@0..1
     FLOAT@0..1 "2"
   WHITESPACE@1..2 " "
-  ERROR@2..3
+  ERROR_UNEXPECTED_TOKEN@2..3
     FLOAT@2..3 "2"
+  WHITESPACE@3..4 "\n"
 ===
-Unexpected { expected: Unnamed(EOF), found: FLOAT, range: 2..3 }
+LocatedSyntaxError { error: Unexpected { expected: Unnamed(EOF), found: FLOAT }, range: 2..3 }
 ===
   x syntax error
    ,----
@@ -17,4 +18,3 @@ Unexpected { expected: Unnamed(EOF), found: FLOAT, range: 2..3 }
    :   |
    :   `-- expected EOF, found FLOAT
    `----
-
