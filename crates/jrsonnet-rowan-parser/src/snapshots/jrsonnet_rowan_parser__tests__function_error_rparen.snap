@@ -21,7 +21,7 @@ SOURCE_FILE@0..14
       ERROR_MISSING_TOKEN@14..14
     ERROR_MISSING_TOKEN@14..14
 ===
-LocatedSyntaxError { error: Missing { expected: Unnamed(R_PAREN) }, range: 14..14 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([R_PAREN, COMMA, ASSIGN])) }, range: 14..14 }
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 14..14 }
 ===
   x syntax error
@@ -29,5 +29,5 @@ LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 14
  1 | function(a, b
    :               ^^
    :               |`-- missing expression
-   :               `-- missing R_PAREN
+   :               `-- missing R_PAREN, COMMA or ASSIGN
    `----

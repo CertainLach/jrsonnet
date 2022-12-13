@@ -1,0 +1,40 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "{a:1, for a in [1, 2, 3]}\n"
+---
+SOURCE_FILE@0..26
+  EXPR_OBJECT@0..25
+    OBJ_BODY_COMP@0..25
+      L_BRACE@0..1 "{"
+      MEMBER_FIELD_NORMAL@1..4
+        FIELD_NAME_FIXED@1..2
+          NAME@1..2
+            IDENT@1..2 "a"
+        COLON@2..3 ":"
+        EXPR_NUMBER@3..4
+          FLOAT@3..4 "1"
+      COMMA@4..5 ","
+      WHITESPACE@5..6 " "
+      FOR_SPEC@6..24
+        FOR_KW@6..9 "for"
+        WHITESPACE@9..10 " "
+        NAME@10..11
+          IDENT@10..11 "a"
+        WHITESPACE@11..12 " "
+        IN_KW@12..14 "in"
+        WHITESPACE@14..15 " "
+        EXPR_ARRAY@15..24
+          L_BRACK@15..16 "["
+          EXPR_NUMBER@16..17
+            FLOAT@16..17 "1"
+          COMMA@17..18 ","
+          WHITESPACE@18..19 " "
+          EXPR_NUMBER@19..20
+            FLOAT@19..20 "2"
+          COMMA@20..21 ","
+          WHITESPACE@21..22 " "
+          EXPR_NUMBER@22..23
+            FLOAT@22..23 "3"
+          R_BRACK@23..24 "]"
+      R_BRACE@24..25 "}"
+  WHITESPACE@25..26 "\n"

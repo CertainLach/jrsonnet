@@ -18,7 +18,7 @@ SOURCE_FILE@0..10
     ERROR_MISSING_TOKEN@10..10
 ===
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
-LocatedSyntaxError { error: Missing { expected: Unnamed(SEMI) }, range: 10..10 }
+LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([SEMI, COMMA])) }, range: 10..10 }
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
 ===
   x syntax error
@@ -26,6 +26,6 @@ LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10
  1 | local a =
    :           ^^^
    :           `-- missing expression
-   :           |`-- missing SEMI
+   :           |`-- missing SEMI or COMMA
    :           `-- missing expression
    `----

@@ -10,11 +10,11 @@ SOURCE_FILE@0..4
     FLOAT@2..3 "2"
   WHITESPACE@3..4 "\n"
 ===
-LocatedSyntaxError { error: Unexpected { expected: Unnamed(EOF), found: FLOAT }, range: 2..3 }
+LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([EOF, L_BRACK, L_PAREN, L_BRACE, DOT])), found: FLOAT }, range: 2..3 }
 ===
   x syntax error
    ,----
  1 | 2 2
    :   |
-   :   `-- expected EOF, found FLOAT
+   :   `-- expected EOF, L_BRACK, L_PAREN, L_BRACE or DOT, found FLOAT
    `----

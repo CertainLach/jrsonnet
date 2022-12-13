@@ -1,0 +1,41 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "{for a in [1, 2, 3]}\n"
+---
+SOURCE_FILE@0..21
+  EXPR_OBJECT@0..20
+    OBJ_BODY_COMP@0..20
+      L_BRACE@0..1 "{"
+      ERROR_MISSING_TOKEN@1..1
+      FOR_SPEC@1..19
+        FOR_KW@1..4 "for"
+        WHITESPACE@4..5 " "
+        NAME@5..6
+          IDENT@5..6 "a"
+        WHITESPACE@6..7 " "
+        IN_KW@7..9 "in"
+        WHITESPACE@9..10 " "
+        EXPR_ARRAY@10..19
+          L_BRACK@10..11 "["
+          EXPR_NUMBER@11..12
+            FLOAT@11..12 "1"
+          COMMA@12..13 ","
+          WHITESPACE@13..14 " "
+          EXPR_NUMBER@14..15
+            FLOAT@14..15 "2"
+          COMMA@15..16 ","
+          WHITESPACE@16..17 " "
+          EXPR_NUMBER@17..18
+            FLOAT@17..18 "3"
+          R_BRACK@18..19 "]"
+      R_BRACE@19..20 "}"
+  WHITESPACE@20..21 "\n"
+===
+LocatedSyntaxError { error: Missing { expected: Named("field definition") }, range: 1..1 }
+===
+  x syntax error
+   ,----
+ 1 | {for a in [1, 2, 3]}
+   :  ^
+   :  `-- missing field definition
+   `----

@@ -118,12 +118,6 @@ mk_test!(
 		1
 	"#
 
-	array_comp => r#"
-		[a for a in [1, 2, 3]]
-	"#
-	array_comp_incompatible_with_multiple_elems => r#"
-		[a for a in [1, 2, 3], b]
-	"#
 
 	no_rhs => r#"
 		a +
@@ -186,6 +180,50 @@ mk_test!(
 		local * = 1;
 		a
 	"
+	arr_compspec => r#"
+		[a for a in [1, 2, 3]]
+	"#
+	arr_compspec_comma => "
+		[a, for a in [1, 2, 3]]
+	"
+	arr_compspec_no_elems => "
+		[for a in [1, 2, 3]]
+	"
+	arr_compspec_incompatible_with_multiple_elems => r#"
+		[a for a in [1, 2, 3], b]
+	"#
+	arr_compspec_incompatible_with_multiple_elems_w => r#"
+		[a, b, for a in [1, 2, 3], c]
+	"#
+
+	obj_compspec => r#"
+		{a:1 for a in [1, 2, 3]}
+	"#
+	obj_compspec_comma => "
+		{a:1, for a in [1, 2, 3]}
+	"
+	obj_compspec_no_elems => "
+		{for a in [1, 2, 3]}
+	"
+	obj_compspec_incompatible_with_multiple_elems => r#"
+		{a:1 for a in [1, 2, 3], b:1}
+	"#
+	obj_compspec_incompatible_with_multiple_elems_w => r#"
+		{a:1, b:1, for a in [1, 2, 3], c:1}
+	"#
+
+	local_method => r#"
+		local
+			a(x) = x,
+			a = function(x) x,
+		; c
+	"#
+	obj_method => r#"
+		{
+			a(x): x,
+			a: function(x) x,
+		}
+	"#
 );
 
 #[test]

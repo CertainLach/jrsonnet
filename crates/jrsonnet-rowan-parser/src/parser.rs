@@ -1,13 +1,12 @@
-use std::{cell::Cell, fmt::Display, rc::Rc};
+use std::{cell::Cell, fmt, rc::Rc};
 
 use miette::{LabeledSpan, SourceOffset, SourceSpan};
-use rowan::{GreenNode, TextRange, TextSize};
+use rowan::{GreenNode, TextRange};
 
 use crate::{
 	event::Event,
-	lex::Lexeme,
 	marker::{CompletedMarker, Marker, Ranger},
-	nodes::{BinaryOperatorKind, Literal, Number, Text, Trivia, UnaryOperatorKind},
+	nodes::{BinaryOperatorKind, Literal, Number, Text, UnaryOperatorKind},
 	token_set::SyntaxKindSet,
 	AstToken, SyntaxKind,
 	SyntaxKind::*,
@@ -19,20 +18,6 @@ pub struct Parse {
 	pub errors: Vec<LocatedSyntaxError>,
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, PartialOrd, Ord)]
-pub enum ExpectedSyntax {
-	Named(&'static str),
-	Unnamed(SyntaxKind),
-}
-impl Display for ExpectedSyntax {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			ExpectedSyntax::Named(n) => write!(f, "{}", n),
-			ExpectedSyntax::Unnamed(u) => write!(f, "{:?}", u),
-		}
-	}
-}
-
 pub struct Parser {
 	// TODO: remove all trivia before feeding to parser?
 	kinds: Vec<SyntaxKind>,
@@ -41,14 +26,11 @@ pub struct Parser {
 	pub entered: u32,
 	pub hints: Vec<(u32, TextRange, String)>,
 	pub last_error_token: usize,
-	expected_syntax: Option<ExpectedSyntax>,
-	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntaxTrackingState>>,
+	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntax>>,
 	steps: Cell<u64>,
 }
 
-const DEFAULT_RECOVERY_SET: SyntaxKindSet = TS![];
-
-#[derive(Clone, Debug, PartialEq, Eq)]
+#[derive(Clone, Debug)]
 pub enum SyntaxError {
 	Unexpected {
 		expected: ExpectedSyntax,
@@ -80,11 +62,11 @@ impl From<LocatedSyntaxError> for LabeledSpan {
 		dbg!(&val);
 		match val.error {
 			SyntaxError::Unexpected { expected, found } => LabeledSpan::new_with_span(
-				Some(format!("expected {}, found {:?}", expected, found)),
+				Some(format!("expected {expected}, found {found:?}")),
 				span,
 			),
 			SyntaxError::Missing { expected } => {
-				LabeledSpan::new_with_span(Some(format!("missing {}", expected)), span)
+				LabeledSpan::new_with_span(Some(format!("missing {expected}")), span)
 			}
 			SyntaxError::Custom { error } | SyntaxError::Hint { error } => {
 				LabeledSpan::new_with_span(Some(error), span)
@@ -102,10 +84,7 @@ impl Parser {
 			entered: 0,
 			last_error_token: 0,
 			hints: vec![],
-			expected_syntax: None,
-			expected_syntax_tracking_state: Rc::new(Cell::new(
-				ExpectedSyntaxTrackingState::Unnamed,
-			)),
+			expected_syntax_tracking_state: Rc::new(Cell::new(ExpectedSyntax::Unnamed(TS![]))),
 			steps: Cell::new(0),
 		}
 	}
@@ -119,9 +98,8 @@ impl Parser {
 		self.hints.truncate(self.hints.len() - amount)
 	}
 	fn clear_expected_syntaxes(&mut self) {
-		self.expected_syntax = None;
 		self.expected_syntax_tracking_state
-			.set(ExpectedSyntaxTrackingState::Unnamed);
+			.set(ExpectedSyntax::Unnamed(TS![]));
 	}
 	pub fn start(&mut self) -> Marker {
 		let start_event_idx = self.events.len();
@@ -167,37 +145,18 @@ impl Parser {
 			self.error_with_no_skip();
 		}
 	}
-	pub(crate) fn error_with_recovery_set(
-		&mut self,
-		recovery_set: SyntaxKindSet,
-	) -> CompletedMarker {
-		self.error_with_recovery_set_no_default(recovery_set.union(DEFAULT_RECOVERY_SET))
-	}
 	pub fn error_with_no_skip(&mut self) -> CompletedMarker {
-		self.error_with_recovery_set_no_default(SyntaxKindSet::ALL)
+		self.error_with_recovery_set(SyntaxKindSet::ALL)
 	}
 
-	pub fn error_with_recovery_set_no_default(
-		&mut self,
-		recovery_set: SyntaxKindSet,
-	) -> CompletedMarker {
-		let expected_syntax = self
-			.expected_syntax
-			.take()
-			.unwrap_or(ExpectedSyntax::Named("unknown"));
+	pub fn error_with_recovery_set(&mut self, recovery_set: SyntaxKindSet) -> CompletedMarker {
+		let expected = self.expected_syntax_tracking_state.get();
 		self.expected_syntax_tracking_state
-			.set(ExpectedSyntaxTrackingState::Unnamed);
+			.set(ExpectedSyntax::Unnamed(TS![]));
 
 		if self.at_end() || self.at_ts(recovery_set) {
-			// let range = self
-			// 	.offset
-			// 	.unwrap_or_else(|| TextRange::at(TextSize::from(0), TextSize::from(0)));
 			let m = self.start();
-			let m = m.complete(self, ERROR_MISSING_TOKEN);
-			self.events.push(Event::Error(SyntaxError::Missing {
-				expected: expected_syntax,
-			}));
-			return m;
+			return m.complete_missing(self, expected);
 		}
 
 		let current_token = self.current();
@@ -206,11 +165,7 @@ impl Parser {
 
 		let m = self.start();
 		self.bump();
-		let m = m.complete(self, ERROR_UNEXPECTED_TOKEN);
-		self.events.push(Event::Error(SyntaxError::Unexpected {
-			expected: expected_syntax,
-			found: current_token,
-		}));
+		let m = m.complete_unexpected(self, expected, current_token);
 		self.clear_expected_syntaxes();
 		m
 	}
@@ -269,8 +224,7 @@ impl Parser {
 	#[must_use]
 	pub(crate) fn expected_syntax_name(&mut self, name: &'static str) -> ExpectedSyntaxGuard {
 		self.expected_syntax_tracking_state
-			.set(ExpectedSyntaxTrackingState::Named);
-		self.expected_syntax = Some(ExpectedSyntax::Named(name));
+			.set(ExpectedSyntax::Named(name));
 
 		ExpectedSyntaxGuard::new(Rc::clone(&self.expected_syntax_tracking_state))
 	}
@@ -278,12 +232,21 @@ impl Parser {
 		self.nth_at(0, kind)
 	}
 	pub fn nth_at(&mut self, n: usize, kind: SyntaxKind) -> bool {
-		if let ExpectedSyntaxTrackingState::Unnamed = self.expected_syntax_tracking_state.get() {
-			self.expected_syntax = Some(ExpectedSyntax::Unnamed(kind));
+		if n == 0 {
+			if let ExpectedSyntax::Unnamed(kinds) = self.expected_syntax_tracking_state.get() {
+				let kinds = kinds.with(kind);
+				self.expected_syntax_tracking_state
+					.set(ExpectedSyntax::Unnamed(kinds))
+			}
 		}
 		self.nth(n) == kind
 	}
 	pub fn at_ts(&mut self, set: SyntaxKindSet) -> bool {
+		if let ExpectedSyntax::Unnamed(kinds) = self.expected_syntax_tracking_state.get() {
+			let kinds = kinds.union(set);
+			self.expected_syntax_tracking_state
+				.set(ExpectedSyntax::Unnamed(kinds))
+		}
 		set.contains(self.current())
 	}
 	pub fn at_end(&mut self) -> bool {
@@ -291,11 +254,11 @@ impl Parser {
 	}
 }
 pub(crate) struct ExpectedSyntaxGuard {
-	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntaxTrackingState>>,
+	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntax>>,
 }
 
 impl ExpectedSyntaxGuard {
-	fn new(expected_syntax_tracking_state: Rc<Cell<ExpectedSyntaxTrackingState>>) -> Self {
+	fn new(expected_syntax_tracking_state: Rc<Cell<ExpectedSyntax>>) -> Self {
 		Self {
 			expected_syntax_tracking_state,
 		}
@@ -305,14 +268,22 @@ impl ExpectedSyntaxGuard {
 impl Drop for ExpectedSyntaxGuard {
 	fn drop(&mut self) {
 		self.expected_syntax_tracking_state
-			.set(ExpectedSyntaxTrackingState::Unnamed);
+			.set(ExpectedSyntax::Unnamed(TS![]));
 	}
 }
 
-#[derive(Debug, Clone, Copy)]
-enum ExpectedSyntaxTrackingState {
-	Named,
-	Unnamed,
+#[derive(Clone, Debug, Copy)]
+pub enum ExpectedSyntax {
+	Named(&'static str),
+	Unnamed(SyntaxKindSet),
+}
+impl fmt::Display for ExpectedSyntax {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			ExpectedSyntax::Named(name) => write!(f, "{name}"),
+			ExpectedSyntax::Unnamed(set) => write!(f, "{set}"),
+		}
+	}
 }
 
 fn expr(p: &mut Parser) -> CompletedMarker {
@@ -357,44 +328,43 @@ fn expr_binding_power(
 	}
 	Ok(lhs)
 }
-fn compspec(p: &mut Parser) {
-	assert!(p.at(T![for]) || p.at(T![if]));
+
+const COMPSPEC: SyntaxKindSet = TS![for if];
+fn compspec(p: &mut Parser) -> CompletedMarker {
+	assert!(p.at_ts(COMPSPEC));
 	if p.at(T![for]) {
 		let m = p.start();
 		p.bump();
 		name(p);
 		p.expect(T![in]);
 		expr(p);
-		m.complete(p, FOR_SPEC);
+		m.complete(p, FOR_SPEC)
 	} else if p.at(T![if]) {
 		let m = p.start();
 		p.bump();
 		expr(p);
-		m.complete(p, IF_SPEC);
+		m.complete(p, IF_SPEC)
 	} else {
 		unreachable!()
 	}
 }
+
 fn comma(p: &mut Parser) -> bool {
-	if p.at(T![,]) {
-		p.bump();
-		true
-	} else {
-		false
-	}
+	comma_with_alternatives(p, TS![])
 }
 fn comma_with_alternatives(p: &mut Parser, set: SyntaxKindSet) -> bool {
 	if p.at(T![,]) {
 		p.bump();
 		true
 	} else if p.at_ts(set) {
-		p.expect_with_no_skip(T![,]);
-		p.bump();
+		let _ex = p.expected_syntax_name("comma");
+		p.expect_with_recovery_set(T![,], TS![]);
 		true
 	} else {
 		false
 	}
 }
+
 fn field_name(p: &mut Parser) {
 	let _e = p.expected_syntax_name("field name");
 	let m = p.start();
@@ -410,48 +380,16 @@ fn field_name(p: &mut Parser) {
 		text(p);
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
-		p.error_with_recovery_set(TS![;]);
+		m.forget(p);
+		p.error_with_recovery_set(TS![; : :: ::: '(']);
 	}
 }
 fn visibility(p: &mut Parser) {
 	if p.at_ts(TS![: :: :::]) {
 		p.bump()
 	} else {
-		p.error_with_recovery_set(TS![]);
+		p.error_with_recovery_set(TS![=]);
 	}
-}
-fn field(p: &mut Parser) {
-	let m = p.start();
-	field_name(p);
-	let plus = if p.at(T![+]) {
-		let r = p.start_ranger();
-		p.bump();
-		Some(r.finish(p))
-	} else {
-		None
-	};
-	let params = if p.at(T!['(']) {
-		// if let Some(plus) = plus {
-		// 	p.custom_error(plus, "can't extend with method");
-		// }
-		params_desc(p);
-		// if p.at(T![+]) {
-		// 	let r = p.start_ranger();
-		// 	p.bump();
-		// 	p.custom_error(r.finish(p), "can't extend with method");
-		// }
-		true
-	} else {
-		false
-	};
-	visibility(p);
-	expr(p);
-
-	if params {
-		m.complete(p, FIELD_METHOD)
-	} else {
-		m.complete(p, FIELD_NORMAL)
-	};
 }
 fn assertion(p: &mut Parser) {
 	let m = p.start();
@@ -468,9 +406,25 @@ fn object(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump_assert(T!['{']);
 
+	let mut elems = 0;
+	let mut compspecs = Vec::new();
 	loop {
 		if p.at(T!['}']) {
 			p.bump();
+			break;
+		}
+		if p.at_ts(COMPSPEC) {
+			if elems == 0 {
+				let m = p.start();
+				m.complete_missing(p, ExpectedSyntax::Named("field definition"));
+			}
+			while p.at_ts(COMPSPEC) {
+				compspecs.push(compspec(p));
+			}
+			if comma_with_alternatives(p, TS![;]) {
+				continue;
+			}
+			p.expect(R_BRACE);
 			break;
 		}
 		let m = p.start();
@@ -481,20 +435,57 @@ fn object(p: &mut Parser) -> CompletedMarker {
 			assertion(p);
 			m.complete(p, MEMBER_ASSERT_STMT)
 		} else {
-			field(p);
-			while p.at(T![for]) || p.at(T![if]) {
-				compspec(p)
+			field_name(p);
+			if p.at(T![+]) {
+				p.bump();
 			}
-			m.complete(p, MEMBER_FIELD)
+			let params = if p.at(T!['(']) {
+				params_desc(p);
+				visibility(p);
+				expr(p);
+				true
+			} else if p.at_ts(TS![: :: :::]) && p.nth_at(1, T![function]) {
+				visibility(p);
+				p.bump_assert(T![function]);
+				params_desc(p);
+				expr(p);
+				true
+			} else {
+				visibility(p);
+				expr(p);
+				false
+			};
+
+			if params {
+				m.complete(p, MEMBER_FIELD_METHOD)
+			} else {
+				m.complete(p, MEMBER_FIELD_NORMAL)
+			}
 		};
-		if comma_with_alternatives(p, SyntaxKindSet::new(&[T![=]])) {
+		elems += 1;
+		while p.at_ts(COMPSPEC) {
+			compspecs.push(compspec(p));
+		}
+		if comma_with_alternatives(p, TS![;]) {
 			continue;
 		}
 		p.expect(R_BRACE);
 		break;
 	}
 
-	m.complete(p, OBJ_BODY_MEMBER_LIST);
+	if elems > 1 && !compspecs.is_empty() {
+		for errored in compspecs {
+			errored.wrap_error(
+				p,
+				"compspec may only be used if there is only one array element",
+			);
+		}
+		m.complete(p, OBJ_BODY_MEMBER_LIST);
+	} else if !compspecs.is_empty() {
+		m.complete(p, OBJ_BODY_COMP);
+	} else {
+		m.complete(p, OBJ_BODY_MEMBER_LIST);
+	}
 	m_t.complete(p, EXPR_OBJECT)
 }
 fn param(p: &mut Parser) {
@@ -530,6 +521,7 @@ fn args_desc(p: &mut Parser) {
 	p.bump_assert(T!['(']);
 
 	let started_named = Cell::new(false);
+	let mut unnamed_after_named = Vec::new();
 
 	loop {
 		if p.at(T![')']) {
@@ -545,7 +537,10 @@ fn args_desc(p: &mut Parser) {
 			started_named.set(true);
 		} else {
 			expr(p);
-			m.complete(p, ARG);
+			let arg = m.complete(p, ARG);
+			if started_named.get() {
+				unnamed_after_named.push(arg)
+			}
 		}
 		if comma(p) {
 			continue;
@@ -556,6 +551,11 @@ fn args_desc(p: &mut Parser) {
 	if p.at(T![tailstrict]) {
 		p.bump()
 	}
+
+	for errored in unnamed_after_named {
+		errored.wrap_error(p, "can't use positional arguments after named");
+	}
+
 	m.complete(p, ARGS_DESC);
 }
 
@@ -564,8 +564,7 @@ fn array(p: &mut Parser) -> CompletedMarker {
 	let m = p.start();
 	p.bump_assert(T!['[']);
 
-	// This vec will have at most one element in case of correct input
-	let mut compspecs = Vec::with_capacity(1);
+	let mut compspecs = Vec::new();
 	let mut elems = 0;
 
 	loop {
@@ -573,16 +572,20 @@ fn array(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 			break;
 		}
+		if elems != 0 && p.at_ts(COMPSPEC) {
+			while p.at_ts(COMPSPEC) {
+				compspecs.push(compspec(p));
+			}
+			if comma(p) {
+				continue;
+			}
+			p.expect(T![']']);
+			break;
+		}
 		elems += 1;
 		expr(p);
-		let c = p.start_ranger();
-		let mut had_spec = false;
-		while p.at(T![for]) || p.at(T![if]) {
-			had_spec = true;
-			compspec(p)
-		}
-		if had_spec {
-			compspecs.push(c.finish(p));
+		while p.at_ts(COMPSPEC) {
+			compspecs.push(compspec(p));
 		}
 		if comma(p) {
 			continue;
@@ -593,10 +596,10 @@ fn array(p: &mut Parser) -> CompletedMarker {
 
 	if elems > 1 && !compspecs.is_empty() {
 		for spec in compspecs {
-			// p.custom_error(
-			// 	spec,
-			// 	"compspec may only be used if there is only one array element",
-			// )
+			spec.wrap_error(
+				p,
+				"compspec may only be used if there is only one array element",
+			);
 		}
 
 		m.complete(p, EXPR_ARRAY)
