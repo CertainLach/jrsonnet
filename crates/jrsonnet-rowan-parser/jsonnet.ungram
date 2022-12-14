@@ -38,15 +38,6 @@ ExprParened =
 
 ExprLiteral =
     Literal
-ExprIntrinsicThisFile =
-    '$intrinsicThisFile'
-ExprIntrinsicId =
-    '$intrinsicId'
-ExprIntrinsic =
-    '$intrinsic'
-    '('
-    name:Name
-    ')'
 ExprString =
     Text
 ExprNumber =
@@ -110,9 +101,6 @@ Expr =
 |   ExprApply
 |   ExprObjExtend
 |   ExprParened
-|   ExprIntrinsicThisFile
-|   ExprIntrinsicId
-|   ExprIntrinsic
 |   ExprString
 |   ExprNumber
 |   ExprLiteral
@@ -167,14 +155,7 @@ Arg =
 
 ObjBodyComp =
     '{'
-    pre:ObjLocalPostComma*
-    '['
-    key:LhsExpr
-    ']'
-    '+'?
-    ':'
-    value:Expr
-    post:ObjLocalPreComma*
+    (MemberComp (',' MemberComp)* ','?)?
     CompSpec*
     '}'
 ObjBodyMemberList =
@@ -184,13 +165,6 @@ ObjBodyMemberList =
 ObjBody =
     ObjBodyComp
 |   ObjBodyMemberList
-
-ObjLocalPostComma =
-    ObjLocal
-    ','
-ObjLocalPreComma =
-    ','
-    ObjLocal
 
 MemberBindStmt = ObjLocal
 MemberAssertStmt = Assertion
@@ -204,6 +178,10 @@ MemberFieldMethod =
     ParamsDesc
     Visibility
     Expr
+MemberComp =
+    MemberBindStmt
+|    MemberFieldNormal
+|   MemberFieldMethod
 Member =
     MemberBindStmt
 |   MemberAssertStmt
@@ -367,7 +345,7 @@ Trivia =
 |   'LIT_SINGLE_LINE_HASH_COMMENT!'
 |   'LIT_SINGLE_LINE_SLASH_COMMENT!'
 
-ParsingError =
+CustomError =
     'ERROR_MISSING_TOKEN!'
 |   'ERROR_UNEXPECTED_TOKEN!'
 |   'ERROR_CUSTOM!'

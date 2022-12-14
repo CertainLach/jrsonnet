@@ -6,15 +6,15 @@ SOURCE_FILE@0..4
   EXPR_NUMBER@0..1
     FLOAT@0..1 "2"
   WHITESPACE@1..2 " "
-  ERROR_UNEXPECTED_TOKEN@2..3
+  ERROR_CUSTOM@2..3
     FLOAT@2..3 "2"
   WHITESPACE@3..4 "\n"
 ===
-LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([EOF, L_BRACK, L_PAREN, L_BRACE, DOT])), found: FLOAT }, range: 2..3 }
+LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 2..3 }
 ===
   x syntax error
    ,----
  1 | 2 2
    :   |
-   :   `-- expected EOF, L_BRACK, L_PAREN, L_BRACE or DOT, found FLOAT
+   :   `-- unexpected tokens after end
    `----

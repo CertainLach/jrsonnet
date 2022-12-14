@@ -5,10 +5,11 @@ use dprint_core::formatting::{PrintItems, PrintOptions};
 use jrsonnet_rowan_parser::{
 	nodes::{
 		ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
-		DestructRest, Expr, Field, FieldName, ForSpec, IfSpec, ImportKind, LhsExpr, Literal,
-		Member, Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Text,
-		UnaryOperator,
+		DestructRest, Expr, FieldName, ForSpec, IfSpec, ImportKind, LhsExpr, Literal, Member, Name,
+		Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Text, UnaryOperator,
+		Visibility, VisibilityKind,
 	},
+	rowan::NodeOrToken,
 	AstNode, AstToken, SyntaxToken,
 };
 
@@ -35,6 +36,10 @@ macro_rules! pi {
 	}};
 	(@s; $o:ident: str($e:expr $(,)?) $($t:tt)*) => {{
 		$o.push_str($e);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: string($e:expr $(,)?) $($t:tt)*) => {{
+		$o.push_string($e);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: nl $($t:tt)*) => {{
@@ -96,8 +101,8 @@ where
 		if let Some(v) = self {
 			v.print()
 		} else {
-			p!(new: str(
-				&format!(
+			p!(new: string(
+				format!(
 					"/*missing {}*/",
 					type_name::<P>().replace("jrsonnet_rowan_parser::generated::nodes::", "")
 				),
@@ -108,18 +113,18 @@ where
 
 impl Printable for SyntaxToken {
 	fn print(&self) -> PrintItems {
-		p!(new: str(&self.to_string()))
+		p!(new: string(self.to_string()))
 	}
 }
 
 impl Printable for Text {
 	fn print(&self) -> PrintItems {
-		p!(new: str(&format!("{}", self)))
+		p!(new: string(format!("{}", self)))
 	}
 }
 impl Printable for Number {
 	fn print(&self) -> PrintItems {
-		p!(new: str(&format!("{}", self)))
+		p!(new: string(format!("{}", self)))
 	}
 }
 
@@ -201,22 +206,10 @@ impl Printable for FieldName {
 		}
 	}
 }
-impl Printable for Field {
+
+impl Printable for Visibility {
 	fn print(&self) -> PrintItems {
-		let mut pi = p!(new:);
-		match self {
-			Field::FieldNormal(n) => {
-				p!(pi: {n.field_name()});
-				if n.plus_token().is_some() {
-					p!(pi: str("+"));
-				}
-				p!(pi: str(": ") {n.expr()});
-			}
-			Field::FieldMethod(m) => {
-				p!(pi: {m.field_name()} {m.params_desc()} str(": ") {m.expr()});
-			}
-		}
-		pi
+		p!(new: string(self.to_string()))
 	}
 }
 
@@ -282,10 +275,82 @@ impl Printable for SliceDesc {
 	}
 }
 
+impl Printable for Member {
+	fn print(&self) -> PrintItems {
+		match self {
+			Member::MemberBindStmt(b) => {
+				p!(new: {b.obj_local()})
+			}
+			Member::MemberAssertStmt(ass) => {
+				p!(new: {ass.assertion()})
+			}
+			Member::MemberFieldNormal(n) => {
+				p!(new: {n.field_name()} if(n.plus_token().is_some())({n.plus_token()}) {n.visibility()} str(" ") {n.expr()})
+			}
+			Member::MemberFieldMethod(_) => todo!(),
+		}
+	}
+}
+
 impl Printable for ObjBody {
 	fn print(&self) -> PrintItems {
 		match self {
-			ObjBody::ObjBodyComp(_) => todo!(),
+			ObjBody::ObjBodyComp(l) => {
+				let mut pi = p!(new: str("{") >i nl);
+				let (children, end_comments) = children_between::<Member>(
+					l.syntax().clone(),
+					l.l_brace_token().map(Into::into).as_ref(),
+					Some(
+						&(l.comp_specs()
+							.next()
+							.expect("at least one spec is defined")
+							.syntax()
+							.clone())
+						.into(),
+					),
+				);
+				for mem in children.into_iter() {
+					if mem.should_start_with_newline {
+						p!(pi: nl);
+					}
+					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
+					p!(pi: {mem.value} str(","));
+					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
+					p!(pi: nl)
+				}
+
+				if end_comments.should_start_with_newline {
+					p!(pi: nl);
+				}
+				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
+
+				let (compspecs, end_comments) = children_between::<CompSpec>(
+					l.syntax().clone(),
+					l.member_comps()
+						.last()
+						.map(|m| m.syntax().clone())
+						.map(Into::into)
+						.or_else(|| l.l_brace_token().map(Into::into))
+						.as_ref(),
+					l.r_brace_token().map(Into::into).as_ref(),
+				);
+				for mem in compspecs.into_iter() {
+					if mem.should_start_with_newline {
+						p!(pi: nl);
+					}
+					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
+					p!(pi: {mem.value});
+					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
+					p!(pi: nl)
+				}
+				if end_comments.should_start_with_newline {
+					p!(pi: nl);
+				}
+				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
+
+				p!(pi: <i str("}"));
+				pi
+			}
 			ObjBody::ObjBodyMemberList(l) => {
 				let mut pi = p!(new: str("{") >i nl);
 				let (children, end_comments) = children_between::<Member>(
@@ -298,18 +363,7 @@ impl Printable for ObjBody {
 						p!(pi: nl);
 					}
 					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
-					match mem.value {
-						Member::MemberBindStmt(b) => {
-							p!(pi: {b.obj_local()})
-						}
-						Member::MemberAssertStmt(ass) => {
-							p!(pi: {ass.assertion()})
-						}
-						Member::MemberField(f) => {
-							p!(pi: {f.field()})
-						}
-					}
-					p!(pi: str(","));
+					p!(pi: {mem.value} str(","));
 					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
 					p!(pi: nl)
 				}
@@ -326,12 +380,12 @@ impl Printable for ObjBody {
 }
 impl Printable for UnaryOperator {
 	fn print(&self) -> PrintItems {
-		p!(new: str(self.text()))
+		p!(new: string(self.text().to_string()))
 	}
 }
 impl Printable for BinaryOperator {
 	fn print(&self) -> PrintItems {
-		p!(new: str(self.text()))
+		p!(new: string(self.text().to_string()))
 	}
 }
 impl Printable for Bind {
@@ -348,12 +402,12 @@ impl Printable for Bind {
 }
 impl Printable for Literal {
 	fn print(&self) -> PrintItems {
-		p!(new: str(&self.syntax().to_string()))
+		p!(new: string(self.syntax().to_string()))
 	}
 }
 impl Printable for ImportKind {
 	fn print(&self) -> PrintItems {
-		p!(new: str(&self.syntax().to_string()))
+		p!(new: string(self.syntax().to_string()))
 	}
 }
 impl Printable for LhsExpr {
@@ -406,9 +460,6 @@ impl Printable for Expr {
 			Expr::ExprParened(p) => {
 				p!(new: str("(") {p.expr()} str(")"))
 			}
-			Expr::ExprIntrinsicThisFile(_) => p!(new: str("$intrinsicThisFile")),
-			Expr::ExprIntrinsicId(_) => p!(new: str("$intrinsicId")),
-			Expr::ExprIntrinsic(i) => p!(new: str("$intrinsic(") {i.name()} str(")")),
 			Expr::ExprString(s) => p!(new: {s.text()}),
 			Expr::ExprNumber(n) => p!(new: {n.number()}),
 			Expr::ExprArray(a) => {
@@ -544,10 +595,6 @@ fn main() {
 
 		local ? = skip;
 
-		local intr = $intrinsic(test);
-		local intrId = $intrinsicId;
-		local intrThisFile = $intrinsicThisFile;
-
 		local ie = a[expr];
 
 		local unary = !a;
@@ -643,7 +690,13 @@ fn main() {
 
 		  2
 
-		  else Template {}
+		  else Template {},
+
+		  compspecs: {
+			obj_with_no_item: {for i in [1, 2, 3]},
+			obj_with_2_items: {a:1, b:2, for i in [1,2,3]},
+		  }
+
 		} + Template
 
 

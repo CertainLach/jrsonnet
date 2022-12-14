@@ -212,45 +212,6 @@ impl ExprLiteral {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprIntrinsicThisFile {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprIntrinsicThisFile {
-	pub fn intrinsic_this_file_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!["$intrinsicThisFile"])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprIntrinsicId {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprIntrinsicId {
-	pub fn intrinsic_id_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!["$intrinsicId"])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprIntrinsic {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprIntrinsic {
-	pub fn intrinsic_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!["$intrinsic"])
-	}
-	pub fn l_paren_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!['('])
-	}
-	pub fn name(&self) -> Option<Name> {
-		support::child(&self.syntax)
-	}
-	pub fn r_paren_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![')'])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprString {
 	pub(crate) syntax: SyntaxNode,
 }
@@ -535,28 +496,7 @@ impl ObjBodyComp {
 	pub fn l_brace_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T!['{'])
 	}
-	pub fn pre(&self) -> AstChildren<ObjLocalPostComma> {
-		support::children(&self.syntax)
-	}
-	pub fn l_brack_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!['['])
-	}
-	pub fn key(&self) -> Option<LhsExpr> {
-		support::child(&self.syntax)
-	}
-	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![']'])
-	}
-	pub fn plus_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![+])
-	}
-	pub fn colon_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![:])
-	}
-	pub fn value(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-	pub fn post(&self) -> AstChildren<ObjLocalPreComma> {
+	pub fn member_comps(&self) -> AstChildren<MemberComp> {
 		support::children(&self.syntax)
 	}
 	pub fn comp_specs(&self) -> AstChildren<CompSpec> {
@@ -564,32 +504,6 @@ impl ObjBodyComp {
 	}
 	pub fn r_brace_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T!['}'])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ObjLocalPostComma {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ObjLocalPostComma {
-	pub fn obj_local(&self) -> Option<ObjLocal> {
-		support::child(&self.syntax)
-	}
-	pub fn comma_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![,])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ObjLocalPreComma {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ObjLocalPreComma {
-	pub fn comma_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![,])
-	}
-	pub fn obj_local(&self) -> Option<ObjLocal> {
-		support::child(&self.syntax)
 	}
 }
 
@@ -610,6 +524,16 @@ impl ObjBodyMemberList {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct MemberBindStmt {
+	pub(crate) syntax: SyntaxNode,
+}
+impl MemberBindStmt {
+	pub fn obj_local(&self) -> Option<ObjLocal> {
+		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ObjLocal {
 	pub(crate) syntax: SyntaxNode,
 }
@@ -618,16 +542,6 @@ impl ObjLocal {
 		support::token(&self.syntax, T![local])
 	}
 	pub fn bind(&self) -> Option<Bind> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct MemberBindStmt {
-	pub(crate) syntax: SyntaxNode,
-}
-impl MemberBindStmt {
-	pub fn obj_local(&self) -> Option<ObjLocal> {
 		support::child(&self.syntax)
 	}
 }
@@ -905,9 +819,6 @@ pub enum Expr {
 	ExprApply(ExprApply),
 	ExprObjExtend(ExprObjExtend),
 	ExprParened(ExprParened),
-	ExprIntrinsicThisFile(ExprIntrinsicThisFile),
-	ExprIntrinsicId(ExprIntrinsicId),
-	ExprIntrinsic(ExprIntrinsic),
 	ExprString(ExprString),
 	ExprNumber(ExprNumber),
 	ExprLiteral(ExprLiteral),
@@ -939,6 +850,13 @@ pub enum CompSpec {
 pub enum Bind {
 	BindDestruct(BindDestruct),
 	BindFunction(BindFunction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum MemberComp {
+	MemberBindStmt(MemberBindStmt),
+	MemberFieldNormal(MemberFieldNormal),
+	MemberFieldMethod(MemberFieldMethod),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1110,13 +1028,13 @@ pub enum TriviaKind {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ParsingError {
+pub struct CustomError {
 	syntax: SyntaxToken,
-	kind: ParsingErrorKind,
+	kind: CustomErrorKind,
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum ParsingErrorKind {
+pub enum CustomErrorKind {
 	ErrorMissingToken,
 	ErrorUnexpectedToken,
 	ErrorCustom,
@@ -1319,51 +1237,6 @@ impl AstNode for ExprParened {
 impl AstNode for ExprLiteral {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == EXPR_LITERAL
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprIntrinsicThisFile {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_INTRINSIC_THIS_FILE
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprIntrinsicId {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_INTRINSIC_ID
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprIntrinsic {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_INTRINSIC
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1676,36 +1549,6 @@ impl AstNode for ObjBodyComp {
 		&self.syntax
 	}
 }
-impl AstNode for ObjLocalPostComma {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == OBJ_LOCAL_POST_COMMA
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ObjLocalPreComma {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == OBJ_LOCAL_PRE_COMMA
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
 impl AstNode for ObjBodyMemberList {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == OBJ_BODY_MEMBER_LIST
@@ -1721,9 +1564,9 @@ impl AstNode for ObjBodyMemberList {
 		&self.syntax
 	}
 }
-impl AstNode for ObjLocal {
+impl AstNode for MemberBindStmt {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == OBJ_LOCAL
+		kind == MEMBER_BIND_STMT
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1736,9 +1579,9 @@ impl AstNode for ObjLocal {
 		&self.syntax
 	}
 }
-impl AstNode for MemberBindStmt {
+impl AstNode for ObjLocal {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == MEMBER_BIND_STMT
+		kind == OBJ_LOCAL
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -2046,21 +1889,6 @@ impl From<ExprParened> for Expr {
 		Expr::ExprParened(node)
 	}
 }
-impl From<ExprIntrinsicThisFile> for Expr {
-	fn from(node: ExprIntrinsicThisFile) -> Expr {
-		Expr::ExprIntrinsicThisFile(node)
-	}
-}
-impl From<ExprIntrinsicId> for Expr {
-	fn from(node: ExprIntrinsicId) -> Expr {
-		Expr::ExprIntrinsicId(node)
-	}
-}
-impl From<ExprIntrinsic> for Expr {
-	fn from(node: ExprIntrinsic) -> Expr {
-		Expr::ExprIntrinsic(node)
-	}
-}
 impl From<ExprString> for Expr {
 	fn from(node: ExprString) -> Expr {
 		Expr::ExprString(node)
@@ -2129,30 +1957,10 @@ impl From<ExprError> for Expr {
 impl AstNode for Expr {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			EXPR_BINARY
-			| EXPR_UNARY
-			| EXPR_SLICE
-			| EXPR_INDEX
-			| EXPR_INDEX_EXPR
-			| EXPR_APPLY
-			| EXPR_OBJ_EXTEND
-			| EXPR_PARENED
-			| EXPR_INTRINSIC_THIS_FILE
-			| EXPR_INTRINSIC_ID
-			| EXPR_INTRINSIC
-			| EXPR_STRING
-			| EXPR_NUMBER
-			| EXPR_LITERAL
-			| EXPR_ARRAY
-			| EXPR_OBJECT
-			| EXPR_ARRAY_COMP
-			| EXPR_IMPORT
-			| EXPR_VAR
-			| EXPR_LOCAL
-			| EXPR_IF_THEN_ELSE
-			| EXPR_FUNCTION
-			| EXPR_ASSERT
-			| EXPR_ERROR => true,
+			EXPR_BINARY | EXPR_UNARY | EXPR_SLICE | EXPR_INDEX | EXPR_INDEX_EXPR | EXPR_APPLY
+			| EXPR_OBJ_EXTEND | EXPR_PARENED | EXPR_STRING | EXPR_NUMBER | EXPR_LITERAL
+			| EXPR_ARRAY | EXPR_OBJECT | EXPR_ARRAY_COMP | EXPR_IMPORT | EXPR_VAR | EXPR_LOCAL
+			| EXPR_IF_THEN_ELSE | EXPR_FUNCTION | EXPR_ASSERT | EXPR_ERROR => true,
 			_ => false,
 		}
 	}
@@ -2166,11 +1974,6 @@ impl AstNode for Expr {
 			EXPR_APPLY => Expr::ExprApply(ExprApply { syntax }),
 			EXPR_OBJ_EXTEND => Expr::ExprObjExtend(ExprObjExtend { syntax }),
 			EXPR_PARENED => Expr::ExprParened(ExprParened { syntax }),
-			EXPR_INTRINSIC_THIS_FILE => {
-				Expr::ExprIntrinsicThisFile(ExprIntrinsicThisFile { syntax })
-			}
-			EXPR_INTRINSIC_ID => Expr::ExprIntrinsicId(ExprIntrinsicId { syntax }),
-			EXPR_INTRINSIC => Expr::ExprIntrinsic(ExprIntrinsic { syntax }),
 			EXPR_STRING => Expr::ExprString(ExprString { syntax }),
 			EXPR_NUMBER => Expr::ExprNumber(ExprNumber { syntax }),
 			EXPR_LITERAL => Expr::ExprLiteral(ExprLiteral { syntax }),
@@ -2198,9 +2001,6 @@ impl AstNode for Expr {
 			Expr::ExprApply(it) => &it.syntax,
 			Expr::ExprObjExtend(it) => &it.syntax,
 			Expr::ExprParened(it) => &it.syntax,
-			Expr::ExprIntrinsicThisFile(it) => &it.syntax,
-			Expr::ExprIntrinsicId(it) => &it.syntax,
-			Expr::ExprIntrinsic(it) => &it.syntax,
 			Expr::ExprString(it) => &it.syntax,
 			Expr::ExprNumber(it) => &it.syntax,
 			Expr::ExprLiteral(it) => &it.syntax,
@@ -2310,6 +2110,45 @@ impl AstNode for Bind {
 		match self {
 			Bind::BindDestruct(it) => &it.syntax,
 			Bind::BindFunction(it) => &it.syntax,
+		}
+	}
+}
+impl From<MemberBindStmt> for MemberComp {
+	fn from(node: MemberBindStmt) -> MemberComp {
+		MemberComp::MemberBindStmt(node)
+	}
+}
+impl From<MemberFieldNormal> for MemberComp {
+	fn from(node: MemberFieldNormal) -> MemberComp {
+		MemberComp::MemberFieldNormal(node)
+	}
+}
+impl From<MemberFieldMethod> for MemberComp {
+	fn from(node: MemberFieldMethod) -> MemberComp {
+		MemberComp::MemberFieldMethod(node)
+	}
+}
+impl AstNode for MemberComp {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			MEMBER_BIND_STMT | MEMBER_FIELD_NORMAL | MEMBER_FIELD_METHOD => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let res = match syntax.kind() {
+			MEMBER_BIND_STMT => MemberComp::MemberBindStmt(MemberBindStmt { syntax }),
+			MEMBER_FIELD_NORMAL => MemberComp::MemberFieldNormal(MemberFieldNormal { syntax }),
+			MEMBER_FIELD_METHOD => MemberComp::MemberFieldMethod(MemberFieldMethod { syntax }),
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			MemberComp::MemberBindStmt(it) => &it.syntax,
+			MemberComp::MemberFieldNormal(it) => &it.syntax,
+			MemberComp::MemberFieldMethod(it) => &it.syntax,
 		}
 	}
 }
@@ -2847,19 +2686,19 @@ impl std::fmt::Display for Trivia {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl AstToken for ParsingError {
+impl AstToken for CustomError {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		ParsingErrorKind::can_cast(kind)
+		CustomErrorKind::can_cast(kind)
 	}
 	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let kind = ParsingErrorKind::cast(syntax.kind())?;
-		Some(ParsingError { syntax, kind })
+		let kind = CustomErrorKind::cast(syntax.kind())?;
+		Some(CustomError { syntax, kind })
 	}
 	fn syntax(&self) -> &SyntaxToken {
 		&self.syntax
 	}
 }
-impl ParsingErrorKind {
+impl CustomErrorKind {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
 			ERROR_MISSING_TOKEN | ERROR_UNEXPECTED_TOKEN | ERROR_CUSTOM => true,
@@ -2876,12 +2715,12 @@ impl ParsingErrorKind {
 		Some(res)
 	}
 }
-impl ParsingError {
-	pub fn kind(&self) -> ParsingErrorKind {
+impl CustomError {
+	pub fn kind(&self) -> CustomErrorKind {
 		self.kind
 	}
 }
-impl std::fmt::Display for ParsingError {
+impl std::fmt::Display for CustomError {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2902,6 +2741,11 @@ impl std::fmt::Display for CompSpec {
 	}
 }
 impl std::fmt::Display for Bind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for MemberComp {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2992,21 +2836,6 @@ impl std::fmt::Display for ExprParened {
 	}
 }
 impl std::fmt::Display for ExprLiteral {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprIntrinsicThisFile {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprIntrinsicId {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprIntrinsic {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -3111,27 +2940,17 @@ impl std::fmt::Display for ObjBodyComp {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ObjLocalPostComma {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ObjLocalPreComma {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
 impl std::fmt::Display for ObjBodyMemberList {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ObjLocal {
+impl std::fmt::Display for MemberBindStmt {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for MemberBindStmt {
+impl std::fmt::Display for ObjLocal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

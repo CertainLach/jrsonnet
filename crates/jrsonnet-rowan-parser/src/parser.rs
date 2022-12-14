@@ -114,7 +114,13 @@ impl Parser {
 	pub fn parse(mut self) -> Vec<Event> {
 		let m = self.start();
 		expr(&mut self);
-		self.expect(EOF);
+		if !self.at(EOF) {
+			let m = self.start();
+			while !self.at(EOF) {
+				self.bump();
+			}
+			m.complete_error(&mut self, "unexpected tokens after end");
+		}
 		m.complete(&mut self, SOURCE_FILE);
 
 		self.events
@@ -832,21 +838,6 @@ fn lhs_basic(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 		let m = p.start();
 		name(p);
 		m.complete(p, EXPR_VAR)
-	} else if p.at(INTRINSIC_THIS_FILE) {
-		let m = p.start();
-		p.bump();
-		m.complete(p, EXPR_INTRINSIC_THIS_FILE)
-	} else if p.at(INTRINSIC_ID) {
-		let m = p.start();
-		p.bump();
-		m.complete(p, EXPR_INTRINSIC_ID)
-	} else if p.at(INTRINSIC) {
-		let m = p.start();
-		p.bump();
-		p.expect(T!['(']);
-		name(p);
-		p.expect(T![')']);
-		m.complete(p, EXPR_INTRINSIC)
 	} else if p.at(T![if]) {
 		let m = p.start();
 		p.bump();

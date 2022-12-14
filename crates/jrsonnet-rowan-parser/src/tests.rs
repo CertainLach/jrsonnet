@@ -228,6 +228,14 @@ mk_test!(
 			a: function(x) x,
 		}
 	"#
+
+	continue_after_total_failure => r#"
+		local intr = $intrinsic(test);
+
+		local a = 1, b = 2, c = a + b;
+
+		[c]
+	"#
 );
 
 #[test]
