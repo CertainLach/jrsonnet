@@ -212,6 +212,10 @@ mk_test!(
 		{a:1, b:1, for a in [1, 2, 3], c:1}
 	"#
 
+	obj_compspec_incompatible_with_asserts => r#"
+		{assert 1, a: 1 for a in [1,2,3]}
+	"#
+
 	local_method => r#"
 		local
 			a(x) = x,
