@@ -408,6 +408,7 @@ fn object(p: &mut Parser) -> CompletedMarker {
 
 	let mut elems = 0;
 	let mut compspecs = Vec::new();
+	let mut asserts = Vec::new();
 	loop {
 		if p.at(T!['}']) {
 			p.bump();
@@ -430,10 +431,10 @@ fn object(p: &mut Parser) -> CompletedMarker {
 		let m = p.start();
 		if p.at(T![local]) {
 			obj_local(p);
-			m.complete(p, MEMBER_BIND_STMT)
+			m.complete(p, MEMBER_BIND_STMT);
 		} else if p.at(T![assert]) {
 			assertion(p);
-			m.complete(p, MEMBER_ASSERT_STMT)
+			asserts.push(m.complete(p, MEMBER_ASSERT_STMT));
 		} else {
 			field_name(p);
 			if p.at(T![+]) {
@@ -455,14 +456,14 @@ fn object(p: &mut Parser) -> CompletedMarker {
 				expr(p);
 				false
 			};
+			elems += 1;
 
 			if params {
 				m.complete(p, MEMBER_FIELD_METHOD)
 			} else {
 				m.complete(p, MEMBER_FIELD_NORMAL)
-			}
+			};
 		};
-		elems += 1;
 		while p.at_ts(COMPSPEC) {
 			compspecs.push(compspec(p));
 		}
@@ -482,6 +483,9 @@ fn object(p: &mut Parser) -> CompletedMarker {
 		}
 		m.complete(p, OBJ_BODY_MEMBER_LIST);
 	} else if !compspecs.is_empty() {
+		for errored in asserts {
+			errored.wrap_error(p, "asserts can't be used in object comprehensions");
+		}
 		m.complete(p, OBJ_BODY_COMP);
 	} else {
 		m.complete(p, OBJ_BODY_MEMBER_LIST);
