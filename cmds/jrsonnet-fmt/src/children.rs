@@ -3,13 +3,11 @@
 use std::{fmt::Debug, mem};
 
 use jrsonnet_rowan_parser::{
-	nodes::{Trivia, TriviaKind},
-	AstNode, AstToken, SyntaxElement,
-	SyntaxKind::*,
-	SyntaxNode, TS,
+	nodes::{CustomError, Trivia, TriviaKind},
+	AstNode, AstToken, SyntaxElement, SyntaxNode, TS,
 };
 
-pub type ChildTrivia = Vec<Trivia>;
+pub type ChildTrivia = Vec<Result<Trivia, String>>;
 
 /// Node should have no non-trivia tokens before element
 pub fn trivia_before(node: SyntaxNode, end: Option<&SyntaxElement>) -> ChildTrivia {
@@ -20,12 +18,14 @@ pub fn trivia_before(node: SyntaxNode, end: Option<&SyntaxElement>) -> ChildTriv
 		}
 
 		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
-			out.push(trivia);
+			out.push(Ok(trivia));
+		} else if CustomError::can_cast(item.kind()) {
+			out.push(Err(item.to_string()));
 		} else if end.is_none() {
 			break;
 		} else {
 			assert!(
-				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
 			)
@@ -46,10 +46,12 @@ pub fn trivia_after(node: SyntaxNode, start: Option<&SyntaxElement>) -> ChildTri
 	let mut out = Vec::new();
 	for item in iter {
 		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
-			out.push(trivia);
+			out.push(Ok(trivia));
+		} else if CustomError::can_cast(item.kind()) {
+			out.push(Err(item.to_string()))
 		} else {
 			assert!(
-				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
 			)
@@ -74,12 +76,14 @@ pub fn trivia_between(
 	let mut out = Vec::new();
 	for item in iter.take_while(|i| Some(i) != end) {
 		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
-			out.push(trivia);
+			out.push(Ok(trivia));
+		} else if CustomError::can_cast(item.kind()) {
+			out.push(Err(item.to_string()))
 		} else if loose {
 			break;
 		} else {
 			assert!(
-				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
 			)
@@ -120,11 +124,16 @@ pub fn should_start_with_newline(prev_inline: Option<&ChildTrivia>, tt: &ChildTr
 fn count_newlines_before(tt: &ChildTrivia) -> usize {
 	let mut nl_count = 0;
 	for t in tt {
-		match t.kind() {
-			TriviaKind::Whitespace => {
-				nl_count += t.text().bytes().filter(|b| *b == b'\n').count();
+		match t {
+			Ok(t) => match t.kind() {
+				TriviaKind::Whitespace => {
+					nl_count += t.text().bytes().filter(|b| *b == b'\n').count();
+				}
+				_ => break,
+			},
+			Err(_) => {
+				nl_count += 1;
 			}
-			_ => break,
 		}
 	}
 	nl_count
@@ -132,19 +141,22 @@ fn count_newlines_before(tt: &ChildTrivia) -> usize {
 fn count_newlines_after(tt: &ChildTrivia) -> usize {
 	let mut nl_count = 0;
 	for t in tt.iter().rev() {
-		match t.kind() {
-			TriviaKind::Whitespace => {
-				nl_count += t.text().bytes().filter(|b| *b == b'\n').count();
-			}
-			TriviaKind::SingleLineHashComment => {
-				nl_count += 1;
-				break;
-			}
-			TriviaKind::SingleLineSlashComment => {
-				nl_count += 1;
-				break;
-			}
-			_ => {}
+		match t {
+			Ok(t) => match t.kind() {
+				TriviaKind::Whitespace => {
+					nl_count += t.text().bytes().filter(|b| *b == b'\n').count();
+				}
+				TriviaKind::SingleLineHashComment => {
+					nl_count += 1;
+					break;
+				}
+				TriviaKind::SingleLineSlashComment => {
+					nl_count += 1;
+					break;
+				}
+				_ => {}
+			},
+			Err(_) => nl_count += 1,
 		}
 	}
 	nl_count
@@ -187,16 +199,18 @@ pub fn children<T: AstNode + Debug>(
 				|| current_child.is_none()
 				|| trivia.text().contains('\n') && !is_single_line_comment
 			{
-				next.push(trivia.clone());
+				next.push(Ok(trivia.clone()));
 				started_next = true;
 			} else {
 				let cur = current_child.as_mut().expect("checked not none");
-				cur.inline_trivia.push(trivia);
+				cur.inline_trivia.push(Ok(trivia));
 				if is_single_line_comment {
 					started_next = true;
 				}
 			}
 			had_some = true;
+		} else if CustomError::can_cast(item.kind()) {
+			next.push(Err(item.to_string()))
 		} else if loose {
 			if had_some {
 				break;
@@ -204,7 +218,7 @@ pub fn children<T: AstNode + Debug>(
 			started_next = true;
 		} else {
 			assert!(
-				TS![, ;].contains(item.kind()) || item.kind() == ERROR,
+				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
 			)

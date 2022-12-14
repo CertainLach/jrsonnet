@@ -1,0 +1,74 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "local intr = $intrinsic(test);\n\nlocal a = 1, b = 2, c = a + b;\n\n[c]\n"
+---
+SOURCE_FILE@0..68
+  EXPR_LOCAL@0..29
+    LOCAL_KW@0..5 "local"
+    WHITESPACE@5..6 " "
+    BIND_DESTRUCT@6..14
+      DESTRUCT_FULL@6..10
+        NAME@6..10
+          IDENT@6..10 "intr"
+      WHITESPACE@10..11 " "
+      ASSIGN@11..12 "="
+      WHITESPACE@12..13 " "
+      EXPR_LITERAL@13..14
+        DOLLAR@13..14 "$"
+    ERROR_UNEXPECTED_TOKEN@14..23
+      IDENT@14..23 "intrinsic"
+    EXPR_PARENED@23..29
+      L_PAREN@23..24 "("
+      EXPR_VAR@24..28
+        NAME@24..28
+          IDENT@24..28 "test"
+      R_PAREN@28..29 ")"
+  ERROR_CUSTOM@29..67
+    SEMI@29..30 ";"
+    WHITESPACE@30..32 "\n\n"
+    LOCAL_KW@32..37 "local"
+    WHITESPACE@37..38 " "
+    IDENT@38..39 "a"
+    WHITESPACE@39..40 " "
+    ASSIGN@40..41 "="
+    WHITESPACE@41..42 " "
+    FLOAT@42..43 "1"
+    COMMA@43..44 ","
+    WHITESPACE@44..45 " "
+    IDENT@45..46 "b"
+    WHITESPACE@46..47 " "
+    ASSIGN@47..48 "="
+    WHITESPACE@48..49 " "
+    FLOAT@49..50 "2"
+    COMMA@50..51 ","
+    WHITESPACE@51..52 " "
+    IDENT@52..53 "c"
+    WHITESPACE@53..54 " "
+    ASSIGN@54..55 "="
+    WHITESPACE@55..56 " "
+    IDENT@56..57 "a"
+    WHITESPACE@57..58 " "
+    PLUS@58..59 "+"
+    WHITESPACE@59..60 " "
+    IDENT@60..61 "b"
+    SEMI@61..62 ";"
+    WHITESPACE@62..64 "\n\n"
+    L_BRACK@64..65 "["
+    IDENT@65..66 "c"
+    R_BRACK@66..67 "]"
+  WHITESPACE@67..68 "\n"
+===
+LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA])), found: IDENT }, range: 14..23 }
+LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 29..67 }
+===
+  x syntax error
+   ,-[1:1]
+ 1 | ,-> local intr = $intrinsic(test);
+   : ||              ^^^^|^^^^
+   : ||                  `-- expected L_BRACK, L_PAREN, L_BRACE, SEMI, DOT or COMMA, found IDENT
+ 2 | |
+ 3 | |   local a = 1, b = 2, c = a + b;
+ 4 | |
+ 5 | |-> [c]
+   : `---- unexpected tokens after end
+   `----

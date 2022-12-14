@@ -247,9 +247,6 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		"$" => "DOLLAR";
 		"=" => "ASSIGN";
 		"?" => "QUESTION_MARK";
-		"$intrinsicThisFile" => "INTRINSIC_THIS_FILE";
-		"$intrinsicId" => "INTRINSIC_ID";
-		"$intrinsic" => "INTRINSIC";
 		// Literals
 		lit("FLOAT") => r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?";
 		error("FLOAT_JUNK_AFTER_POINT") => r"(?:0|[1-9][0-9]*)\.[^0-9]";

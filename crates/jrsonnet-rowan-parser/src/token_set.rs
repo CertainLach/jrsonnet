@@ -27,7 +27,10 @@ impl SyntaxKindSet {
 		SyntaxKindSet(self.0 | mask(kind))
 	}
 
-	pub const fn contains(&self, kind: SyntaxKind) -> bool {
+	pub fn contains(&self, kind: SyntaxKind) -> bool {
+		if !is_token(kind) {
+			return false;
+		}
 		self.0 & mask(kind) != 0
 	}
 }
@@ -74,6 +77,9 @@ impl fmt::Debug for SyntaxKindSet {
 }
 
 const fn mask(kind: SyntaxKind) -> u128 {
+	if kind as u32 > 128 {
+		panic!("mask for not a token kind")
+	}
 	1u128 << (kind as u128)
 }
 
@@ -94,4 +100,7 @@ fn sanity() {
 		(SyntaxKind::LEXING_ERROR as u32) < 127,
 		"can't keep KindSet as bitset"
 	);
+}
+fn is_token(kind: SyntaxKind) -> bool {
+	(kind as u32) < 127
 }
