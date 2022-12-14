@@ -28,7 +28,7 @@ pub enum FormatError {
 
 impl From<FormatError> for Error {
 	fn from(e: FormatError) -> Self {
-		Self::new(Format(e))
+		Self::new(Format(e), vec![], vec![])
 	}
 }
 

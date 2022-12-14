@@ -122,6 +122,7 @@ enum CacheValue {
 #[derive(Trace)]
 #[trace(tracking(force))]
 pub struct ObjValueInternals {
+	location: Option<ExprLocation>,
 	sup: Option<ObjValue>,
 	this: Option<ObjValue>,
 
@@ -177,6 +178,7 @@ impl ObjValue {
 		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	) -> Self {
 		Self(Cc::new(ObjValueInternals {
+			location: None,
 			sup,
 			this: None,
 			assertions,
@@ -215,6 +217,7 @@ impl ObjValue {
 	#[must_use]
 	pub fn with_this(&self, this: Self) -> Self {
 		Self(Cc::new(ObjValueInternals {
+			location: self.0.location.clone(),
 			sup: self.0.sup.clone(),
 			assertions: self.0.assertions.clone(),
 			assertions_ran: RefCell::new(GcHashSet::new()),
@@ -236,6 +239,20 @@ impl ObjValue {
 			return false;
 		}
 		self.0.sup.as_ref().map_or(true, Self::is_empty)
+	}
+
+	pub fn field_location(&self, field: IStr) -> Option<Option<ExprLocation>> {
+		let mut current = Some(self);
+		while let Some(obj) = current.take() {
+			if let Some(member) = obj.0.this_entries.get(&field) {
+				return Some(member.location.clone());
+			};
+			if let Some(sup) = &obj.0.sup {
+				current.replace(sup);
+			}
+		}
+
+		None
 	}
 
 	/// Run callback for every field found in object
@@ -304,7 +321,7 @@ impl ObjValue {
 						break;
 					}
 					fields[j] = fields[k].clone();
-					j = k
+					j = k;
 				}
 				fields[j] = x;
 			}
@@ -518,6 +535,7 @@ impl Hash for ObjValue {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
+	location: Option<ExprLocation>,
 	sup: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
 	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
@@ -529,6 +547,7 @@ impl ObjValueBuilder {
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
+			location: None,
 			sup: None,
 			map: GcHashMap::with_capacity(capacity),
 			assertions: Vec::new(),
@@ -541,6 +560,10 @@ impl ObjValueBuilder {
 	}
 	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
 		self.sup = Some(super_obj);
+		self
+	}
+	pub fn with_location(&mut self, location: ExprLocation) -> &mut Self {
+		self.location = Some(location);
 		self
 	}
 

@@ -110,6 +110,16 @@ pub mod tests {
 					line_end_offset: 67
 				}
 			]
-		)
+		);
+		assert_eq!(
+			offset_to_location("\n\n1234567890", &[2]),
+			[CodeLocation {
+				offset: 0,
+				line: 1,
+				column: 2,
+				line_start_offset: 0,
+				line_end_offset: 11,
+			}]
+		);
 	}
 }

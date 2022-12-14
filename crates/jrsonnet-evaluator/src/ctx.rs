@@ -65,7 +65,7 @@ impl Context {
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
 		use std::cmp::Ordering;
 
-		use crate::throw;
+		use crate::{error::ErrorBuilder, throw, Error};
 
 		if let Some(val) = self.0.bindings.get(&name).cloned() {
 			return Ok(val);
@@ -77,14 +77,17 @@ impl Context {
 			if conf < 0.8 {
 				return;
 			}
-			heap.push((conf, k));
+			heap.push((conf, k, ));
 		});
 		heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
-		throw!(VariableIsNotDefined(
+		let mut error = Error::builder(VariableIsNotDefined(
 			name,
-			heap.into_iter().map(|(_, k)| k).collect()
-		))
+			heap.into_iter().map(|(_, k)| k).collect(),
+		));
+
+		Err(error.build())
+		// throw!()
 	}
 	pub fn contains_binding(&self, name: IStr) -> bool {
 		self.0.bindings.contains_key(&name)

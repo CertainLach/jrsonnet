@@ -1,12 +1,22 @@
 use std::{
 	any::Any,
 	path::{Path, PathBuf},
+	rc::Rc,
 };
 
+use annotate_snippets::{
+	display_list::{DisplayLine, DisplayList, FormatOptions, Margin},
+	formatter::style::Stylesheet,
+	snippet::{self, Slice, Snippet, SourceAnnotation},
+};
+use hashbrown::HashMap;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{CodeLocation, Source};
 
-use crate::{error::ErrorKind, Error};
+use crate::{
+	error::{Annotation, AnnotationType, ErrorKind},
+	Error,
+};
 
 /// The way paths should be displayed
 #[derive(Clone, Trace)]
@@ -110,7 +120,7 @@ impl TraceFormat for CompactFormat {
 		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		if let ErrorKind::ImportSyntaxError { path, error } = error.error() {
+		if let ErrorKind::ImportSyntaxError { path, error } = &*error.error() {
 			use std::fmt::Write;
 
 			writeln!(out)?;
@@ -140,7 +150,6 @@ impl TraceFormat for CompactFormat {
 		}
 		let file_names = error
 			.trace()
-			.0
 			.iter()
 			.map(|el| &el.location)
 			.map(|location| {
@@ -168,7 +177,7 @@ impl TraceFormat for CompactFormat {
 			.map(String::len)
 			.max()
 			.unwrap_or(0);
-		for (el, file) in error.trace().0.iter().zip(file_names) {
+		for (el, file) in error.trace().iter().zip(file_names) {
 			writeln!(out)?;
 			if let Some(file) = file {
 				write!(
@@ -207,7 +216,7 @@ impl TraceFormat for JsFormat {
 		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		write!(out, "{}", error.error())?;
-		for item in &error.trace().0 {
+		for item in error.trace().iter() {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {
@@ -247,15 +256,20 @@ pub struct ExplainingFormat {
 }
 #[cfg(feature = "explaining-traces")]
 impl TraceFormat for ExplainingFormat {
+	#[allow(clippy::too_many_lines)]
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
 		error: &Error,
 	) -> Result<(), std::fmt::Error> {
-		write!(out, "{}", error.error())?;
-		if let ErrorKind::ImportSyntaxError { path, error } = error.error() {
+		if let ErrorKind::ImportSyntaxError {
+			path,
+			error: parse_error,
+		} = &*error.error()
+		{
+			write!(out, "{}", error.error())?;
 			writeln!(out)?;
-			let offset = error.location.offset;
+			let offset = parse_error.location.offset;
 			let location = path
 				.map_source_locations(&[offset as u32])
 				.into_iter()
@@ -272,9 +286,139 @@ impl TraceFormat for ExplainingFormat {
 				&end_location,
 				"syntax error",
 			)?;
+		} else {
+			dbg!(error);
+			let mut per_source = <HashMap<Source, Vec<&Annotation>>>::new();
+			// dbg!(error.annotations());
+
+			for annotation in error.annotations() {
+				let annotations = per_source.entry(annotation.location.0.clone()).or_default();
+				annotations.push(annotation);
+			}
+
+			let mut slices = Vec::new();
+			// Annotate-snippets has broken \t support
+			let sources = per_source
+				.iter()
+				.map(|(s, _)| s.code().replace('\t', " "))
+				.collect::<Vec<_>>();
+			for (i, (source, annotations)) in per_source.iter().enumerate() {
+				slices.push(Slice {
+					source: &sources[i],
+					line_start: 0,
+					fold: false,
+					origin: Some("It sucks."),
+					annotations: annotations
+						.iter()
+						.map(|a| SourceAnnotation {
+							annotation_type: match a.ty {
+								AnnotationType::Error => snippet::AnnotationType::Error,
+								AnnotationType::Warning => snippet::AnnotationType::Warning,
+								AnnotationType::Note => snippet::AnnotationType::Note,
+							},
+							label: &a.note,
+							range: (a.location.1 as usize + 1, a.location.2 as usize + 1),
+						})
+						.collect(),
+				});
+			}
+
+			let title = error.error().to_string();
+
+			let snippet = Snippet {
+				opt: FormatOptions {
+					color: true,
+					margin: Some(Margin::new(0, 0, 0, 0, 140, 0)),
+					..FormatOptions::default()
+				},
+				title: Some(snippet::Annotation {
+					id: None,
+					label: Some(&title),
+					annotation_type: snippet::AnnotationType::Error,
+				}),
+				footer: error
+					.global_annotations()
+					.iter()
+					.map(|a| snippet::Annotation {
+						id: None,
+						label: Some(&a.note),
+						annotation_type: match a.ty {
+							AnnotationType::Error => snippet::AnnotationType::Error,
+							AnnotationType::Warning => snippet::AnnotationType::Warning,
+							AnnotationType::Note => snippet::AnnotationType::Note,
+						},
+					})
+					.collect(),
+				slices,
+			};
+			dbg!(&snippet);
+			let mut dl = DisplayList::from(snippet);
+			dbg!(&dl.body);
+			// Remove useless first span
+			if let Some(first_non_raw) = dl
+				.body
+				.iter()
+				.position(|i| !matches!(i, DisplayLine::Raw(_)))
+			{
+				if let Some(non_folds) = dl
+					.body
+					.iter()
+					.skip(first_non_raw)
+					.position(|i| matches!(i, DisplayLine::Fold { .. }))
+				{
+					let mut is_useless = true;
+					for line in dl.body.iter().skip(first_non_raw).take(non_folds) {
+						match line {
+							DisplayLine::Source {
+								lineno: _,
+								inline_marks,
+								line: _,
+							} => {
+								if !inline_marks.is_empty() {
+									is_useless = false;
+									break;
+								}
+							}
+							DisplayLine::Raw(_) => {
+								is_useless = false;
+								break;
+							}
+							DisplayLine::Fold { .. } => unreachable!(),
+						}
+					}
+					if is_useless {
+						if let Some(next_useful_in) = dl
+							.body
+							.iter()
+							.skip(first_non_raw)
+							.skip(non_folds)
+							.position(|i| !matches!(i, DisplayLine::Fold { .. }))
+						{
+							dl.body
+								.drain(first_non_raw..(first_non_raw + non_folds + next_useful_in))
+								.count();
+						}
+					}
+				}
+			}
+
+			// Replace tabs, as this library doesn't supports them
+			for i in dl.body.iter_mut() {
+				match i {
+					DisplayLine::Source {
+						lineno,
+						inline_marks,
+						line,
+					} => {}
+					_ => {}
+					_ => {}
+				}
+			}
+
+			write!(out, "{dl}")?;
 		}
 		let trace = &error.trace();
-		for item in &trace.0 {
+		for item in trace.iter() {
 			writeln!(out)?;
 			let desc = &item.desc;
 			if let Some(source) = &item.location {

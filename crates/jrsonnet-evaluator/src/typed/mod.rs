@@ -92,7 +92,7 @@ fn push_type_description(
 	State::push_description(error_reason, || match item() {
 		Ok(_) => Ok(()),
 		Err(mut e) => {
-			if let ErrorKind::TypeError(e) = &mut e.error_mut() {
+			if let ErrorKind::TypeError(e) = &mut *e.error_mut() {
 				(e.1).0.push(path());
 			}
 			Err(e)
@@ -217,9 +217,9 @@ impl CheckType for ComplexValType {
 						Ok(()) => {
 							return Ok(());
 						}
-						Err(e) => match e.error() {
+						Err(e) => match &*e.error() {
 							ErrorKind::TypeError(e) => errors.push(e.clone()),
-							_ => return Err(e),
+							_ => return Err(e.clone()),
 						},
 					}
 				}
@@ -232,9 +232,9 @@ impl CheckType for ComplexValType {
 						Ok(()) => {
 							return Ok(());
 						}
-						Err(e) => match e.error() {
+						Err(e) => match &*e.error() {
 							ErrorKind::TypeError(e) => errors.push(e.clone()),
-							_ => return Err(e),
+							_ => return Err(e.clone()),
 						},
 					}
 				}

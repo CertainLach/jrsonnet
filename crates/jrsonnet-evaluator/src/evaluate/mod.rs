@@ -18,7 +18,7 @@ use crate::{
 	throw,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
-	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
+	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
 	Unbound, Val,
 };
 pub mod destructure;
@@ -485,11 +485,25 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 							heap.push((conf, field));
 						}
 						heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+						dbg!(&heap);
 
-						throw!(NoSuchField(
+						let mut error = Error::builder(NoSuchField(
 							key.clone().into_flat(),
-							heap.into_iter().map(|(_, v)| v).collect()
-						))
+							vec![], // heap.into_iter().map(|(_, v)| v).collect(),
+						));
+						for (_, name) in heap {
+							if let Some(location) =
+								v.field_location(name.clone()).expect("field is exists")
+							{
+								error = error
+									.annotate(location, format!("similarly named field {name:?}"));
+							} else {
+								error = error.annotate_global(format!(
+									"similarly named field {name:?} (defined in native)"
+								));
+							}
+						}
+						Err(error.build())
 					}
 					Err(e) => Err(e),
 				},
