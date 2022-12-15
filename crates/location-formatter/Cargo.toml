@@ -7,3 +7,7 @@ edition = "2021"
 
 [dependencies]
 smallvec = "1.10.0"
+range-map = "0.2.0"
+random_color = "0.6.1"
+rand = "0.8.5"
+num-traits = "0.2.15"

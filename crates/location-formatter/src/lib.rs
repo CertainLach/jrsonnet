@@ -1,19 +1,24 @@
-use std::ops::{RangeBounds, RangeInclusive};
+use std::{collections::HashMap, ops::RangeInclusive};
 
 // use segment::{Segment, SegmentBuffer};
 type TextPart = Segment<char, Formatting>;
 type Text = SegmentBuffer<char, Formatting>;
 
 mod segment;
+use range_map::{Range, RangeSet};
 use segment::{Meta, Segment, SegmentBuffer};
-use smallvec::smallvec;
+use single_line::{AnnotationId, LineAnnotation, Opts};
+
+mod chars;
+mod single_line;
 
 #[derive(Default, Clone, PartialEq, Debug)]
-struct Formatting {
+pub struct Formatting {
 	color: Option<u32>,
 	bg_color: Option<u32>,
 	bold: bool,
 	underline: bool,
+	decoration: bool,
 }
 impl Meta for Formatting {
 	fn try_merge(&mut self, other: &Self) -> bool {
@@ -57,6 +62,27 @@ impl Formatting {
 			..Default::default()
 		}
 	}
+	fn decoration(mut self) -> Self {
+		self.decoration = true;
+		self
+	}
+}
+
+pub(crate) fn print_buf(buf: &Text) {
+	for frag in buf.segments() {
+		if let Some(color) = frag.meta().color {
+			let [r, g, b, _a] = u32::to_be_bytes(color);
+			print!("\x1b[38;2;{r};{g};{b}m");
+		}
+		if let Some(bg_color) = frag.meta().bg_color {
+			let [r, g, b, _a] = u32::to_be_bytes(bg_color);
+			print!("\x1b[48;2;{r};{g};{b}m");
+		}
+		print!("{}", frag.iter().copied().collect::<String>());
+		if frag.meta().color.is_some() || frag.meta().bg_color.is_some() {
+			print!("\x1b[0m");
+		}
+	}
 }
 
 #[derive(Clone)]
@@ -65,44 +91,33 @@ struct RawLine {
 }
 impl RawLine {
 	fn print(&self) {
-		for frag in self.data.iter() {
-			if let Some(color) = frag.meta().color {
-				let [r, g, b, _a] = u32::to_be_bytes(color);
-				print!("\x1b[38;2;{r};{g};{b}m");
-			}
-			if let Some(bg_color) = frag.meta().bg_color {
-				let [r, g, b, _a] = u32::to_be_bytes(bg_color);
-				print!("\x1b[48;2;{r};{g};{b}m");
-			}
-			print!("{}", frag.iter().copied().collect::<String>());
-			if frag.meta().color.is_some() || frag.meta().bg_color.is_some() {
-				print!("\x1b[0m");
-			}
-		}
+		print_buf(&self.data);
+		// for frag in self.data.iter() {}
 	}
 }
 
-#[derive(Debug)]
-struct InlineAnnotation {
-	range: RangeInclusive<usize>,
-	range_fmt: Formatting,
-	range_char: char,
-	text: Text,
+struct AnnotationLine {
+	prefix: Text,
+	line: Text,
+	annotation: Option<AnnotationId>,
 }
 
-
+struct GapLine {
+	prefix: Text,
+	line: Text,
+}
 
 struct TextLine {
 	prefix: Text,
 	line_num: usize,
 	line: Text,
-	inline_annotations: Vec<InlineAnnotation>,
-	annotation_buffers: Vec<Text>,
+	annotations: Vec<LineAnnotation>,
+	annotation_buffers: Vec<(Option<AnnotationId>, Text)>,
 }
 impl TextLine {
 	fn add_prefix(&mut self, this: Text, annotations: Text) {
 		self.prefix.extend(this);
-		for ele in self.annotation_buffers.iter_mut() {
+		for (_, ele) in self.annotation_buffers.iter_mut() {
 			ele.splice(0..0, Some(annotations.clone()));
 		}
 	}
@@ -143,18 +158,31 @@ fn cons_slices<T>(mut slice: &mut [T], test: impl Fn(&T) -> bool) -> Vec<&mut [T
 
 enum Line {
 	Text(TextLine),
-	TextAnnotation(RawLine),
+	Annotation(AnnotationLine),
 	Raw(RawLine),
-	Delimiter,
 	Nop,
-	Gap(RawLine),
+	Gap(GapLine),
 }
 impl Line {
+	fn text_mut(&mut self) -> Option<&mut Text> {
+		Some(match self {
+			Line::Text(t) => &mut t.line,
+			Line::Gap(t) => &mut t.line,
+			Line::Annotation(t) => &mut t.line,
+			_ => return None,
+		})
+	}
 	fn is_text(&self) -> bool {
 		matches!(self, Self::Text(_))
 	}
-	fn is_text_annotation(&self) -> bool {
-		matches!(self, Self::TextAnnotation(_))
+	fn is_annotation(&self) -> bool {
+		matches!(self, Self::Annotation(_))
+	}
+	fn as_annotation(&self) -> Option<&AnnotationLine> {
+		match self {
+			Self::Annotation(a) => Some(a),
+			_ => None,
+		}
 	}
 	fn is_gap(&self) -> bool {
 		matches!(self, Self::Gap(_))
@@ -165,7 +193,7 @@ impl Line {
 			_ => None,
 		}
 	}
-	fn as_gap_mut(&mut self) -> Option<&mut RawLine> {
+	fn as_gap_mut(&mut self) -> Option<&mut GapLine> {
 		match self {
 			Line::Gap(t) => Some(t),
 			_ => None,
@@ -235,7 +263,7 @@ fn cleanup(source: &mut Source) {
 	cleanup_nops(source);
 }
 
-fn process(source: &mut Source) {
+fn process(source: &mut Source, opts: &Opts) {
 	cleanup(source);
 	// Format inline annotations
 	{
@@ -243,139 +271,13 @@ fn process(source: &mut Source) {
 			.lines
 			.iter_mut()
 			.flat_map(Line::as_text_mut)
-			.filter(|t| !t.inline_annotations.is_empty())
+			.filter(|t| !t.annotations.is_empty())
 		{
-			if line.inline_annotations.len() == 1 {
-				let annotation = &line.inline_annotations[0];
-				line.line
-					.apply_meta(annotation.range.clone(), &annotation.range_fmt);
-				line.line.extend(SegmentBuffer::new(smallvec![Segment::new(
-					annotation.range_fmt.clone(),
-					smallvec![' ', '▶', ' ']
-				),]));
-				line.line.extend(annotation.text.clone());
-			} else {
-				line.inline_annotations.sort_by(|a, b| {
-					a.range
-						.start()
-						.cmp(b.range.start())
-						.then(b.range.clone().count().cmp(&a.range.clone().count()))
-				});
-				dbg!(&line.inline_annotations);
-				let max_pos = *line
-					.inline_annotations
-					.iter()
-					.map(|a| a.range.end())
-					.max()
-					.unwrap();
-				let mut ranges = vec![];
-				let mut processed = 0;
-				while !line.inline_annotations[processed..].is_empty() {
-					let annotation = &line.inline_annotations[processed];
-					if let Some(prev) = processed.checked_sub(1) {
-						if line.inline_annotations[prev]
-							.range
-							.clone()
-							.any(|p| annotation.range.contains(&p))
-						{
-							let buf = Text::new(smallvec![Segment::new(
-								Formatting::default(),
-								smallvec![' '; max_pos + 1]
-							)]);
-							ranges.push(buf);
-						}
-					}
-					{
-						let nested = ranges.len().saturating_sub(1);
-						for range in ranges.iter_mut().take(nested) {
-							range.apply_meta(
-								annotation.range.start()..=annotation.range.start(),
-								&Formatting {
-									bg_color: annotation.range_fmt.color,
-									..Default::default()
-								},
-							);
-						}
-					}
-					if let Some(range) = ranges.last_mut() {
-						let data = Text::new(smallvec![Segment::new(
-							annotation.range_fmt.clone(),
-							smallvec![annotation.range_char; annotation.range.clone().count()],
-						)]);
-						range.splice(annotation.range.clone(), Some(data));
-					} else {
-						line.line
-							.apply_meta(annotation.range.clone(), &annotation.range_fmt);
-					}
-
-					processed += 1;
-				}
-				ranges.reverse();
-
-				for (i, annotation) in line.inline_annotations.iter().rev().enumerate() {
-					let mut total_padding = *annotation.range.start();
-					for line in line.inline_annotations.iter().rev().skip(i) {
-						total_padding = total_padding.max(*line.range.start());
-					}
-					total_padding += 4;
-					let mut segment = Text::new(smallvec![Segment::new(
-						Formatting::default(),
-						smallvec![' '; total_padding]
-					)]);
-					if line
-						.inline_annotations
-						.iter()
-						.rev()
-						.skip(i)
-						.skip(1)
-						.any(|a| a.range.start() == annotation.range.start())
-					{
-						segment.splice(
-							annotation.range.start() + 1..=annotation.range.start() + 1,
-							Some(SegmentBuffer::new(smallvec![Segment::new(
-								annotation.range_fmt.clone(),
-								smallvec!['├']
-							),])),
-						);
-					} else {
-						segment.splice(
-							annotation.range.start() + 1..=annotation.range.start() + 2,
-							Some(SegmentBuffer::new(smallvec![Segment::new(
-								annotation.range_fmt.clone(),
-								smallvec!['╰', '─', '─']
-							),])),
-						);
-					}
-					for line in line
-						.inline_annotations
-						.iter()
-						.filter(|a| a.range.start() < annotation.range.start())
-					{
-						segment.splice(
-							line.range.start() + 1..=line.range.start() + 1,
-							Some(SegmentBuffer::new(smallvec![Segment::new(
-								line.range_fmt.clone(),
-								smallvec!['│']
-							),])),
-						);
-					}
-					segment.extend(annotation.text.clone());
-					ranges.push(segment);
-					// ranges.push(SegmentBuffer::new(smallvec![Segment::new(
-					// 	annotation.
-					// )]))
-				}
-
-				for range in ranges {
-					line.annotation_buffers.push(range);
-				}
-			}
-
-			// line.annotation_buffers.push(data_buf);
-
-			// let line = smallvec![];
-
-			// for ele in line.inline_annotations.iter() {}
+			let (replace, extra) =
+				single_line::generate_segment(line.annotations.clone(), line.line.clone(), opts);
+			line.line = replace;
+			line.annotation_buffers = extra;
+			line.annotations.truncate(0);
 		}
 	}
 	// Make gaps in files
@@ -388,73 +290,19 @@ fn process(source: &mut Source) {
 				let Line::Text(t) = ctx else {
 					continue;
 				};
-				if t.inline_annotations.is_empty() {
+				if t.annotation_buffers.is_empty() {
 					continue;
 				}
 				continue 'line;
 			}
-			slice[i] = Line::Gap(RawLine {
-				data: Text::new(smallvec![]),
+			slice[i] = Line::Gap(GapLine {
+				prefix: Text::new([]),
+				line: Text::new([]),
 			});
 		}
 	}
 	cleanup(source);
 
-	// Bake line prefixes
-	{
-		for source_group in cons_slices(&mut source.lines, |l| {
-			l.is_text() || l.is_text_annotation() || l.is_gap()
-		}) {
-			let max_prefix_len = source_group
-				.iter()
-				.flat_map(|l| l.as_text())
-				.map(|l| {
-					if l.line_num == 0 {
-						1
-					} else {
-						l.line_num.ilog10() + 1
-					}
-				})
-				.max()
-				.unwrap()
-				.max(1) as usize;
-			for line in source_group.iter_mut() {
-				if let Some(line) = line.as_text_mut() {
-					let num = line.line_num.to_string();
-					let this_prefix = Text::new(smallvec![
-						Segment::new(
-							Formatting::line_number(),
-							smallvec![' '; max_prefix_len - num.len()],
-						),
-						Segment::new(Formatting::line_number(), num.chars().collect(),),
-						Segment::new(Formatting::line_number(), smallvec![' ']),
-						Segment::new(Formatting::default(), smallvec![' ']),
-					]);
-					let annotation_prefix = Text::new(smallvec![
-						Segment::new(
-							Formatting::line_number(),
-							smallvec![' '; max_prefix_len - 1]
-						),
-						Segment::new(Formatting::line_number(), smallvec!['·']),
-						Segment::new(Formatting::default(), smallvec![' ']),
-					]);
-					line.add_prefix(this_prefix, annotation_prefix)
-				} else if let Some(raw) = line.as_gap_mut() {
-					let annotation_prefix = Text::new(smallvec![
-						Segment::new(
-							Formatting::line_number(),
-							smallvec![' '; max_prefix_len - 1]
-						),
-						Segment::new(Formatting::line_number(), smallvec!['⋮']),
-						Segment::new(Formatting::default(), smallvec![' ']),
-					]);
-					raw.data.splice(0..0, Some(annotation_prefix));
-				} else {
-					unreachable!()
-				}
-			}
-		}
-	}
 	// Expand annotation buffers
 	{
 		let mut insertions = vec![];
@@ -469,10 +317,188 @@ fn process(source: &mut Source) {
 			}
 		}
 		insertions.reverse();
-		for (i, l) in insertions {
-			source
-				.lines
-				.insert(i, Line::TextAnnotation(RawLine { data: l }));
+		for (i, (annotation, line)) in insertions {
+			source.lines.insert(
+				i,
+				Line::Annotation(AnnotationLine {
+					line,
+					annotation,
+					prefix: SegmentBuffer::new([]),
+				}),
+			);
+		}
+	}
+	// Connect annotation lines
+	{
+		for lines in &mut cons_slices(&mut source.lines, |l| {
+			l.is_annotation() || l.is_text() || l.is_gap()
+		}) {
+			struct Connection {
+				range: Range<usize>,
+				connected: Vec<usize>,
+			}
+
+			let mut connected_annotations = HashMap::new();
+			for (i, line) in lines.iter().enumerate() {
+				if let Some(annotation) = line.as_annotation() {
+					if let Some(annotation) = annotation.annotation {
+						let conn = connected_annotations
+							.entry(annotation)
+							.or_insert(Connection {
+								range: Range::new(i, i),
+								connected: Vec::new(),
+							});
+						conn.range.start = conn.range.start.min(i);
+						conn.range.end = conn.range.end.max(i);
+						conn.connected.push(i);
+					}
+				}
+			}
+			let mut grouped = connected_annotations
+				.iter()
+				.map(|(k, v)| (*k, vec![v.range].into_iter().collect::<RangeSet<usize>>()))
+				.collect::<Vec<_>>();
+			grouped.sort_by_key(|a| a.1.num_elements());
+			let grouped = single_line::group_nonconflicting(grouped);
+
+			for group in grouped {
+				for annotation in group {
+					let annotation_fmt = Formatting::default().decoration();
+					let conn = connected_annotations.get(&annotation).expect("exists");
+					let range = conn.range;
+					let mut max_index = usize::MAX;
+					for line in range.start..=range.end {
+						match &lines[line] {
+							Line::Text(t) if t.line.data().all(|c| c.is_whitespace()) => {}
+							Line::Text(t) => {
+								print_buf(&t.line);
+								println!();
+								let whitespaces =
+									t.line.data().take_while(|i| i.is_whitespace()).count();
+								dbg!(whitespaces);
+								max_index = max_index.min(whitespaces)
+							}
+							Line::Annotation(t) if t.line.data().all(|c| c.is_whitespace()) => {}
+							Line::Annotation(t) => {
+								print_buf(&t.line);
+								println!();
+								let whitespaces =
+									t.line.data().take_while(|i| i.is_whitespace()).count();
+								dbg!(whitespaces);
+								max_index = max_index.min(whitespaces)
+							}
+							Line::Gap(_) => {}
+							_ => unreachable!(),
+						}
+					}
+					while max_index < 2 {
+						let seg = Some(SegmentBuffer::new([Segment::new(
+							vec![' '; 2 - max_index],
+							annotation_fmt.clone(),
+						)]));
+						for line in lines.iter_mut() {
+							match line {
+								Line::Text(t) => t.line.splice(0..0, seg.clone()),
+								Line::Annotation(t) => t.line.splice(0..0, seg.clone()),
+								Line::Gap(t) => t.line.splice(0..0, seg.clone()),
+								_ => unreachable!(),
+							}
+						}
+						max_index = 2;
+					}
+					if max_index >= 2 {
+						let offset = max_index - 2;
+
+						for line in range.start..=range.end {
+							use chars::line::*;
+							let char = if range.start == range.end {
+								RANGE_EMPTY
+							} else if line == range.start {
+								RANGE_START
+							} else if line == range.end {
+								RANGE_END
+							} else if conn.connected.contains(&line) {
+								RANGE_CONNECTION
+							} else {
+								RANGE_CONTINUE
+							};
+							let text = lines[line].text_mut().expect("only with text reachable");
+							if text.len() <= offset {
+								text.resize(offset + 1, ' ', annotation_fmt.clone());
+							}
+							text.splice(
+								offset..=offset,
+								Some(SegmentBuffer::new([Segment::new(
+									[char],
+									annotation_fmt.clone(),
+								)])),
+							);
+
+							if conn.connected.contains(&line) {
+								for i in offset + 1..text.len() {
+									let (char, fmt) = text.get(i).expect("in bounds");
+									if !text.get(i).expect("in bounds").0.is_whitespace()
+										&& !fmt.decoration
+									{
+										break;
+									}
+									if let Some((keep_style, replacement)) = cross(char) {
+										text.splice(
+											i..=i,
+											Some(SegmentBuffer::new([Segment::new(
+												[replacement],
+												if keep_style {
+													fmt
+												} else {
+													annotation_fmt.clone()
+												},
+											)])),
+										)
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+
+			// dbg!(grouped);
+		}
+
+		// todo!()
+	}
+	// Apply line numbers
+	{
+		for lines in &mut cons_slices(&mut source.lines, |l| {
+			l.is_annotation() || l.is_text() || l.is_gap()
+		}) {
+			let max_num = lines
+				.iter()
+				.filter_map(|l| match l {
+					Line::Text(t) => Some(t.line_num),
+					_ => None,
+				})
+				.max()
+				.unwrap_or(0);
+			let max_len = max_num.to_string().len();
+			let prefix_segment = Segment::new(vec![' '; max_len - 1], Formatting::line_number());
+			for line in lines.iter_mut() {
+				match line {
+					Line::Text(t) => t.prefix.extend(SegmentBuffer::new([Segment::new(
+						format!("{:>width$} ", t.line_num, width = max_len).chars(),
+						Formatting::line_number(),
+					)])),
+					Line::Annotation(a) => a.prefix.extend(SegmentBuffer::new([
+						prefix_segment.clone(),
+						Segment::new(['·', ' '], Formatting::line_number()),
+					])),
+					Line::Gap(a) => a.prefix.extend(SegmentBuffer::new([
+						prefix_segment.clone(),
+						Segment::new(['⋮', ' '], Formatting::line_number()),
+					])),
+					_ => unreachable!(),
+				}
+			}
 		}
 	}
 	// To raw
@@ -480,15 +506,24 @@ fn process(source: &mut Source) {
 		for line in &mut source.lines {
 			match line {
 				Line::Text(t) => {
-					let mut buf = SegmentBuffer::new(smallvec![]);
+					let mut buf = SegmentBuffer::new([]);
 					buf.extend(t.prefix.clone());
 					buf.extend(t.line.clone());
 					*line = Line::Raw(RawLine { data: buf });
 				}
-				Line::TextAnnotation(t) => *line = Line::Raw(t.clone()),
-				Line::Delimiter => *line = Line::Nop,
+				Line::Annotation(t) => {
+					let mut buf = SegmentBuffer::new([]);
+					buf.extend(t.prefix.clone());
+					buf.extend(t.line.clone());
+					*line = Line::Raw(RawLine { data: buf })
+				}
+				Line::Gap(t) => {
+					let mut buf = SegmentBuffer::new([]);
+					buf.extend(t.prefix.clone());
+					buf.extend(t.line.clone());
+					*line = Line::Raw(RawLine { data: buf })
+				}
 				Line::Raw(_) | Line::Nop => {}
-				Line::Gap(t) => *line = Line::Raw(t.clone()),
 			}
 		}
 	}
@@ -496,18 +531,15 @@ fn process(source: &mut Source) {
 }
 
 fn parse(txt: &str) -> Source {
-	let mut lines = txt
+	let lines = txt
 		.split('\n')
 		.map(|s| s.to_string())
 		.enumerate()
 		.map(|(num, line)| TextLine {
 			line_num: num + 1,
-			line: SegmentBuffer::new(smallvec![Segment::new(
-				Formatting::default(),
-				line.chars().collect()
-			)]),
-			prefix: SegmentBuffer::new(smallvec![]),
-			inline_annotations: Vec::new(),
+			line: SegmentBuffer::new([Segment::new(line.chars(), Formatting::default())]),
+			prefix: SegmentBuffer::new([]),
+			annotations: Vec::new(),
 			annotation_buffers: Vec::new(),
 		})
 		.map(Line::Text)
@@ -529,73 +561,153 @@ fn print(s: &Source) {
 
 #[test]
 fn test_fmt() {
+	use range_map::Range;
+	use single_line::AnnotationIdAllocator;
+	let mut aid = AnnotationIdAllocator::new();
 	let mut s = parse(include_str!("../../jrsonnet-stdlib/src/std.jsonnet"));
-	s.lines[1]
-		.as_text_mut()
-		.unwrap()
-		.inline_annotations
-		.extend(vec![
-			InlineAnnotation {
-				range: 2..=6,
-				range_char: '~',
-				range_fmt: Formatting::color(0x00ff0000),
-				text: SegmentBuffer::new(smallvec![Segment::new(
-					Formatting::default(),
-					"Local def".chars().collect()
-				)]),
-			},
-			InlineAnnotation {
-				range: 8..=10,
-				range_char: '-',
-				range_fmt: Formatting::color(0x0000ff00),
-				text: SegmentBuffer::new(smallvec![Segment::new(
-					Formatting::default(),
-					"Local name".chars().collect()
-				)]),
-			},
-			InlineAnnotation {
-				range: 12..=12,
-				range_char: '=',
-				range_fmt: Formatting::color(0xff000000),
-				text: SegmentBuffer::new(smallvec![Segment::new(
-					Formatting::default(),
-					"Equals".chars().collect()
-				)]),
-			},
-			// InlineAnnotation {
-			// 	range: 3..=13,
-			// 	range_char: '#',
-			// 	range_fmt: Formatting::color(0xffff0000),
-			// 	text: SegmentBuffer::new(smallvec![Segment::new(
-			// 		Formatting::default(),
-			// 		"Full local".chars().collect()
-			// 	)]),
-			// },
-		]);
+
+	let local_def = aid.next();
+	s.lines[1].as_text_mut().unwrap().annotations.extend(vec![
+		LineAnnotation {
+			id: local_def,
+			priority: 0,
+			ranges: vec![Range::new(2, 6)].into_iter().collect(),
+			formatting: Formatting::color(0x00ff0000),
+			left: true,
+			right: vec![SegmentBuffer::new([Segment::new(
+				"Local def".chars(),
+				Formatting::default(),
+			)])],
+		},
+		LineAnnotation {
+			id: aid.next(),
+			priority: 0,
+			ranges: vec![Range::new(8, 10)].into_iter().collect(),
+			formatting: Formatting::color(0x0000ff00),
+			left: false,
+			right: vec![SegmentBuffer::new([Segment::new(
+				"Local name".chars(),
+				Formatting::default(),
+			)])],
+		},
+		LineAnnotation {
+			id: aid.next(),
+			priority: 0,
+			ranges: vec![Range::new(12, 12)].into_iter().collect(),
+			formatting: Formatting::color(0xff000000),
+			left: false,
+			right: vec![SegmentBuffer::new([Segment::new(
+				"Equals".chars(),
+				Formatting::default(),
+			)])],
+		},
+	]);
 
 	s.lines[99]
 		.as_text_mut()
 		.unwrap()
-		.inline_annotations
-		.extend(vec![InlineAnnotation {
-			range: 4..=8,
-			range_char: '~',
-			range_fmt: Formatting::color(0x00ff0000),
-			text: SegmentBuffer::new(smallvec![Segment::new(
+		.annotations
+		.extend(vec![LineAnnotation {
+			id: local_def,
+			priority: 0,
+			ranges: vec![Range::new(4, 8)].into_iter().collect(),
+			formatting: Formatting::color(0x00ff0000),
+			left: true,
+			right: vec![SegmentBuffer::new([Segment::new(
+				"Another local def".chars(),
 				Formatting::default(),
-				"IDK".chars().collect()
-			)]),
+			)])],
 		}]);
+
+	{
+		let connected = aid.next();
+		s.lines[188]
+			.as_text_mut()
+			.unwrap()
+			.annotations
+			.extend(vec![LineAnnotation {
+				id: connected,
+				priority: 0,
+				ranges: vec![Range::new(10, 14)].into_iter().collect(),
+				formatting: Formatting::color(0x00ffff00),
+				left: true,
+				right: vec![],
+			}]);
+
+		s.lines[191]
+			.as_text_mut()
+			.unwrap()
+			.annotations
+			.extend(vec![LineAnnotation {
+				id: connected,
+				priority: 0,
+				ranges: vec![Range::new(10, 14)].into_iter().collect(),
+				formatting: Formatting::color(0x00ffff00),
+				left: true,
+				right: vec![],
+			}]);
+
+		s.lines[194]
+			.as_text_mut()
+			.unwrap()
+			.annotations
+			.extend(vec![LineAnnotation {
+				id: connected,
+				priority: 0,
+				ranges: vec![Range::new(10, 12)].into_iter().collect(),
+				formatting: Formatting::color(0x00ffff00),
+				left: true,
+				right: vec![SegmentBuffer::new([Segment::new(
+					"Example connected definition".chars(),
+					Formatting::default(),
+				)])],
+			}])
+	}
+	{
+		let conflicting_connection = aid.next();
+		s.lines[97]
+			.as_text_mut()
+			.unwrap()
+			.annotations
+			.extend(vec![LineAnnotation {
+				id: conflicting_connection,
+				priority: 0,
+				ranges: vec![Range::new(6, 7)].into_iter().collect(),
+				formatting: Formatting::color(0xffff0000),
+				left: true,
+				right: vec![],
+			}]);
+
+		s.lines[193]
+			.as_text_mut()
+			.unwrap()
+			.annotations
+			.extend(vec![LineAnnotation {
+				id: conflicting_connection,
+				priority: 0,
+				ranges: vec![Range::new(12, 14)].into_iter().collect(),
+				formatting: Formatting::color(0xffff0000),
+				left: true,
+				right: vec![SegmentBuffer::new([Segment::new(
+					"Example connected definition".chars(),
+					Formatting::default(),
+				)])],
+			}])
+	}
 
 	s.global.push(GlobalAnnotation {
 		range: 2832..=3135,
-		text: SegmentBuffer::new(smallvec![Segment::new(
-			Formatting::default(),
-			"TEST".chars().collect()
-		)]),
+		text: SegmentBuffer::new([Segment::new("TEST".chars(), Formatting::default())]),
 	});
 
-	process(&mut s);
+	process(
+		&mut s,
+		&Opts {
+			ratnest_sort: false,
+			ratnest_merge: false,
+			first_layer_reformats_orig: true,
+		},
+	);
 
 	print(&s);
 }
