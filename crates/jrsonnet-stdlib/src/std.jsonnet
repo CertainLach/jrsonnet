@@ -209,10 +209,6 @@
   set(arr, keyF=id)::
     std.uniq(std.sort(arr, keyF), keyF),
 
-  setMember(x, arr, keyF=id)::
-    // TODO(dcunnin): Binary chop for O(log n) complexity
-    std.length(std.setInter([x], arr, keyF)) > 0,
-
   setUnion(a, b, keyF=id)::
     // NOTE: order matters, values in `a` win
     local aux(a, b, i, j, acc) =
