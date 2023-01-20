@@ -1,5 +1,8 @@
 [package]
 name = "jrsonnet-macros"
+description = "Macros to reduce boilerplate in jrsonnet-evaluator usage"
+authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
+license = "MIT"
 version.workspace = true
 edition = "2021"
 

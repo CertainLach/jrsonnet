@@ -36,7 +36,7 @@ jrsonnet-macros.workspace = true
 jrsonnet-gcmodule = { version = "0.3.4" }
 
 pathdiff = "0.2.1"
-hashbrown = "0.13.1"
+hashbrown = "0.13.2"
 static_assertions = "1.1"
 
 rustc-hash = "1.1"
@@ -53,4 +53,4 @@ bincode = { version = "1.3", optional = true }
 # Explaining traces
 annotate-snippets = { version = "0.9.1", features = ["color"], optional = true }
 # Async imports
-async-trait = { version = "0.1.59", optional = true }
+async-trait = { version = "0.1.60", optional = true }

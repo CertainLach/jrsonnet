@@ -125,9 +125,21 @@ impl ArrValue {
 		let from = from.unwrap_or(0);
 		let to = to.unwrap_or(len).min(len);
 		let step = step.unwrap_or(1);
+
 		if from >= to || step == 0 {
 			return None;
 		}
+		// match self {
+		// 	ArrValue::Slice(slice) => {
+		// 		return Some(Self::Slice(Cc::new(SliceArray {
+		// 			inner: slice.inner.clone(),
+		// 			from: slice.from + slice.step * (from as u32),
+		// 			to: slice.from + (to as u32) * slice.step,
+		// 			step: slice.step * step as u32,
+		// 		})))
+		// 	}
+		// 	_ => {}
+		// }
 
 		Some(Self::Slice(Cc::new(SliceArray {
 			inner: self,
