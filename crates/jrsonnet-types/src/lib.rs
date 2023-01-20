@@ -150,7 +150,7 @@ fn write_union<'i>(
 		if should_add_braces {
 			write!(f, "(")?;
 		}
-		write!(f, "{}", v)?;
+		write!(f, "{v}")?;
 		if should_add_braces {
 			write!(f, ")")?;
 		}
@@ -162,7 +162,7 @@ fn print_array(a: &ComplexValType, f: &mut std::fmt::Formatter<'_>) -> std::fmt:
 	if *a == ComplexValType::Any {
 		write!(f, "array")?
 	} else {
-		write!(f, "Array<{}>", a)?
+		write!(f, "Array<{a}>")?
 	}
 	Ok(())
 }
@@ -171,7 +171,7 @@ impl Display for ComplexValType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			ComplexValType::Any => write!(f, "any")?,
-			ComplexValType::Simple(s) => write!(f, "{}", s)?,
+			ComplexValType::Simple(s) => write!(f, "{s}")?,
 			ComplexValType::Char => write!(f, "char")?,
 			ComplexValType::BoundedNumber(a, b) => write!(
 				f,
@@ -187,7 +187,7 @@ impl Display for ComplexValType {
 					if i != 0 {
 						write!(f, ", ")?;
 					}
-					write!(f, "{}: {}", k, v)?;
+					write!(f, "{k}: {v}")?;
 				}
 				write!(f, "}}")?;
 			}

@@ -3,7 +3,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind, Result},
 	function::TlaArg,
 	gc::GcHashMap,
-	IStr, State,
+	IStr,
 };
 use jrsonnet_parser::{ParserSettings, Source};
 

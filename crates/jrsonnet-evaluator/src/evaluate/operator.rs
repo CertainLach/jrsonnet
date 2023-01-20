@@ -104,28 +104,15 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 					}
 				}
 			} else {
-				{
-					let ai = a.iter();
-					let bi = b.iter();
+				let ai = a.iter();
+				let bi = b.iter();
 
-					for (a, b) in ai.zip(bi) {
-						let ord = evaluate_compare_op(&a?, &b?, op)?;
-						if !ord.is_eq() {
-							return Ok(ord);
-						}
+				for (a, b) in ai.zip(bi) {
+					let ord = evaluate_compare_op(&a?, &b?, op)?;
+					if !ord.is_eq() {
+						return Ok(ord);
 					}
 				}
-				// {
-				// 	let ai = a.iter_expl();
-				// 	let bi = b.iter_expl();
-
-				// 	for (a, b) in ai.zip(bi) {
-				// 		let ord = evaluate_compare_op(&a?, &b?, op)?;
-				// 		if !ord.is_eq() {
-				// 			return Ok(ord);
-				// 		}
-				// 	}
-				// }
 			}
 			a.len().cmp(&b.len())
 		}

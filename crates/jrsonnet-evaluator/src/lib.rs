@@ -36,6 +36,7 @@
 	clippy::use_self,
 	// https://github.com/rust-lang/rust-clippy/issues/8539
 	clippy::iter_with_drain,
+	clippy::type_repetition_in_bounds,
 	// ci is being run with nightly, but library should work on stable
 	clippy::missing_const_for_fn,
 )]

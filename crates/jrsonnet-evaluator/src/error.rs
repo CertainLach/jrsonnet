@@ -274,6 +274,7 @@ impl Debug for Error {
 		f.debug_tuple("LocError").field(&self.0).finish()
 	}
 }
+impl std::error::Error for Error {}
 
 pub trait ErrorSource {
 	fn to_location(self) -> Option<ExprLocation>;

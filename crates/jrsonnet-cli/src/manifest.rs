@@ -1,10 +1,8 @@
 use std::path::PathBuf;
 
 use clap::{Parser, ValueEnum};
-use jrsonnet_evaluator::{
-	error::Result,
-	manifest::{JsonFormat, ManifestFormat, StringFormat, ToStringFormat, YamlStreamFormat},
-	State,
+use jrsonnet_evaluator::manifest::{
+	JsonFormat, ManifestFormat, StringFormat, ToStringFormat, YamlStreamFormat,
 };
 use jrsonnet_stdlib::{TomlFormat, YamlFormat};
 

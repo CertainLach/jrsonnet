@@ -8,7 +8,7 @@ use serde::Deserialize;
 #[builtin]
 pub fn builtin_parse_json(str: IStr) -> Result<Val> {
 	let value: Val = serde_json::from_str(&str)
-		.map_err(|e| RuntimeError(format!("failed to parse json: {}", e).into()))?;
+		.map_err(|e| RuntimeError(format!("failed to parse json: {e}").into()))?;
 	Ok(value)
 }
 
@@ -22,7 +22,7 @@ pub fn builtin_parse_yaml(str: IStr) -> Result<Val> {
 	let mut out = vec![];
 	for item in value {
 		let val = Val::deserialize(item)
-			.map_err(|e| RuntimeError(format!("failed to parse yaml: {}", e).into()))?;
+			.map_err(|e| RuntimeError(format!("failed to parse yaml: {e}").into()))?;
 		out.push(val);
 	}
 	Ok(if out.is_empty() {

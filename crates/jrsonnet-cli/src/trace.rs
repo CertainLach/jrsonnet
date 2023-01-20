@@ -1,9 +1,5 @@
 use clap::{Parser, ValueEnum};
-use jrsonnet_evaluator::{
-	error::Result,
-	trace::{CompactFormat, ExplainingFormat, PathResolver, TraceFormat},
-	State,
-};
+use jrsonnet_evaluator::trace::{CompactFormat, ExplainingFormat, PathResolver, TraceFormat};
 
 #[derive(PartialEq, Eq, ValueEnum, Clone)]
 pub enum TraceFormatName {

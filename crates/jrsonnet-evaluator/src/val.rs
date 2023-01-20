@@ -33,6 +33,7 @@ enum ThunkInner<T: Trace> {
 	Pending,
 }
 
+/// Lazily evaluated value
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace)]
 pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<T>>>);
@@ -57,6 +58,13 @@ where
 		self.evaluate()?;
 		Ok(())
 	}
+
+	/// Evaluate thunk, or return cached value
+	///
+	/// # Errors
+	///
+	/// - Lazy value evaluation returned error
+	/// - This method was called during inner value evaluation
 	pub fn evaluate(&self) -> Result<T> {
 		match &*self.0.borrow() {
 			ThunkInner::Computed(v) => return Ok(v.clone()),
@@ -132,7 +140,7 @@ impl<T: Trace> PartialEq for Thunk<T> {
 	}
 }
 
-/// Represents a Jsonnet value, which can be spliced or indexed (string or array).
+/// Represents a Jsonnet value, which can be sliced or indexed (string or array).
 #[allow(clippy::module_name_repetitions)]
 pub enum IndexableVal {
 	/// String.
@@ -245,6 +253,16 @@ impl StrValue {
 			// Can't create non-flat empty string
 			Self::Tree(_) => false,
 		}
+	}
+}
+impl From<&str> for StrValue {
+	fn from(value: &str) -> Self {
+		Self::Flat(value.into())
+	}
+}
+impl From<String> for StrValue {
+	fn from(value: String) -> Self {
+		Self::Flat(value.into())
 	}
 }
 impl Display for StrValue {

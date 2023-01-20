@@ -5,7 +5,7 @@ use std::{
 
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
-use jrsonnet_cli::{ManifestOpts, OutputOpts, TraceOpts, MiscOpts, TlaOpts, StdOpts, GcOpts};
+use jrsonnet_cli::{GcOpts, ManifestOpts, MiscOpts, OutputOpts, StdOpts, TlaOpts, TraceOpts};
 use jrsonnet_evaluator::{
 	apply_tla,
 	error::{Error as JrError, ErrorKind},
@@ -133,16 +133,14 @@ impl From<ErrorKind> for Error {
 
 fn main_catch(opts: Opts) -> bool {
 	let s = State::default();
-	let trace = opts
-		.trace
-		.trace_format();
+	let trace = opts.trace.trace_format();
 	if let Err(e) = main_real(&s, opts) {
 		if let Error::Evaluation(e) = e {
 			let mut out = String::new();
 			trace.write_trace(&mut out, &e).expect("format error");
 			eprintln!("{out}")
 		} else {
-			eprintln!("{}", e);
+			eprintln!("{e}");
 		}
 		return false;
 	}
@@ -150,7 +148,7 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	let _gc_leak_guard= opts.gc.leak_on_exit();
+	let _gc_leak_guard = opts.gc.leak_on_exit();
 	let _gc_print_stats = opts.gc.stats_printer();
 	let _stack_depth_override = opts.misc.stack_size_override();
 
@@ -220,7 +218,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	} else {
 		let output = val.manifest(manifest_format)?;
 		if !output.is_empty() {
-			println!("{}", output);
+			println!("{output}");
 		}
 	}
 

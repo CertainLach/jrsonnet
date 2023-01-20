@@ -6,7 +6,10 @@ mod trace;
 use std::{env, marker::PhantomData, path::PathBuf};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, stack::{set_stack_depth_limit, StackDepthLimitOverrideGuard, limit_stack_depth}, FileImportResolver, State, ImportResolver};
+use jrsonnet_evaluator::{
+	stack::{limit_stack_depth, StackDepthLimitOverrideGuard},
+	FileImportResolver,
+};
 use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
 pub use stdlib::*;
@@ -71,6 +74,7 @@ pub struct GcOpts {
 }
 impl GcOpts {
 	pub fn stats_printer(&self) -> Option<GcStatsPrinter> {
+		#[allow(clippy::unnecessary_lazy_evaluations/*, reason = "GcStatsPrinter has side-effect on Drop"*/)]
 		self.gc_print_stats.then(|| GcStatsPrinter {
 			collect_before_printing_stats: self.gc_collect_before_printing_stats,
 		})
@@ -96,7 +100,7 @@ impl Drop for GcStatsPrinter {
 		eprintln!("=== GC STATS ===");
 		if self.collect_before_printing_stats {
 			let collected = jrsonnet_gcmodule::collect_thread_cycles();
-			eprintln!("Collected: {}", collected);
+			eprintln!("Collected: {collected}");
 		}
 		eprintln!("Tracked: {}", jrsonnet_gcmodule::count_thread_tracked())
 	}

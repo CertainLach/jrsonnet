@@ -54,7 +54,7 @@ mod ordering {
 
 #[cfg(feature = "exp-preserve-order")]
 mod ordering {
-	use std::cmp::Reverse;
+	use std::cmp::{Ordering, Reverse};
 
 	use jrsonnet_gcmodule::Trace;
 
@@ -81,12 +81,10 @@ mod ordering {
 			Self(Reverse(depth), index)
 		}
 		pub fn collide(self, other: Self) -> Self {
-			if self.0 .0 > other.0 .0 {
-				self
-			} else if self.0 .0 < other.0 .0 {
-				other
-			} else {
-				unreachable!("object can't have two fields with same name")
+			match self.0 .0.cmp(&other.0 .0) {
+				Ordering::Greater => self,
+				Ordering::Less => other,
+				Ordering::Equal => unreachable!("object can't have two fields with the same name"),
 			}
 		}
 	}
@@ -187,6 +185,12 @@ impl ObjValue {
 	}
 	pub fn new_empty() -> Self {
 		Self::new(None, Cc::new(GcHashMap::new()), Cc::new(Vec::new()))
+	}
+	pub fn builder() -> ObjValueBuilder {
+		ObjValueBuilder::new()
+	}
+	pub fn builder_with_capacity(capacity: usize) -> ObjValueBuilder {
+		ObjValueBuilder::with_capacity(capacity)
 	}
 	#[must_use]
 	pub fn extend_from(&self, sup: Self) -> Self {
@@ -304,7 +308,7 @@ impl ObjValue {
 						break;
 					}
 					fields[j] = fields[k].clone();
-					j = k
+					j = k;
 				}
 				fields[j] = x;
 			}

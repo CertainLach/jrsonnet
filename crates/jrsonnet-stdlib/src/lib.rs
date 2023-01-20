@@ -211,7 +211,7 @@ impl TracePrinter for StdTracePrinter {
 				locs[0].line
 			);
 		}
-		eprintln!(" {}", value);
+		eprintln!(" {value}");
 	}
 }
 
@@ -229,7 +229,7 @@ pub struct Settings {
 }
 
 fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
-	let source_name = format!("<extvar:{}>", name);
+	let source_name = format!("<extvar:{name}>");
 	Source::new_virtual(source_name.into(), code.into())
 }
 

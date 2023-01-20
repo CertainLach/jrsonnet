@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, tb, trace::PathResolver, State};
+use jrsonnet_evaluator::{error::Result, trace::PathResolver, State};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone)]
@@ -49,7 +49,7 @@ impl FromStr for ExtFile {
 				name: out[0].into(),
 				value: content,
 			}),
-			Err(e) => Err(format!("{}", e)),
+			Err(e) => Err(format!("{e}")),
 		}
 	}
 }
@@ -86,8 +86,7 @@ impl StdOpts {
 		if self.no_stdlib {
 			return Ok(None);
 		}
-		let ctx =
-			ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
+		let ctx = ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
 		for ext in self.ext_str.iter() {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
