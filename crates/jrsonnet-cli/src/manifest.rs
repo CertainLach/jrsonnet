@@ -8,8 +8,6 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_stdlib::{TomlFormat, YamlFormat};
 
-use crate::ConfigureState;
-
 #[derive(Clone, ValueEnum)]
 pub enum ManifestFormatName {
 	/// Expect string as output, and write them directly
@@ -41,9 +39,8 @@ pub struct ManifestOpts {
 	#[clap(long)]
 	pub preserve_order: bool,
 }
-impl ConfigureState for ManifestOpts {
-	type Guards = Box<dyn ManifestFormat>;
-	fn configure(&self, _s: &State) -> Result<Self::Guards> {
+impl ManifestOpts {
+	pub fn manifest_format(&self) -> Box<dyn ManifestFormat> {
 		let format: Box<dyn ManifestFormat> = if self.string {
 			Box::new(StringFormat)
 		} else {
@@ -68,11 +65,11 @@ impl ConfigureState for ManifestOpts {
 				)),
 			}
 		};
-		Ok(if self.yaml_stream {
+		if self.yaml_stream {
 			Box::new(YamlStreamFormat(format))
 		} else {
 			format
-		})
+		}
 	}
 }
 

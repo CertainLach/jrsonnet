@@ -7,7 +7,7 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_parser::{ParserSettings, Source};
 
-use crate::{ConfigureState, ExtFile, ExtStr};
+use crate::{ExtFile, ExtStr};
 
 #[derive(Parser)]
 #[clap(next_help_heading = "TOP LEVEL ARGUMENTS")]
@@ -31,9 +31,8 @@ pub struct TlaOpts {
 	#[clap(long, name = "name=tla code path", number_of_values = 1)]
 	tla_code_file: Vec<ExtFile>,
 }
-impl ConfigureState for TlaOpts {
-	type Guards = GcHashMap<IStr, TlaArg>;
-	fn configure(&self, _s: &State) -> Result<Self::Guards> {
+impl TlaOpts {
+	pub fn tla_opts(&self) -> Result<GcHashMap<IStr, TlaArg>> {
 		let mut out = GcHashMap::new();
 		for (name, value) in self
 			.tla_str

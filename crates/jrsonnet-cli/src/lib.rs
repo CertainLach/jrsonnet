@@ -6,18 +6,12 @@ mod trace;
 use std::{env, marker::PhantomData, path::PathBuf};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, stack::set_stack_depth_limit, FileImportResolver, State};
+use jrsonnet_evaluator::{error::Result, stack::{set_stack_depth_limit, StackDepthLimitOverrideGuard, limit_stack_depth}, FileImportResolver, State, ImportResolver};
 use jrsonnet_gcmodule::with_thread_object_space;
 pub use manifest::*;
 pub use stdlib::*;
 pub use tla::*;
 pub use trace::*;
-
-pub trait ConfigureState {
-	type Guards;
-
-	fn configure(&self, s: &State) -> Result<Self::Guards>;
-}
 
 #[derive(Parser)]
 #[clap(next_help_heading = "INPUT")]
@@ -45,50 +39,18 @@ pub struct MiscOpts {
 	#[clap(long, short = 'J')]
 	jpath: Vec<PathBuf>,
 }
-impl ConfigureState for MiscOpts {
-	type Guards = ();
-	fn configure(&self, s: &State) -> Result<Self::Guards> {
+impl MiscOpts {
+	pub fn import_resolver(&self) -> FileImportResolver {
 		let mut library_paths = self.jpath.clone();
 		library_paths.reverse();
 		if let Some(path) = env::var_os("JSONNET_PATH") {
 			library_paths.extend(env::split_paths(path.as_os_str()));
 		}
 
-		s.set_import_resolver(FileImportResolver::new(library_paths));
-
-		set_stack_depth_limit(self.max_stack);
-		Ok(())
+		FileImportResolver::new(library_paths)
 	}
-}
-
-/// General configuration of jsonnet
-#[derive(Parser)]
-#[clap(name = "jrsonnet", version, author)]
-pub struct GeneralOpts {
-	#[clap(flatten)]
-	misc: MiscOpts,
-
-	#[clap(flatten)]
-	tla: TlaOpts,
-	#[clap(flatten)]
-	std: StdOpts,
-
-	#[clap(flatten)]
-	gc: GcOpts,
-}
-
-impl ConfigureState for GeneralOpts {
-	type Guards = (
-		<TlaOpts as ConfigureState>::Guards,
-		<GcOpts as ConfigureState>::Guards,
-	);
-	fn configure(&self, s: &State) -> Result<Self::Guards> {
-		// Configure trace first, because tla-code/ext-code can throw
-		self.misc.configure(s)?;
-		let tla_guards = self.tla.configure(s)?;
-		self.std.configure(s)?;
-		let gc_guards = self.gc.configure(s)?;
-		Ok((tla_guards, gc_guards))
+	pub fn stack_size_override(&self) -> StackDepthLimitOverrideGuard {
+		limit_stack_depth(self.max_stack)
 	}
 }
 
@@ -107,18 +69,14 @@ pub struct GcOpts {
 	#[clap(long)]
 	gc_collect_before_printing_stats: bool,
 }
-impl ConfigureState for GcOpts {
-	type Guards = (Option<GcStatsPrinter>, Option<LeakSpace>);
-
-	fn configure(&self, _s: &State) -> Result<Self::Guards> {
-		// Constructed structs have side-effects in Drop impl
-		#[allow(clippy::unnecessary_lazy_evaluations)]
-		Ok((
-			self.gc_print_stats.then(|| GcStatsPrinter {
-				collect_before_printing_stats: self.gc_collect_before_printing_stats,
-			}),
-			(!self.gc_collect_on_exit).then(|| LeakSpace(PhantomData)),
-		))
+impl GcOpts {
+	pub fn stats_printer(&self) -> Option<GcStatsPrinter> {
+		self.gc_print_stats.then(|| GcStatsPrinter {
+			collect_before_printing_stats: self.gc_collect_before_printing_stats,
+		})
+	}
+	pub fn leak_on_exit(&self) -> Option<LeakSpace> {
+		(!self.gc_collect_on_exit).then(|| LeakSpace(PhantomData))
 	}
 }
 

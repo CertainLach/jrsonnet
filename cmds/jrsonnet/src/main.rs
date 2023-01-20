@@ -5,7 +5,7 @@ use std::{
 
 use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
-use jrsonnet_cli::{ConfigureState, GeneralOpts, ManifestOpts, OutputOpts, TraceOpts};
+use jrsonnet_cli::{ManifestOpts, OutputOpts, TraceOpts, MiscOpts, TlaOpts, StdOpts, GcOpts};
 use jrsonnet_evaluator::{
 	apply_tla,
 	error::{Error as JrError, ErrorKind},
@@ -60,7 +60,13 @@ struct Opts {
 	#[clap(flatten)]
 	input: InputOpts,
 	#[clap(flatten)]
-	general: GeneralOpts,
+	misc: MiscOpts,
+	#[clap(flatten)]
+	tla: TlaOpts,
+	#[clap(flatten)]
+	std: StdOpts,
+	#[clap(flatten)]
+	gc: GcOpts,
 
 	#[clap(flatten)]
 	trace: TraceOpts,
@@ -129,8 +135,7 @@ fn main_catch(opts: Opts) -> bool {
 	let s = State::default();
 	let trace = opts
 		.trace
-		.configure(&s)
-		.expect("this configurator doesn't fail");
+		.trace_format();
 	if let Err(e) = main_real(&s, opts) {
 		if let Error::Evaluation(e) = e {
 			let mut out = String::new();
@@ -145,8 +150,17 @@ fn main_catch(opts: Opts) -> bool {
 }
 
 fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
-	let (tla, _gc_guard) = opts.general.configure(s)?;
-	let manifest_format = opts.manifest.configure(s)?;
+	let _gc_leak_guard= opts.gc.leak_on_exit();
+	let _gc_print_stats = opts.gc.stats_printer();
+	let _stack_depth_override = opts.misc.stack_size_override();
+
+	let import_resolver = opts.misc.import_resolver();
+	s.set_import_resolver(import_resolver);
+
+	let std = opts.std.context_initializer(s)?;
+	if let Some(std) = std {
+		s.set_context_initializer(std);
+	}
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
@@ -160,8 +174,10 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		s.import(&input)?
 	};
 
+	let tla = opts.tla.tla_opts()?;
 	let val = apply_tla(s.clone(), &tla, val)?;
 
+	let manifest_format = opts.manifest.manifest_format();
 	if let Some(multi) = opts.output.multi {
 		if opts.output.create_output_dirs {
 			let mut dir = multi.clone();

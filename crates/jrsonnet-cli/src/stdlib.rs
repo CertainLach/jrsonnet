@@ -2,8 +2,7 @@ use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
 use jrsonnet_evaluator::{error::Result, tb, trace::PathResolver, State};
-
-use crate::ConfigureState;
+use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone)]
 pub struct ExtStr {
@@ -82,14 +81,13 @@ pub struct StdOpts {
 	#[clap(long, name = "name=var code path", number_of_values = 1)]
 	ext_code_file: Vec<ExtFile>,
 }
-impl ConfigureState for StdOpts {
-	type Guards = ();
-	fn configure(&self, s: &State) -> Result<()> {
+impl StdOpts {
+	pub fn context_initializer(&self, s: &State) -> Result<Option<ContextInitializer>> {
 		if self.no_stdlib {
-			return Ok(());
+			return Ok(None);
 		}
 		let ctx =
-			jrsonnet_stdlib::ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
+			ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
 		for ext in self.ext_str.iter() {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
@@ -102,7 +100,6 @@ impl ConfigureState for StdOpts {
 		for ext in self.ext_code_file.iter() {
 			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
-		s.settings_mut().context_initializer = tb!(ctx);
-		Ok(())
+		Ok(Some(ctx))
 	}
 }

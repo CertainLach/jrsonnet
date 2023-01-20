@@ -5,8 +5,6 @@ use jrsonnet_evaluator::{
 	State,
 };
 
-use crate::ConfigureState;
-
 #[derive(PartialEq, Eq, ValueEnum, Clone)]
 pub enum TraceFormatName {
 	/// Only show `filename:line:column`
@@ -26,9 +24,8 @@ pub struct TraceOpts {
 	#[clap(long, short = 't', default_value = "20")]
 	max_trace: usize,
 }
-impl ConfigureState for TraceOpts {
-	type Guards = Box<dyn TraceFormat>;
-	fn configure(&self, _s: &State) -> Result<Self::Guards> {
+impl TraceOpts {
+	pub fn trace_format(&self) -> Box<dyn TraceFormat> {
 		let resolver = PathResolver::new_cwd_fallback();
 		let max_trace = self.max_trace;
 		let format: Box<dyn TraceFormat> = match self
@@ -46,6 +43,6 @@ impl ConfigureState for TraceOpts {
 				max_trace,
 			}),
 		};
-		Ok(format)
+		format
 	}
 }
