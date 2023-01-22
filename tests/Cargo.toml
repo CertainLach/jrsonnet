@@ -5,7 +5,7 @@ edition = "2021"
 publish = false
 
 [dependencies]
-jrsonnet-evaluator = { path = "../crates/jrsonnet-evaluator" }
-jrsonnet-gcmodule = "0.3.4"
-jrsonnet-stdlib = { path = "../crates/jrsonnet-stdlib" }
+jrsonnet-evaluator.workspace = true
+jrsonnet-gcmodule.workspace = true
+jrsonnet-stdlib.workspace = true
 serde = "1.0.142"

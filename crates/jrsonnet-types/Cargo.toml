@@ -7,6 +7,6 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 peg = "0.8.1"

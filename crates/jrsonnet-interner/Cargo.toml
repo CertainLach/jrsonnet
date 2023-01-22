@@ -16,7 +16,7 @@ structdump = ["dep:structdump"]
 serde = ["dep:serde"]
 
 [dependencies]
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 serde = { version = "1.0", optional = true }
 structdump = { version = "0.2.0", optional = true }

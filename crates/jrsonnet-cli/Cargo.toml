@@ -17,6 +17,6 @@ legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 jrsonnet-evaluator = { workspace = true, features = ["explaining-traces"] }
 jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 clap = { version = "4.0", features = ["derive"] }

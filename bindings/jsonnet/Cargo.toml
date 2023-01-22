@@ -11,7 +11,7 @@ publish = false
 jrsonnet-evaluator.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 [lib]
 name = "jsonnet"

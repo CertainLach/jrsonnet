@@ -33,7 +33,7 @@ jrsonnet-interner.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-types.workspace = true
 jrsonnet-macros.workspace = true
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 pathdiff = "0.2.1"
 hashbrown = "0.13.2"

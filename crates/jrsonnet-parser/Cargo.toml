@@ -27,7 +27,7 @@ serde = ["dep:serde"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 static_assertions = "1.1"
 

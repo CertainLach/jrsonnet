@@ -12,8 +12,10 @@ jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre6" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre6" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre6" }
 
-[profile.test]
-opt-level = 1
+jrsonnet-gcmodule = "0.3.5"
+
+#[profile.test]
+#opt-level = 1
 
 [profile.release]
 opt-level = 3

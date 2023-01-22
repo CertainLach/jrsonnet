@@ -29,7 +29,7 @@ nightly = ["jrsonnet-evaluator/nightly"]
 jrsonnet-evaluator.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-cli.workspace = true
-jrsonnet-gcmodule = { version = "0.3.4" }
+jrsonnet-gcmodule.workspace = true
 
 mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
