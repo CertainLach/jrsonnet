@@ -207,13 +207,13 @@ pub enum ErrorKind {
 
 	#[cfg(feature = "anyhow-error")]
 	#[error(transparent)]
-	Other(Rc<anyhow::Error>),
+	Other(#[trace(skip)] std::rc::Rc<anyhow::Error>),
 }
 
 #[cfg(feature = "anyhow-error")]
 impl From<anyhow::Error> for Error {
 	fn from(e: anyhow::Error) -> Self {
-		Self::new(ErrorKind::Other(Rc::new(e)))
+		Self::new(ErrorKind::Other(std::rc::Rc::new(e)))
 	}
 }
 
