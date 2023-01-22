@@ -233,7 +233,7 @@ fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 	Source::new_virtual(source_name.into(), code.into())
 }
 
-#[derive(Trace)]
+#[derive(Trace, Clone)]
 pub struct ContextInitializer {
 	// When we don't need to support legacy-this-file, we can reuse same context for all files
 	#[cfg(not(feature = "legacy-this-file"))]
