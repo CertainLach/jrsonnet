@@ -499,7 +499,7 @@ impl TypedField {
 		let name = self.name()?;
 		let ty = &self.ty;
 		Some(quote! {
-			(#name, <#ty>::TYPE)
+			(#name, <#ty as Typed>::TYPE)
 		})
 	}
 	fn expand_parse(&self) -> TokenStream {
@@ -509,11 +509,11 @@ impl TypedField {
 			// optional flatten is handled in same way as serde
 			return if self.is_option {
 				quote! {
-					#ident: <#ty>::parse(&obj).ok(),
+					#ident: <#ty as TypedObj>::parse(&obj).ok(),
 				}
 			} else {
 				quote! {
-					#ident: <#ty>::parse(&obj)?,
+					#ident: <#ty as TypedObj>::parse(&obj)?,
 				}
 			};
 		};
@@ -522,14 +522,14 @@ impl TypedField {
 		let value = if self.is_option {
 			quote! {
 				if let Some(value) = obj.get(#name.into())? {
-					Some(<#ty>::from_untyped(value)?)
+					Some(<#ty as Typed>::from_untyped(value)?)
 				} else {
 					None
 				}
 			}
 		} else {
 			quote! {
-				<#ty>::from_untyped(obj.get(#name.into())?.ok_or_else(|| ErrorKind::NoSuchField(#name.into(), vec![]))?)?
+				<#ty as Typed>::from_untyped(obj.get(#name.into())?.ok_or_else(|| ErrorKind::NoSuchField(#name.into(), vec![]))?)?
 			}
 		};
 
@@ -544,23 +544,23 @@ impl TypedField {
 			if self.is_option {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into()).value(<#ty>::into_untyped(value)?)?;
+						out.member(#name.into()).value(<#ty as Typed>::into_untyped(value)?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into()).value(<#ty>::into_untyped(self.#ident)?)?;
+					out.member(#name.into()).value(<#ty as Typed>::into_untyped(self.#ident)?)?;
 				}
 			}
 		} else if self.is_option {
 			quote! {
 				if let Some(value) = self.#ident {
-					value.serialize(out)?;
+					<#ty as TypedObj>::serialize(value, out)?;
 				}
 			}
 		} else {
 			quote! {
-				self.#ident.serialize(out)?;
+				<#ty as TypedObj>::serialize(self.#ident, out)?;
 			}
 		})
 	}
