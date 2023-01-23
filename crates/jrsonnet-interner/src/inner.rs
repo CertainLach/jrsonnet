@@ -1,6 +1,7 @@
 use std::{
 	alloc::{self, Layout},
 	borrow::Borrow,
+	cell::UnsafeCell,
 	cmp,
 	hash::{Hash, Hasher},
 	mem,
@@ -45,7 +46,7 @@ impl InnerHeader {
 }
 
 /// Similar to Rc<[u8]>, but stores all data (refcnt, size) inline, instead of being DST
-pub struct Inner(NonNull<u8>);
+pub struct Inner(UnsafeCell<NonNull<InnerHeader>>);
 impl Inner {
 	/// # Safety
 	/// `is_utf8` should only be set if data is really checked to be utf8
@@ -59,19 +60,15 @@ impl Inner {
 		// - data is written right after allocation
 		// - new allocation can't overlap with passed slice
 		unsafe {
-			let data = alloc::alloc(Layout::from_size_align_unchecked(
+			let data: *mut InnerHeader = alloc::alloc(Layout::from_size_align_unchecked(
 				mem::size_of::<InnerHeader>() + bytes.len(),
 				mem::align_of::<InnerHeader>(),
-			));
+			))
+			.cast();
 			assert!(!data.is_null());
-			*data.cast::<InnerHeader>() =
-				InnerHeader::new(bytes.len().try_into().expect("bytes > 4GB"), is_utf8);
-			ptr::copy_nonoverlapping(
-				bytes.as_ptr(),
-				data.add(mem::size_of::<InnerHeader>()),
-				bytes.len(),
-			);
-			Self(NonNull::new_unchecked(data))
+			*data = InnerHeader::new(bytes.len().try_into().expect("bytes > 4GB"), is_utf8);
+			ptr::copy_nonoverlapping(bytes.as_ptr(), data.offset(1).cast::<u8>(), bytes.len());
+			Self(UnsafeCell::new(NonNull::new_unchecked(data)))
 		}
 	}
 	pub fn new_bytes(bytes: &[u8]) -> Self {
@@ -93,7 +90,7 @@ impl Inner {
 		// SAFETY: bytes after data is allocated to be exactly data.size in length
 		unsafe {
 			slice::from_raw_parts(
-				self.0.as_ptr().add(mem::size_of::<InnerHeader>()),
+				(*self.0.get()).as_ptr().offset(1).cast::<u8>(),
 				size as usize,
 			)
 		}
@@ -135,15 +132,13 @@ impl Inner {
 		unsafe { (*header).set_is_utf8() }
 	}
 
-	const fn header(this: &Self) -> *const InnerHeader {
-		// in `new`, we allocate with correct alignment
-		#![allow(clippy::cast_ptr_alignment)]
-		this.0.as_ptr() as *const InnerHeader
+	fn header(this: &Self) -> *const InnerHeader {
+		// Safety: in `new`, we allocate with correct alignment
+		unsafe { (*this.0.get()).as_ptr() }
 	}
-	const fn header_mut(this: &Self) -> *mut InnerHeader {
-		// in `new`, we allocate with correct alignment
-		#![allow(clippy::cast_ptr_alignment)]
-		this.0.as_ptr().cast::<InnerHeader>()
+	fn header_mut(this: &Self) -> *mut InnerHeader {
+		// Safety: in `new`, we allocate with correct alignment
+		unsafe { (*this.0.get()).as_mut() }
 	}
 
 	fn clone(this: &Self) -> Self {
@@ -152,19 +147,19 @@ impl Inner {
 		unsafe {
 			let refcnt = (*header).refcnt() + 1;
 			(*header).set_refcnt(refcnt);
+			Self(UnsafeCell::new(*this.0.get()))
 		}
-		Self(this.0)
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		a.0 == b.0
+		Self::as_ptr(a) == Self::as_ptr(b)
 	}
-	pub const fn as_ptr(this: &Self) -> *const u8 {
+	pub fn as_ptr(this: &Self) -> *const u8 {
 		// SAFETY: data is initialized
-		unsafe { this.0.as_ptr().add(mem::size_of::<InnerHeader>()) }
+		unsafe { (*this.0.get()).as_ptr().offset(1).cast() }
 	}
 
-	pub const fn strong_count(this: &Self) -> u32 {
+	pub fn strong_count(this: &Self) -> u32 {
 		let header = Self::header(this);
 		// SAFETY: header is initialized
 		unsafe { (*header).refcnt() }
@@ -183,12 +178,14 @@ impl Drop for Inner {
 		#[inline(never)]
 		fn dealloc(val: &Inner) {
 			let header = Inner::header_mut(val);
-			// SAFETY: size is correct, layout is valid
+			// Safety: Data is valid yet
+			let size = unsafe { (*header).size as usize };
+			// SAFETY: size is correct, layout is valid, data will not be used after this, as refcn == 0
 			unsafe {
 				alloc::dealloc(
-					val.0.as_ptr(),
+					header.cast(),
 					Layout::from_size_align_unchecked(
-						mem::size_of::<InnerHeader>() + (*header).size as usize,
+						mem::size_of::<InnerHeader>() + size,
 						mem::align_of::<InnerHeader>(),
 					),
 				);
@@ -209,7 +206,7 @@ impl Drop for Inner {
 
 impl PartialEq for Inner {
 	fn eq(&self, other: &Self) -> bool {
-		self.0 == other.0 || self.as_slice().eq(other.as_slice())
+		Self::as_ptr(self) == Self::as_ptr(other) || self.as_slice().eq(other.as_slice())
 	}
 }
 impl Hash for Inner {

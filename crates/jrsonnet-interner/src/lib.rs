@@ -174,6 +174,7 @@ impl Drop for IBytes {
 		}
 		// First reference - current object, second - POOL
 		if Inner::strong_count(&self.0) <= 2 {
+			eprintln!("unpool");
 			unpool(&self.0);
 		}
 	}
@@ -273,4 +274,17 @@ pub fn intern_bytes(bytes: &[u8]) -> IBytes {
 pub fn intern_str(str: &str) -> IStr {
 	// SAFETY: Rust strings always utf8
 	unsafe { intern_bytes(str.as_bytes()).cast_str_unchecked() }
+}
+
+#[cfg(test)]
+mod tests {
+	use crate::IStr;
+
+	#[test]
+	fn simple() {
+		let a = IStr::from("a");
+		let b = IStr::from("a");
+
+		assert_eq!(a.as_ptr(), b.as_ptr());
+	}
 }
