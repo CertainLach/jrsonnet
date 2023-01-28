@@ -138,7 +138,7 @@ impl Inner {
 	}
 	fn header_mut(this: &Self) -> *mut InnerHeader {
 		// Safety: in `new`, we allocate with correct alignment
-		unsafe { (*this.0.get()).as_mut() }
+		unsafe { (*this.0.get()).as_ptr() }
 	}
 
 	fn clone(this: &Self) -> Self {
