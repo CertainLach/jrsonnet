@@ -411,7 +411,7 @@ pub enum Expr {
 	},
 	Slice(LocExpr, SliceDesc),
 	/// |> expr1 |> expr2
-	Pipe(LocExpr, Vec<LocExpr>),
+	Pipe(LocExpr, LocExpr),
 }
 
 /// file, begin offset, end offset

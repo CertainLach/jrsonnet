@@ -643,21 +643,18 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
-		Pipe(value, mappers) => {
-			let mut value = evaluate(ctx.clone(), value)?;
-			for mapper in mappers {
-				let mapper_ctx = ctx.clone().with_var("_".into(), value.clone());
-				let mapper = evaluate(mapper_ctx, mapper)?;
-				value = match mapper {
-					Val::Null => value,
-					Val::Func(f) => {
-						let native = f.into_native::<((Val,), Val)>();
-						native(value)?
-					}
-					_ => mapper,
-				};
+		Pipe(value, mapper) => {
+			let value = evaluate(ctx.clone(), value)?;
+			let mapper_ctx = ctx.with_var("_".into(), value.clone());
+			let mapper = evaluate(mapper_ctx, mapper)?;
+			match mapper {
+				Val::Null => value,
+				Val::Func(f) => {
+					let native = f.into_native::<((Val,), Val)>();
+					native(value)?
+				}
+				_ => mapper,
 			}
-			value
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let Expr::Str(path) = &*path.0 else {

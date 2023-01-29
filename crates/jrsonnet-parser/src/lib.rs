@@ -294,7 +294,7 @@ parser! {
 			= precedence! {
 				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
 				--
-				a:@ e:(_ "|>" _ e:expr(s) {e})+ {Expr::Pipe(a, e)}
+				a:(@) _ "|>" _ e:@ {Expr::Pipe(a, e)}
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				--
