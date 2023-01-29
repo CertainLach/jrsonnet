@@ -410,6 +410,8 @@ pub enum Expr {
 		cond_else: Option<LocExpr>,
 	},
 	Slice(LocExpr, SliceDesc),
+	/// |> expr1 |> expr2
+	Pipe(LocExpr, Vec<LocExpr>),
 }
 
 /// file, begin offset, end offset
