@@ -1,4 +1,4 @@
-use std::borrow::Cow;
+use std::{any::Any, borrow::Cow};
 
 use jrsonnet_gcmodule::Trace;
 
@@ -25,6 +25,8 @@ pub trait Builtin: Trace {
 	fn params(&self) -> &[BuiltinParam];
 	/// Call the builtin
 	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
+
+	fn as_any(&self) -> &dyn Any;
 }
 
 pub trait StaticBuiltin: Builtin + Send + Sync
@@ -75,6 +77,10 @@ impl Builtin for NativeCallback {
 			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;
 		self.handler.call(&args)
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
 	}
 }
 

@@ -380,6 +380,9 @@ fn builtin_inner(
 					let result: #result = #name(#(#pass)*);
 					<_ as Typed>::into_result(result)
 				}
+				fn as_any(&self) -> &dyn ::std::any::Any {
+					self
+				}
 			}
 		};
 	})
