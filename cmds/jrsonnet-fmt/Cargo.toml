@@ -8,3 +8,4 @@ dprint-core = "0.60.0"
 jrsonnet-rowan-parser.workspace = true
 insta = "1.15"
 indoc = "1.0"
+ass-stroke = { path = "/home/lach/build/ass-stroke/crates/ass-stroke", version = "0.1.0" }

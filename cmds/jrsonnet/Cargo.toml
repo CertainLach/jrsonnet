@@ -12,10 +12,7 @@ experimental = ["exp-preserve-order", "exp-destruct", "exp-null-coaelse", "exp-o
 # Use mimalloc as allocator
 mimalloc = ["mimallocator"]
 # Experimental feature, which allows to preserve order of object fields
-exp-preserve-order = [
-    "jrsonnet-evaluator/exp-preserve-order",
-    "jrsonnet-cli/exp-preserve-order",
-]
+exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order", "jrsonnet-cli/exp-preserve-order"]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
 # Iteration over objects yields [key, value] elements
@@ -44,3 +41,4 @@ clap = { version = "4.1", features = ["derive"] }
 clap_complete = { version = "4.1" }
 serde_json = "1.0.104"
 serde = { workspace = true, features = ["derive"] }
+ass-stroke = { git = "https://github.com/CertainLach/ass-stroke", version = "0.1.0" }

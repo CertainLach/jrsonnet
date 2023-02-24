@@ -267,3 +267,8 @@ pub struct EndingComments {
 	pub should_start_with_newline: bool,
 	pub trivia: ChildTrivia,
 }
+impl EndingComments {
+	pub fn is_empty(&self) -> bool {
+		!self.should_start_with_newline && self.trivia.is_empty()
+	}
+}

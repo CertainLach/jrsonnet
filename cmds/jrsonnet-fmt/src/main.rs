@@ -296,7 +296,6 @@ impl Printable for ObjBody {
 	fn print(&self) -> PrintItems {
 		match self {
 			ObjBody::ObjBodyComp(l) => {
-				let mut pi = p!(new: str("{") >i nl);
 				let (children, end_comments) = children_between::<Member>(
 					l.syntax().clone(),
 					l.l_brace_token().map(Into::into).as_ref(),
@@ -309,6 +308,7 @@ impl Printable for ObjBody {
 						.into(),
 					),
 				);
+				let mut pi = p!(new: str("{") >i nl);
 				for mem in children.into_iter() {
 					if mem.should_start_with_newline {
 						p!(pi: nl);
@@ -341,7 +341,6 @@ impl Printable for ObjBody {
 					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
 					p!(pi: {mem.value});
 					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
-					p!(pi: nl)
 				}
 				if end_comments.should_start_with_newline {
 					p!(pi: nl);
@@ -352,12 +351,15 @@ impl Printable for ObjBody {
 				pi
 			}
 			ObjBody::ObjBodyMemberList(l) => {
-				let mut pi = p!(new: str("{") >i nl);
 				let (children, end_comments) = children_between::<Member>(
 					l.syntax().clone(),
 					l.l_brace_token().map(Into::into).as_ref(),
 					l.r_brace_token().map(Into::into).as_ref(),
 				);
+				if children.is_empty() && end_comments.is_empty() {
+					return p!(new: str("{ }"));
+				}
+				let mut pi = p!(new: str("{") >i nl);
 				for mem in children.into_iter() {
 					if mem.should_start_with_newline {
 						p!(pi: nl);
@@ -395,7 +397,7 @@ impl Printable for Bind {
 				p!(new: {d.into()} str(" = ") {d.value()})
 			}
 			Bind::BindFunction(f) => {
-				p!(new: str("function") {f.params()} str(" = ") {f.value()})
+				p!(new: {f.name()} {f.params()} str(" = ") {f.value()})
 			}
 		}
 	}
@@ -504,7 +506,7 @@ impl Printable for Expr {
 							p!(pi: nl);
 						}
 						p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
-						p!(pi: {bind.value} str(";"));
+						p!(pi: {bind.value} str(","));
 						p!(pi: items(format_comments(&bind.inline_trivia, CommentLocation::ItemInline)) nl);
 					}
 					if end_comments.should_start_with_newline {
@@ -573,16 +575,45 @@ impl Printable for SourceFile {
 	}
 }
 
+fn format(input: &str) -> String {
+	let (parsed, errors) = jrsonnet_rowan_parser::parse(input);
+	if !errors.is_empty() {
+		let mut builder = ass_stroke::SnippetBuilder::new(input);
+		for error in errors {
+			builder
+				.error(ass_stroke::Text::single(
+					format!("{:?}", error.error).chars(),
+					Default::default(),
+				))
+				.range(
+					error.range.start().into()
+						..=(usize::from(error.range.end()) - 1).max(error.range.start().into()),
+				)
+				.build();
+		}
+		let snippet = builder.build();
+		let ansi = ass_stroke::source_to_ansi(&snippet);
+		println!("{ansi}");
+	}
+	dprint_core::formatting::format(
+		|| parsed.print(),
+		PrintOptions {
+			indent_width: 2,
+			max_width: 100,
+			use_tabs: false,
+			new_line_text: "\n",
+		},
+	)
+}
 fn main() {
-	let (parsed, _errors) = jrsonnet_rowan_parser::parse(
-		r#"
+	let input = r#"
 
 
 		# Edit me!
 		local b = import "b.libsonnet";  # comment
 		local a = import "a.libsonnet";
 
-			 local f(x,y)=x+y;
+		local f(x,y)=x+y;
 
 		local {a: [b, ..., c], d, ...e} = null;
 
@@ -693,28 +724,29 @@ fn main() {
 		  else Template {},
 
 		  compspecs: {
-			obj_with_no_item: {for i in [1, 2, 3]},
-			obj_with_2_items: {a:1, b:2, for i in [1,2,3]},
+			obj_with_no_item: {a:1, for i in [1, 2, 3]},
+			obj_with_2_items: {a:1, /*b:2,*/ for i in [1,2,3]},
 		  }
 
 		} + Template
+"#;
 
-
-		// Comment after everything
-"#,
-	);
-
-	// dbg!(errors);
-	dbg!(&parsed);
-
-	let o = dprint_core::formatting::format(
-		|| parsed.print(),
-		PrintOptions {
-			indent_width: 2,
-			max_width: 100,
-			use_tabs: false,
-			new_line_text: "\n",
-		},
-	);
-	println!("{}", o);
+	let mut iteration = 0;
+	let mut a = input.to_string();
+	let mut b;
+	// https://github.com/dprint/dprint/pull/423
+	loop {
+		b = format(&a).trim().to_owned();
+		if a == b {
+			break;
+		}
+		println!("{b}");
+		a = b;
+		iteration += 1;
+		if iteration > 5 {
+			panic!("formatting not converged");
+			break;
+		}
+	}
+	println!("{a}");
 }
