@@ -16,7 +16,7 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2023-01-06"; channel = "nightly"; }).default.override {
+        rust = ((pkgs.rustChannelOf { date = "2023-02-20"; channel = "nightly"; }).default.override {
           extensions = [ "rust-src" "miri" ];
         });
       in
@@ -83,6 +83,7 @@
             rust
             cargo-edit
             cargo-asm
+            cargo-outdated
             lld
             hyperfine
             valgrind

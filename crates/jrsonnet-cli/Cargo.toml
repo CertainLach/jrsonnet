@@ -19,4 +19,4 @@ jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
 jrsonnet-gcmodule.workspace = true
 
-clap = { version = "4.0", features = ["derive"] }
+clap = { version = "4.1", features = ["derive"] }
