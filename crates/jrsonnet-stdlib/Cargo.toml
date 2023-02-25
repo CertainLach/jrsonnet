@@ -7,7 +7,7 @@ license = "MIT"
 edition = "2021"
 
 [features]
-default = ["codegenerated-stdlib", "exp-more-hashes"]
+default = ["codegenerated-stdlib"]
 # Speed-up initialization by generating code for parsed stdlib, instead
 # of invoking parser for it
 codegenerated-stdlib = ["jrsonnet-parser/structdump"]
@@ -15,7 +15,8 @@ codegenerated-stdlib = ["jrsonnet-parser/structdump"]
 legacy-this-file = []
 # Add order preservation flag to some functions
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
-exp-more-hashes = ["sha2"]
+# Add nonstandard `std.sha256` function
+exp-more-hashes = ["dep:sha2"]
 
 [dependencies]
 jrsonnet-evaluator.workspace = true
