@@ -244,7 +244,7 @@ pub struct ContextInitializer {
 	settings: Rc<RefCell<Settings>>,
 }
 impl ContextInitializer {
-	pub fn new(s: State, resolver: PathResolver) -> Self {
+	pub fn new(_s: State, resolver: PathResolver) -> Self {
 		let settings = Settings {
 			ext_vars: Default::default(),
 			ext_natives: Default::default(),
@@ -256,7 +256,7 @@ impl ContextInitializer {
 		Self {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
-				let mut context = ContextBuilder::with_capacity(s, 1);
+				let mut context = ContextBuilder::with_capacity(_s, 1);
 				context.bind(
 					"std".into(),
 					Thunk::evaluated(Val::Obj(stdlib_uncached(settings.clone()))),
