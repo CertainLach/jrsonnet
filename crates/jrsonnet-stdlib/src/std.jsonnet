@@ -214,19 +214,6 @@
           aux(a, b, i, j + 1, acc + [b[j]]) tailstrict;
     aux(a, b, 0, 0, []),
 
-  setInter(a, b, keyF=id)::
-    local aux(a, b, i, j, acc) =
-      if i >= std.length(a) || j >= std.length(b) then
-        acc
-      else
-        if keyF(a[i]) == keyF(b[j]) then
-          aux(a, b, i + 1, j + 1, acc + [a[i]]) tailstrict
-        else if keyF(a[i]) < keyF(b[j]) then
-          aux(a, b, i + 1, j, acc) tailstrict
-        else
-          aux(a, b, i, j + 1, acc) tailstrict;
-    aux(a, b, 0, 0, []) tailstrict,
-
   setDiff(a, b, keyF=id)::
     local aux(a, b, i, j, acc) =
       if i >= std.length(a) then

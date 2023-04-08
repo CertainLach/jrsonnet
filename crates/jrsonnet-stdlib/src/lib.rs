@@ -42,6 +42,8 @@ mod misc;
 pub use misc::*;
 mod sets;
 pub use sets::*;
+mod compat;
+pub use compat::*;
 
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
@@ -147,6 +149,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("endsWith", builtin_ends_with::INST),
 		// Sets
 		("setMember", builtin_set_member::INST),
+		("setInter", builtin_set_inter::INST),
 	]
 	.iter()
 	.cloned()
