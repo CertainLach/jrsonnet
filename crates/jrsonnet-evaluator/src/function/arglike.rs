@@ -55,6 +55,16 @@ where
 }
 impl<T> OptionalContext for T where T: Typed + Clone {}
 
+impl ArgLike for Thunk<Val> {
+	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+		if tailstrict {
+			self.force()?;
+		}
+		Ok(self.clone())
+	}
+}
+impl OptionalContext for Thunk<Val> {}
+
 #[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
