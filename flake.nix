@@ -16,8 +16,8 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2023-02-20"; channel = "nightly"; }).default.override {
-          extensions = [ "rust-src" "miri" ];
+        rust = ((pkgs.rustChannelOf { date = "2023-04-03"; channel = "nightly"; }).default.override {
+          extensions = [ "rust-src" "miri" "rust-analyzer" ];
         });
       in
       rec {
