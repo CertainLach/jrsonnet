@@ -79,12 +79,16 @@ fn yaml_needs_quotes(string: &str) -> bool {
 		|| string.contains(|c| matches!(c, ':' | '{' | '}' | '[' | ']' | ',' | '#' | '`' | '\"' | '\'' | '\\' | '\0'..='\x06' | '\t' | '\n' | '\r' | '\x0e'..='\x1a' | '\x1c'..='\x1f'))
 		|| [
 			// http://yaml.org/type/bool.html
-			// Note: 'y', 'Y', 'n', 'N', is not quoted deliberately, as in libyaml. PyYAML also parse
-			// them as string, not booleans, although it is violating the YAML 1.1 specification.
-			// See https://github.com/dtolnay/serde-yaml/pull/83#discussion_r152628088.
 			"yes", "Yes", "YES", "no", "No", "NO", "True", "TRUE", "true", "False", "FALSE", "false",
 			"on", "On", "ON", "off", "Off", "OFF", // http://yaml.org/type/null.html
 			"null", "Null", "NULL", "~",
+			// > Quoted in std.jsonnet, however, in serde_yaml they were quoted:
+			// > Note: 'y', 'Y', 'n', 'N', is not quoted deliberately, as in libyaml. PyYAML also parse
+			// > them as string, not booleans, although it is violating the YAML 1.1 specification.
+			// > See https://github.com/dtolnay/serde-yaml/pull/83#discussion_r152628088.
+			"y", "Y", "n", "N",
+			"-.inf", "+.inf", ".inf",
+			"-", "---", ""
 		].contains(&string)
 		|| (string.chars().all(|c| matches!(c, '0'..='9' | '-'))
 			&& string.chars().filter(|c| *c == '-').count() == 2)
