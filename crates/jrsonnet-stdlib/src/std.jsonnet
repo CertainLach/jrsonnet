@@ -196,19 +196,6 @@
 
       aux(value),
 
-  uniq(arr, keyF=id)::
-    local f(a, b) =
-      if std.length(a) == 0 then
-        [b]
-      else if keyF(a[std.length(a) - 1]) == keyF(b) then
-        a
-      else
-        a + [b];
-    std.foldl(f, arr, []),
-
-  set(arr, keyF=id)::
-    std.uniq(std.sort(arr, keyF), keyF),
-
   setUnion(a, b, keyF=id)::
     // NOTE: order matters, values in `a` win
     local aux(a, b, i, j, acc) =

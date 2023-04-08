@@ -106,6 +106,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("format", builtin_format::INST),
 		// Sort
 		("sort", builtin_sort::INST),
+		("uniq", builtin_uniq::INST),
+		("set", builtin_set::INST),
 		// Hash
 		("md5", builtin_md5::INST),
 		#[cfg(feature = "exp-more-hashes")]
