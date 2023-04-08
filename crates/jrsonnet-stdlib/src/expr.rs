@@ -1,11 +1,5 @@
 use jrsonnet_parser::LocExpr;
 
-mod structdump_import {
-	pub(super) use std::{option::Option, rc::Rc, vec};
-
-	pub(super) use jrsonnet_parser::*;
-}
-
 pub fn stdlib_expr() -> LocExpr {
 	#[cfg(feature = "serialized-stdlib")]
 	{
@@ -85,15 +79,25 @@ pub fn stdlib_expr() -> LocExpr {
 
 	#[cfg(feature = "codegenerated-stdlib")]
 	{
+		mod structdump_import {
+			pub(super) use std::{option::Option, rc::Rc, vec};
+
+			pub(super) use jrsonnet_parser::*;
+		};
+
 		include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
 	}
 
 	#[cfg(not(feature = "codegenerated-stdlib"))]
 	{
+		use jrsonnet_parser::Source;
+
+		const STDLIB_STR: &str = include_str!("./std.jsonnet");
+
 		jrsonnet_parser::parse(
 			STDLIB_STR,
-			&ParserSettings {
-				file_name: Source::new_virtual(Cow::Borrowed("<std>"), STDLIB_STR.into()),
+			&jrsonnet_parser::ParserSettings {
+				source: Source::new_virtual("<std>".into(), STDLIB_STR.into()),
 			},
 		)
 		.unwrap()
