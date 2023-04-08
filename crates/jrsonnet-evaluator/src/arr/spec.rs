@@ -748,7 +748,7 @@ impl ArrayLike for MappedArray {
 			.get(index)
 			.transpose()
 			.expect("index checked")
-			.and_then(|r| self.0.mapper.evaluate_simple(&(r,)));
+			.and_then(|r| self.0.mapper.evaluate_simple(&(r,), false));
 
 		let new_value = match val {
 			Ok(v) => v,

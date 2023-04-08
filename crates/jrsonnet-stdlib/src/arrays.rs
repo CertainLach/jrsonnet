@@ -88,14 +88,14 @@ pub fn builtin_flatmap(
 
 #[builtin]
 pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),))?))
+	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),), false)?))
 }
 
 #[builtin]
 pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
 	let mut acc = init;
 	for i in arr.iter() {
-		acc = func.evaluate_simple(&(acc, i?))?;
+		acc = func.evaluate_simple(&(acc, i?), false)?;
 	}
 	Ok(acc)
 }
@@ -104,7 +104,7 @@ pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
 pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
 	let mut acc = init;
 	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&(i?, acc))?;
+		acc = func.evaluate_simple(&(i?, acc), false)?;
 	}
 	Ok(acc)
 }

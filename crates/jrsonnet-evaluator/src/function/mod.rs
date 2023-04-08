@@ -164,12 +164,16 @@ impl FuncVal {
 			Self::Builtin(b) => b.call(call_ctx, loc, args),
 		}
 	}
-	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(&self, args: &A) -> Result<Val> {
+	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
+		&self,
+		args: &A,
+		tailstrict: bool,
+	) -> Result<Val> {
 		self.evaluate(
 			ContextBuilder::dangerous_empty_state().build(),
 			CallLocation::native(),
 			args,
-			true,
+			tailstrict,
 		)
 	}
 	/// Convert jsonnet function to plain `Fn` value.

@@ -234,6 +234,7 @@ impl ArrValue {
 		}
 	}
 
+	/// Is this vec supports .get_cheap()?
 	pub fn is_cheap(&self) -> bool {
 		match self {
 			ArrValue::Eager(_) | ArrValue::Range(..) | ArrValue::Bytes(_) => true,

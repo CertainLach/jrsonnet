@@ -174,7 +174,6 @@ impl Drop for IBytes {
 		}
 		// First reference - current object, second - POOL
 		if Inner::strong_count(&self.0) <= 2 {
-			eprintln!("unpool");
 			unpool(&self.0);
 		}
 	}

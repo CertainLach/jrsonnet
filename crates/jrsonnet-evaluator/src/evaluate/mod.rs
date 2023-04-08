@@ -414,6 +414,7 @@ pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 #[allow(clippy::too_many_lines)]
 pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
+
 	if let Some(trivial) = evaluate_trivial(expr) {
 		return Ok(trivial);
 	}

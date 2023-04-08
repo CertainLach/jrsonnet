@@ -22,6 +22,7 @@ macro_rules! impl_native_desc {
 				Box::new(move |$($gen),*| {
 					let val = val.evaluate_simple(
 						&($($gen,)*),
+						false,
 					)?;
 					O::from_untyped(val)
 				})
