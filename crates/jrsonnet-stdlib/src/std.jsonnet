@@ -302,4 +302,13 @@
       error 'find second parameter should be an array, got ' + std.type(arr)
     else
       std.filter(function(i) arr[i] == value, std.range(0, std.length(arr) - 1)),
+
+  // Compat
+  __compare_array(arr1, arr2):
+    assert std.isArray(arr1) && std.isArray(arr2);
+    std.__compare(arr1, arr2),
+  __array_less(arr1, arr2):: std.__compare_array(arr1, arr2) == -1,
+  __array_greater(arr1, arr2):: std.__compare_array(arr1, arr2) == 1,
+  __array_less_or_equal(arr1, arr2):: std.__compare_array(arr1, arr2) <= 0,
+  __array_greater_or_equal(arr1, arr2):: std.__compare_array(arr1, arr2) >= 0,
 }
