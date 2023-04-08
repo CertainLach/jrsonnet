@@ -124,6 +124,17 @@ local names = {
     parseYaml: ['str'],
     encodeUTF8: ['str'],
     decodeUTF8: ['arr'],
+
+    sum: ['arr'],
+    xor: ['x', 'y'],
+
+    // C++ jsonnet undocumented
+    __compare: ['v1', 'v2'],
+    __compare_array: ['arr1', 'arr2'],
+    __array_less: ['arr1', 'arr2'],
+    __array_greater: ['arr1', 'arr2'],
+    __array_less_or_equal: ['arr1', 'arr2'],
+    __array_greater_or_equal: ['arr1', 'arr2'],
 };
 
 std.all(std.map(function(key) assertNames(key, names[key]), std.objectFields(names)))
