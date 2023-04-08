@@ -177,7 +177,8 @@ fn manifest_json_ex_buf(
 					buf.push_str(cur_padding);
 				}
 			} else if mtype == JsonFormatting::Std {
-				buf.push_str("\n\n");
+				buf.push_str(options.newline);
+				buf.push_str(options.newline);
 				buf.push_str(cur_padding);
 			} else if mtype == JsonFormatting::ToString || mtype == JsonFormatting::Manifest {
 				buf.push(' ');
@@ -226,7 +227,8 @@ fn manifest_json_ex_buf(
 					buf.push_str(cur_padding);
 				}
 			} else if mtype == JsonFormatting::Std {
-				buf.push_str("\n\n");
+				buf.push_str(options.newline);
+				buf.push_str(options.newline);
 				buf.push_str(cur_padding);
 			} else if mtype == JsonFormatting::ToString || mtype == JsonFormatting::Manifest {
 				buf.push(' ');
