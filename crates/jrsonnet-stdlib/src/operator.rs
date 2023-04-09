@@ -34,8 +34,8 @@ pub fn builtin_equals(a: Val, b: Val) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_xor(x: Val, y: Val) -> Result<bool> {
-	Ok(!equals(&x, &y)?)
+pub fn builtin_xor(x: bool, y: bool) -> bool {
+	x ^ y
 }
 
 #[builtin]
