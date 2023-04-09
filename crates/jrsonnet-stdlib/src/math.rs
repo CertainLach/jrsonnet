@@ -25,6 +25,11 @@ pub fn builtin_min(a: f64, b: f64) -> f64 {
 }
 
 #[builtin]
+pub fn builtin_sum(arr: Vec<f64>) -> f64 {
+	arr.iter().sum()
+}
+
+#[builtin]
 pub fn builtin_modulo(x: f64, y: f64) -> f64 {
 	x % y
 }
