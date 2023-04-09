@@ -86,6 +86,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("sign", builtin_sign::INST),
 		("max", builtin_max::INST),
 		("min", builtin_min::INST),
+		("sum", builtin_sum::INST),
 		("modulo", builtin_modulo::INST),
 		("floor", builtin_floor::INST),
 		("ceil", builtin_ceil::INST),
@@ -105,6 +106,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("mod", builtin_mod::INST),
 		("primitiveEquals", builtin_primitive_equals::INST),
 		("equals", builtin_equals::INST),
+		("xor", builtin_xor::INST),
 		("format", builtin_format::INST),
 		// Sort
 		("sort", builtin_sort::INST),
