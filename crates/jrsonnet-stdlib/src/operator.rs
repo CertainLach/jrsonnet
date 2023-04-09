@@ -34,6 +34,11 @@ pub fn builtin_equals(a: Val, b: Val) -> Result<bool> {
 }
 
 #[builtin]
+pub fn builtin_xor(x: Val, y: Val) -> Result<bool> {
+	Ok(!equals(&x, &y)?)
+}
+
+#[builtin]
 pub fn builtin_format(str: IStr, vals: Val) -> Result<String> {
 	std_format(&str, vals)
 }

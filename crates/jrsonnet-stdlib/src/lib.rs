@@ -105,6 +105,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("mod", builtin_mod::INST),
 		("primitiveEquals", builtin_primitive_equals::INST),
 		("equals", builtin_equals::INST),
+		("xor", builtin_xor::INST),
 		("format", builtin_format::INST),
 		// Sort
 		("sort", builtin_sort::INST),
