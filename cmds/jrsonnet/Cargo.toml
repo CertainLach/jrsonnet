@@ -2,6 +2,7 @@
 name = "jrsonnet"
 description = "Rust jsonnet implementation"
 version.workspace = true
+repository.workspace = true
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2021"

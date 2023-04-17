@@ -2,6 +2,7 @@
 name = "jrsonnet-interner"
 description = "Jrsonnet string interning"
 version.workspace = true
+repository.workspace = true
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 edition = "2021"

@@ -4,6 +4,7 @@ description = "Macros to reduce boilerplate in jrsonnet-evaluator usage"
 authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
 license = "MIT"
 version.workspace = true
+repository.workspace = true
 edition = "2021"
 
 [lib]

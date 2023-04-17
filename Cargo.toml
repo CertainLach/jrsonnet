@@ -1,5 +1,6 @@
 [workspace]
 package.version = "0.5.0-pre7"
+package.repository = "https://github.com/CertainLach/jrsonnet"
 members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
 default-members = ["cmds/jrsonnet"]
 
