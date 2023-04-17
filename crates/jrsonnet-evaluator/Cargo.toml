@@ -26,7 +26,7 @@ exp-destruct = ["jrsonnet-parser/exp-destruct"]
 # Iteration over objects yields [key, value] elements
 exp-object-iteration = []
 # Bigint type
-exp-bigint = ["num-bigint"]
+exp-bigint = ["num-bigint", "jrsonnet-types/exp-bigint"]
 
 # Improves performance, and implements some useful things using nightly-only features
 nightly = ["hashbrown/nightly"]

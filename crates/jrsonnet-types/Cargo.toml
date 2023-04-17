@@ -11,3 +11,6 @@ edition = "2021"
 jrsonnet-gcmodule.workspace = true
 
 peg = "0.8.1"
+
+[features]
+exp-bigint = []
