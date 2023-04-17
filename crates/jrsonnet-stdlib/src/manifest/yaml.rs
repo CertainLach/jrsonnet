@@ -140,6 +140,8 @@ fn manifest_yaml_ex_buf(
 			}
 		}
 		Val::Num(n) => write!(buf, "{}", *n).unwrap(),
+		#[cfg(feature = "exp-bigint")]
+		Val::BigInt(n) => write!(buf, "{}", *n).unwrap(),
 		Val::Arr(a) => {
 			if a.is_empty() {
 				buf.push_str("[]");

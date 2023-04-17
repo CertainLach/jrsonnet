@@ -103,6 +103,8 @@ fn manifest_value(
 			escape_string_json_buf(&s.clone().into_flat(), buf);
 		}
 		Val::Num(n) => write!(buf, "{n}").unwrap(),
+		#[cfg(feature = "exp-bigint")]
+		Val::BigInt(n) => write!(buf, "{n}").unwrap(),
 		Val::Arr(a) => {
 			if a.is_empty() {
 				buf.push_str("[]");

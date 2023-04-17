@@ -24,6 +24,8 @@ exp-preserve-order = []
 exp-destruct = ["jrsonnet-parser/exp-destruct"]
 # Iteration over objects yields [key, value] elements
 exp-object-iteration = []
+# Bigint type
+exp-bigint = ["num-bigint"]
 
 # Improves performance, and implements some useful things using nightly-only features
 nightly = ["hashbrown/nightly"]
@@ -54,3 +56,5 @@ bincode = { version = "1.3", optional = true }
 annotate-snippets = { version = "0.9.1", features = ["color"], optional = true }
 # Async imports
 async-trait = { version = "0.1.60", optional = true }
+# Bigint
+num-bigint = { version = "0.4.3", features = ["serde"], optional = true }

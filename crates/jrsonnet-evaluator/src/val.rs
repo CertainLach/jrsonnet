@@ -311,6 +311,9 @@ pub enum Val {
 	/// Should be finite, and not NaN
 	/// This restriction isn't enforced by enum, as enum field can't be marked as private
 	Num(f64),
+	/// Experimental bigint
+	#[cfg(feature = "exp-bigint")]
+	BigInt(#[trace(skip)] Box<num_bigint::BigInt>),
 	/// Represents a Jsonnet array.
 	Arr(ArrValue),
 	/// Represents a Jsonnet object.
@@ -389,6 +392,8 @@ impl Val {
 		match self {
 			Self::Str(..) => ValType::Str,
 			Self::Num(..) => ValType::Num,
+			#[cfg(feature = "exp-bigint")]
+			Self::BigInt(..) => ValType::BigInt,
 			Self::Arr(..) => ValType::Arr,
 			Self::Obj(..) => ValType::Obj,
 			Self::Bool(_) => ValType::Bool,

@@ -298,6 +298,7 @@ dependencies = [
  "jrsonnet-macros",
  "jrsonnet-parser",
  "jrsonnet-types",
+ "num-bigint",
  "pathdiff",
  "rustc-hash",
  "serde",
@@ -370,6 +371,7 @@ dependencies = [
  "jrsonnet-macros",
  "jrsonnet-parser",
  "md5",
+ "num-bigint",
  "serde",
  "serde_json",
  "serde_yaml_with_quirks",
@@ -446,6 +448,37 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2d44fe4ebf6b538fcf39d9975c2b90bb3232d1ba8e8bffeacd004f27b20c577a"
 dependencies = [
  "mimalloc-sys",
+]
+
+[[package]]
+name = "num-bigint"
+version = "0.4.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f93ab6289c7b344a8a9f60f88d80aa20032336fe78da341afc91c8a2341fc75f"
+dependencies = [
+ "autocfg",
+ "num-integer",
+ "num-traits",
+ "serde",
+]
+
+[[package]]
+name = "num-integer"
+version = "0.1.45"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "225d3389fb3509a24c93f5c29eb6bde2586b98d9f016636dff58d7c6f7569cd9"
+dependencies = [
+ "autocfg",
+ "num-traits",
+]
+
+[[package]]
+name = "num-traits"
+version = "0.2.15"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "578ede34cf02f8924ab9447f50c28075b4d3e5b269972345e7e0372b38c6cdcd"
+dependencies = [
+ "autocfg",
 ]
 
 [[package]]

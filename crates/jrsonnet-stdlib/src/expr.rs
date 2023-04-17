@@ -83,7 +83,7 @@ pub fn stdlib_expr() -> LocExpr {
 			pub(super) use std::{option::Option, rc::Rc, vec};
 
 			pub(super) use jrsonnet_parser::*;
-		};
+		}
 
 		include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
 	}

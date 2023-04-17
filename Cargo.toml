@@ -1,5 +1,5 @@
 [workspace]
-package.version = "0.5.0"
+package.version = "0.5.0-pre7"
 members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
 default-members = ["cmds/jrsonnet"]
 

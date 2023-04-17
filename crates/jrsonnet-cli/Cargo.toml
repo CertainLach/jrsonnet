@@ -11,6 +11,10 @@ exp-preserve-order = [
     "jrsonnet-evaluator/exp-preserve-order",
     "jrsonnet-stdlib/exp-preserve-order",
 ]
+exp-bigint = [
+    "jrsonnet-evaluator/exp-bigint",
+    "jrsonnet-stdlib/exp-bigint",
+]
 legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 
 [dependencies]

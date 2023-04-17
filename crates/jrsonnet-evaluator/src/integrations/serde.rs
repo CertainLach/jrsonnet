@@ -162,6 +162,8 @@ impl Serialize for Val {
 			Val::Null => serializer.serialize_none(),
 			Val::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
 			Val::Num(n) => serializer.serialize_f64(*n),
+			#[cfg(feature = "exp-bigint")]
+			Val::BigInt(b) => b.serialize(serializer),
 			Val::Arr(arr) => {
 				let mut seq = serializer.serialize_seq(Some(arr.len()))?;
 				for (i, element) in arr.iter().enumerate() {

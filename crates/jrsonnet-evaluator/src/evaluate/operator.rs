@@ -47,6 +47,8 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Arr(a), Arr(b)) => Val::Arr(ArrValue::extended(a.clone(), b.clone())),
 
 		(Num(v1), Num(v2)) => Val::new_checked_num(v1 + v2)?,
+		#[cfg(feature = "exp-bigint")]
+		(BigInt(a), BigInt(b)) => BigInt(Box::new((&**a).clone() + (&**b).clone())),
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type(),
@@ -95,6 +97,8 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 	Ok(match (a, b) {
 		(Str(a), Str(b)) => a.cmp(b),
 		(Num(a), Num(b)) => a.partial_cmp(b).expect("jsonnet numbers are non NaN"),
+		#[cfg(feature = "exp-bigint")]
+		(BigInt(a), BigInt(b)) => a.cmp(b),
 		(Arr(a), Arr(b)) => {
 			if let (Some(ai), Some(bi)) = (a.iter_cheap(), b.iter_cheap()) {
 				for (a, b) in ai.zip(bi) {
@@ -173,6 +177,12 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 			}
 			Num(f64::from((*v1 as i32) >> (*v2 as i32)))
 		}
+
+		// Bigint X Bigint
+		#[cfg(feature = "exp-bigint")]
+		(BigInt(a), Mul, BigInt(b)) => BigInt(Box::new((&**a).clone() * (&**b).clone())),
+		#[cfg(feature = "exp-bigint")]
+		(BigInt(a), Sub, BigInt(b)) => BigInt(Box::new((&**a).clone() - (&**b).clone())),
 
 		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
 			op,

@@ -143,6 +143,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("asciiLower", builtin_ascii_lower::INST),
 		("findSubstr", builtin_find_substr::INST),
 		("parseInt", builtin_parse_int::INST),
+		#[cfg(feature = "exp-bigint")]
+		("bigint", builtin_bigint::INST),
 		("parseOctal", builtin_parse_octal::INST),
 		("parseHex", builtin_parse_hex::INST),
 		// Misc

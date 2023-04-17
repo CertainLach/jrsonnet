@@ -88,6 +88,8 @@ pub enum ValType {
 	Null,
 	Str,
 	Num,
+	#[cfg(feature = "exp-bigint")]
+	BigInt,
 	Arr,
 	Obj,
 	Func,
@@ -101,6 +103,8 @@ impl ValType {
 			Null => "null",
 			Str => "string",
 			Num => "number",
+			#[cfg(feature = "exp-bigint")]
+			BigInt => "bigint",
 			Arr => "array",
 			Obj => "object",
 			Func => "function",
