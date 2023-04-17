@@ -71,7 +71,7 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 			keyf.evaluate_simple(&(value.clone(),), false)?,
 		));
 	}
-	let sort_type = get_sort_type(&mut vk, |v| &v.1)?;
+	let sort_type = get_sort_type(&vk, |v| &v.1)?;
 	match sort_type {
 		SortKeyType::Number => vk.sort_by_key(|v| match v.1 {
 			Val::Num(n) => NonNaNf64(n),
@@ -106,10 +106,10 @@ pub fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	Ok(super::sort::sort(
+	super::sort::sort(
 		arr,
 		keyF.unwrap_or_else(FuncVal::identity),
-	)?)
+	)
 }
 
 fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
@@ -129,7 +129,7 @@ fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 	let mut out = Vec::new();
 	let last_value = arr.get_lazy(0).unwrap();
 	let mut last_key = keyf.evaluate_simple(&(last_value.clone(),), false)?;
-	out.push(last_value.clone());
+	out.push(last_value);
 
 	for next in arr.iter_lazy().skip(1) {
 		let next_key = keyf.evaluate_simple(&(next.clone(),), false)?;

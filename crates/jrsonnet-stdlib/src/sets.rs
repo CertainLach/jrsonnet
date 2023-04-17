@@ -35,7 +35,7 @@ pub fn builtin_set_member(x: Thunk<Val>, arr: ArrValue, keyF: Option<FuncVal>) -
 }
 
 #[builtin]
-#[allow(non_snake_case)]
+#[allow(non_snake_case, clippy::redundant_closure)]
 pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	let mut a = a.iter_lazy();
 	let mut b = b.iter_lazy();
