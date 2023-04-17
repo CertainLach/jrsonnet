@@ -23,9 +23,6 @@ enum SubOpts {
 		/// Target shell name
 		shell: Shell,
 	},
-	Deps {
-		path: String,
-	},
 }
 
 #[derive(Parser)]
@@ -86,7 +83,6 @@ fn main() {
 
 	if let Some(sub) = opts.sub {
 		match sub {
-			SubOpts::Deps { path } => todo!(),
 			SubOpts::Generate { shell } => {
 				use clap_complete::generate;
 				let app = &mut Opts::command();
