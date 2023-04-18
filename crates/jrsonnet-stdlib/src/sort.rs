@@ -57,7 +57,7 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => unreachable!(),
+		SortKeyType::Unknown => unreachable!("list is not empty, as checked in sort"),
 	};
 	Ok(values)
 }
@@ -81,7 +81,7 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => unreachable!(),
+		SortKeyType::Unknown => unreachable!("list is not empty, as checked in sort"),
 	};
 	Ok(vk.into_iter().map(|v| v.0).collect())
 }
@@ -103,13 +103,7 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 #[builtin]
 #[allow(non_snake_case)]
 pub fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
-	if arr.len() <= 1 {
-		return Ok(arr);
-	}
-	super::sort::sort(
-		arr,
-		keyF.unwrap_or_else(FuncVal::identity),
-	)
+	super::sort::sort(arr, keyF.unwrap_or_else(FuncVal::identity))
 }
 
 fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
@@ -160,6 +154,9 @@ pub fn builtin_uniq(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 #[builtin]
 #[allow(non_snake_case)]
 pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+	if arr.len() <= 1 {
+		return Ok(arr);
+	}
 	let keyF = keyF.unwrap_or(FuncVal::identity());
 	if keyF.is_identity() {
 		let arr = arr.iter().collect::<Result<Vec<Val>>>()?;
