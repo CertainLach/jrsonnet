@@ -46,6 +46,9 @@ fn get_sort_type<T>(values: &[T], key_getter: impl Fn(&T) -> &Val) -> Result<Sor
 }
 
 fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
+    if values.len() <= 1 {
+        return Ok(values);
+    }
 	// Fast path, identity key getter
 	let sort_type = get_sort_type(&values, |k| k)?;
 	match sort_type {
@@ -160,6 +163,9 @@ pub fn builtin_uniq(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 #[builtin]
 #[allow(non_snake_case)]
 pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+    if arr.len() <= 1 {
+        return Ok(arr);
+    }
 	let keyF = keyF.unwrap_or(FuncVal::identity());
 	if keyF.is_identity() {
 		let arr = arr.iter().collect::<Result<Vec<Val>>>()?;
