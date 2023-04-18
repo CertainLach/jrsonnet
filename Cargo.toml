@@ -1,17 +1,17 @@
 [workspace]
-package.version = "0.5.0-pre7"
+package.version = "0.5.0-pre8"
 package.repository = "https://github.com/CertainLach/jrsonnet"
 members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
 default-members = ["cmds/jrsonnet"]
 
 [workspace.dependencies]
-jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0-pre7" }
-jrsonnet-macros = { path = "./crates/jrsonnet-macros", version = "0.5.0-pre7" }
-jrsonnet-parser = { path = "./crates/jrsonnet-parser", version = "0.5.0-pre7" }
-jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre7" }
-jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre7" }
-jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre7" }
-jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre7" }
+jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0-pre8" }
+jrsonnet-macros = { path = "./crates/jrsonnet-macros", version = "0.5.0-pre8" }
+jrsonnet-parser = { path = "./crates/jrsonnet-parser", version = "0.5.0-pre8" }
+jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre8" }
+jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre8" }
+jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre8" }
+jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre8" }
 
 jrsonnet-gcmodule = "0.3.5"
 
