@@ -430,6 +430,8 @@ pub fn render_float(
 			for b in frac_str.as_bytes().iter().rev() {
 				if *b == b'0' {
 					trim -= 1;
+				} else {
+					break;
 				}
 			}
 		}
@@ -556,7 +558,11 @@ pub fn format_code(
 		}
 		ConvTypeV::Shorter => {
 			let value = f64::from_untyped(value.clone())?;
-			let exponent = value.log10().floor();
+			let exponent = if value == 0.0 {
+				0.0
+			} else {
+				value.abs().log10().floor()
+			};
 			if exponent < -4.0 || exponent >= fpprec as f64 {
 				render_float_sci(
 					&mut tmp_out,
