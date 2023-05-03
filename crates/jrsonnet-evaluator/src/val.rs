@@ -445,6 +445,8 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
 		(Val::Num(a), Val::Num(b)) => (a - b).abs() <= f64::EPSILON,
+		#[cfg(feature = "exp-bigint")]
+		(Val::BigInt(a), Val::BigInt(b)) => a == b,
 		(Val::Arr(_), Val::Arr(_)) => {
 			throw!("primitiveEquals operates on primitive types, got array")
 		}
