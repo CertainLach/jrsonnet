@@ -1,15 +1,18 @@
 //! Those implementations are a bit sketchy, as this is mostly performance experiments
 //! of not yet finished nightly rust features
 
-use std::{cell::RefCell, iter, mem::replace};
+use std::{cell::RefCell, iter, mem::replace, rc::Rc};
 
 use jrsonnet_gcmodule::{Cc, Trace};
-use jrsonnet_interner::IBytes;
+use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_parser::LocExpr;
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, val::ThunkValue,
+	error::ErrorKind::InfiniteRecursionDetected,
+	evaluate,
+	function::FuncVal,
+	val::{StrValue, ThunkValue},
 	Context, Error, Result, Thunk, Val,
 };
 
@@ -150,6 +153,69 @@ impl ArrayLike for SliceArray {
 impl From<SliceArray> for ArrValue {
 	fn from(value: SliceArray) -> Self {
 		Self::Slice(Cc::new(value))
+	}
+}
+
+#[derive(Trace, Debug, Clone)]
+pub struct CharArray(pub Rc<Vec<char>>);
+#[cfg(feature = "nightly")]
+type CharArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
+#[cfg(feature = "nightly")]
+type CharArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
+#[cfg(feature = "nightly")]
+type CharArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
+impl ArrayLike for CharArray {
+	#[cfg(feature = "nightly")]
+	type Iter<'t> = CharArrayIter<'t>;
+	#[cfg(feature = "nightly")]
+	type IterLazy<'t> = CharArrayLazyIter<'t>;
+	#[cfg(feature = "nightly")]
+	type IterCheap<'t> = CharArrayCheapIter<'t>;
+
+	fn len(&self) -> usize {
+		self.0.len()
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		Ok(self.get_cheap(index))
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		self.get_cheap(index).map(Thunk::evaluated)
+	}
+
+	fn get_cheap(&self, index: usize) -> Option<Val> {
+		self.0
+			.get(index)
+			.map(|v| Val::Str(StrValue::Flat(IStr::from(*v))))
+	}
+
+	#[cfg(feature = "nightly")]
+	fn iter(&self) -> CharArrayIter<'_> {
+		self.0
+			.iter()
+			.map(|v| Ok(Val::Str(StrValue::Flat(IStr::from(*v)))))
+	}
+
+	#[cfg(feature = "nightly")]
+	fn iter_lazy(&self) -> CharArrayLazyIter<'_> {
+		self.0
+			.iter()
+			.map(|v| Thunk::evaluated(Val::Str(StrValue::Flat(IStr::from(*v)))))
+	}
+
+	#[cfg(feature = "nightly")]
+	fn iter_cheap(&self) -> Option<CharArrayCheapIter<'_>> {
+		Some(
+			self.0
+				.iter()
+				.map(|v| Val::Str(StrValue::Flat(IStr::from(*v)))),
+		)
+	}
+}
+impl From<CharArray> for ArrValue {
+	fn from(value: CharArray) -> Self {
+		ArrValue::Chars(value)
 	}
 }
 
@@ -935,6 +1001,7 @@ macro_rules! pass {
 	($t:ident.$m:ident($($ident:ident),*)) => {
 		match $t {
 			Self::Bytes(e) => e.$m($($ident)*),
+			Self::Chars(e) => e.$m($($ident)*),
 			Self::Expr(e) => e.$m($($ident)*),
 			Self::Lazy(e) => e.$m($($ident)*),
 			Self::Eager(e) => e.$m($($ident)*),

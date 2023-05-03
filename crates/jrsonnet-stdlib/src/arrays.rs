@@ -45,8 +45,9 @@ pub fn builtin_slice(
 }
 
 #[builtin]
-pub fn builtin_map(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	Ok(arr.map(func))
+pub fn builtin_map(func: FuncVal, arr: IndexableVal) -> ArrValue {
+	let arr = arr.to_array();
+	arr.map(func)
 }
 
 #[builtin]

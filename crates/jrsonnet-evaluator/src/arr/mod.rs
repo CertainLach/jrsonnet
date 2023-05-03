@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
@@ -14,6 +16,8 @@ use spec::*;
 pub enum ArrValue {
 	/// Layout optimized byte array.
 	Bytes(BytesArray),
+	/// Layout optimized char array.
+	Chars(CharArray),
 	/// Every element is lazy evaluated.
 	Lazy(LazyArray),
 	/// Every element is defined somewhere in source code
@@ -65,6 +69,9 @@ impl ArrValue {
 
 	pub fn bytes(bytes: IBytes) -> Self {
 		Self::Bytes(BytesArray(bytes))
+	}
+	pub fn chars(chars: impl Iterator<Item = char>) -> Self {
+		Self::Chars(CharArray(Rc::new(chars.collect())))
 	}
 
 	#[must_use]
@@ -237,7 +244,9 @@ impl ArrValue {
 	/// Is this vec supports `.get_cheap()?`
 	pub fn is_cheap(&self) -> bool {
 		match self {
-			ArrValue::Eager(_) | ArrValue::Range(..) | ArrValue::Bytes(_) => true,
+			ArrValue::Eager(_) | ArrValue::Range(..) | ArrValue::Bytes(_) | ArrValue::Chars(_) => {
+				true
+			}
 			ArrValue::Extended(v) => v.a.is_cheap() && v.b.is_cheap(),
 			ArrValue::Slice(r) => r.inner.is_cheap(),
 			ArrValue::Reverse(i) => i.0.is_cheap(),

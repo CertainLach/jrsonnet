@@ -149,6 +149,12 @@ pub enum IndexableVal {
 	Arr(ArrValue),
 }
 impl IndexableVal {
+	pub fn to_array(self) -> ArrValue {
+		match self {
+			IndexableVal::Str(s) => ArrValue::chars(s.chars()),
+			IndexableVal::Arr(arr) => arr,
+		}
+	}
 	/// Slice the value.
 	///
 	/// # Implementation

@@ -205,6 +205,12 @@ impl From<&String> for IStr {
 		s.as_str().into()
 	}
 }
+impl From<char> for IStr {
+	fn from(value: char) -> Self {
+		let mut buf = [0; 5];
+		Self::from(&*value.encode_utf8(&mut buf))
+	}
+}
 impl From<&[u8]> for IBytes {
 	fn from(v: &[u8]) -> Self {
 		intern_bytes(v)
