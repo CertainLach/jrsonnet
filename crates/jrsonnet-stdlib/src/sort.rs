@@ -1,6 +1,9 @@
+use std::cmp::Ordering;
+
 use jrsonnet_evaluator::{
 	error::Result,
 	function::{builtin, FuncVal},
+	operator::evaluate_compare_op,
 	throw,
 	val::{equals, ArrValue},
 	Thunk, Val,
@@ -39,7 +42,7 @@ fn get_sort_type<T>(values: &[T], key_getter: impl Fn(&T) -> &Val) -> Result<Sor
 			(Val::Str(_) | Val::Num(_), _) => {
 				throw!("sort elements should have the same types")
 			}
-			_ => throw!("sort key should either be a string or a number"),
+			_ => {}
 		}
 	}
 	Ok(sort_type)
@@ -57,7 +60,24 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => unreachable!("list is not empty, as checked in sort"),
+		SortKeyType::Unknown => {
+			let mut err = None;
+			// evaluate_compare_op will never return equal on types, which are different from
+			// jsonnet perspective
+			values.sort_unstable_by(|a, b| {
+				match evaluate_compare_op(a, b, jrsonnet_parser::BinaryOpType::Lt) {
+					Ok(ord) => ord,
+					Err(e) if err.is_none() => {
+						let _ = err.insert(e);
+						Ordering::Equal
+					}
+					Err(_) => Ordering::Equal,
+				}
+			});
+			if let Some(err) = err {
+				return Err(err);
+			}
+		}
 	};
 	Ok(values)
 }
@@ -81,7 +101,24 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => unreachable!("list is not empty, as checked in sort"),
+		SortKeyType::Unknown => {
+			let mut err = None;
+			// evaluate_compare_op will never return equal on types, which are different from
+			// jsonnet perspective
+			vk.sort_by(|(_a, ak), (_b, bk)| {
+				match evaluate_compare_op(ak, bk, jrsonnet_parser::BinaryOpType::Lt) {
+					Ok(ord) => ord,
+					Err(e) if err.is_none() => {
+						let _ = err.insert(e);
+						Ordering::Equal
+					}
+					Err(_) => Ordering::Equal,
+				}
+			});
+			if let Some(err) = err {
+				return Err(err);
+			}
+		}
 	};
 	Ok(vk.into_iter().map(|v| v.0).collect())
 }
