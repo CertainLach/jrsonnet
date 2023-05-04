@@ -200,12 +200,16 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			}
 			println!("{}", path.to_str().expect("path"));
 			let mut file = File::create(path)?;
-			writeln!(
+			write!(
 				file,
 				"{}",
 				data.manifest(&manifest_format)
-					.with_description(|| format!("manifesting {field}"))?
+					.with_description(|| format!("manifesting {field}"))?,
 			)?;
+			if manifest_format.file_trailing_newline() {
+				writeln!(file)?;
+			}
+			file.flush()?;
 		}
 	} else if let Some(path) = opts.output.output_file {
 		if opts.output.create_output_dirs {
