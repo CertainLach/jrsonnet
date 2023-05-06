@@ -56,6 +56,9 @@ struct InputOpts {
 struct Opts {
 	#[clap(subcommand)]
 	sub: Option<SubOpts>,
+	/// Print version
+	#[clap(long)]
+	version: bool,
 
 	#[clap(flatten)]
 	input: InputOpts,
@@ -80,6 +83,11 @@ struct Opts {
 
 fn main() {
 	let opts: Opts = Opts::parse();
+
+	if opts.version {
+		print!("{}", Opts::command().render_version());
+		std::process::exit(0)
+	}
 
 	if let Some(sub) = opts.sub {
 		match sub {
