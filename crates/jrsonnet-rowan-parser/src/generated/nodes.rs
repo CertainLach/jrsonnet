@@ -19,6 +19,19 @@ impl SourceFile {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Expr {
+	pub(crate) syntax: SyntaxNode,
+}
+impl Expr {
+	pub fn stmt_locals(&self) -> AstChildren<StmtLocal> {
+		support::children(&self.syntax)
+	}
+	pub fn expr_base(&self) -> Option<ExprBase> {
+		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprBinary {
 	pub(crate) syntax: SyntaxNode,
 }
@@ -303,25 +316,6 @@ impl ExprVar {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprLocal {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprLocal {
-	pub fn local_kw_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![local])
-	}
-	pub fn binds(&self) -> AstChildren<Bind> {
-		support::children(&self.syntax)
-	}
-	pub fn semi_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![;])
-	}
-	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprIfThenElse {
 	pub(crate) syntax: SyntaxNode,
 }
@@ -449,6 +443,22 @@ impl ExprError {
 	}
 	pub fn expr(&self) -> Option<Expr> {
 		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StmtLocal {
+	pub(crate) syntax: SyntaxNode,
+}
+impl StmtLocal {
+	pub fn local_kw_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![local])
+	}
+	pub fn binds(&self) -> AstChildren<Bind> {
+		support::children(&self.syntax)
+	}
+	pub fn semi_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![;])
 	}
 }
 
@@ -810,7 +820,25 @@ impl DestructArrayElement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Expr {
+pub enum ObjBody {
+	ObjBodyComp(ObjBodyComp),
+	ObjBodyMemberList(ObjBodyMemberList),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum CompSpec {
+	ForSpec(ForSpec),
+	IfSpec(IfSpec),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Bind {
+	BindDestruct(BindDestruct),
+	BindFunction(BindFunction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum ExprBase {
 	ExprBinary(ExprBinary),
 	ExprUnary(ExprUnary),
 	ExprSlice(ExprSlice),
@@ -827,29 +855,10 @@ pub enum Expr {
 	ExprArrayComp(ExprArrayComp),
 	ExprImport(ExprImport),
 	ExprVar(ExprVar),
-	ExprLocal(ExprLocal),
 	ExprIfThenElse(ExprIfThenElse),
 	ExprFunction(ExprFunction),
 	ExprAssert(ExprAssert),
 	ExprError(ExprError),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum ObjBody {
-	ObjBodyComp(ObjBodyComp),
-	ObjBodyMemberList(ObjBodyMemberList),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum CompSpec {
-	ForSpec(ForSpec),
-	IfSpec(IfSpec),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Bind {
-	BindDestruct(BindDestruct),
-	BindFunction(BindFunction),
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1042,6 +1051,21 @@ pub enum CustomErrorKind {
 impl AstNode for SourceFile {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == SOURCE_FILE
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for Expr {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == EXPR
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1354,21 +1378,6 @@ impl AstNode for ExprVar {
 		&self.syntax
 	}
 }
-impl AstNode for ExprLocal {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_LOCAL
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
 impl AstNode for ExprIfThenElse {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == EXPR_IF_THEN_ELSE
@@ -1477,6 +1486,21 @@ impl AstNode for Assertion {
 impl AstNode for ExprError {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == EXPR_ERROR
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for StmtLocal {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == STMT_LOCAL
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1849,174 +1873,6 @@ impl AstNode for DestructArrayElement {
 		&self.syntax
 	}
 }
-impl From<ExprBinary> for Expr {
-	fn from(node: ExprBinary) -> Expr {
-		Expr::ExprBinary(node)
-	}
-}
-impl From<ExprUnary> for Expr {
-	fn from(node: ExprUnary) -> Expr {
-		Expr::ExprUnary(node)
-	}
-}
-impl From<ExprSlice> for Expr {
-	fn from(node: ExprSlice) -> Expr {
-		Expr::ExprSlice(node)
-	}
-}
-impl From<ExprIndex> for Expr {
-	fn from(node: ExprIndex) -> Expr {
-		Expr::ExprIndex(node)
-	}
-}
-impl From<ExprIndexExpr> for Expr {
-	fn from(node: ExprIndexExpr) -> Expr {
-		Expr::ExprIndexExpr(node)
-	}
-}
-impl From<ExprApply> for Expr {
-	fn from(node: ExprApply) -> Expr {
-		Expr::ExprApply(node)
-	}
-}
-impl From<ExprObjExtend> for Expr {
-	fn from(node: ExprObjExtend) -> Expr {
-		Expr::ExprObjExtend(node)
-	}
-}
-impl From<ExprParened> for Expr {
-	fn from(node: ExprParened) -> Expr {
-		Expr::ExprParened(node)
-	}
-}
-impl From<ExprString> for Expr {
-	fn from(node: ExprString) -> Expr {
-		Expr::ExprString(node)
-	}
-}
-impl From<ExprNumber> for Expr {
-	fn from(node: ExprNumber) -> Expr {
-		Expr::ExprNumber(node)
-	}
-}
-impl From<ExprLiteral> for Expr {
-	fn from(node: ExprLiteral) -> Expr {
-		Expr::ExprLiteral(node)
-	}
-}
-impl From<ExprArray> for Expr {
-	fn from(node: ExprArray) -> Expr {
-		Expr::ExprArray(node)
-	}
-}
-impl From<ExprObject> for Expr {
-	fn from(node: ExprObject) -> Expr {
-		Expr::ExprObject(node)
-	}
-}
-impl From<ExprArrayComp> for Expr {
-	fn from(node: ExprArrayComp) -> Expr {
-		Expr::ExprArrayComp(node)
-	}
-}
-impl From<ExprImport> for Expr {
-	fn from(node: ExprImport) -> Expr {
-		Expr::ExprImport(node)
-	}
-}
-impl From<ExprVar> for Expr {
-	fn from(node: ExprVar) -> Expr {
-		Expr::ExprVar(node)
-	}
-}
-impl From<ExprLocal> for Expr {
-	fn from(node: ExprLocal) -> Expr {
-		Expr::ExprLocal(node)
-	}
-}
-impl From<ExprIfThenElse> for Expr {
-	fn from(node: ExprIfThenElse) -> Expr {
-		Expr::ExprIfThenElse(node)
-	}
-}
-impl From<ExprFunction> for Expr {
-	fn from(node: ExprFunction) -> Expr {
-		Expr::ExprFunction(node)
-	}
-}
-impl From<ExprAssert> for Expr {
-	fn from(node: ExprAssert) -> Expr {
-		Expr::ExprAssert(node)
-	}
-}
-impl From<ExprError> for Expr {
-	fn from(node: ExprError) -> Expr {
-		Expr::ExprError(node)
-	}
-}
-impl AstNode for Expr {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		match kind {
-			EXPR_BINARY | EXPR_UNARY | EXPR_SLICE | EXPR_INDEX | EXPR_INDEX_EXPR | EXPR_APPLY
-			| EXPR_OBJ_EXTEND | EXPR_PARENED | EXPR_STRING | EXPR_NUMBER | EXPR_LITERAL
-			| EXPR_ARRAY | EXPR_OBJECT | EXPR_ARRAY_COMP | EXPR_IMPORT | EXPR_VAR | EXPR_LOCAL
-			| EXPR_IF_THEN_ELSE | EXPR_FUNCTION | EXPR_ASSERT | EXPR_ERROR => true,
-			_ => false,
-		}
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let res = match syntax.kind() {
-			EXPR_BINARY => Expr::ExprBinary(ExprBinary { syntax }),
-			EXPR_UNARY => Expr::ExprUnary(ExprUnary { syntax }),
-			EXPR_SLICE => Expr::ExprSlice(ExprSlice { syntax }),
-			EXPR_INDEX => Expr::ExprIndex(ExprIndex { syntax }),
-			EXPR_INDEX_EXPR => Expr::ExprIndexExpr(ExprIndexExpr { syntax }),
-			EXPR_APPLY => Expr::ExprApply(ExprApply { syntax }),
-			EXPR_OBJ_EXTEND => Expr::ExprObjExtend(ExprObjExtend { syntax }),
-			EXPR_PARENED => Expr::ExprParened(ExprParened { syntax }),
-			EXPR_STRING => Expr::ExprString(ExprString { syntax }),
-			EXPR_NUMBER => Expr::ExprNumber(ExprNumber { syntax }),
-			EXPR_LITERAL => Expr::ExprLiteral(ExprLiteral { syntax }),
-			EXPR_ARRAY => Expr::ExprArray(ExprArray { syntax }),
-			EXPR_OBJECT => Expr::ExprObject(ExprObject { syntax }),
-			EXPR_ARRAY_COMP => Expr::ExprArrayComp(ExprArrayComp { syntax }),
-			EXPR_IMPORT => Expr::ExprImport(ExprImport { syntax }),
-			EXPR_VAR => Expr::ExprVar(ExprVar { syntax }),
-			EXPR_LOCAL => Expr::ExprLocal(ExprLocal { syntax }),
-			EXPR_IF_THEN_ELSE => Expr::ExprIfThenElse(ExprIfThenElse { syntax }),
-			EXPR_FUNCTION => Expr::ExprFunction(ExprFunction { syntax }),
-			EXPR_ASSERT => Expr::ExprAssert(ExprAssert { syntax }),
-			EXPR_ERROR => Expr::ExprError(ExprError { syntax }),
-			_ => return None,
-		};
-		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Expr::ExprBinary(it) => &it.syntax,
-			Expr::ExprUnary(it) => &it.syntax,
-			Expr::ExprSlice(it) => &it.syntax,
-			Expr::ExprIndex(it) => &it.syntax,
-			Expr::ExprIndexExpr(it) => &it.syntax,
-			Expr::ExprApply(it) => &it.syntax,
-			Expr::ExprObjExtend(it) => &it.syntax,
-			Expr::ExprParened(it) => &it.syntax,
-			Expr::ExprString(it) => &it.syntax,
-			Expr::ExprNumber(it) => &it.syntax,
-			Expr::ExprLiteral(it) => &it.syntax,
-			Expr::ExprArray(it) => &it.syntax,
-			Expr::ExprObject(it) => &it.syntax,
-			Expr::ExprArrayComp(it) => &it.syntax,
-			Expr::ExprImport(it) => &it.syntax,
-			Expr::ExprVar(it) => &it.syntax,
-			Expr::ExprLocal(it) => &it.syntax,
-			Expr::ExprIfThenElse(it) => &it.syntax,
-			Expr::ExprFunction(it) => &it.syntax,
-			Expr::ExprAssert(it) => &it.syntax,
-			Expr::ExprError(it) => &it.syntax,
-		}
-	}
-}
 impl From<ObjBodyComp> for ObjBody {
 	fn from(node: ObjBodyComp) -> ObjBody {
 		ObjBody::ObjBodyComp(node)
@@ -2110,6 +1966,167 @@ impl AstNode for Bind {
 		match self {
 			Bind::BindDestruct(it) => &it.syntax,
 			Bind::BindFunction(it) => &it.syntax,
+		}
+	}
+}
+impl From<ExprBinary> for ExprBase {
+	fn from(node: ExprBinary) -> ExprBase {
+		ExprBase::ExprBinary(node)
+	}
+}
+impl From<ExprUnary> for ExprBase {
+	fn from(node: ExprUnary) -> ExprBase {
+		ExprBase::ExprUnary(node)
+	}
+}
+impl From<ExprSlice> for ExprBase {
+	fn from(node: ExprSlice) -> ExprBase {
+		ExprBase::ExprSlice(node)
+	}
+}
+impl From<ExprIndex> for ExprBase {
+	fn from(node: ExprIndex) -> ExprBase {
+		ExprBase::ExprIndex(node)
+	}
+}
+impl From<ExprIndexExpr> for ExprBase {
+	fn from(node: ExprIndexExpr) -> ExprBase {
+		ExprBase::ExprIndexExpr(node)
+	}
+}
+impl From<ExprApply> for ExprBase {
+	fn from(node: ExprApply) -> ExprBase {
+		ExprBase::ExprApply(node)
+	}
+}
+impl From<ExprObjExtend> for ExprBase {
+	fn from(node: ExprObjExtend) -> ExprBase {
+		ExprBase::ExprObjExtend(node)
+	}
+}
+impl From<ExprParened> for ExprBase {
+	fn from(node: ExprParened) -> ExprBase {
+		ExprBase::ExprParened(node)
+	}
+}
+impl From<ExprString> for ExprBase {
+	fn from(node: ExprString) -> ExprBase {
+		ExprBase::ExprString(node)
+	}
+}
+impl From<ExprNumber> for ExprBase {
+	fn from(node: ExprNumber) -> ExprBase {
+		ExprBase::ExprNumber(node)
+	}
+}
+impl From<ExprLiteral> for ExprBase {
+	fn from(node: ExprLiteral) -> ExprBase {
+		ExprBase::ExprLiteral(node)
+	}
+}
+impl From<ExprArray> for ExprBase {
+	fn from(node: ExprArray) -> ExprBase {
+		ExprBase::ExprArray(node)
+	}
+}
+impl From<ExprObject> for ExprBase {
+	fn from(node: ExprObject) -> ExprBase {
+		ExprBase::ExprObject(node)
+	}
+}
+impl From<ExprArrayComp> for ExprBase {
+	fn from(node: ExprArrayComp) -> ExprBase {
+		ExprBase::ExprArrayComp(node)
+	}
+}
+impl From<ExprImport> for ExprBase {
+	fn from(node: ExprImport) -> ExprBase {
+		ExprBase::ExprImport(node)
+	}
+}
+impl From<ExprVar> for ExprBase {
+	fn from(node: ExprVar) -> ExprBase {
+		ExprBase::ExprVar(node)
+	}
+}
+impl From<ExprIfThenElse> for ExprBase {
+	fn from(node: ExprIfThenElse) -> ExprBase {
+		ExprBase::ExprIfThenElse(node)
+	}
+}
+impl From<ExprFunction> for ExprBase {
+	fn from(node: ExprFunction) -> ExprBase {
+		ExprBase::ExprFunction(node)
+	}
+}
+impl From<ExprAssert> for ExprBase {
+	fn from(node: ExprAssert) -> ExprBase {
+		ExprBase::ExprAssert(node)
+	}
+}
+impl From<ExprError> for ExprBase {
+	fn from(node: ExprError) -> ExprBase {
+		ExprBase::ExprError(node)
+	}
+}
+impl AstNode for ExprBase {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			EXPR_BINARY | EXPR_UNARY | EXPR_SLICE | EXPR_INDEX | EXPR_INDEX_EXPR | EXPR_APPLY
+			| EXPR_OBJ_EXTEND | EXPR_PARENED | EXPR_STRING | EXPR_NUMBER | EXPR_LITERAL
+			| EXPR_ARRAY | EXPR_OBJECT | EXPR_ARRAY_COMP | EXPR_IMPORT | EXPR_VAR
+			| EXPR_IF_THEN_ELSE | EXPR_FUNCTION | EXPR_ASSERT | EXPR_ERROR => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let res = match syntax.kind() {
+			EXPR_BINARY => ExprBase::ExprBinary(ExprBinary { syntax }),
+			EXPR_UNARY => ExprBase::ExprUnary(ExprUnary { syntax }),
+			EXPR_SLICE => ExprBase::ExprSlice(ExprSlice { syntax }),
+			EXPR_INDEX => ExprBase::ExprIndex(ExprIndex { syntax }),
+			EXPR_INDEX_EXPR => ExprBase::ExprIndexExpr(ExprIndexExpr { syntax }),
+			EXPR_APPLY => ExprBase::ExprApply(ExprApply { syntax }),
+			EXPR_OBJ_EXTEND => ExprBase::ExprObjExtend(ExprObjExtend { syntax }),
+			EXPR_PARENED => ExprBase::ExprParened(ExprParened { syntax }),
+			EXPR_STRING => ExprBase::ExprString(ExprString { syntax }),
+			EXPR_NUMBER => ExprBase::ExprNumber(ExprNumber { syntax }),
+			EXPR_LITERAL => ExprBase::ExprLiteral(ExprLiteral { syntax }),
+			EXPR_ARRAY => ExprBase::ExprArray(ExprArray { syntax }),
+			EXPR_OBJECT => ExprBase::ExprObject(ExprObject { syntax }),
+			EXPR_ARRAY_COMP => ExprBase::ExprArrayComp(ExprArrayComp { syntax }),
+			EXPR_IMPORT => ExprBase::ExprImport(ExprImport { syntax }),
+			EXPR_VAR => ExprBase::ExprVar(ExprVar { syntax }),
+			EXPR_IF_THEN_ELSE => ExprBase::ExprIfThenElse(ExprIfThenElse { syntax }),
+			EXPR_FUNCTION => ExprBase::ExprFunction(ExprFunction { syntax }),
+			EXPR_ASSERT => ExprBase::ExprAssert(ExprAssert { syntax }),
+			EXPR_ERROR => ExprBase::ExprError(ExprError { syntax }),
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			ExprBase::ExprBinary(it) => &it.syntax,
+			ExprBase::ExprUnary(it) => &it.syntax,
+			ExprBase::ExprSlice(it) => &it.syntax,
+			ExprBase::ExprIndex(it) => &it.syntax,
+			ExprBase::ExprIndexExpr(it) => &it.syntax,
+			ExprBase::ExprApply(it) => &it.syntax,
+			ExprBase::ExprObjExtend(it) => &it.syntax,
+			ExprBase::ExprParened(it) => &it.syntax,
+			ExprBase::ExprString(it) => &it.syntax,
+			ExprBase::ExprNumber(it) => &it.syntax,
+			ExprBase::ExprLiteral(it) => &it.syntax,
+			ExprBase::ExprArray(it) => &it.syntax,
+			ExprBase::ExprObject(it) => &it.syntax,
+			ExprBase::ExprArrayComp(it) => &it.syntax,
+			ExprBase::ExprImport(it) => &it.syntax,
+			ExprBase::ExprVar(it) => &it.syntax,
+			ExprBase::ExprIfThenElse(it) => &it.syntax,
+			ExprBase::ExprFunction(it) => &it.syntax,
+			ExprBase::ExprAssert(it) => &it.syntax,
+			ExprBase::ExprError(it) => &it.syntax,
 		}
 	}
 }
@@ -2725,11 +2742,6 @@ impl std::fmt::Display for CustomError {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for Expr {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
 impl std::fmt::Display for ObjBody {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
@@ -2741,6 +2753,11 @@ impl std::fmt::Display for CompSpec {
 	}
 }
 impl std::fmt::Display for Bind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for ExprBase {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2771,6 +2788,11 @@ impl std::fmt::Display for DestructArrayPart {
 	}
 }
 impl std::fmt::Display for SourceFile {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for Expr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2875,11 +2897,6 @@ impl std::fmt::Display for ExprVar {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ExprLocal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
 impl std::fmt::Display for ExprIfThenElse {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
@@ -2916,6 +2933,11 @@ impl std::fmt::Display for Assertion {
 	}
 }
 impl std::fmt::Display for ExprError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for StmtLocal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

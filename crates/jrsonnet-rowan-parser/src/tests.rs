@@ -244,3 +244,10 @@ fn stdlib() {
 	let result = process(src);
 	insta::assert_snapshot!("stdlib", result, src);
 }
+#[test]
+fn eval_simple() {
+	let src = "local a = 1, b = 2; a + local c = 1; c";
+	let (node, errors) = parse(src);
+
+	dbg!(node);
+}

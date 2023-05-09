@@ -3,7 +3,7 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "local * = 1;\na\n"
 ---
 SOURCE_FILE@0..15
-  EXPR_LOCAL@0..14
+  STMT_LOCAL@0..12
     LOCAL_KW@0..5 "local"
     WHITESPACE@5..6 " "
     BIND_DESTRUCT@6..11
@@ -15,10 +15,10 @@ SOURCE_FILE@0..15
       EXPR_NUMBER@10..11
         FLOAT@10..11 "1"
     SEMI@11..12 ";"
-    WHITESPACE@12..13 "\n"
-    EXPR_VAR@13..14
-      NAME@13..14
-        IDENT@13..14 "a"
+  WHITESPACE@12..13 "\n"
+  EXPR_VAR@13..14
+    NAME@13..14
+      IDENT@13..14 "a"
   WHITESPACE@14..15 "\n"
 ===
 LocatedSyntaxError { error: Unexpected { expected: Named("destruction specifier"), found: MUL }, range: 6..7 }

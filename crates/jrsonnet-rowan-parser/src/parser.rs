@@ -293,6 +293,26 @@ impl fmt::Display for ExpectedSyntax {
 }
 
 fn expr(p: &mut Parser) -> CompletedMarker {
+	while p.at(T![local]) {
+		let m = p.start();
+
+		p.bump();
+		loop {
+			if p.at(T![;]) {
+				p.bump();
+				break;
+			}
+			bind(p);
+
+			if p.at(T![,]) {
+				p.bump();
+				continue;
+			}
+			p.expect(T![;]);
+			break;
+		}
+		m.complete(p, STMT_LOCAL);
+	}
 	match expr_binding_power(p, 0) {
 		Ok(m) => m,
 		Err(m) => m,
@@ -658,6 +678,7 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 	m.complete(p, SLICE_DESC);
 	true
 }
+
 fn lhs(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 	let mut lhs = lhs_basic(p)?;
 
@@ -853,25 +874,6 @@ fn lhs_basic(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 		array(p)
 	} else if p.at(T!['{']) {
 		object(p)
-	} else if p.at(T![local]) {
-		let m = p.start();
-		p.bump();
-		loop {
-			if p.at(T![;]) {
-				p.bump();
-				break;
-			}
-			bind(p);
-
-			if p.at(T![,]) {
-				p.bump();
-				continue;
-			}
-			p.expect(T![;]);
-			break;
-		}
-		expr(p);
-		m.complete(p, EXPR_LOCAL)
 	} else if p.at(T![function]) {
 		let m = p.start();
 		p.bump();

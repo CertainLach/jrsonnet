@@ -3,7 +3,7 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "local\n\ta(x) = x,\n\ta = function(x) x,\n; c\n"
 ---
 SOURCE_FILE@0..41
-  EXPR_LOCAL@0..40
+  STMT_LOCAL@0..38
     LOCAL_KW@0..5 "local"
     WHITESPACE@5..7 "\n\t"
     BIND_FUNCTION@7..15
@@ -45,8 +45,8 @@ SOURCE_FILE@0..41
     COMMA@35..36 ","
     WHITESPACE@36..37 "\n"
     SEMI@37..38 ";"
-    WHITESPACE@38..39 " "
-    EXPR_VAR@39..40
-      NAME@39..40
-        IDENT@39..40 "c"
+  WHITESPACE@38..39 " "
+  EXPR_VAR@39..40
+    NAME@39..40
+      IDENT@39..40 "c"
   WHITESPACE@40..41 "\n"

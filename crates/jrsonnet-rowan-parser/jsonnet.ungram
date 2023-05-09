@@ -65,11 +65,6 @@ ImportKind =
 
 ExprVar =
     name:Name
-ExprLocal =
-    'local'
-    (Bind (',' Bind)* ','?)
-    ';'
-    Expr
 
 ExprIfThenElse =
     'if'
@@ -92,7 +87,15 @@ ExprError =
     'error'
     Expr
 
+StmtLocal =
+    'local'
+    (Bind (',' Bind)* ','?)
+    ';'
+
 Expr =
+    StmtLocal*
+    ExprBase
+ExprBase =
     ExprBinary
 |   ExprUnary
 |   ExprSlice
@@ -109,7 +112,6 @@ Expr =
 |   ExprArrayComp
 |   ExprImport
 |   ExprVar
-|   ExprLocal
 |   ExprIfThenElse
 |   ExprFunction
 |   ExprAssert
