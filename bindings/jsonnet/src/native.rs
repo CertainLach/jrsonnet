@@ -46,7 +46,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		let v = unsafe {
 			(self.cb)(
 				self.ctx,
-				&n_args as *const _ as *const *const Val,
+				n_args.as_ptr().cast(),
 				&mut success,
 			)
 		};
