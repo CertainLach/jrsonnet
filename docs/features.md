@@ -2,7 +2,7 @@
 
 Some features, which exists in jrsonnet, but not yet in other implementations.
 
-Any of those features may be enabled during build time using feature flags, i.e: `--feature=exp-destruct`.
+Any of those features may be enabled during build time using feature flags, i.e: `--features=exp-destruct`.
 
 ## `exp-destruct`
 
