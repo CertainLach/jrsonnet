@@ -231,6 +231,11 @@ pub fn builtin_member(arr: IndexableVal, x: Val) -> Result<bool> {
 }
 
 #[builtin]
+pub fn builtin_contains(arr: IndexableVal, elem: Val) -> Result<bool> {
+	builtin_member(arr, elem)
+}
+
+#[builtin]
 pub fn builtin_count(arr: ArrValue, x: Val) -> Result<usize> {
 	let mut count = 0;
 	for item in arr.iter() {
