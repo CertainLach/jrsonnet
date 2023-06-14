@@ -51,17 +51,6 @@ impl Context {
 		self.0.sup.as_ref()
 	}
 
-	#[cfg(not(feature = "friendly-errors"))]
-	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
-		Ok(self
-			.0
-			.bindings
-			.get(&name)
-			.cloned()
-			.ok_or(VariableIsNotDefined(name, vec![]))?)
-	}
-
-	#[cfg(feature = "friendly-errors")]
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
 		use std::cmp::Ordering;
 

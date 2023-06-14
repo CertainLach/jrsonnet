@@ -1,4 +1,4 @@
-use std::{cmp::Ordering, rc::Rc};
+use std::rc::Rc;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
@@ -12,7 +12,7 @@ use self::destructure::destruct;
 use crate::{
 	arr::ArrValue,
 	destructure::evaluate_dest,
-	error::{ErrorKind::*, suggest_object_fields},
+	error::{suggest_object_fields, ErrorKind::*},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	throw,

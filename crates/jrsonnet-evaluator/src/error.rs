@@ -1,6 +1,7 @@
 use std::{
+	cmp::Ordering,
 	fmt::{Debug, Display},
-	path::PathBuf, cmp::Ordering,
+	path::PathBuf,
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -79,9 +80,8 @@ pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
 		if conf < 0.8 {
 			continue;
 		}
-		if field.as_str() == key.as_str() {
-			panic!("looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
-		}
+		assert!(field.as_str() != key.as_str(), "looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
+
 		heap.push((conf, field));
 	}
 	heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
