@@ -234,14 +234,34 @@ impl IndexableVal {
 	/// For arrays, nothing will be copied on this call, instead [`ArrValue::Slice`] view will be returned.
 	pub fn slice(
 		self,
-		index: Option<BoundedUsize<0, { i32::MAX as usize }>>,
-		end: Option<BoundedUsize<0, { i32::MAX as usize }>>,
+		index: Option<i32>,
+		end: Option<i32>,
 		step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
 	) -> Result<Self> {
 		match &self {
 			IndexableVal::Str(s) => {
-				let index = index.as_deref().copied().unwrap_or(0);
-				let end = end.as_deref().copied().unwrap_or(usize::MAX);
+				let mut computed_len = None;
+				let mut get_len = || {
+					computed_len.map_or_else(
+						|| {
+							let len = s.chars().count();
+							let _ = computed_len.insert(len);
+							len
+						},
+						|len| len,
+					)
+				};
+				let mut get_idx = |pos: Option<i32>, default| {
+					match pos {
+						Some(v) if v < 0 => get_len().saturating_sub((-v) as usize),
+						// No need to clamp, as iterator interface is used
+						Some(v) => v as usize,
+						None => default,
+					}
+				};
+
+				let index = get_idx(index, 0);
+				let end = get_idx(end, usize::MAX);
 				let step = step.as_deref().copied().unwrap_or(1);
 
 				if index >= end {
@@ -258,8 +278,13 @@ impl IndexableVal {
 				))
 			}
 			IndexableVal::Arr(arr) => {
-				let index = index.as_deref().copied().unwrap_or(0);
-				let end = end.as_deref().copied().unwrap_or(usize::MAX).min(arr.len());
+				let get_idx = |pos: Option<i32>, len: usize, default| match pos {
+					Some(v) if v < 0 => len.saturating_sub((-v) as usize),
+					Some(v) => (v as usize).min(len),
+					None => default,
+				};
+				let index = get_idx(index, arr.len(), 0);
+				let end = get_idx(end, arr.len(), arr.len());
 				let step = step.as_deref().copied().unwrap_or(1);
 
 				if index >= end {
