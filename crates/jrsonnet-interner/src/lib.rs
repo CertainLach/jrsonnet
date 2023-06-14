@@ -79,19 +79,7 @@ impl Hash for IStr {
 
 impl Drop for IStr {
 	fn drop(&mut self) {
-		#[cold]
-		#[inline(never)]
-		fn unpool(inner: &Inner) {
-			// May fail on program termination
-			let res = POOL.try_with(|pool| pool.borrow_mut().remove(inner));
-			if res.is_ok() {
-				debug_assert_eq!(Inner::strong_count(inner), 1);
-			}
-		}
-		// First reference - current object, second - POOL
-		if Inner::strong_count(&self.0) <= 2 {
-			unpool(&self.0);
-		}
+		maybe_unpool(&self.0)
 	}
 }
 
@@ -163,19 +151,33 @@ impl Hash for IBytes {
 
 impl Drop for IBytes {
 	fn drop(&mut self) {
-		#[cold]
-		#[inline(never)]
-		fn unpool(inner: &Inner) {
-			// May fail on program termination
-			let res = POOL.try_with(|pool| pool.borrow_mut().remove(inner));
-			if res.is_ok() {
-				debug_assert_eq!(Inner::strong_count(inner), 1);
+		maybe_unpool(&self.0)
+	}
+}
+
+fn maybe_unpool(inner: &Inner) {
+	#[cold]
+	#[inline(never)]
+	fn unpool(inner: &Inner) {
+		// May fail on program termination
+		let _ = POOL.try_with(|pool| {
+			let mut pool = pool.borrow_mut();
+
+			if pool.remove(inner).is_none() {
+				// On some platforms (i.e i686-windows), try_with will not fail after TLS
+				// destructor is called, but instead re-initialize the TLS with the empty pool.
+				// Allow non-pooled Drop in this case.
+				// https://github.com/CertainLach/jrsonnet/issues/98#issuecomment-1591624016
+				//
+				// However, if pool is not empty, most likely this is issue #113, and then I don't
+				// have any explainations for now.
+				assert!(pool.is_empty(), "received an unpooled string not during the program termination, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
 			}
-		}
-		// First reference - current object, second - POOL
-		if Inner::strong_count(&self.0) <= 2 {
-			unpool(&self.0);
-		}
+		});
+	}
+	// First reference - current object, second - POOL
+	if Inner::strong_count(&inner) <= 2 {
+		unpool(&inner);
 	}
 }
 
