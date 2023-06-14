@@ -1,11 +1,21 @@
+#![allow(non_snake_case)]
+
 use jrsonnet_evaluator::{
 	error::{ErrorKind::RuntimeError, Result},
 	function::{builtin, FuncVal},
 	throw,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal, StrValue},
-	Either, IStr, Val,
+	Either, IStr, Thunk, Val,
 };
+
+pub(crate) fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
+	if let Some(on_empty) = on_empty {
+		on_empty.evaluate()
+	} else {
+		throw!("expected non-empty array")
+	}
+}
 
 #[builtin]
 pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
@@ -229,4 +239,12 @@ pub fn builtin_count(arr: ArrValue, x: Val) -> Result<usize> {
 		}
 	}
 	Ok(count)
+}
+
+#[builtin]
+pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
+	if arr.is_empty() {
+		return eval_on_empty(onEmpty);
+	}
+	Ok(Val::Num(arr.iter().sum::<f64>() / (arr.len() as f64)))
 }

@@ -13,6 +13,8 @@ use jrsonnet_evaluator::{
 use jrsonnet_gcmodule::Cc;
 use jrsonnet_parser::BinaryOpType;
 
+use crate::eval_on_empty;
+
 #[derive(Copy, Clone)]
 enum SortKeyType {
 	Number,
@@ -207,13 +209,6 @@ pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	}
 }
 
-fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
-	if let Some(on_empty) = on_empty {
-		on_empty.evaluate()
-	} else {
-		throw!("expected non-empty array")
-	}
-}
 
 fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
 	if let Some(key_f) = key_f {
