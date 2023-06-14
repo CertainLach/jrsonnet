@@ -43,13 +43,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 		}
 		n_args.push(None);
 		let mut success = 1;
-		let v = unsafe {
-			(self.cb)(
-				self.ctx,
-				n_args.as_ptr().cast(),
-				&mut success,
-			)
-		};
+		let v = unsafe { (self.cb)(self.ctx, n_args.as_ptr().cast(), &mut success) };
 		let v = unsafe { *Box::from_raw(v) };
 		if success == 1 {
 			Ok(v)

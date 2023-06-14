@@ -79,7 +79,7 @@ impl Hash for IStr {
 
 impl Drop for IStr {
 	fn drop(&mut self) {
-		maybe_unpool(&self.0)
+		maybe_unpool(&self.0);
 	}
 }
 
@@ -151,7 +151,7 @@ impl Hash for IBytes {
 
 impl Drop for IBytes {
 	fn drop(&mut self) {
-		maybe_unpool(&self.0)
+		maybe_unpool(&self.0);
 	}
 }
 
@@ -176,8 +176,8 @@ fn maybe_unpool(inner: &Inner) {
 		});
 	}
 	// First reference - current object, second - POOL
-	if Inner::strong_count(&inner) <= 2 {
-		unpool(&inner);
+	if Inner::strong_count(inner) <= 2 {
+		unpool(inner);
 	}
 }
 

@@ -28,26 +28,26 @@ mod ordering {
 	use jrsonnet_gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace)]
-	pub struct FieldIndex;
+	pub struct FieldIndex(());
 	impl FieldIndex {
 		pub const fn next(self) -> Self {
-			Self
+			Self(())
 		}
 	}
 
 	#[derive(Clone, Copy, Default, Debug, Trace)]
-	pub struct SuperDepth;
+	pub struct SuperDepth(());
 	impl SuperDepth {
 		pub const fn deeper(self) -> Self {
-			Self
+			Self(())
 		}
 	}
 
 	#[derive(Clone, Copy)]
-	pub struct FieldSortKey;
+	pub struct FieldSortKey(());
 	impl FieldSortKey {
 		pub const fn new(_: SuperDepth, _: FieldIndex) -> Self {
-			Self
+			Self(())
 		}
 	}
 }
