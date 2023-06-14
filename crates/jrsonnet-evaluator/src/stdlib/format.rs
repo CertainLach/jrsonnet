@@ -6,7 +6,12 @@ use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{error::ErrorKind::*, throw, typed::Typed, Error, ObjValue, Result, Val};
+use crate::{
+	error::{format_found, suggest_object_fields, ErrorKind::*},
+	throw,
+	typed::Typed,
+	Error, ObjValue, Result, Val,
+};
 
 #[derive(Debug, Clone, Error, Trace)]
 pub enum FormatError {
@@ -24,6 +29,15 @@ pub enum FormatError {
 	MappingKeysRequired,
 	#[error("no such format field: {0}")]
 	NoSuchFormatField(IStr),
+
+	#[error("expected subfield <{0}> to be an object, got {1} instead")]
+	SubfieldDidntYieldAnObject(IStr, ValType),
+	#[error("subfield not found: <[{full}]{current}>{}", format_found(.found, "subfield"))]
+	SubfieldNotFound {
+		current: IStr,
+		full: IStr,
+		found: Box<Vec<IStr>>,
+	},
 }
 
 impl From<FormatError> for Error {
@@ -691,6 +705,37 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 	Ok(out)
 }
 
+fn get_dotted_field(obj: ObjValue, field: &str) -> Result<Val> {
+	let mut current = Val::Obj(obj);
+	let mut name_offset = 0;
+	for component in field.split('.') {
+		let end_offset = name_offset + component.len();
+		current = if let Val::Obj(obj) = current {
+			if let Some(value) = obj.get(component.into())? {
+				value
+			} else {
+				let current = &field[name_offset..end_offset];
+				let full = &field[..name_offset];
+				let found = Box::new(suggest_object_fields(&obj, current.into()));
+				throw!(SubfieldNotFound {
+					current: current.into(),
+					full: full.into(),
+					found,
+				})
+			}
+		} else {
+			// No underflow may happen, initially we always start with an object
+			let subfield = &field[..name_offset - 1];
+			throw!(SubfieldDidntYieldAnObject(
+				subfield.into(),
+				current.value_type()
+			));
+		};
+		name_offset = end_offset + 1;
+	}
+	Ok(current)
+}
+
 pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 	let codes = parse_codes(str)?;
 	let mut out = String::new();
@@ -726,7 +771,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 					if let Some(v) = values.get(f.clone())? {
 						v
 					} else {
-						throw!(NoSuchFormatField(f));
+						get_dotted_field(values.clone(), &f)?
 					}
 				};
 

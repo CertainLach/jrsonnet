@@ -1,6 +1,6 @@
 use std::{
 	fmt::{Debug, Display},
-	path::PathBuf,
+	path::PathBuf, cmp::Ordering,
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -9,9 +9,9 @@ use jrsonnet_parser::{BinaryOpType, ExprLocation, LocExpr, Source, SourcePath, U
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{function::CallLocation, stdlib::format::FormatError, typed::TypeLocError};
+use crate::{function::CallLocation, stdlib::format::FormatError, typed::TypeLocError, ObjValue};
 
-fn format_found(list: &[IStr], what: &str) -> String {
+pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
 		return String::new();
 	}
@@ -66,6 +66,26 @@ const fn format_empty_str(str: &str) -> &str {
 	} else {
 		str
 	}
+}
+
+pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
+	let mut heap = Vec::new();
+	for field in v.fields_ex(
+		true,
+		#[cfg(feature = "exp-preserve-order")]
+		false,
+	) {
+		let conf = strsim::jaro_winkler(field.as_str(), key.as_str());
+		if conf < 0.8 {
+			continue;
+		}
+		if field.as_str() == key.as_str() {
+			panic!("looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
+		}
+		heap.push((conf, field));
+	}
+	heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+	heap.into_iter().map(|v| v.1).collect()
 }
 
 type FunctionSignature = Vec<(Option<IStr>, bool)>;
@@ -347,6 +367,9 @@ impl<T> ResultExt for Result<T, Error> {
 macro_rules! throw {
 	($w:ident$(::$i:ident)*$(($($tt:tt)*))?) => {
 		return Err($w$(::$i)*$(($($tt)*))?.into())
+	};
+	($w:ident$(::$i:ident)*$({$($tt:tt)*})?) => {
+		return Err($w$(::$i)*$({$($tt)*})?.into())
 	};
 	($l:literal) => {
 		return Err($crate::error::ErrorKind::RuntimeError($l.into()).into())

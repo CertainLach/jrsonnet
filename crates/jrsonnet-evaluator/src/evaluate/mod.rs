@@ -12,7 +12,7 @@ use self::destructure::destruct;
 use crate::{
 	arr::ArrValue,
 	destructure::evaluate_dest,
-	error::ErrorKind::*,
+	error::{ErrorKind::*, suggest_object_fields},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	throw,
@@ -466,31 +466,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				|| format!("field <{key}> access"),
 				|| match v.get(key.clone().into_flat()) {
 					Ok(Some(v)) => Ok(v),
-					#[cfg(not(feature = "friendly-errors"))]
-					Ok(None) => throw!(NoSuchField(key.clone(), vec![])),
-					#[cfg(feature = "friendly-errors")]
 					Ok(None) => {
-						let mut heap = Vec::new();
-						for field in v.fields_ex(
-							true,
-							#[cfg(feature = "exp-preserve-order")]
-							false,
-						) {
-							let conf = strsim::jaro_winkler(
-								&field as &str,
-								&key.clone().into_flat() as &str,
-							);
-							if conf < 0.8 {
-								continue;
-							}
-							heap.push((conf, field));
-						}
-						heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
+						let suggestions = suggest_object_fields(&v, key.clone().into_flat());
 
-						throw!(NoSuchField(
-							key.clone().into_flat(),
-							heap.into_iter().map(|(_, v)| v).collect()
-						))
+						throw!(NoSuchField(key.clone().into_flat(), suggestions))
 					}
 					Err(e) => Err(e),
 				},
