@@ -112,6 +112,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("sort", builtin_sort::INST),
 		("uniq", builtin_uniq::INST),
 		("set", builtin_set::INST),
+		("minArray", builtin_min_array::INST),
+		("maxArray", builtin_max_array::INST),
 		// Hash
 		("md5", builtin_md5::INST),
 		("sha256", builtin_sha256::INST),
