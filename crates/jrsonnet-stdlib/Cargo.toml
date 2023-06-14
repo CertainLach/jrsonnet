@@ -16,8 +16,6 @@ codegenerated-stdlib = ["jrsonnet-parser/structdump"]
 legacy-this-file = []
 # Add order preservation flag to some functions
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
-# Add nonstandard `std.sha256` function
-exp-more-hashes = ["dep:sha2"]
 # Bigint type
 exp-bigint = ["num-bigint", "jrsonnet-evaluator/exp-bigint"]
 
@@ -34,6 +32,8 @@ serde = "1.0"
 
 # std.md5
 md5 = "0.7.0"
+# std.sha256, std.sha512
+sha2 = "0.10.6"
 # std.base64
 base64 = "0.21.0"
 # std.parseJson
@@ -41,7 +41,6 @@ serde_json = "1.0"
 # std.parseYaml, custom library fork is used for C++/golang compatibility
 serde_yaml_with_quirks = "0.8.24"
 
-sha2 = { version = "0.10.6", optional = true }
 num-bigint = { version = "0.4.3", optional = true }
 
 [build-dependencies]

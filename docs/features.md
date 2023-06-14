@@ -154,6 +154,3 @@ local obj = {
 }
 ```
 
-## `exp-more-hashes`
-
-Adds new standard library function: `std.sha256`, upstream issue: https://github.com/google/jsonnet/pull/607

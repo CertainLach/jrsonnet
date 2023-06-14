@@ -114,7 +114,6 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("set", builtin_set::INST),
 		// Hash
 		("md5", builtin_md5::INST),
-		#[cfg(feature = "exp-more-hashes")]
 		("sha256", builtin_sha256::INST),
 		// Encoding
 		("encodeUTF8", builtin_encode_utf8::INST),
