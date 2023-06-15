@@ -20,6 +20,9 @@ exp-null-coaelse = [
     "jrsonnet-evaluator/exp-null-coaelse",
     "jrsonnet-stdlib/exp-null-coaelse",
 ]
+exp-regex = [
+    "jrsonnet-stdlib/exp-regex",
+]
 legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 
 [dependencies]
