@@ -1,10 +1,10 @@
-use std::rc::Rc;
+use std::{collections::VecDeque, fmt, marker::PhantomData, rc::Rc};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, FieldName,
+	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 
@@ -14,12 +14,13 @@ use crate::{
 	destructure::evaluate_dest,
 	error::{suggest_object_fields, ErrorKind::*},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
-	function::{CallLocation, FuncDesc, FuncVal},
+	function::{parse::parse_function_call, CallLocation, FuncDesc, FuncVal},
+	operator::evaluate_binary_op_normal,
 	throw,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
-	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
-	Unbound, Val,
+	Context, ContextBuilder, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending,
+	Result, State, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -411,235 +412,589 @@ pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 	})
 }
 
-#[allow(clippy::too_many_lines)]
-pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
-	use Expr::*;
-
-	if let Some(trivial) = evaluate_trivial(expr) {
-		return Ok(trivial);
+struct Fifo<T> {
+	data: Vec<(T, Tag<T>)>,
+}
+impl<T> Fifo<T> {
+	fn with_capacity(cap: usize) -> Self {
+		Self {
+			data: Vec::with_capacity(cap),
+		}
 	}
-	let LocExpr(expr, loc) = expr;
-	Ok(match &**expr {
-		Literal(LiteralType::This) => {
-			Val::Obj(ctx.this().ok_or(CantUseSelfOutsideOfObject)?.clone())
+	fn single(data: T, tag: Tag<T>) -> Self {
+		// eprintln!(">>> {}", tag.0);
+		Self {
+			data: vec![(data, tag)],
 		}
-		Literal(LiteralType::Super) => Val::Obj(
-			ctx.super_obj().ok_or(NoSuperFound)?.with_this(
-				ctx.this()
-					.expect("if super exists - then this should too")
-					.clone(),
-			),
-		),
-		Literal(LiteralType::Dollar) => {
-			Val::Obj(ctx.dollar().ok_or(NoTopLevelObjectFound)?.clone())
+	}
+	fn push(&mut self, data: T, tag: Tag<T>) {
+		// eprintln!(">>> {}", tag.0);
+		self.data.push((data, tag));
+	}
+	#[track_caller]
+	fn pop(&mut self, tag: Tag<T>) -> T {
+		// eprintln!("<<< {}", tag.0);
+		let (data, stag) = self.data.pop().unwrap_or_else(|| panic!("underflow querying for {tag:?}"));
+		debug_assert_eq!(
+			stag, tag,
+			"mismatched expected {tag:?} and actual {stag:?} tags",
+		);
+		data
+	}
+	fn is_empty(&self) -> bool {
+		self.data.is_empty()
+	}
+}
+
+struct Tag<T>(#[cfg(debug_assertions)] &'static str, PhantomData<fn(T)>);
+
+impl<T> PartialEq for Tag<T> {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+impl<T> fmt::Debug for Tag<T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		#[cfg(debug_assertions)]
+		{
+			write!(f, "Tag({})", self.0)
 		}
-		Literal(LiteralType::True) => Val::Bool(true),
-		Literal(LiteralType::False) => Val::Bool(false),
-		Literal(LiteralType::Null) => Val::Null,
-		Parened(e) => evaluate(ctx, e)?,
-		Str(v) => Val::Str(StrValue::Flat(v.clone())),
-		Num(v) => Val::new_checked_num(*v)?,
-		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
-		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
-		Var(name) => State::push(
-			CallLocation::new(loc),
-			|| format!("variable <{name}> access"),
-			|| ctx.binding(name.clone())?.evaluate(),
-		)?,
-		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
-			let name = evaluate(ctx.clone(), index)?;
-			let Val::Str(name) = name else {
-				throw!(ValueIndexMustBeTypeGot(
-					ValType::Obj,
-					ValType::Str,
-					name.value_type(),
-				))
-			};
-			ctx.super_obj()
-				.expect("no super found")
-				.get_for(name.into_flat(), ctx.this().expect("no this found").clone())?
-				.expect("value not found")
+		#[cfg(not(debug_assertions))]
+		{
+			write!(f, "UncheckedTag")
 		}
-		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
-			(Val::Obj(v), Val::Str(key)) => State::push(
-				CallLocation::new(loc),
-				|| format!("field <{key}> access"),
-				|| match v.get(key.clone().into_flat()) {
-					Ok(Some(v)) => Ok(v),
-					Ok(None) => {
-						let suggestions = suggest_object_fields(&v, key.clone().into_flat());
+	}
+}
+macro_rules! val_tag {
+	($ident:ident) => {
+		const $ident: Tag<Val> = Tag(
+			#[cfg(debug_assertions)]
+			stringify!($ident),
+			PhantomData,
+		);
+	};
+}
+macro_rules! ctx_tag {
+	($ident:ident) => {
+		const $ident: Tag<Context> = Tag(
+			#[cfg(debug_assertions)]
+			stringify!($ident),
+			PhantomData,
+		);
+	};
+}
 
-						throw!(NoSuchField(key.clone().into_flat(), suggestions))
-					}
-					Err(e) => Err(e),
-				},
-			)?,
-			(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Obj,
-				ValType::Str,
-				n.value_type(),
-			)),
+const DUMMY_TCA: Tag<TailCallApply> = Tag(
+	#[cfg(debug_assertions)]
+	"APPLY",
+	PhantomData,
+);
 
-			(Val::Arr(v), Val::Num(n)) => {
-				if n.fract() > f64::EPSILON {
-					throw!(FractionalIndex)
-				}
-				v.get(n as usize)?
-					.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
-			}
-			(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n.into_flat())),
-			(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Arr,
-				ValType::Num,
-				n.value_type(),
-			)),
+#[derive(Debug)]
+enum TailCallApply {
+	Eval {
+		expr: LocExpr,
+		in_ctx: Tag<Context>,
+		out_val: Tag<Val>,
+	},
+	PushCtx {
+		tag: Tag<Context>,
+		ctx: Context,
+	},
+	ParseNormalArgs(ParamsDesc, ArgsDesc, CallLocation<'static>, bool),
+	IfCond {
+		in_val: Tag<Val>,
+		then_val: LocExpr,
+		else_val: Option<LocExpr>,
+		out_val: Tag<Val>,
+	},
+	ApplyUnknownFn {
+		args: ArgsDesc,
+		location: CallLocation<'static>,
+		tailstrict: bool,
+		out_val: Tag<Val>,
+	},
+	ApplyBopNormal {
+		op: BinaryOpType,
+		a_val: Tag<Val>,
+		b_val: Tag<Val>,
+		out_val: Tag<Val>,
+	},
+}
 
-			(Val::Str(s), Val::Num(n)) => Val::Str({
-				let v: IStr = s
-					.clone()
-					.into_flat()
-					.chars()
-					.skip(n as usize)
-					.take(1)
-					.collect::<String>()
-					.into();
-				if v.is_empty() {
-					let size = s.into_flat().chars().count();
-					throw!(StringBoundsError(n as usize, size))
-				}
-				StrValue::Flat(v)
-			}),
-			(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Str,
-				ValType::Num,
-				n.value_type(),
-			)),
+// Until before statement is not stable
+macro_rules! tco_become {
+	($apply:ident, $value:expr) => {
+		$apply.push($value, DUMMY_TCA);
+		continue;
+	};
+}
+macro_rules! tco_queue {
+	($apply:ident, $value:expr) => {
+		$apply.push($value, DUMMY_TCA);
+	};
+}
+macro_rules! tco {
+  //   (@cont $apply:ident, $last:expr) => {
+  //       tco_queue!($apply, $last)
+  //   };
+  //   (@cont $apply:ident, $($pre:expr,)+ $last:expr) => {
+		// tco!(@cont $apply, $($pre),+);
+  //       tco_queue!($apply, $last)
+  //   };
+	(@cont $apply:ident, [] @ $($pre:expr)*) => {{
+		$({
+			let v = $pre;
+			$apply.push(v, DUMMY_TCA);
+		})*
+	}};
+	(@cont $apply:ident, [$first:tt $($tt:tt)*] @ $($pre:expr)*) => {{
+		tco!(@cont $apply, [$($tt)*] @$first $($pre)* );
+	}};
+    ($apply:ident, $($pre:expr),* $(,)?) => {{
+		tco!(@cont $apply, [$({$pre})*] @);
+		continue;
+    }};
+}
 
-			(v, _) => throw!(CantIndexInto(v.value_type())),
+val_tag!(INIT_VAL);
+ctx_tag!(INIT_CTX);
+
+ctx_tag!(FN_BODY_CTX);
+ctx_tag!(FN_DEF_CTX);
+
+val_tag!(APPLY_LHS_VAL);
+ctx_tag!(APPLY_LHS_CTX);
+
+val_tag!(COND_VAL);
+ctx_tag!(COND_CTX);
+ctx_tag!(COND_THEN_ELSE_CTX);
+
+val_tag!(BOP_LHS_VAL);
+val_tag!(BOP_RHS_VAL);
+ctx_tag!(BOP_LHS_CTX);
+ctx_tag!(BOP_RHS_CTX);
+
+ctx_tag!(BOP_CTX);
+
+#[allow(clippy::too_many_lines)]
+pub fn evaluate<'a>(ctx: Context, expr: &'a LocExpr) -> Result<Val> {
+	use Expr::*;
+	use TailCallApply::*;
+
+	let mut stack = Fifo::<Val>::with_capacity(1);
+	let mut ctxs = Fifo::single(ctx, INIT_CTX);
+	let mut apply = Fifo::<TailCallApply>::single(
+		Eval {
+			expr: expr.clone(),
+			in_ctx: INIT_CTX,
+			out_val: INIT_VAL,
 		},
-		LocalExpr(bindings, returned) => {
-			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
-				GcHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
-			let fctx = Context::new_future();
-			for b in bindings {
-				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
-			}
-			let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
-			evaluate(ctx, &returned.clone())?
-		}
-		Arr(items) => {
-			if items.is_empty() {
-				Val::Arr(ArrValue::empty())
-			} else if items.len() == 1 {
-				#[derive(Trace)]
-				struct ArrayElement {
-					ctx: Context,
-					item: LocExpr,
+		DUMMY_TCA,
+	);
+
+	while !apply.is_empty() {
+		let op = apply.pop(DUMMY_TCA);
+		match op {
+			TailCallApply::PushCtx { tag, ctx } => ctxs.push(ctx, tag),
+			TailCallApply::Eval {
+				expr,
+				in_ctx,
+				out_val,
+			} => {
+				let ctx = ctxs.pop(in_ctx);
+
+				if let Some(trivial) = evaluate_trivial(&expr) {
+					stack.push(trivial, out_val);
+					continue;
 				}
-				impl ThunkValue for ArrayElement {
-					type Output = Val;
-					fn get(self: Box<Self>) -> Result<Val> {
-						evaluate(self.ctx, &self.item)
+				let LocExpr(expr, loc) = expr;
+				stack.push(
+					match &*expr {
+						Literal(LiteralType::This) => {
+							Val::Obj(ctx.this().ok_or(CantUseSelfOutsideOfObject)?.clone())
+						}
+						Literal(LiteralType::Super) => Val::Obj(
+							ctx.super_obj().ok_or(NoSuperFound)?.with_this(
+								ctx.this()
+									.expect("if super exists - then this should too")
+									.clone(),
+							),
+						),
+						Literal(LiteralType::Dollar) => {
+							Val::Obj(ctx.dollar().ok_or(NoTopLevelObjectFound)?.clone())
+						}
+						Literal(LiteralType::True) => Val::Bool(true),
+						Literal(LiteralType::False) => Val::Bool(false),
+						Literal(LiteralType::Null) => Val::Null,
+						Parened(e) => evaluate(ctx, e)?,
+						Str(v) => Val::Str(StrValue::Flat(v.clone())),
+						Num(v) => Val::new_checked_num(*v)?,
+						BinaryOp(v1, o, v2) => {
+							// FIXME: short-circuiting binary op
+							ctxs.push(ctx.clone(), BOP_RHS_CTX);
+							ctxs.push(ctx.clone(), BOP_LHS_CTX);
+							tco!(
+								apply,
+								Eval {
+									expr: v1.clone(),
+									in_ctx: BOP_LHS_CTX,
+									out_val: BOP_LHS_VAL
+								},
+								Eval {
+									expr: v2.clone(),
+									in_ctx: BOP_RHS_CTX,
+									out_val: BOP_RHS_VAL,
+								},
+								ApplyBopNormal {
+									op: *o,
+									a_val: BOP_LHS_VAL,
+									b_val: BOP_RHS_VAL,
+									out_val
+								}
+							);
+						}
+						UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
+						Var(name) => State::push(
+							CallLocation::new(&loc),
+							|| format!("variable <{name}> access"),
+							|| ctx.binding(name.clone())?.evaluate(),
+						)?,
+						Index(LocExpr(v, _), index)
+							if matches!(&**v, Expr::Literal(LiteralType::Super)) =>
+						{
+							let name = evaluate(ctx.clone(), index)?;
+							let Val::Str(name) = name else {
+						    throw!(ValueIndexMustBeTypeGot(
+						    	ValType::Obj,
+						    	ValType::Str,
+						    	name.value_type(),
+						    ))
+					    };
+							ctx.super_obj()
+								.expect("no super found")
+								.get_for(
+									name.into_flat(),
+									ctx.this().expect("no this found").clone(),
+								)?
+								.expect("value not found")
+						}
+						Index(value, index) => {
+							match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
+								(Val::Obj(v), Val::Str(key)) => State::push(
+									CallLocation::new(&loc),
+									|| format!("field <{key}> access"),
+									|| match v.get(key.clone().into_flat()) {
+										Ok(Some(v)) => Ok(v),
+										Ok(None) => {
+											let suggestions =
+												suggest_object_fields(&v, key.clone().into_flat());
+
+											throw!(NoSuchField(
+												key.clone().into_flat(),
+												suggestions
+											))
+										}
+										Err(e) => Err(e),
+									},
+								)?,
+								(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
+									ValType::Obj,
+									ValType::Str,
+									n.value_type(),
+								)),
+
+								(Val::Arr(v), Val::Num(n)) => {
+									if n.fract() > f64::EPSILON {
+										throw!(FractionalIndex)
+									}
+									v.get(n as usize)?
+										.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+								}
+								(Val::Arr(_), Val::Str(n)) => {
+									throw!(AttemptedIndexAnArrayWithString(n.into_flat()))
+								}
+								(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
+									ValType::Arr,
+									ValType::Num,
+									n.value_type(),
+								)),
+
+								(Val::Str(s), Val::Num(n)) => Val::Str({
+									let v: IStr = s
+										.clone()
+										.into_flat()
+										.chars()
+										.skip(n as usize)
+										.take(1)
+										.collect::<String>()
+										.into();
+									if v.is_empty() {
+										let size = s.into_flat().chars().count();
+										throw!(StringBoundsError(n as usize, size))
+									}
+									StrValue::Flat(v)
+								}),
+								(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
+									ValType::Str,
+									ValType::Num,
+									n.value_type(),
+								)),
+
+								(v, _) => throw!(CantIndexInto(v.value_type())),
+							}
+						}
+						LocalExpr(bindings, returned) => {
+							let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
+								GcHashMap::with_capacity(
+									bindings.iter().map(BindSpec::capacity_hint).sum(),
+								);
+							let fctx = Context::new_future();
+							for b in bindings {
+								evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
+							}
+							let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
+							evaluate(ctx, &returned.clone())?
+						}
+						Arr(items) => {
+							if items.is_empty() {
+								Val::Arr(ArrValue::empty())
+							} else if items.len() == 1 {
+								#[derive(Trace)]
+								struct ArrayElement {
+									ctx: Context,
+									item: LocExpr,
+								}
+								impl ThunkValue for ArrayElement {
+									type Output = Val;
+									fn get(self: Box<Self>) -> Result<Val> {
+										evaluate(self.ctx, &self.item)
+									}
+								}
+								Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(ArrayElement {
+									ctx,
+									item: items[0].clone(),
+								})])))
+							} else {
+								Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
+							}
+						}
+						ArrComp(expr, comp_specs) => {
+							let mut out = Vec::new();
+							evaluate_comp(ctx, comp_specs, &mut |ctx| {
+								out.push(evaluate(ctx, expr)?);
+								Ok(())
+							})?;
+							Val::Arr(ArrValue::eager(out))
+						}
+						Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
+						ObjExtend(a, b) => evaluate_add_op(
+							&evaluate(ctx.clone(), a)?,
+							&Val::Obj(evaluate_object(ctx, b)?),
+						)?,
+						Apply(value, args, tailstrict) => {
+							tco_queue!(
+								apply,
+								ApplyUnknownFn {
+									args: args.clone(),
+									location: CallLocation::native(),
+									tailstrict: *tailstrict,
+									out_val
+								}
+							);
+							ctxs.push(ctx.clone(), APPLY_LHS_CTX);
+							ctxs.push(ctx, APPLY_LHS_CTX);
+							tco_become!(
+								apply,
+								Eval {
+									expr: value.clone(),
+									in_ctx: APPLY_LHS_CTX,
+									out_val: APPLY_LHS_VAL
+								}
+							);
+						}
+						Function(params, body) => {
+							evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
+						}
+						AssertExpr(assert, returned) => {
+							evaluate_assert(ctx.clone(), assert)?;
+							evaluate(ctx, returned)?
+						}
+						ErrorStmt(e) => State::push(
+							CallLocation::new(&loc),
+							|| "error statement".to_owned(),
+							|| throw!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
+						)?,
+						IfElse {
+							cond,
+							cond_then,
+							cond_else,
+						} => {
+							tco_queue!(
+								apply,
+								IfCond {
+									in_val: COND_VAL,
+									then_val: cond_then.clone(),
+									else_val: cond_else.clone(),
+									out_val
+								}
+							);
+							ctxs.push(ctx.clone(), COND_THEN_ELSE_CTX);
+							ctxs.push(ctx, COND_CTX);
+							tco_become!(
+								apply,
+								Eval {
+									expr: cond.0.clone(),
+									in_ctx: COND_CTX,
+									out_val: COND_VAL
+								}
+							);
+						}
+						Slice(value, desc) => {
+							fn parse_idx<T: Typed>(
+								loc: CallLocation<'_>,
+								ctx: &Context,
+								expr: Option<&LocExpr>,
+								desc: &'static str,
+							) -> Result<Option<T>> {
+								if let Some(value) = expr {
+									Ok(Some(State::push(
+										loc,
+										|| format!("slice {desc}"),
+										|| T::from_untyped(evaluate(ctx.clone(), value)?),
+									)?))
+								} else {
+									Ok(None)
+								}
+							}
+
+							let indexable = evaluate(ctx.clone(), value)?;
+							let loc = CallLocation::new(&loc);
+
+							let start = parse_idx(loc, &ctx, desc.start.as_ref(), "start")?;
+							let end = parse_idx(loc, &ctx, desc.end.as_ref(), "end")?;
+							let step = parse_idx(loc, &ctx, desc.step.as_ref(), "step")?;
+
+							IndexableVal::into_untyped(
+								indexable.into_indexable()?.slice(start, end, step)?,
+							)?
+						}
+						i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
+							let Expr::Str(path) = &*path.0 else {
+						    throw!("computed imports are not supported")
+					    };
+							let tmp = loc.clone().0;
+							let s = ctx.state();
+							let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
+							match i {
+								Import(_) => State::push(
+									CallLocation::new(&loc),
+									|| format!("import {:?}", path.clone()),
+									|| s.import_resolved(resolved_path),
+								)?,
+								ImportStr(_) => {
+									Val::Str(StrValue::Flat(s.import_resolved_str(resolved_path)?))
+								}
+								ImportBin(_) => {
+									Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?))
+								}
+								_ => unreachable!(),
+							}
+						}
+					},
+					out_val,
+				);
+			}
+			TailCallApply::ApplyUnknownFn {
+				args,
+				location,
+				tailstrict,
+				out_val,
+			} => {
+				let mut value = stack.pop(APPLY_LHS_VAL);
+				let Val::Func(f) = value else {
+					throw!(OnlyFunctionsCanBeCalledGot(value.value_type()));
+				};
+				match f {
+					FuncVal::Id => todo!(),
+					FuncVal::Normal(desc) => {
+						tco_queue!(
+							apply,
+							Eval {
+								expr: desc.body.clone(),
+								in_ctx: FN_BODY_CTX,
+								out_val
+							}
+						);
+						ctxs.push(desc.ctx.clone(), FN_DEF_CTX);
+						tco_become!(
+							apply,
+							ParseNormalArgs(desc.params.clone(), args, location, tailstrict)
+						);
 					}
+					FuncVal::StaticBuiltin(_) => todo!(),
+					FuncVal::Builtin(_) => todo!(),
 				}
-				Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(ArrayElement {
-					ctx,
-					item: items[0].clone(),
-				})])))
-			} else {
-				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
+				// let body = || f.evaluate(ctx, loc, args, tailstrict);
+				// if tailstrict {
+				// 	body()?
+				// } else {
+				// 	State::push(loc, || format!("function <{}> call", f.name()), body)?
+				// }
 			}
-		}
-		ArrComp(expr, comp_specs) => {
-			let mut out = Vec::new();
-			evaluate_comp(ctx, comp_specs, &mut |ctx| {
-				out.push(evaluate(ctx, expr)?);
-				Ok(())
-			})?;
-			Val::Arr(ArrValue::eager(out))
-		}
-		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
-		ObjExtend(a, b) => evaluate_add_op(
-			&evaluate(ctx.clone(), a)?,
-			&Val::Obj(evaluate_object(ctx, b)?),
-		)?,
-		Apply(value, args, tailstrict) => {
-			evaluate_apply(ctx, value, args, CallLocation::new(loc), *tailstrict)?
-		}
-		Function(params, body) => {
-			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
-		}
-		AssertExpr(assert, returned) => {
-			evaluate_assert(ctx.clone(), assert)?;
-			evaluate(ctx, returned)?
-		}
-		ErrorStmt(e) => State::push(
-			CallLocation::new(loc),
-			|| "error statement".to_owned(),
-			|| throw!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
-		)?,
-		IfElse {
-			cond,
-			cond_then,
-			cond_else,
-		} => {
-			if State::push(
-				CallLocation::new(loc),
-				|| "if condition".to_owned(),
-				|| bool::from_untyped(evaluate(ctx.clone(), &cond.0)?),
-			)? {
-				evaluate(ctx, cond_then)?
-			} else {
-				match cond_else {
-					Some(v) => evaluate(ctx, v)?,
-					None => Val::Null,
-				}
+			ParseNormalArgs(params, args, call, tailstrict) => {
+				let definition_context = ctxs.pop(FN_DEF_CTX);
+				let lhs_ctx = ctxs.pop(APPLY_LHS_CTX);
+				let ctx =
+					parse_function_call(lhs_ctx, definition_context, &params, &args, tailstrict)?;
+				ctxs.push(ctx, FN_BODY_CTX);
 			}
-		}
-		Slice(value, desc) => {
-			fn parse_idx<T: Typed>(
-				loc: CallLocation<'_>,
-				ctx: &Context,
-				expr: Option<&LocExpr>,
-				desc: &'static str,
-			) -> Result<Option<T>> {
-				if let Some(value) = expr {
-					Ok(Some(State::push(
-						loc,
-						|| format!("slice {desc}"),
-						|| T::from_untyped(evaluate(ctx.clone(), value)?),
-					)?))
+			IfCond {
+				in_val,
+				then_val,
+				else_val,
+				out_val,
+			} => {
+				let cond = stack.pop(in_val);
+				let cond = bool::from_untyped(cond)?;
+				if cond {
+					tco_become!(
+						apply,
+						Eval {
+							expr: then_val,
+							in_ctx: COND_THEN_ELSE_CTX,
+							out_val
+						}
+					);
+				} else if let Some(else_val) = else_val {
+					tco_become!(
+						apply,
+						Eval {
+							expr: else_val,
+							in_ctx: COND_THEN_ELSE_CTX,
+							out_val
+						}
+					);
 				} else {
-					Ok(None)
+					ctxs.pop(COND_THEN_ELSE_CTX);
+					stack.push(Val::Null, out_val)
 				}
 			}
-
-			let indexable = evaluate(ctx.clone(), value)?;
-			let loc = CallLocation::new(loc);
-
-			let start = parse_idx(loc, &ctx, desc.start.as_ref(), "start")?;
-			let end = parse_idx(loc, &ctx, desc.end.as_ref(), "end")?;
-			let step = parse_idx(loc, &ctx, desc.step.as_ref(), "step")?;
-
-			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
-		}
-		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
-			let Expr::Str(path) = &*path.0 else {
-				throw!("computed imports are not supported")
-			};
-			let tmp = loc.clone().0;
-			let s = ctx.state();
-			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
-			match i {
-				Import(_) => State::push(
-					CallLocation::new(loc),
-					|| format!("import {:?}", path.clone()),
-					|| s.import_resolved(resolved_path),
-				)?,
-				ImportStr(_) => Val::Str(StrValue::Flat(s.import_resolved_str(resolved_path)?)),
-				ImportBin(_) => Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?)),
-				_ => unreachable!(),
+			ApplyBopNormal {
+				op,
+				a_val,
+				b_val,
+				out_val,
+			} => {
+				let b = stack.pop(b_val);
+				let a = stack.pop(a_val);
+				let v = evaluate_binary_op_normal(&a, op, &b)?;
+				stack.push(v, out_val);
 			}
 		}
-	})
+	}
+	assert!(ctxs.is_empty());
+	assert!(apply.is_empty());
+	assert!(stack.data.len() == 1);
+	Ok(stack.pop(INIT_VAL))
 }
