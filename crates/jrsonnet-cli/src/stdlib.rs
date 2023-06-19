@@ -13,18 +13,15 @@ pub struct ExtStr {
 impl FromStr for ExtStr {
 	type Err = &'static str;
 	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		let out: Vec<_> = s.split('=').collect();
-		match out.len() {
-			1 => Ok(ExtStr {
-				name: out[0].to_owned(),
-				value: std::env::var(out[0]).or(Err("missing env var"))?,
+		match s.find('=') {
+			Some(idx) => Ok(ExtStr {
+				name: s[..idx].to_owned(),
+				value: s[idx + 1..].to_owned(),
 			}),
-			2 => Ok(ExtStr {
-				name: out[0].to_owned(),
-				value: out[1].to_owned(),
+			None => Ok(ExtStr {
+				name: s.to_owned(),
+				value: std::env::var(s).or(Err("missing env var"))?,
 			}),
-
-			_ => Err("bad ext-str syntax"),
 		}
 	}
 }
