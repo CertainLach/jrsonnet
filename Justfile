@@ -14,3 +14,6 @@ test:
 
 build:
 	cargo build --release
+
+pre-commit:
+	cargo fmt --check
