@@ -80,6 +80,7 @@
         };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;[
+            just
             rust
             cargo-edit
             cargo-asm
