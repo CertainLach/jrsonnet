@@ -1,6 +1,6 @@
 use std::{
 	any::Any,
-	path::{Path, PathBuf},
+	path::{Path, PathBuf, Component},
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -34,6 +34,10 @@ impl PathResolver {
 			Self::Absolute => from.to_string_lossy().into_owned(),
 			Self::Relative(base) => {
 				if from.is_relative() {
+					return from.to_string_lossy().into_owned();
+				}
+				// In case of different disks/different root directory - do not try to diff
+				if base.components().filter(|c| !matches!(c, Component::RootDir)).next() != from.components().filter(|c| !matches!(c, Component::RootDir)).next() {
 					return from.to_string_lossy().into_owned();
 				}
 				pathdiff::diff_paths(from, base)

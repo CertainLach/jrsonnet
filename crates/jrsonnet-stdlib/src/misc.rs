@@ -55,10 +55,11 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 pub fn builtin_trace(
 	this: &builtin_trace,
 	loc: CallLocation,
-	str: IStr,
+	str: Val,
 	rest: Thunk<Val>,
 ) -> Result<Val> {
-	this.settings.borrow().trace_printer.print_trace(loc, str);
+	use jrsonnet_evaluator::error::ResultExt;
+	this.settings.borrow().trace_printer.print_trace(loc, str.to_string().description("std.trace message toString")?);
 	rest.evaluate()
 }
 
