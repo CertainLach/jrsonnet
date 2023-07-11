@@ -105,6 +105,10 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("mantissa", builtin_mantissa::INST),
 		("exponent", builtin_exponent::INST),
 		("round", builtin_round::INST),
+		("isEven", builtin_is_even::INST),
+		("isOdd", builtin_is_odd::INST),
+		("isInteger", builtin_is_integer::INST),
+		("isDecimal", builtin_is_decimal::INST),
 		// Operator
 		("mod", builtin_mod::INST),
 		("primitiveEquals", builtin_primitive_equals::INST),
