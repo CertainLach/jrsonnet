@@ -33,6 +33,11 @@ pub fn builtin_is_empty(str: String) -> bool {
 }
 
 #[builtin]
+pub fn builtin_equals_ignore_case(x: String, y: String) -> bool {
+	x.to_ascii_lowercase() == y.to_ascii_lowercase()
+}
+
+#[builtin]
 pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> ArrValue {
 	use Either2::*;
 	match maxsplits {

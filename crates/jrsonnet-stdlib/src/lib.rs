@@ -149,6 +149,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("char", builtin_char::INST),
 		("strReplace", builtin_str_replace::INST),
 		("isEmpty", builtin_is_empty::INST),
+		("equalsIgnoreCase", builtin_equals_ignore_case::INST),
 		("splitLimit", builtin_splitlimit::INST),
 		("asciiUpper", builtin_ascii_upper::INST),
 		("asciiLower", builtin_ascii_lower::INST),
