@@ -114,3 +114,8 @@ pub fn builtin_mantissa(x: f64) -> f64 {
 pub fn builtin_exponent(x: f64) -> i16 {
 	frexp(x).1
 }
+
+#[builtin]
+pub fn builtin_round(x: f64) -> f64 {
+	x.round()
+}
