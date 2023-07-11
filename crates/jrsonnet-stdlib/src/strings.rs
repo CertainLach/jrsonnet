@@ -28,6 +28,11 @@ pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
 }
 
 #[builtin]
+pub fn builtin_is_empty(str: String) -> bool {
+	str.is_empty()
+}
+
+#[builtin]
 pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> ArrValue {
 	use Either2::*;
 	match maxsplits {
