@@ -253,3 +253,26 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 	}
 	Ok(Val::Num(arr.iter().sum::<f64>() / (arr.len() as f64)))
 }
+
+#[builtin]
+pub fn builtin_remove_at(
+	arr: ArrValue,
+	index: usize,
+) -> Result<ArrValue> {
+	let newArrLeft = arr.clone().slice(None, Some(index), None);
+	let newArrRight = arr.clone().slice(Some(index + 1), None, None);
+	return Ok(ArrValue::extended(
+		newArrLeft.unwrap_or(ArrValue::empty()),
+		newArrRight.unwrap_or(ArrValue::empty()))
+	);
+}
+
+#[builtin]
+pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
+	for (index, item) in arr.iter().enumerate() {
+		if equals(&item?, &elem)? {
+			return builtin_remove_at(arr.clone(), index) 
+		}
+	}
+	Ok(arr)
+}
