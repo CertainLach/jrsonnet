@@ -126,20 +126,29 @@ impl MaybeUnbound {
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
 pub trait ContextInitializer: Trace {
+	/// For which size the builder should be preallocated
+	fn reserve_vars(&self) -> usize {
+		0
+	}
 	/// Initialize default file context.
-	fn initialize(&self, state: State, for_file: Source) -> Context;
+	/// Has default implementation, which calls `populate`.
+	/// Prefer to always implement `populate` instead.
+	fn initialize(&self, state: State, for_file: Source) -> Context {
+		let mut builder = ContextBuilder::with_capacity(state, self.reserve_vars());
+		self.populate(for_file, &mut builder);
+		builder.build()
+	}
+	/// For composability: extend builder. May panic if this initialization is not supported,
+	/// and the context may only be created via `initialize`.
+	fn populate(&self, for_file: Source, builder: &mut ContextBuilder);
 	/// Allows upcasting from abstract to concrete context initializer.
 	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
 	fn as_any(&self) -> &dyn Any;
 }
 
 /// Context initializer which adds nothing.
-#[derive(Trace)]
-pub struct DummyContextInitializer;
-impl ContextInitializer for DummyContextInitializer {
-	fn initialize(&self, state: State, _for_file: Source) -> Context {
-		ContextBuilder::new(state).build()
-	}
+impl ContextInitializer for () {
+	fn populate(&self, _for_file: Source, _builder: &mut ContextBuilder) {}
 	fn as_any(&self) -> &dyn Any {
 		self
 	}
@@ -157,7 +166,7 @@ pub struct EvaluationSettings {
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		Self {
-			context_initializer: tb!(DummyContextInitializer),
+			context_initializer: tb!(()),
 			import_resolver: tb!(DummyImportResolver),
 		}
 	}
@@ -395,6 +404,46 @@ impl State {
 	}
 	pub fn settings_mut(&self) -> RefMut<'_, EvaluationSettings> {
 		self.0.settings.borrow_mut()
+	}
+	pub fn add_global(&self, name: IStr, value: Thunk<Val>) {
+		#[derive(Trace)]
+		struct GlobalsCtx {
+			globals: RefCell<GcHashMap<IStr, Thunk<Val>>>,
+			inner: TraceBox<dyn ContextInitializer>,
+		}
+		impl ContextInitializer for GlobalsCtx {
+			fn reserve_vars(&self) -> usize {
+				self.inner.reserve_vars() + self.globals.borrow().len()
+			}
+			fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
+				self.inner.populate(for_file, builder);
+				for (name, val) in self.globals.borrow().iter() {
+					builder.bind(name.clone(), val.clone());
+				}
+			}
+
+			fn as_any(&self) -> &dyn Any {
+				self
+			}
+		}
+		let mut settings = self.settings_mut();
+		let initializer = &mut settings.context_initializer;
+		match initializer.as_any().downcast_ref::<GlobalsCtx>() {
+			Some(glob) => {
+				glob.globals.borrow_mut().insert(name, value);
+			}
+			None => {
+				let inner = std::mem::replace(&mut settings.context_initializer, tb!(()));
+				settings.context_initializer = tb!(GlobalsCtx {
+					globals: {
+						let mut out = GcHashMap::with_capacity(1);
+						out.insert(name, value);
+						RefCell::new(out)
+					},
+					inner
+				})
+			}
+		}
 	}
 }
 

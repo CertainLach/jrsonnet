@@ -5,7 +5,6 @@ use jrsonnet_evaluator::{
 	function::{builtin, FuncVal},
 	throw, ObjValueBuilder, State, Thunk, Val,
 };
-use jrsonnet_stdlib::StateExt;
 
 #[macro_export]
 macro_rules! ensure_eq {

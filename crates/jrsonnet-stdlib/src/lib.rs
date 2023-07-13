@@ -7,10 +7,10 @@ use std::{
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{builtin::Builtin, CallLocation, FuncVal, TlaArg},
-	gc::{GcHashMap, TraceBox},
+	gc::TraceBox,
 	tb,
 	trace::PathResolver,
-	Context, ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
+	ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_parser::Source;
@@ -231,8 +231,6 @@ pub struct Settings {
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
 	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
-	/// Helper to add globals without implementing custom ContextInitializer
-	pub globals: GcHashMap<IStr, Thunk<Val>>,
 	/// Used for `std.trace`
 	pub trace_printer: Box<dyn TracePrinter>,
 	/// Used for `std.thisFile`
@@ -246,10 +244,13 @@ fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 
 #[derive(Trace, Clone)]
 pub struct ContextInitializer {
-	// When we don't need to support legacy-this-file, we can reuse same context for all files
+	/// When we don't need to support legacy-this-file, we can reuse same context for all files
 	#[cfg(not(feature = "legacy-this-file"))]
-	context: Context,
-	// Otherwise, we can only keep first stdlib layer, and then stack thisFile on top of it
+	context: jrsonnet_evaluator::Context,
+	/// For `populate`
+	#[cfg(not(feature = "legacy-this-file"))]
+	stdlib_thunk: Thunk<Val>,
+	/// Otherwise, we can only keep first stdlib layer, and then stack thisFile on top of it
 	#[cfg(feature = "legacy-this-file")]
 	stdlib_obj: ObjValue,
 	settings: Rc<RefCell<Settings>>,
@@ -259,23 +260,24 @@ impl ContextInitializer {
 		let settings = Settings {
 			ext_vars: Default::default(),
 			ext_natives: Default::default(),
-			globals: Default::default(),
 			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
 		};
 		let settings = Rc::new(RefCell::new(settings));
+		let stdlib_obj = stdlib_uncached(settings.clone());
+		#[cfg(not(feature = "legacy-this-file"))]
+		let stdlib_thunk = Thunk::evaluated(Val::Obj(stdlib_obj));
 		Self {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
 				let mut context = ContextBuilder::with_capacity(_s, 1);
-				context.bind(
-					"std".into(),
-					Thunk::evaluated(Val::Obj(stdlib_uncached(settings.clone()))),
-				);
+				context.bind("std".into(), stdlib_thunk.clone());
 				context.build()
 			},
+			#[cfg(not(feature = "legacy-this-file"))]
+			stdlib_thunk,
 			#[cfg(feature = "legacy-this-file")]
-			stdlib_obj: stdlib_uncached(settings.clone()),
+			stdlib_obj,
 			settings,
 		}
 	}
@@ -321,28 +323,24 @@ impl ContextInitializer {
 	}
 }
 impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
+	fn reserve_vars(&self) -> usize {
+		1
+	}
 	#[cfg(not(feature = "legacy-this-file"))]
 	fn initialize(&self, _s: State, _source: Source) -> jrsonnet_evaluator::Context {
-		let out = self.context.clone();
-		let globals = &self.settings().globals;
-		if globals.is_empty() {
-			return out;
-		}
-
-		let mut out = ContextBuilder::extend(out);
-		for (k, v) in globals.iter() {
-			out.bind(k.clone(), v.clone());
-		}
-		out.build()
+		self.context.clone()
+	}
+	#[cfg(not(feature = "legacy-this-file"))]
+	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
+		builder.bind("std".into(), self.stdlib_thunk.clone());
 	}
 	#[cfg(feature = "legacy-this-file")]
-	fn initialize(&self, s: State, source: Source) -> Context {
+	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
 		use jrsonnet_evaluator::val::StrValue;
 
-		let mut builder = ObjValueBuilder::new();
-		builder.with_super(self.stdlib_obj.clone());
-		builder
-			.member("thisFile".into())
+		let mut std = ObjValueBuilder::new();
+		std.with_super(self.stdlib_obj.clone());
+		std.member("thisFile".into())
 			.hide()
 			.value(Val::Str(StrValue::Flat(
 				match source.source_path().path() {
@@ -351,17 +349,12 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 				},
 			)))
 			.expect("this object builder is empty");
-		let stdlib_with_this_file = builder.build();
+		let stdlib_with_this_file = std.build();
 
-		let mut context = ContextBuilder::with_capacity(s, 1);
-		context.bind(
+		builder.bind(
 			"std".into(),
 			Thunk::evaluated(Val::Obj(stdlib_with_this_file)),
 		);
-		for (k, v) in self.settings().globals.iter() {
-			context.bind(k.clone(), v.clone());
-		}
-		context.build()
 	}
 	fn as_any(&self) -> &dyn std::any::Any {
 		self
@@ -371,22 +364,11 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 pub trait StateExt {
 	/// This method was previously implemented in jrsonnet-evaluator itself
 	fn with_stdlib(&self);
-	fn add_global(&self, name: IStr, value: Thunk<Val>);
 }
 
 impl StateExt for State {
 	fn with_stdlib(&self) {
 		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
 		self.settings_mut().context_initializer = tb!(initializer)
-	}
-	fn add_global(&self, name: IStr, value: Thunk<Val>) {
-		self.settings()
-			.context_initializer
-			.as_any()
-			.downcast_ref::<ContextInitializer>()
-			.expect("not standard context initializer")
-			.settings_mut()
-			.globals
-			.insert(name, value);
 	}
 }
