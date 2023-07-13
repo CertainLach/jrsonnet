@@ -10,21 +10,43 @@ pub struct ExtStr {
 	pub value: String,
 }
 
+/// Parses a string like `name=<value>`, or `name` and reads value from env variable.
+/// With no value it will be read from env variable.
+/// If env variable is not found then it will be an error.
+/// Value can contain `=` symbol.
+///
+/// ```
+/// use std::str::FromStr;
+/// use jrsonnet_cli::ExtStr;
+///
+/// let ext = ExtStr::from_str("name=value").unwrap();
+/// assert_eq!(ext.name, "name");
+/// assert_eq!(ext.value, "value");
+///
+/// std::env::set_var("name", "value");
+///
+/// let ext = ExtStr::from_str("name").unwrap();
+/// assert_eq!(ext.name, "name");
+/// assert_eq!(ext.value, "value");
+///
+/// let ext = ExtStr::from_str("name=value=with=equals").unwrap();
+/// assert_eq!(ext.name, "name");
+/// assert_eq!(ext.value, "value=with=equals");
+/// ```
+///
 impl FromStr for ExtStr {
 	type Err = &'static str;
-	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		let out: Vec<_> = s.split('=').collect();
-		match out.len() {
-			1 => Ok(ExtStr {
-				name: out[0].to_owned(),
-				value: std::env::var(out[0]).or(Err("missing env var"))?,
-			}),
-			2 => Ok(ExtStr {
-				name: out[0].to_owned(),
-				value: out[1].to_owned(),
-			}),
 
-			_ => Err("bad ext-str syntax"),
+	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
+		match s.find('=') {
+			Some(idx) => Ok(ExtStr {
+				name: s[..idx].to_owned(),
+				value: s[idx + 1..].to_owned(),
+			}),
+			None => Ok(ExtStr {
+				name: s.to_owned(),
+				value: std::env::var(s).or(Err("missing env var"))?,
+			}),
 		}
 	}
 }
