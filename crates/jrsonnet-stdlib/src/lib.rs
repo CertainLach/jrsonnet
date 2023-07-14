@@ -139,6 +139,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		// Objects
 		("objectFieldsEx", builtin_object_fields_ex::INST),
 		("objectHasEx", builtin_object_has_ex::INST),
+		("objectRemoveKey", builtin_object_remove_key::INST),
 		// Manifest
 		("escapeStringJson", builtin_escape_string_json::INST),
 		("manifestJsonEx", builtin_manifest_json_ex::INST),

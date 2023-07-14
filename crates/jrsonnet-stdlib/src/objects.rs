@@ -1,8 +1,9 @@
 use jrsonnet_evaluator::{
 	function::builtin,
 	val::{StrValue, Val},
-	IStr, ObjValue,
+	IStr, ObjValue, ObjValueBuilder,
 };
+
 
 #[builtin]
 pub fn builtin_object_fields_ex(
@@ -26,4 +27,17 @@ pub fn builtin_object_fields_ex(
 #[builtin]
 pub fn builtin_object_has_ex(obj: ObjValue, fname: IStr, hidden: bool) -> bool {
 	obj.has_field_ex(fname, hidden)
+}
+
+#[builtin]
+pub fn builtin_object_remove_key(obj: ObjValue, key: IStr) -> ObjValue {
+	let mut new_obj = ObjValueBuilder::with_capacity(obj.len() - 1);
+	for (k, v) in obj.iter() {
+		if k == key {
+			continue
+		}
+		new_obj.member(k).value_unchecked(v.unwrap())
+	}
+
+	new_obj.build()
 }
