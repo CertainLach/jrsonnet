@@ -274,6 +274,12 @@
   objectValuesAll(o)::
     [o[k] for k in std.objectFieldsAll(o)],
 
+  objectKeysValues(o)::
+    [{ key: k, value: o[k] } for k in std.objectFields(o)],
+	
+  objectKeysValuesAll(o)::
+		[{ key: k, value: o[k] } for k in std.objectFieldsAll(o)],
+
   resolvePath(f, r)::
     local arr = std.split(f, '/');
     std.join('/', std.makeArray(std.length(arr) - 1, function(i) arr[i]) + [r]),

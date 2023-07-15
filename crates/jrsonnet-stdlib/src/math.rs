@@ -114,3 +114,28 @@ pub fn builtin_mantissa(x: f64) -> f64 {
 pub fn builtin_exponent(x: f64) -> i16 {
 	frexp(x).1
 }
+
+#[builtin]
+pub fn builtin_round(x: f64) -> f64 {
+	x.round()
+}
+
+#[builtin]
+pub fn builtin_is_even(x: f64) -> bool {
+	builtin_round(x) % 2.0 == 0.0
+}
+
+#[builtin]
+pub fn builtin_is_odd(x: f64) -> bool {
+	builtin_round(x) % 2.0 == 1.0
+}
+
+#[builtin]
+pub fn builtin_is_integer(x: f64) -> bool {
+	builtin_round(x) == x
+}
+
+#[builtin]
+pub fn builtin_is_decimal(x: f64) -> bool {
+	builtin_round(x) != x
+}
