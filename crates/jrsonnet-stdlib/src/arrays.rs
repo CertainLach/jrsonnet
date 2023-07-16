@@ -260,11 +260,12 @@ pub fn builtin_remove_at(
 	index: usize,
 ) -> Result<ArrValue> {
 	let newArrLeft = arr.clone().slice(None, Some(index), None);
-	let newArrRight = arr.clone().slice(Some(index + 1), None, None);
-	return Ok(ArrValue::extended(
+	let newArrRight = arr.slice(Some(index + 1), None, None);
+	
+	Ok(ArrValue::extended(
 		newArrLeft.unwrap_or(ArrValue::empty()),
 		newArrRight.unwrap_or(ArrValue::empty()))
-	);
+	)
 }
 
 #[builtin]
