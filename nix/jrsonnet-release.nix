@@ -8,10 +8,10 @@ rustPlatform.buildRustPackage rec {
   src = fetchFromGitHub {
     owner = "CertainLach";
     repo = pname;
-    rev = "ccafbf79faf649e0990e277c061be9a2b62ad84c";
-    hash = "sha256-LTDIJY9wfv4h5e3/5bONHHBS0qMLKdY6bk6ajKEjG7A=";
+    rev = "777cdf5396004dd5e9447da82c9f081066729d91";
+    hash = "sha256-xfNKSjOZM77NB3mJkTY9RC+ClX5KLyk/Q774vWK0goc=";
   };
-  cargoHash = "sha256-LBlJWE3LcbOe/uu19TbLhbUhBKy8DzuDCP4XyuAEmUk=";
+  cargoHash = "sha256-EJQbOmAD6O5l9YKgd/nFD4Df3PfETQ/ffm2YxxxxW1U=";
 
   cargoTestFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
   cargoBuildFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];

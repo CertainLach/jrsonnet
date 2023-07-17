@@ -2,13 +2,14 @@ use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
 	parenthesized,
-	parse::{Parse, ParseStream},
-	parse_macro_input,
+	parse::{self, Parse, ParseStream},
+	parse_macro_input, parse_quote,
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{self, Comma},
-	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
-	PathArguments, Result, ReturnType, Token, Type,
+	visit_mut::VisitMut,
+	Attribute, DeriveInput, Error, Expr, ExprBlock, ExprCall, ExprStruct, FnArg, GenericArgument,
+	Ident, ItemFn, LitStr, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
 };
 
 fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
@@ -88,6 +89,9 @@ mod kw {
 	syn::custom_keyword!(rename);
 	syn::custom_keyword!(flatten);
 	syn::custom_keyword!(ok);
+
+	syn::custom_keyword!(ctx);
+	syn::custom_keyword!(val);
 }
 
 struct EmptyAttr;
@@ -650,4 +654,226 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			}
 		};
 	})
+}
+
+#[derive(Default)]
+struct OutCollector {
+	out_vals: Vec<Ident>,
+	out_ctxs: Vec<Ident>,
+}
+impl syn::visit_mut::VisitMut for OutCollector {
+	fn visit_expr_call_mut(&mut self, call: &mut ExprCall) {
+		if call.args.len() != 1 {
+			return;
+		}
+		let Expr::Path(p) = call.args.iter().next().unwrap() else {
+			return;
+		};
+		let Some(def) = p.path.get_ident() else {
+			return;
+		};
+		match &mut *call.func {
+			Expr::Path(p) if p.path.is_ident("val") => {
+				self.out_vals.push(def.clone());
+				p.path = parse_quote!(core::convert::identity)
+			}
+			Expr::Path(p) if p.path.is_ident("ctx") => {
+				self.out_ctxs.push(def.clone());
+				p.path = parse_quote!(core::convert::identity)
+			}
+			_ => return,
+		}
+	}
+}
+enum TcoItem {
+	InsertCtx(Ident, Expr),
+	InsertVal(Ident, Expr),
+	Apply {
+		val: ExprStruct,
+		out_vals: Vec<Ident>,
+		out_ctxs: Vec<Ident>,
+	},
+}
+impl Parse for TcoItem {
+	fn parse(input: ParseStream) -> Result<Self> {
+		if input.peek(kw::ctx) {
+			input.parse::<kw::ctx>()?;
+			let item;
+			parenthesized!(item in input);
+			let ident = item.parse()?;
+			item.parse::<Token![,]>()?;
+			let expr = item.parse()?;
+			Ok(Self::InsertCtx(ident, expr))
+		} else if input.peek(kw::val) {
+			input.parse::<kw::val>()?;
+			let item;
+			parenthesized!(item in input);
+			let ident = item.parse()?;
+			item.parse::<Token![,]>()?;
+			let expr = item.parse()?;
+			Ok(Self::InsertVal(ident, expr))
+		} else {
+			let mut val: ExprStruct = input.parse()?;
+			let mut collector = OutCollector::default();
+			collector.visit_expr_struct_mut(&mut val);
+			let OutCollector { out_vals, out_ctxs } = collector;
+			Ok(Self::Apply {
+				val,
+				out_ctxs,
+				out_vals,
+			})
+		}
+	}
+}
+impl TcoItem {
+	fn expand_ops_rev(self, init_rev: &mut Vec<TcoOp>, out: &mut Vec<TcoOp>) {
+		use TcoOp::*;
+		match self {
+			TcoItem::InsertCtx(n, v) => {
+				init_rev.push(DeclCtx(n.clone()));
+				init_rev.push(SetCtx(n, v));
+			}
+			TcoItem::InsertVal(n, v) => {
+				init_rev.push(DeclVal(n.clone()));
+				init_rev.push(SetVal(n, v));
+			}
+			TcoItem::Apply {
+				val,
+				out_vals,
+				out_ctxs,
+			} => {
+				for n in out_vals.iter() {
+					init_rev.push(DeclVal(n.clone()));
+				}
+				for n in out_ctxs.iter() {
+					init_rev.push(DeclCtx(n.clone()));
+				}
+				out.push(AddApply(val))
+			}
+		}
+	}
+}
+
+enum TcoOp {
+	DeclVal(Ident),
+	DeclCtx(Ident),
+	SetVal(Ident, Expr),
+	SetCtx(Ident, Expr),
+	AddApply(ExprStruct),
+}
+impl TcoOp {
+	fn expand(&self, out: &mut Vec<TokenStream>) {
+		out.push(match self {
+			TcoOp::DeclVal(v) => quote! {
+				let #v = crate::val_tag(stringify!(#v));
+			},
+			TcoOp::DeclCtx(v) => quote! {
+				let #v = crate::ctx_tag(stringify!(#v));
+			},
+			TcoOp::SetVal(v, e) => quote! {{
+				tcvm.vals.push(#e, #v.clone());
+			}},
+			TcoOp::SetCtx(v, e) => quote! {{
+				tcvm.ctxs.push(#e, #v.clone());
+			}},
+			TcoOp::AddApply(apply) => quote! {{
+				tcvm.apply.push(crate::TailCallApply::#apply, crate::apply_tag());
+			}},
+		})
+	}
+}
+
+struct TcoInput {
+	items: Vec<TcoItem>,
+}
+impl Parse for TcoInput {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let mut items = Vec::new();
+		loop {
+			if input.is_empty() {
+				break;
+			}
+			let i: TcoItem = input.parse()?;
+			items.push(i);
+			if input.peek(Token![,]) {
+				input.parse::<Token![,]>()?;
+				continue;
+			}
+			break;
+		}
+		if !input.is_empty() {
+			return Err(Error::new(input.span(), "unknown statement after input"));
+		}
+		Ok(TcoInput { items })
+	}
+}
+impl TcoInput {
+	fn expand(self, cont: TokenStream) -> TokenStream {
+		let mut init = Vec::new();
+		let mut out = Vec::new();
+
+		for i in self.items.into_iter().rev() {
+			i.expand_ops_rev(&mut init, &mut out);
+		}
+
+		let mut vals = 0usize;
+		let mut ctxs = 0usize;
+		let mut applys = 0usize;
+		for v in init.iter().chain(out.iter()) {
+			match v {
+				TcoOp::DeclVal(_) => vals += 1,
+				TcoOp::DeclCtx(_) => ctxs += 1,
+				TcoOp::SetVal(_, _) => {}
+				TcoOp::SetCtx(_, _) => {}
+				TcoOp::AddApply(_) => applys += 1,
+			}
+		}
+
+		let mut run = Vec::new();
+		if vals != 0 {
+			run.push(quote! {tcvm.vals.reserve(#vals);});
+		}
+		if ctxs != 0 {
+			run.push(quote! {tcvm.ctxs.reserve(#ctxs);});
+		}
+		if applys != 0 {
+			run.push(quote! {tcvm.apply.reserve(#applys);});
+		}
+		for i in init.iter() {
+			i.expand(&mut run);
+		}
+		for i in out.iter() {
+			i.expand(&mut run);
+		}
+
+		quote!({
+			#(#run;)*;
+			#cont
+		})
+	}
+}
+
+#[proc_macro]
+pub fn tco(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let item: TcoInput = match syn::parse(item) {
+		Ok(v) => v,
+		Err(e) => return e.to_compile_error().into(),
+	};
+	item.expand(quote! {continue;}).into()
+}
+#[proc_macro]
+pub fn tcr(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let item: TcoInput = match syn::parse(item) {
+		Ok(v) => v,
+		Err(e) => return e.to_compile_error().into(),
+	};
+	item.expand(quote! {}).into()
+}
+#[proc_macro]
+pub fn tcok(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let item: TcoInput = match syn::parse(item) {
+		Ok(v) => v,
+		Err(e) => return e.to_compile_error().into(),
+	};
+	item.expand(quote! {return Ok(())}).into()
 }

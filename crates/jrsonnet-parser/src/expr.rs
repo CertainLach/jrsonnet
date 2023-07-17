@@ -179,7 +179,8 @@ impl Deref for ParamsDesc {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+// FIXME: remove Clone
+#[derive(Debug, PartialEq, Trace, Clone)]
 pub struct ArgsDesc {
 	pub unnamed: Vec<LocExpr>,
 	pub named: Vec<(IStr, LocExpr)>,

@@ -44,6 +44,8 @@ mod sets;
 pub use sets::*;
 mod compat;
 pub use compat::*;
+mod regex;
+pub use crate::regex::*;
 
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
@@ -171,6 +173,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		// Sets
 		("setMember", builtin_set_member::INST),
 		("setInter", builtin_set_inter::INST),
+		// Regex
+		("regexQuoteMeta", builtin_regex_quote_meta::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
 	]
@@ -202,6 +206,37 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		.member("trace".into())
 		.hide()
 		.value(Val::Func(FuncVal::builtin(builtin_trace { settings })))
+		.expect("no conflict");
+
+	// Regex
+	let regex_cache = RegexCache::default();
+	builder
+		.member("regexFullMatch".into())
+		.hide()
+		.value(Val::Func(FuncVal::builtin(builtin_regex_full_match {
+			cache: regex_cache.clone(),
+		})))
+		.expect("no conflict");
+	builder
+		.member("regexPartialMatch".into())
+		.hide()
+		.value(Val::Func(FuncVal::builtin(builtin_regex_partial_match {
+			cache: regex_cache.clone(),
+		})))
+		.expect("no conflict");
+	builder
+		.member("regexReplace".into())
+		.hide()
+		.value(Val::Func(FuncVal::builtin(builtin_regex_replace {
+			cache: regex_cache.clone(),
+		})))
+		.expect("no conflict");
+	builder
+		.member("regexGlobalReplace".into())
+		.hide()
+		.value(Val::Func(FuncVal::builtin(builtin_regex_global_replace {
+			cache: regex_cache.clone(),
+		})))
 		.expect("no conflict");
 
 	builder

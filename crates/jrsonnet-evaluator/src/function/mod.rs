@@ -35,6 +35,15 @@ impl CallLocation<'static> {
 		Self(None)
 	}
 }
+impl Debug for CallLocation<'_> {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        if let Some(_v) = self.0 {
+			write!(f, "Code")
+		} else {
+			write!(f, "Native")
+		}
+    }
+}
 
 /// Represents Jsonnet function defined in code.
 #[derive(Debug, PartialEq, Trace)]

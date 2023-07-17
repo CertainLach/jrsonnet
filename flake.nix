@@ -73,7 +73,7 @@
             quick = true;
             jrsonnetVariants = [
               { drv = jrsonnet; name = "current"; }
-              { drv = jrsonnet-nightly; name = "current-nightly"; }
+              # { drv = jrsonnet-nightly; name = "current-nightly"; }
               { drv = jrsonnet-release; name = "before-str-extend"; }
             ];
           };

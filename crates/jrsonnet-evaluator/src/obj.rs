@@ -7,6 +7,7 @@ use std::{
 
 use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
+use jrsonnet_macros::{tco, tcr};
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 
@@ -15,7 +16,7 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	tb, throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	tb, throw, MaybeUnbound, Result, State, Tag, TailCallApply, TcVM, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -389,6 +390,28 @@ impl ObjValue {
 		})
 	}
 
+	#[inline(always)]
+	pub(crate) fn get_tcvm(&self, tcvm: &mut TcVM, key: IStr, out_val: Tag<Val>) -> Result<()> {
+		self.run_assertions()?;
+		let cache_key = (key.clone(), None);
+		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
+			match v {
+				CacheValue::Cached(v) => {
+					tcr!(val(out_val, v.clone()));
+					return Ok(());
+				}
+				CacheValue::NotFound => throw!(NoSuchField(key, vec![])),
+				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+				CacheValue::Errored(e) => return Err(e.clone()),
+			};
+		}
+		self.0
+			.value_cache
+			.borrow_mut()
+			.insert(cache_key.clone(), CacheValue::Pending);
+
+		todo!()
+	}
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions()?;
 		let cache_key = (key.clone(), None);
@@ -470,6 +493,20 @@ impl ObjValue {
 			(None, Some(super_obj)) => super_obj.get_raw(key, real_this),
 			(None, None) => Ok(None),
 		}
+	}
+	fn evaluate_this_tcvm(
+		&self,
+		tcvm: &mut TcVM,
+		v: &ObjMember,
+		real_this: Self,
+		out_val: Tag<Val>,
+	) {
+		tcr!(Unbound {
+			invoke: v.invoke.clone(),
+			sup: self.0.sup.clone(),
+			this: Some(real_this),
+			out_val,
+		});
 	}
 	fn evaluate_this(&self, v: &ObjMember, real_this: Self) -> Result<Val> {
 		v.invoke.evaluate(self.0.sup.clone(), Some(real_this))
