@@ -39,6 +39,11 @@ pub fn builtin_xor(x: bool, y: bool) -> bool {
 }
 
 #[builtin]
+pub fn builtin_xnor(x: bool, y: bool) -> bool {
+	x == y
+}
+
+#[builtin]
 pub fn builtin_format(str: IStr, vals: Val) -> Result<String> {
 	std_format(&str, vals)
 }

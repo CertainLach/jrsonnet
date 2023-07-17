@@ -1,3 +1,5 @@
+#![allow(non_snake_case)]
+
 use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
@@ -9,6 +11,9 @@ use jrsonnet_evaluator::{
 	Thunk, Val,
 };
 use jrsonnet_gcmodule::Cc;
+use jrsonnet_parser::BinaryOpType;
+
+use crate::eval_on_empty;
 
 #[derive(Copy, Clone)]
 enum SortKeyType {
@@ -64,15 +69,13 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 			let mut err = None;
 			// evaluate_compare_op will never return equal on types, which are different from
 			// jsonnet perspective
-			values.sort_unstable_by(|a, b| {
-				match evaluate_compare_op(a, b, jrsonnet_parser::BinaryOpType::Lt) {
-					Ok(ord) => ord,
-					Err(e) if err.is_none() => {
-						let _ = err.insert(e);
-						Ordering::Equal
-					}
-					Err(_) => Ordering::Equal,
+			values.sort_unstable_by(|a, b| match evaluate_compare_op(a, b, BinaryOpType::Lt) {
+				Ok(ord) => ord,
+				Err(e) if err.is_none() => {
+					let _ = err.insert(e);
+					Ordering::Equal
 				}
+				Err(_) => Ordering::Equal,
 			});
 			if let Some(err) = err {
 				return Err(err);
@@ -105,16 +108,16 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 			let mut err = None;
 			// evaluate_compare_op will never return equal on types, which are different from
 			// jsonnet perspective
-			vk.sort_by(|(_a, ak), (_b, bk)| {
-				match evaluate_compare_op(ak, bk, jrsonnet_parser::BinaryOpType::Lt) {
+			vk.sort_by(
+				|(_a, ak), (_b, bk)| match evaluate_compare_op(ak, bk, BinaryOpType::Lt) {
 					Ok(ord) => ord,
 					Err(e) if err.is_none() => {
 						let _ = err.insert(e);
 						Ordering::Equal
 					}
 					Err(_) => Ordering::Equal,
-				}
-			});
+				},
+			);
 			if let Some(err) = err {
 				return Err(err);
 			}
@@ -138,7 +141,6 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 }
 
 #[builtin]
-#[allow(non_snake_case)]
 pub fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	super::sort::sort(arr, keyF.unwrap_or_else(FuncVal::identity))
 }
@@ -205,4 +207,51 @@ pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 		let arr = uniq_keyf(ArrValue::lazy(Cc::new(arr)), keyF)?;
 		Ok(ArrValue::lazy(Cc::new(arr)))
 	}
+}
+
+
+fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
+	if let Some(key_f) = key_f {
+		key_f.evaluate_simple(&(val,), false)
+	} else {
+		Ok(val)
+	}
+}
+
+fn array_top1(arr: ArrValue, key_f: Option<FuncVal>, ordering: Ordering) -> Result<Val> {
+	let mut iter = arr.iter();
+	let mut min = iter.next().expect("not empty")?;
+	let mut min_key = eval_keyf(min.clone(), &key_f)?;
+	for item in iter {
+		let cur = item?;
+		let cur_key = eval_keyf(cur.clone(), &key_f)?;
+		if evaluate_compare_op(&cur_key, &min_key, BinaryOpType::Lt)? == ordering {
+			min = cur;
+			min_key = cur_key;
+		}
+	}
+	Ok(min)
+}
+
+#[builtin]
+pub fn builtin_min_array(
+	arr: ArrValue,
+	keyF: Option<FuncVal>,
+	onEmpty: Option<Thunk<Val>>,
+) -> Result<Val> {
+	if arr.is_empty() {
+		return eval_on_empty(onEmpty);
+	}
+	array_top1(arr, keyF, Ordering::Less)
+}
+#[builtin]
+pub fn builtin_max_array(
+	arr: ArrValue,
+	keyF: Option<FuncVal>,
+	onEmpty: Option<Thunk<Val>>,
+) -> Result<Val> {
+	if arr.is_empty() {
+		return eval_on_empty(onEmpty);
+	}
+	array_top1(arr, keyF, Ordering::Greater)
 }

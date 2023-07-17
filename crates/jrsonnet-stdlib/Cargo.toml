@@ -32,8 +32,12 @@ serde = "1.0"
 
 # std.md5
 md5 = "0.7.0"
+# std.sha1
+sha1 = "0.10.5"
 # std.sha256, std.sha512
 sha2 = "0.10.6"
+# std.sha3
+sha3 = "0.10.8"
 # std.base64
 base64 = "0.21.0"
 # std.parseJson

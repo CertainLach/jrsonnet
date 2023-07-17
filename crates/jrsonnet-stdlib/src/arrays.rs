@@ -1,11 +1,21 @@
+#![allow(non_snake_case)]
+
 use jrsonnet_evaluator::{
 	error::{ErrorKind::RuntimeError, Result},
 	function::{builtin, FuncVal},
 	throw,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal, StrValue},
-	Either, IStr, Val,
+	Either, IStr, Thunk, Val,
 };
+
+pub(crate) fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
+	if let Some(on_empty) = on_empty {
+		on_empty.evaluate()
+	} else {
+		throw!("expected non-empty array")
+	}
+}
 
 #[builtin]
 pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
@@ -221,6 +231,11 @@ pub fn builtin_member(arr: IndexableVal, x: Val) -> Result<bool> {
 }
 
 #[builtin]
+pub fn builtin_contains(arr: IndexableVal, elem: Val) -> Result<bool> {
+	builtin_member(arr, elem)
+}
+
+#[builtin]
 pub fn builtin_count(arr: ArrValue, x: Val) -> Result<usize> {
 	let mut count = 0;
 	for item in arr.iter() {
@@ -229,4 +244,36 @@ pub fn builtin_count(arr: ArrValue, x: Val) -> Result<usize> {
 		}
 	}
 	Ok(count)
+}
+
+#[builtin]
+pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
+	if arr.is_empty() {
+		return eval_on_empty(onEmpty);
+	}
+	Ok(Val::Num(arr.iter().sum::<f64>() / (arr.len() as f64)))
+}
+
+#[builtin]
+pub fn builtin_remove_at(
+	arr: ArrValue,
+	index: usize,
+) -> Result<ArrValue> {
+	let newArrLeft = arr.clone().slice(None, Some(index), None);
+	let newArrRight = arr.slice(Some(index + 1), None, None);
+	
+	Ok(ArrValue::extended(
+		newArrLeft.unwrap_or(ArrValue::empty()),
+		newArrRight.unwrap_or(ArrValue::empty()))
+	)
+}
+
+#[builtin]
+pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
+	for (index, item) in arr.iter().enumerate() {
+		if equals(&item?, &elem)? {
+			return builtin_remove_at(arr.clone(), index) 
+		}
+	}
+	Ok(arr)
 }
