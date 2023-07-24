@@ -32,9 +32,7 @@ macro_rules! any_ext_impl {
 			self.hash(&mut hasher)
 		}
 		fn dyn_eq(&self, other: &dyn $T) -> bool {
-			let Some(other) = other.as_any().downcast_ref::<Self>() else {
-				return false
-			};
+			let Some(other) = other.as_any().downcast_ref::<Self>() else { return false };
 			let this = <Self as $T>::as_any(self)
 				.downcast_ref::<Self>()
 				.expect("restricted by impl");

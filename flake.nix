@@ -20,7 +20,7 @@
           extensions = [ "rust-src" "miri" "rust-analyzer" ];
         });
       in
-      rec {
+      {
         packages = rec {
           go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix { };
           sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix { };
@@ -79,16 +79,18 @@
           };
         };
         devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs;[
+          nativeBuildInputs = with pkgs; [
+            just
             rust
             cargo-edit
             cargo-asm
             cargo-outdated
             lld
             hyperfine
+            graphviz
+          ] ++ lib.optionals (!stdenv.isDarwin) [
             valgrind
             kcachegrind
-            graphviz
           ];
         };
       }
