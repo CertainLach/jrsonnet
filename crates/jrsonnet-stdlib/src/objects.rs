@@ -4,7 +4,6 @@ use jrsonnet_evaluator::{
 	IStr, ObjValue, ObjValueBuilder,
 };
 
-
 #[builtin]
 pub fn builtin_object_fields_ex(
 	obj: ObjValue,
@@ -30,11 +29,22 @@ pub fn builtin_object_has_ex(obj: ObjValue, fname: IStr, hidden: bool) -> bool {
 }
 
 #[builtin]
-pub fn builtin_object_remove_key(obj: ObjValue, key: IStr) -> ObjValue {
+pub fn builtin_object_remove_key(
+	obj: ObjValue,
+	key: IStr,
+	// Standard implementation uses std.objectFields without such argument, we can't
+	// assume order preservation should always be enabled/disabled
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ObjValue {
+	#[cfg(feature = "exp-preserve-order")]
+	let preserve_order = preserve_order.unwrap_or(false);
 	let mut new_obj = ObjValueBuilder::with_capacity(obj.len() - 1);
-	for (k, v) in obj.iter() {
+	for (k, v) in obj.iter(
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	) {
 		if k == key {
-			continue
+			continue;
 		}
 		new_obj.member(k).value_unchecked(v.unwrap())
 	}
