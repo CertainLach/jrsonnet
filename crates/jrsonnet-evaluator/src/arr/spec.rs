@@ -178,7 +178,9 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Waiting(..) => {}
 		};
 
-		let ArrayThunk::Waiting(expr) = replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending) else {
+		let ArrayThunk::Waiting(expr) =
+			replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending)
+		else {
 			unreachable!()
 		};
 
@@ -489,7 +491,9 @@ impl ArrayLike for MappedArray {
 			ArrayThunk::Waiting(..) => {}
 		};
 
-		let ArrayThunk::Waiting(_) = replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending) else {
+		let ArrayThunk::Waiting(_) =
+			replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending)
+		else {
 			unreachable!()
 		};
 

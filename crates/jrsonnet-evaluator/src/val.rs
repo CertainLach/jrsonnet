@@ -72,7 +72,8 @@ where
 			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
 			ThunkInner::Waiting(..) => (),
 		};
-		let ThunkInner::Waiting(value) = replace(&mut *self.0.borrow_mut(), ThunkInner::Pending) else {
+		let ThunkInner::Waiting(value) = replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)
+		else {
 			unreachable!();
 		};
 		let new_value = match value.0.get() {

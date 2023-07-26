@@ -630,7 +630,7 @@ pub mod tests {
 					el!(
 						Apply(
 							el!(
-								Index{
+								Index {
 									indexable: el!(Var("std".into()), 1, 4),
 									index: el!(Str("deepJoin".into()), 5, 13),
 									#[cfg(feature = "exp-null-coaelse")]

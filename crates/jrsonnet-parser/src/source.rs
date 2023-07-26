@@ -33,7 +33,7 @@ macro_rules! any_ext_impl {
 		}
 		fn dyn_eq(&self, other: &dyn $T) -> bool {
 			let Some(other) = other.as_any().downcast_ref::<Self>() else {
-				return false
+				return false;
 			};
 			let this = <Self as $T>::as_any(self)
 				.downcast_ref::<Self>()

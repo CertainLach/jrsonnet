@@ -208,7 +208,10 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			create_dir_all(dir)?;
 		}
 		let Val::Obj(obj) = val else {
-			throw!("value should be object for --multi manifest, got {}", val.value_type())
+			throw!(
+				"value should be object for --multi manifest, got {}",
+				val.value_type()
+			)
 		};
 		for (field, data) in obj.iter(
 			#[cfg(feature = "exp-preserve-order")]

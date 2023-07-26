@@ -51,7 +51,7 @@ fn type_is_path<'ty>(ty: &'ty Type, needed: &str) -> Option<&'ty PathArguments> 
 
 fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
 	let Some(args) = type_is_path(ty, "Option") else {
-		return Ok(None)
+		return Ok(None);
 	};
 	// It should have only on angle-bracketed param ("<String>"):
 	let PathArguments::AngleBracketed(params) = args else {
@@ -63,7 +63,7 @@ fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
 		return Err(Error::new(
 			generic_arg.span(),
 			"option generic should be a type",
-		))
+		));
 	};
 	Ok(Some(ty))
 }
@@ -210,7 +210,7 @@ fn builtin_inner(
 		return Err(Error::new(
 			fun.sig.span(),
 			"builtin should return something",
-		))
+		));
 	};
 
 	let name = fun.sig.ident.to_string();

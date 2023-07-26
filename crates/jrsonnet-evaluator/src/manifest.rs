@@ -276,7 +276,10 @@ pub struct StringFormat;
 impl ManifestFormat for StringFormat {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
 		let Val::Str(s) = val else {
-			throw!("output should be string for string manifest format, got {}", val.value_type())
+			throw!(
+				"output should be string for string manifest format, got {}",
+				val.value_type()
+			)
 		};
 		write!(out, "{s}").unwrap();
 		Ok(())
@@ -290,7 +293,10 @@ pub struct YamlStreamFormat<I>(pub I);
 impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
 		let Val::Arr(arr) = val else {
-			throw!("output should be array for yaml stream format, got {}", val.value_type())
+			throw!(
+				"output should be array for yaml stream format, got {}",
+				val.value_type()
+			)
 		};
 		if !arr.is_empty() {
 			for v in arr.iter() {
