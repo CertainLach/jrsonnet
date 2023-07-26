@@ -43,6 +43,12 @@ struct InputOpts {
 
 	/// Path to the file to be compiled if `--evaluate` is unset, otherwise code itself
 	pub input: Option<String>,
+
+	/// After executing input, apply specified code.
+	/// Output of the initial input will be accessible using `$`
+	#[cfg(feature = "exp-apply")]
+	#[clap(long)]
+	pub exp_apply: Vec<String>,
 }
 
 /// Jsonnet commandline interpreter (Rust implementation)
@@ -181,7 +187,18 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	};
 
 	let tla = opts.tla.tla_opts()?;
-	let val = apply_tla(s.clone(), &tla, val)?;
+	#[allow(unused_mut)]
+	let mut val = apply_tla(s.clone(), &tla, val)?;
+
+	#[cfg(feature = "exp-apply")]
+	for apply in opts.input.exp_apply {
+		use jrsonnet_evaluator::{InitialUnderscore, Thunk};
+		val = s.evaluate_snippet_with(
+			"<exp_apply>".to_owned(),
+			&apply,
+			InitialUnderscore(Thunk::evaluated(val)),
+		)?;
+	}
 
 	let manifest_format = opts.manifest.manifest_format();
 	if let Some(multi) = opts.output.multi {

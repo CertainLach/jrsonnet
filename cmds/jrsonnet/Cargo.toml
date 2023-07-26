@@ -8,7 +8,7 @@ license = "MIT"
 edition = "2021"
 
 [features]
-experimental = ["exp-preserve-order", "exp-destruct"]
+experimental = ["exp-preserve-order", "exp-destruct", "exp-null-coaelse", "exp-object-iteration", "exp-bigint", "exp-apply"]
 # Use mimalloc as allocator
 mimalloc = ["mimallocator"]
 # Experimental feature, which allows to preserve order of object fields
@@ -22,6 +22,10 @@ exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
 exp-object-iteration = ["jrsonnet-evaluator/exp-object-iteration"]
 # Bigint type
 exp-bigint = ["jrsonnet-evaluator/exp-bigint", "jrsonnet-cli/exp-bigint"]
+# obj?.field, obj?.['field']
+exp-null-coaelse = ["jrsonnet-evaluator/exp-null-coaelse", "jrsonnet-parser/exp-null-coaelse"]
+# --exp-apply
+exp-apply = []
 
 # std.thisFile support
 legacy-this-file = ["jrsonnet-cli/legacy-this-file"]

@@ -154,6 +154,37 @@ impl ContextInitializer for () {
 	}
 }
 
+macro_rules! impl_context_initializer {
+	($($gen:ident)*) => {
+		#[allow(non_snake_case)]
+		impl<$($gen: ContextInitializer + Trace,)*> ContextInitializer for ($($gen,)*) {
+			fn reserve_vars(&self) -> usize {
+				let mut out = 0;
+				let ($($gen,)*) = self;
+				$(out += $gen.reserve_vars();)*
+				out
+			}
+			fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
+				let ($($gen,)*) = self;
+				$($gen.populate(for_file.clone(), builder);)*
+			}
+			fn as_any(&self) -> &dyn Any {
+				self
+			}
+		}
+	};
+	($($cur:ident)* @ $c:ident $($rest:ident)*) => {
+		impl_context_initializer!($($cur)*);
+		impl_context_initializer!($($cur)* $c @ $($rest)*);
+	};
+	($($cur:ident)* @) => {
+		impl_context_initializer!($($cur)*);
+	}
+}
+impl_context_initializer! {
+	A B @ C D E
+}
+
 /// Dynamically reconfigurable evaluation settings
 #[derive(Trace)]
 pub struct EvaluationSettings {
@@ -361,6 +392,23 @@ impl State {
 		context_initializer.initialize(self.clone(), source)
 	}
 
+	/// Creates context with all passed global variables, calling custom modifier
+	pub fn create_default_context_with(
+		&self,
+		source: Source,
+		context_initializer: impl ContextInitializer,
+	) -> Context {
+		let default_initializer = &self.settings().context_initializer;
+		let mut builder = ContextBuilder::with_capacity(
+			self.clone(),
+			default_initializer.reserve_vars() + context_initializer.reserve_vars(),
+		);
+		default_initializer.populate(source.clone(), &mut builder);
+		context_initializer.populate(source, &mut builder);
+
+		builder.build()
+	}
+
 	/// Executes code creating a new stack frame
 	pub fn push<T>(
 		e: CallLocation<'_>,
@@ -428,22 +476,31 @@ impl State {
 		}
 		let mut settings = self.settings_mut();
 		let initializer = &mut settings.context_initializer;
-		match initializer.as_any().downcast_ref::<GlobalsCtx>() {
-			Some(glob) => {
-				glob.globals.borrow_mut().insert(name, value);
-			}
-			None => {
-				let inner = std::mem::replace(&mut settings.context_initializer, tb!(()));
-				settings.context_initializer = tb!(GlobalsCtx {
-					globals: {
-						let mut out = GcHashMap::with_capacity(1);
-						out.insert(name, value);
-						RefCell::new(out)
-					},
-					inner
-				})
-			}
+		if let Some(global) = initializer.as_any().downcast_ref::<GlobalsCtx>() {
+			global.globals.borrow_mut().insert(name, value);
+		} else {
+			let inner = std::mem::replace(&mut settings.context_initializer, tb!(()));
+			settings.context_initializer = tb!(GlobalsCtx {
+				globals: {
+					let mut out = GcHashMap::with_capacity(1);
+					out.insert(name, value);
+					RefCell::new(out)
+				},
+				inner
+			});
 		}
+	}
+}
+
+#[derive(Trace)]
+pub struct InitialUnderscore(pub Thunk<Val>);
+impl ContextInitializer for InitialUnderscore {
+	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
+		builder.bind("_".into(), self.0.clone());
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
 	}
 }
 
@@ -464,6 +521,30 @@ impl State {
 			error: Box::new(e),
 		})?;
 		evaluate(self.create_default_context(source), &parsed)
+	}
+	/// Parses and evaluates the given snippet with custom context modifier
+	pub fn evaluate_snippet_with(
+		&self,
+		name: impl Into<IStr>,
+		code: impl Into<IStr>,
+		context_initializer: impl ContextInitializer,
+	) -> Result<Val> {
+		let code = code.into();
+		let source = Source::new_virtual(name.into(), code.clone());
+		let parsed = jrsonnet_parser::parse(
+			&code,
+			&ParserSettings {
+				source: source.clone(),
+			},
+		)
+		.map_err(|e| ImportSyntaxError {
+			path: source.clone(),
+			error: Box::new(e),
+		})?;
+		evaluate(
+			self.create_default_context_with(source, context_initializer),
+			&parsed,
+		)
 	}
 }
 
