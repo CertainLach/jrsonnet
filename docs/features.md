@@ -154,3 +154,10 @@ local obj = {
 }
 ```
 
+## `exp-null-coalescing`
+
+Provides a new operator and new indexing syntax sugar:
+
+`a ?? b` - equivalent to `if a == null then b else a`
+
+`a?.b`, `a?.['b']` - equivalent to `if a != null then std.get(a, 'b', null)`
