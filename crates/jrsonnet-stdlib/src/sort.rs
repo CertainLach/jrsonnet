@@ -209,7 +209,6 @@ pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 	}
 }
 
-
 fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
 	if let Some(key_f) = key_f {
 		key_f.evaluate_simple(&(val,), false)
