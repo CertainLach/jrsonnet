@@ -1,6 +1,3 @@
-//! Those implementations are a bit sketchy, as this is mostly performance experiments
-//! of not yet finished nightly rust features
-
 use std::{cell::RefCell, iter, mem::replace, rc::Rc};
 
 use jrsonnet_gcmodule::{Cc, Trace};
@@ -17,19 +14,6 @@ use crate::{
 };
 
 pub trait ArrayLike: Sized + Into<ArrValue> {
-	#[cfg(feature = "nightly")]
-	type Iter<'t>
-	where
-		Self: 't;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t>
-	where
-		Self: 't;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t>
-	where
-		Self: 't;
-
 	fn len(&self) -> usize;
 	fn is_empty(&self) -> bool {
 		self.len() == 0
@@ -37,13 +21,6 @@ pub trait ArrayLike: Sized + Into<ArrValue> {
 	fn get(&self, index: usize) -> Result<Option<Val>>;
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>>;
 	fn get_cheap(&self, index: usize) -> Option<Val>;
-	#[cfg(feature = "nightly")]
-	#[allow(clippy::iter_not_returning_iterator)]
-	fn iter(&self) -> Self::Iter<'_>;
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> Self::IterLazy<'_>;
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<Self::IterCheap<'_>>;
 
 	fn reverse(self) -> ArrValue {
 		ArrValue::Reverse(Cc::new(ReverseArray(self.into())))
@@ -59,7 +36,6 @@ pub struct SliceArray {
 }
 
 impl SliceArray {
-	#[cfg(not(feature = "nightly"))]
 	fn iter(&self) -> impl Iterator<Item = Result<Val>> + '_ {
 		self.inner
 			.iter()
@@ -68,7 +44,6 @@ impl SliceArray {
 			.step_by(self.step as usize)
 	}
 
-	#[cfg(not(feature = "nightly"))]
 	fn iter_lazy(&self) -> impl Iterator<Item = Thunk<Val>> + '_ {
 		self.inner
 			.iter_lazy()
@@ -77,7 +52,6 @@ impl SliceArray {
 			.step_by(self.step as usize)
 	}
 
-	#[cfg(not(feature = "nightly"))]
 	fn iter_cheap(&self) -> Option<impl crate::arr::ArrayLikeIter<Val> + '_> {
 		Some(
 			self.inner
@@ -88,20 +62,7 @@ impl SliceArray {
 		)
 	}
 }
-#[cfg(feature = "nightly")]
-type SliceArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type SliceArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type SliceArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for SliceArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = SliceArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = SliceArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = SliceArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		iter::repeat(())
 			.take((self.to - self.from) as usize)
@@ -120,35 +81,6 @@ impl ArrayLike for SliceArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.iter_cheap()?.nth(index)
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> SliceArrayIter<'_> {
-		self.inner
-			.iter()
-			.skip(self.from as usize)
-			.take((self.to - self.from) as usize)
-			.step_by(self.step as usize)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> SliceArrayLazyIter<'_> {
-		self.inner
-			.iter_lazy()
-			.skip(self.from as usize)
-			.take((self.to - self.from) as usize)
-			.step_by(self.step as usize)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<SliceArrayCheapIter<'_>> {
-		Some(
-			self.inner
-				.iter_cheap()?
-				.skip(self.from as usize)
-				.take((self.to - self.from) as usize)
-				.step_by(self.step as usize),
-		)
-	}
 }
 impl From<SliceArray> for ArrValue {
 	fn from(value: SliceArray) -> Self {
@@ -158,20 +90,7 @@ impl From<SliceArray> for ArrValue {
 
 #[derive(Trace, Debug, Clone)]
 pub struct CharArray(pub Rc<Vec<char>>);
-#[cfg(feature = "nightly")]
-type CharArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type CharArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type CharArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for CharArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = CharArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = CharArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = CharArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.len()
 	}
@@ -189,29 +108,6 @@ impl ArrayLike for CharArray {
 			.get(index)
 			.map(|v| Val::Str(StrValue::Flat(IStr::from(*v))))
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> CharArrayIter<'_> {
-		self.0
-			.iter()
-			.map(|v| Ok(Val::Str(StrValue::Flat(IStr::from(*v)))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> CharArrayLazyIter<'_> {
-		self.0
-			.iter()
-			.map(|v| Thunk::evaluated(Val::Str(StrValue::Flat(IStr::from(*v)))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<CharArrayCheapIter<'_>> {
-		Some(
-			self.0
-				.iter()
-				.map(|v| Val::Str(StrValue::Flat(IStr::from(*v)))),
-		)
-	}
 }
 impl From<CharArray> for ArrValue {
 	fn from(value: CharArray) -> Self {
@@ -221,20 +117,7 @@ impl From<CharArray> for ArrValue {
 
 #[derive(Trace, Debug, Clone)]
 pub struct BytesArray(pub IBytes);
-#[cfg(feature = "nightly")]
-type BytesArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type BytesArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type BytesArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for BytesArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = BytesArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = BytesArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = BytesArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.len()
 	}
@@ -249,23 +132,6 @@ impl ArrayLike for BytesArray {
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get(index).map(|v| Val::Num(f64::from(*v)))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> BytesArrayIter<'_> {
-		self.0.iter().map(|v| Ok(Val::Num(f64::from(*v))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> BytesArrayLazyIter<'_> {
-		self.0
-			.iter()
-			.map(|v| Thunk::evaluated(Val::Num(f64::from(*v))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<BytesArrayCheapIter<'_>> {
-		Some(self.0.iter().map(|v| Val::Num(f64::from(*v))))
 	}
 }
 impl From<BytesArray> for ArrValue {
@@ -297,20 +163,7 @@ impl ExprArray {
 		}))
 	}
 }
-#[cfg(feature = "nightly")]
-type ExprArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type ExprArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type ExprArrayCheapIter<'t> = iter::Empty<Val>;
 impl ArrayLike for ExprArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = ExprArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = ExprArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = ExprArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.cached.borrow().len()
 	}
@@ -374,19 +227,6 @@ impl ArrayLike for ExprArray {
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> ExprArrayIter<'_> {
-		(0..self.len()).map(|i| self.get(i).transpose().expect("index checked"))
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> ExprArrayLazyIter<'_> {
-		(0..self.len()).map(|i| self.get_lazy(i).expect("index checked"))
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<Self::IterCheap<'_>> {
-		None
-	}
 }
 impl From<ExprArray> for ArrValue {
 	fn from(value: ExprArray) -> Self {
@@ -401,14 +241,6 @@ pub struct ExtendedArray {
 	split: usize,
 	len: usize,
 }
-#[cfg(feature = "nightly")]
-
-type ExtendedArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type ExtendedArrayLazyIter<'t> =
-	impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type ExtendedArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ExtendedArray {
 	pub fn new(a: ArrValue, b: ArrValue) -> Self {
 		let a_len = a.len();
@@ -459,13 +291,6 @@ where
 	}
 }
 impl ArrayLike for ExtendedArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = ExtendedArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = ExtendedArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = ExtendedArrayCheapIter<'t>;
-
 	fn get(&self, index: usize) -> Result<Option<Val>> {
 		if self.split > index {
 			self.a.get(index)
@@ -492,21 +317,6 @@ impl ArrayLike for ExtendedArray {
 			self.b.get_cheap(index - self.split)
 		}
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> ExtendedArrayIter<'_> {
-		WithExactSize(self.a.iter().chain(self.b.iter()), self.len)
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> ExtendedArrayLazyIter<'_> {
-		WithExactSize(self.a.iter_lazy().chain(self.b.iter_lazy()), self.len)
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<ExtendedArrayCheapIter<'_>> {
-		let a = self.a.iter_cheap()?;
-		let b = self.b.iter_cheap()?;
-		Some(WithExactSize(a.chain(b), self.len))
-	}
 }
 impl From<ExtendedArray> for ArrValue {
 	fn from(value: ExtendedArray) -> Self {
@@ -516,22 +326,7 @@ impl From<ExtendedArray> for ArrValue {
 
 #[derive(Trace, Debug, Clone)]
 pub struct LazyArray(pub Cc<Vec<Thunk<Val>>>);
-#[cfg(feature = "nightly")]
-type LazyArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type LazyArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type LazyArrayCheapIter<'t> = iter::Empty<Val>;
 impl ArrayLike for LazyArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = LazyArrayIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = LazyArrayLazyIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = LazyArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.len()
 	}
@@ -547,18 +342,6 @@ impl ArrayLike for LazyArray {
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		self.0.get(index).cloned()
 	}
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> LazyArrayIter<'_> {
-		self.0.iter().map(Thunk::evaluate)
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> LazyArrayLazyIter<'_> {
-		self.0.iter().cloned()
-	}
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<LazyArrayCheapIter<'_>> {
-		None
-	}
 }
 impl From<LazyArray> for ArrValue {
 	fn from(value: LazyArray) -> Self {
@@ -568,22 +351,7 @@ impl From<LazyArray> for ArrValue {
 
 #[derive(Trace, Debug, Clone)]
 pub struct EagerArray(pub Cc<Vec<Val>>);
-#[cfg(feature = "nightly")]
-type EagerArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type EagerArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type EagerArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for EagerArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = EagerArrayIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = EagerArrayLazyIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = EagerArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.len()
 	}
@@ -598,21 +366,6 @@ impl ArrayLike for EagerArray {
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get(index).cloned()
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> EagerArrayIter<'_> {
-		self.0.iter().cloned().map(Ok)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> EagerArrayLazyIter<'_> {
-		self.0.iter().cloned().map(Thunk::evaluated)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<EagerArrayCheapIter<'_>> {
-		Some(self.0.iter().cloned())
 	}
 }
 impl From<EagerArray> for ArrValue {
@@ -648,22 +401,7 @@ impl RangeArray {
 	}
 }
 
-#[cfg(feature = "nightly")]
-type RangeArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type RangeArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type RangeArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for RangeArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = RangeArrayIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = RangeArrayLazyIter<'t>;
-
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = RangeArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.range().len()
 	}
@@ -682,22 +420,6 @@ impl ArrayLike for RangeArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.range().nth(index).map(|i| Val::Num(f64::from(i)))
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> RangeArrayIter<'_> {
-		self.range().map(|i| Ok(Val::Num(f64::from(i))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> RangeArrayLazyIter<'_> {
-		self.range()
-			.map(|i| Thunk::evaluated(Val::Num(f64::from(i))))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<RangeArrayCheapIter<'_>> {
-		Some(self.range().map(|i| Val::Num(f64::from(i))))
-	}
 }
 impl From<RangeArray> for ArrValue {
 	fn from(value: RangeArray) -> Self {
@@ -708,15 +430,6 @@ impl From<RangeArray> for ArrValue {
 #[derive(Debug, Trace, Clone)]
 pub struct ReverseArray(pub ArrValue);
 impl ArrayLike for ReverseArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = iter::Rev<UnknownArrayIter<'t>>;
-
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = iter::Rev<UnknownArrayIterLazy<'t>>;
-
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = iter::Rev<UnknownArrayIterCheap<'t>>;
-
 	fn len(&self) -> usize {
 		self.0.len()
 	}
@@ -731,21 +444,6 @@ impl ArrayLike for ReverseArray {
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get_cheap(self.0.len() - index - 1)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> iter::Rev<UnknownArrayIter<'_>> {
-		self.0.iter().rev()
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> iter::Rev<UnknownArrayIterLazy<'_>> {
-		self.0.iter_lazy().rev()
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<iter::Rev<UnknownArrayIterCheap<'_>>> {
-		Some(self.0.iter_cheap()?.rev())
 	}
 	fn reverse(self) -> ArrValue {
 		self.0
@@ -775,20 +473,7 @@ impl MappedArray {
 		}))
 	}
 }
-#[cfg(feature = "nightly")]
-type MappedArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type MappedArrayLazyIter<'t> = impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type MappedArrayCheapIter<'t> = iter::Empty<Val>;
 impl ArrayLike for MappedArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = MappedArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = MappedArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = MappedArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.cached.borrow().len()
 	}
@@ -862,21 +547,6 @@ impl ArrayLike for MappedArray {
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> MappedArrayIter<'_> {
-		(0..self.len()).map(|i| self.get(i).transpose().expect("length checked"))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> MappedArrayLazyIter<'_> {
-		(0..self.len()).map(|i| self.get_lazy(i).expect("length checked"))
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<Self::IterCheap<'_>> {
-		None
-	}
 }
 impl From<MappedArray> for ArrValue {
 	fn from(value: MappedArray) -> Self {
@@ -906,21 +576,7 @@ impl RepeatedArray {
 	}
 }
 
-#[cfg(feature = "nightly")]
-type RepeatedArrayIter<'t> = impl DoubleEndedIterator<Item = Result<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type RepeatedArrayLazyIter<'t> =
-	impl DoubleEndedIterator<Item = Thunk<Val>> + ExactSizeIterator + 't;
-#[cfg(feature = "nightly")]
-type RepeatedArrayCheapIter<'t> = impl DoubleEndedIterator<Item = Val> + ExactSizeIterator + 't;
 impl ArrayLike for RepeatedArray {
-	#[cfg(feature = "nightly")]
-	type Iter<'t> = RepeatedArrayIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterLazy<'t> = RepeatedArrayLazyIter<'t>;
-	#[cfg(feature = "nightly")]
-	type IterCheap<'t> = RepeatedArrayCheapIter<'t>;
-
 	fn len(&self) -> usize {
 		self.0.total_len
 	}
@@ -945,56 +601,11 @@ impl ArrayLike for RepeatedArray {
 		}
 		self.0.data.get_cheap(index % self.0.data.len())
 	}
-
-	#[cfg(feature = "nightly")]
-	fn iter(&self) -> RepeatedArrayIter<'_> {
-		(0..self.0.total_len)
-			.map(|i| self.get(i))
-			.map(Result::transpose)
-			.map(Option::unwrap)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_lazy(&self) -> RepeatedArrayLazyIter<'_> {
-		(0..self.0.total_len)
-			.map(|i| self.get_lazy(i))
-			.map(Option::unwrap)
-	}
-
-	#[cfg(feature = "nightly")]
-	fn iter_cheap(&self) -> Option<RepeatedArrayCheapIter<'_>> {
-		if !self.0.data.is_cheap() {
-			return None;
-		}
-		Some(
-			(0..self.0.total_len)
-				.map(|i| self.get_cheap(i))
-				.map(Option::unwrap),
-		)
-	}
 }
 impl From<RepeatedArray> for ArrValue {
 	fn from(value: RepeatedArray) -> Self {
 		Self::Repeated(value)
 	}
-}
-
-#[cfg(feature = "nightly")]
-macro_rules! impl_iter_enum {
-	($n:ident => $v:ident) => {
-		pub enum $n<'t> {
-			Bytes(<BytesArray as ArrayLike>::$v<'t>),
-			Expr(<ExprArray as ArrayLike>::$v<'t>),
-			Lazy(<LazyArray as ArrayLike>::$v<'t>),
-			Eager(<EagerArray as ArrayLike>::$v<'t>),
-			Range(<RangeArray as ArrayLike>::$v<'t>),
-			Slice(Box<<SliceArray as ArrayLike>::$v<'t>>),
-			Extended(Box<<ExtendedArray as ArrayLike>::$v<'t>>),
-			Reverse(Box<<ReverseArray as ArrayLike>::$v<'t>>),
-			Mapped(Box<<MappedArray as ArrayLike>::$v<'t>>),
-			Repeated(Box<<RepeatedArray as ArrayLike>::$v<'t>>),
-		}
-	};
 }
 
 macro_rules! pass {
@@ -1015,81 +626,3 @@ macro_rules! pass {
 	};
 }
 pub(super) use pass;
-
-#[cfg(feature = "nightly")]
-macro_rules! pass_iter_call {
-	($t:ident.$c:ident $(in $wrap:ident)? => $e:ident) => {
-		match $t {
-			ArrValue::Bytes(e) => $e::Bytes($($wrap!)?(e.$c())),
-			ArrValue::Lazy(e) => $e::Lazy($($wrap!)?(e.$c())),
-			ArrValue::Expr(e) => $e::Expr($($wrap!)?(e.$c())),
-			ArrValue::Eager(e) => $e::Eager($($wrap!)?(e.$c())),
-			ArrValue::Range(e) => $e::Range($($wrap!)?(e.$c())),
-			ArrValue::Slice(e) => $e::Slice(Box::new($($wrap!)?(e.$c()))),
-			ArrValue::Extended(e) => $e::Extended(Box::new($($wrap!)?(e.$c()))),
-			ArrValue::Reverse(e) => $e::Reverse(Box::new($($wrap!)?(e.$c()))),
-			ArrValue::Mapped(e) => $e::Mapped(Box::new($($wrap!)?(e.$c()))),
-			ArrValue::Repeated(e) => $e::Repeated(Box::new($($wrap!)?(e.$c()))),
-		}
-	};
-}
-#[cfg(feature = "nightly")]
-pub(super) use pass_iter_call;
-
-#[cfg(feature = "nightly")]
-macro_rules! impl_iter {
-	($t:ident => $out:ty) => {
-		impl Iterator for $t<'_> {
-			type Item = $out;
-
-			fn next(&mut self) -> Option<Self::Item> {
-				pass!(self.next())
-			}
-			fn nth(&mut self, count: usize) -> Option<Self::Item> {
-				pass!(self.nth(count))
-			}
-			fn size_hint(&self) -> (usize, Option<usize>) {
-				pass!(self.size_hint())
-			}
-		}
-		impl DoubleEndedIterator for $t<'_> {
-			fn next_back(&mut self) -> Option<Self::Item> {
-				pass!(self.next_back())
-			}
-			fn nth_back(&mut self, count: usize) -> Option<Self::Item> {
-				pass!(self.nth_back(count))
-			}
-		}
-		impl ExactSizeIterator for $t<'_> {
-			fn len(&self) -> usize {
-				match self {
-					Self::Bytes(e) => e.len(),
-					Self::Expr(e) => e.len(),
-					Self::Lazy(e) => e.len(),
-					Self::Eager(e) => e.len(),
-					Self::Range(e) => e.len(),
-					Self::Slice(e) => e.len(),
-					Self::Extended(e) => {
-						e.size_hint().1.expect("overflow is checked in constructor")
-					}
-					Self::Reverse(e) => e.len(),
-					Self::Mapped(e) => e.len(),
-					Self::Repeated(e) => e.len(),
-				}
-			}
-		}
-	};
-}
-
-#[cfg(feature = "nightly")]
-impl_iter_enum!(UnknownArrayIter => Iter);
-#[cfg(feature = "nightly")]
-impl_iter!(UnknownArrayIter => Result<Val>);
-#[cfg(feature = "nightly")]
-impl_iter_enum!(UnknownArrayIterLazy => IterLazy);
-#[cfg(feature = "nightly")]
-impl_iter!(UnknownArrayIterLazy => Thunk<Val>);
-#[cfg(feature = "nightly")]
-impl_iter_enum!(UnknownArrayIterCheap => IterCheap);
-#[cfg(feature = "nightly")]
-impl_iter!(UnknownArrayIterCheap => Val);

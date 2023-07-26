@@ -185,36 +185,15 @@ impl ArrValue {
 		pass!(self.get_lazy(index))
 	}
 
-	#[cfg(feature = "nightly")]
-	pub fn iter(&self) -> UnknownArrayIter<'_> {
-		pass_iter_call!(self.iter => UnknownArrayIter)
-	}
-	#[cfg(not(feature = "nightly"))]
 	pub fn iter(&self) -> impl ArrayLikeIter<Result<Val>> + '_ {
 		(0..self.len()).map(|i| self.get(i).transpose().expect("length checked"))
 	}
 
 	/// Iterate over elements, returning lazy values.
-	#[cfg(feature = "nightly")]
-	pub fn iter_lazy(&self) -> UnknownArrayIterLazy<'_> {
-		pass_iter_call!(self.iter_lazy => UnknownArrayIterLazy)
-	}
-	#[cfg(not(feature = "nightly"))]
 	pub fn iter_lazy(&self) -> impl ArrayLikeIter<Thunk<Val>> + '_ {
 		(0..self.len()).map(|i| self.get_lazy(i).expect("length checked"))
 	}
 
-	#[cfg(feature = "nightly")]
-	pub fn iter_cheap(&self) -> Option<UnknownArrayIterCheap<'_>> {
-		macro_rules! question {
-			($v:expr) => {
-				$v?
-			};
-		}
-		Some(pass_iter_call!(self.iter_cheap in question => UnknownArrayIterCheap))
-	}
-
-	#[cfg(not(feature = "nightly"))]
 	pub fn iter_cheap(&self) -> Option<impl ArrayLikeIter<Val> + '_> {
 		if self.is_cheap() {
 			Some((0..self.len()).map(|i| self.get_cheap(i).expect("length and is_cheap checked")))

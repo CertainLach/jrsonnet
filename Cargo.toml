@@ -3,6 +3,7 @@ package.version = "0.5.0-pre9"
 package.repository = "https://github.com/CertainLach/jrsonnet"
 members = ["crates/*", "bindings/jsonnet", "cmds/jrsonnet", "tests"]
 default-members = ["cmds/jrsonnet"]
+resolver = "2"
 
 [workspace.dependencies]
 jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0-pre9" }
