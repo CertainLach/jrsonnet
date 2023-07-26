@@ -122,6 +122,8 @@ pub enum BinaryOpType {
 
 	And,
 	Or,
+	#[cfg(feature = "exp-null-coaelse")]
+	NullCoaelse,
 
 	// Equialent to std.objectHasEx(a, b, true)
 	In,
@@ -153,6 +155,8 @@ impl Display for BinaryOpType {
 				And => "&&",
 				Or => "||",
 				In => "in",
+				#[cfg(feature = "exp-null-coaelse")]
+				NullCoaelse => "??",
 			}
 		)
 	}
@@ -399,8 +403,13 @@ pub enum Expr {
 	ErrorStmt(LocExpr),
 	/// a(b, c)
 	Apply(LocExpr, ArgsDesc, bool),
-	/// a[b]
-	Index(LocExpr, LocExpr),
+	/// a[b], a.b, a?.b
+	Index {
+		indexable: LocExpr,
+		index: LocExpr,
+		#[cfg(feature = "exp-null-coaelse")]
+		null_coaelse: bool,
+	},
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
 	/// if true == false then 1 else 2

@@ -288,7 +288,11 @@ parser! {
 		rule unaryop(x: rule<()>) -> ()
 			= quiet!{ x() } / expected!("<unary op>")
 
-
+		rule ensure_null_coaelse()
+			= "" {?
+				#[cfg(not(feature = "exp-null-coaelse"))] return Err("!!!experimental null coaelscing was not enabled");
+				#[cfg(feature = "exp-null-coaelse")] Ok(())
+			}
 		use BinaryOpType::*;
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
@@ -296,6 +300,10 @@ parser! {
 				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
+				a:(@) _ binop(<"??">) _ ensure_null_coaelse() b:@ {
+					#[cfg(feature = "exp-null-coaelse")] return expr_bin!(a NullCoaelse b);
+					unreachable!("ensure_null_coaelse will fail if feature is not enabled")
+				}
 				--
 				a:(@) _ binop(<"&&">) _ b:@ {expr_bin!(a And b)}
 				--
@@ -329,8 +337,16 @@ parser! {
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
 				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
-				a:(@) _ "." _ a:position!() e:id_loc(s) b:position!() {Expr::Index(a, e)}
-				a:(@) _ "[" _ e:expr(s) _ "]" {Expr::Index(a, e)}
+				indexable:(@) _ null_coaelse:("?" _ ensure_null_coaelse())? "."  _ index:id_loc(s) {Expr::Index{
+					indexable, index,
+					#[cfg(feature = "exp-null-coaelse")]
+					null_coaelse: null_coaelse.is_some(),
+				}}
+				indexable:(@) _ null_coaelse:("?" _ "." _ ensure_null_coaelse())? "[" _ index:expr(s) _ "]" {Expr::Index{
+					indexable, index,
+					#[cfg(feature = "exp-null-coaelse")]
+					null_coaelse: null_coaelse.is_some(),
+				}}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
 				--

@@ -10,6 +10,7 @@ edition = "2021"
 [features]
 default = []
 exp-destruct = []
+exp-null-coaelse = []
 # Implement serialization of AST using structdump
 #
 # Structdump generates code, which exactly replicated passed AST

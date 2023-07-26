@@ -88,6 +88,10 @@ pub fn evaluate_binary_op_special(
 	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
 		(Bool(true), Or, _o) => Val::Bool(true),
 		(Bool(false), And, _o) => Val::Bool(false),
+		#[cfg(feature = "exp-null-coaelse")]
+		(Null, NullCoaelse, eb) => evaluate(ctx, eb)?,
+		#[cfg(feature = "exp-null-coaelse")]
+		(a, NullCoaelse, _o) => a,
 		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(ctx, eb)?)?,
 	})
 }

@@ -446,7 +446,12 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index(LocExpr(v, _), index) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
+		Index {
+			indexable: LocExpr(v, _),
+			index,
+			#[cfg(feature = "exp-null-coaelse")]
+			null_coaelse,
+		} if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
 			let name = evaluate(ctx.clone(), index)?;
 			let Val::Str(name) = name else {
 				throw!(ValueIndexMustBeTypeGot(
@@ -455,17 +460,37 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					name.value_type(),
 				))
 			};
-			ctx.super_obj()
-				.expect("no super found")
-				.get_for(name.into_flat(), ctx.this().expect("no this found").clone())?
-				.expect("value not found")
+			let Some(super_obj) = ctx.super_obj() else {
+				throw!(NoSuperFound)
+			};
+			let this = ctx
+				.this()
+				.expect("no this found, while super present, should not happen");
+			let key = name.into_flat();
+			match super_obj.get_for(key.clone(), this.clone())? {
+				Some(v) => v,
+				#[cfg(feature = "exp-null-coaelse")]
+				None if *null_coaelse => Val::Null,
+				None => {
+					let suggestions = suggest_object_fields(super_obj, key.clone());
+
+					throw!(NoSuchField(key, suggestions))
+				}
+			}
 		}
-		Index(value, index) => match (evaluate(ctx.clone(), value)?, evaluate(ctx, index)?) {
+		Index {
+			indexable,
+			index,
+			#[cfg(feature = "exp-null-coaelse")]
+			null_coaelse,
+		} => match (evaluate(ctx.clone(), indexable)?, evaluate(ctx, index)?) {
 			(Val::Obj(v), Val::Str(key)) => State::push(
 				CallLocation::new(loc),
 				|| format!("field <{key}> access"),
 				|| match v.get(key.clone().into_flat()) {
 					Ok(Some(v)) => Ok(v),
+					#[cfg(feature = "exp-null-coaelse")]
+					Ok(None) if *null_coaelse => Ok(Val::Null),
 					Ok(None) => {
 						let suggestions = suggest_object_fields(&v, key.clone().into_flat());
 
@@ -514,6 +539,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				ValType::Num,
 				n.value_type(),
 			)),
+			#[cfg(feature = "exp-null-coaelse")]
+			(Val::Null, _) if *null_coaelse => Val::Null,
 
 			(v, _) => throw!(CantIndexInto(v.value_type())),
 		},
