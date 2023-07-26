@@ -181,10 +181,16 @@ pub enum ErrorKind {
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(
-		"syntax error: expected {}, got {:?}",
-		.error.expected,
-		.path.code().chars().nth(error.location.offset)
-		.map_or_else(|| "EOF".into(), |c| c.to_string())
+		"syntax error: {}",
+		// Peg has no fancier way to handle critical parsing errors https://github.com/kevinmehall/rust-peg/issues/225
+		{.error.expected.tokens().find(|t| t.starts_with("!!!")).map_or_else(|| {
+			format!(
+				"expected {}, got {:?}",
+				.error.expected,
+				.path.code().chars().nth(error.location.offset)
+				.map_or_else(|| "EOF".into(), |c| c.to_string())
+			)
+		}, |v| v[3..].into())}
 	)]
 	ImportSyntaxError {
 		path: Source,

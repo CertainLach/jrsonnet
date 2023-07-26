@@ -106,7 +106,7 @@ parser! {
 					rest: rest.0,
 					end: rest.1,
 				});
-				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
 		pub rule destruct_object(s: &ParserSettings) -> expr::Destruct
 			= "{" _
@@ -120,13 +120,13 @@ parser! {
 					fields,
 					rest,
 				});
-				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
 		pub rule destruct(s: &ParserSettings) -> expr::Destruct
 			= v:id() {expr::Destruct::Full(v)}
 			/ "?" {?
 				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Skip);
-				#[cfg(not(feature = "exp-destruct"))] Err("experimental destructuring was not enabled")
+				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
 			/ arr:destruct_array(s) {arr}
 			/ obj:destruct_object(s) {obj}
