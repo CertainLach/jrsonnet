@@ -390,7 +390,28 @@ impl ObjValue {
 			)
 		})
 	}
+	pub fn get_lazy(&self, key: IStr) -> Option<Thunk<Val>> {
+		#[derive(Trace)]
+		struct ThunkGet {
+			obj: ObjValue,
+			key: IStr,
+		}
+		impl ThunkValue for ThunkGet {
+			type Output = Val;
 
+			fn get(self: Box<Self>) -> Result<Self::Output> {
+				Ok(self.obj.get(self.key)?.expect("field exists"))
+			}
+		}
+
+		if !self.has_field_ex(key.clone(), true) {
+			return None;
+		}
+		Some(Thunk::new(ThunkGet {
+			obj: self.clone(),
+			key,
+		}))
+	}
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions()?;
 		let cache_key = (key.clone(), None);
