@@ -347,6 +347,51 @@ where
 	}
 }
 
+impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
+	const TYPE: &'static ComplexValType = &ComplexValType::AttrsOf(V::TYPE);
+
+	fn into_untyped(typed: Self) -> Result<Val> {
+		let mut out = ObjValueBuilder::with_capacity(typed.len());
+		for (k, v) in typed {
+			let Some(key) = K::into_untyped(k)?.as_str() else {
+				throw!("map key should serialize to string");
+			};
+			let value = V::into_untyped(v)?;
+			out.member(key).value_unchecked(value);
+		}
+		Ok(Val::Obj(out.build()))
+	}
+
+	fn from_untyped(value: Val) -> Result<Self> {
+		Self::TYPE.check(&value)?;
+		let obj = value.as_obj().expect("typecheck should fail");
+
+		let mut out = BTreeMap::new();
+		if V::wants_lazy() {
+			for key in obj.fields_ex(
+				false,
+				#[cfg(feature = "exp-preserve-order")]
+				false,
+			) {
+				let value = obj.get_lazy(key.clone()).expect("field exists");
+				let value = V::from_lazy_untyped(value)?;
+				let key = K::from_untyped(Val::Str(key.into()))?;
+				let _ = out.insert(key, value);
+			}
+		} else {
+			for (key, value) in obj.iter(
+				#[cfg(feature = "exp-preserve-order")]
+				false,
+			) {
+				let key = K::from_untyped(Val::Str(key.into()))?;
+				let value = V::from_untyped(value?)?;
+				let _ = out.insert(key, value);
+			}
+		}
+		Ok(out)
+	}
+}
+
 impl Typed for Val {
 	const TYPE: &'static ComplexValType = &ComplexValType::Any;
 

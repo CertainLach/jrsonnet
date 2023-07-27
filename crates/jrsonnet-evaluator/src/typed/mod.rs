@@ -191,6 +191,19 @@ impl CheckType for ComplexValType {
 				}
 				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
 			},
+			Self::AttrsOf(a) => match value {
+				Val::Obj(o) => {
+					for (_key, value) in o.iter(
+						#[cfg(feature = "exp-preserve-order")]
+						false,
+					) {
+						let value = value?;
+						a.check(&value)?;
+					}
+					Ok(())
+				}
+				v => Err(TypeError::ExpectedGot(self.clone(), v.value_type()).into()),
+			},
 			Self::ObjectRef(elems) => match value {
 				Val::Obj(obj) => {
 					for (k, v) in elems.iter() {
