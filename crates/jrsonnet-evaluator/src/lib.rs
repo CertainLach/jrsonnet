@@ -39,6 +39,8 @@
 	clippy::type_repetition_in_bounds,
 	// ci is being run with nightly, but library should work on stable
 	clippy::missing_const_for_fn,
+	// too many false-positives with .expect() calls
+	clippy::missing_panics_doc,
 )]
 
 // For jrsonnet-macros

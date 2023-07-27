@@ -26,13 +26,13 @@ enum SortKeyType {
 struct NonNaNf64(f64);
 impl PartialOrd for NonNaNf64 {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		self.0.partial_cmp(&other.0)
+		Some(self.cmp(other))
 	}
 }
 impl Eq for NonNaNf64 {}
 impl Ord for NonNaNf64 {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.partial_cmp(other).expect("non nan")
+		self.0.partial_cmp(&other.0).expect("non nan")
 	}
 }
 

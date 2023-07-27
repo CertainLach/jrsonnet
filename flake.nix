@@ -17,7 +17,7 @@
           overlays = [ rust-overlay.overlays.default ];
         };
         rust = ((pkgs.rustChannelOf { date = "2023-07-23"; channel = "nightly"; }).default.override {
-          extensions = [ "rust-src" "miri" "rust-analyzer" ];
+          extensions = [ "rust-src" "miri" "rust-analyzer" "clippy" ];
         });
       in
       rec {

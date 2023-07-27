@@ -346,15 +346,14 @@ impl PartialEq for StrValue {
 impl Eq for StrValue {}
 impl PartialOrd for StrValue {
 	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
-		let a = self.clone().into_flat();
-		let b = other.clone().into_flat();
-		Some(a.cmp(&b))
+		Some(self.cmp(other))
 	}
 }
 impl Ord for StrValue {
 	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
-		self.partial_cmp(other)
-			.expect("partial_cmp always returns Some")
+		let a = self.clone().into_flat();
+		let b = other.clone().into_flat();
+		a.cmp(&b)
 	}
 }
 

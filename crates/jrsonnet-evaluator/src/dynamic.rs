@@ -22,7 +22,7 @@ impl<T: Trace + 'static> Pending<T> {
 		self.0
 			.set(value)
 			.map_err(|_| ())
-			.expect("wrapper is filled already")
+			.expect("wrapper is filled already");
 	}
 }
 impl<T: Clone + Trace + 'static> Pending<T> {
@@ -53,8 +53,8 @@ impl<T: Trace + 'static> Default for Pending<T> {
 	}
 }
 
-impl<T: Trace + Clone> Into<Thunk<T>> for Pending<T> {
-	fn into(self) -> Thunk<T> {
-		Thunk::new(self)
+impl<T: Trace + Clone> From<Pending<T>> for Thunk<T> {
+	fn from(value: Pending<T>) -> Self {
+		Self::new(value)
 	}
 }

@@ -591,7 +591,7 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 		.map(TypedField::parse)
 		.collect::<Result<Vec<_>>>()?;
 
-	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl( );
+	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
 	let typed = {
 		let fields = fields

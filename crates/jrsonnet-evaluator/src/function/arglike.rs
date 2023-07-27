@@ -210,14 +210,14 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 		tailstrict: bool,
 		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
-		for (name, value) in self.iter() {
+		for (name, value) in self {
 			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
 		}
 		Ok(())
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		for (name, _) in self.iter() {
+		for (name, _) in self {
 			handler(name);
 		}
 	}

@@ -206,7 +206,7 @@ impl CheckType for ComplexValType {
 			},
 			Self::ObjectRef(elems) => match value {
 				Val::Obj(obj) => {
-					for (k, v) in elems.iter() {
+					for (k, v) in *elems {
 						if let Some(got_v) = obj.get((*k).into())? {
 							push_type_description(
 								|| format!("property {k}"),
@@ -225,7 +225,7 @@ impl CheckType for ComplexValType {
 			},
 			Self::Union(types) => {
 				let mut errors = Vec::new();
-				for ty in types.iter() {
+				for ty in types {
 					match ty.check(value) {
 						Ok(()) => {
 							return Ok(());
@@ -240,7 +240,7 @@ impl CheckType for ComplexValType {
 			}
 			Self::UnionRef(types) => {
 				let mut errors = Vec::new();
-				for ty in types.iter() {
+				for ty in *types {
 					match ty.check(value) {
 						Ok(()) => {
 							return Ok(());
@@ -254,13 +254,13 @@ impl CheckType for ComplexValType {
 				Err(TypeError::UnionFailed(self.clone(), TypeLocErrorList(errors)).into())
 			}
 			Self::Sum(types) => {
-				for ty in types.iter() {
+				for ty in types {
 					ty.check(value)?;
 				}
 				Ok(())
 			}
 			Self::SumRef(types) => {
-				for ty in types.iter() {
+				for ty in *types {
 					ty.check(value)?;
 				}
 				Ok(())

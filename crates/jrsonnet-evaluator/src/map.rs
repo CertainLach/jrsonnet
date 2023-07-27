@@ -15,7 +15,7 @@ pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
 	pub fn iter_keys(self, mut handler: impl FnMut(IStr)) {
-		for (k, _) in self.0.current.iter() {
+		for (k, _) in &*self.0.current {
 			handler(k.clone());
 		}
 		if let Some(parent) = self.0.parent.clone() {

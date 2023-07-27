@@ -294,7 +294,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 	// We have single context for all fields, so we can cache binds
 	let uctx = CachedUnbound::new(evaluate_object_locals(fctx.clone(), locals));
 
-	for member in members.iter() {
+	for member in members {
 		match member {
 			Member::Field(field) => {
 				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;

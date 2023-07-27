@@ -217,7 +217,7 @@ impl Hash for Inner {
 impl Eq for Inner {}
 impl PartialOrd for Inner {
 	fn partial_cmp(&self, other: &Self) -> Option<cmp::Ordering> {
-		self.as_slice().partial_cmp(other.as_slice())
+		Some(self.cmp(other))
 	}
 }
 impl Ord for Inner {
