@@ -591,25 +591,25 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 		.map(TypedField::parse)
 		.collect::<Result<Vec<_>>>()?;
 
+	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl( );
+
 	let typed = {
 		let fields = fields
 			.iter()
 			.flat_map(TypedField::expand_field)
 			.collect::<Vec<_>>();
-		let len = fields.len();
 		quote! {
-			const ITEMS: [(&'static str, &'static ComplexValType); #len] = [
-				#(#fields,)*
-			];
-			impl Typed for #ident {
-				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&ITEMS);
+			impl #impl_generics Typed for #ident #ty_generics #where_clause {
+				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&[
+					#(#fields,)*
+				]);
 
-				fn from_untyped(value: Val) -> Result<Self> {
+				fn from_untyped(value: Val) -> JrResult<Self> {
 					let obj = value.as_obj().expect("shape is correct");
 					Self::parse(&obj)
 				}
 
-				fn into_untyped(value: Self) -> Result<Val> {
+				fn into_untyped(value: Self) -> JrResult<Val> {
 					let mut out = ObjValueBuilder::new();
 					value.serialize(&mut out)?;
 					Ok(Val::Obj(out.build()))
@@ -636,7 +636,7 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 
 			#typed
 
-			impl TypedObj for #ident {
+			impl #impl_generics TypedObj for #ident #ty_generics #where_clause {
 				fn serialize(self, out: &mut ObjValueBuilder) -> JrResult<()> {
 					#(#fields_serialize)*
 
