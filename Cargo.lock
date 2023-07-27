@@ -363,9 +363,9 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-gcmodule"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "35243aa6a013032e9469f3798c54e2ca7af44973b1eafdc924cb6ca351a71f72"
+checksum = "c11fb98940a7f8b419619e98ccbf2e094671a5fdd0e277f05acd373071186d57"
 dependencies = [
  "jrsonnet-gcmodule-derive",
  "parking_lot",
@@ -373,9 +373,9 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-gcmodule-derive"
-version = "0.3.5"
+version = "0.3.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "96206bf4ae74d5257bbbd23113bfe67b09e8973de3843b728c3ce289dee86eda"
+checksum = "6bee774b7ba86fc86ee84482cd6732aa860ae3559f9827c65efd75c51e66ac76"
 dependencies = [
  "proc-macro2",
  "quote",
