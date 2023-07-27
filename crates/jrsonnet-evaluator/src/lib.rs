@@ -182,7 +182,7 @@ macro_rules! impl_context_initializer {
 	}
 }
 impl_context_initializer! {
-	A B @ C D E
+	A @ B C D E F G
 }
 
 /// Dynamically reconfigurable evaluation settings
