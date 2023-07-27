@@ -1,34 +1,60 @@
-use std::cell::RefCell;
+use std::cell::OnceCell;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 
+use crate::{error::ErrorKind::InfiniteRecursionDetected, throw, val::ThunkValue, Result, Thunk};
+
 // TODO: Replace with OnceCell once in std
 #[derive(Clone, Trace)]
-pub struct Pending<V: Trace + 'static>(pub Cc<RefCell<Option<V>>>);
+pub struct Pending<V: Trace + 'static>(pub Cc<OnceCell<V>>);
 impl<T: Trace + 'static> Pending<T> {
 	pub fn new() -> Self {
-		Self(Cc::new(RefCell::new(None)))
+		Self(Cc::new(OnceCell::new()))
 	}
 	pub fn new_filled(v: T) -> Self {
-		Self(Cc::new(RefCell::new(Some(v))))
+		let cell = OnceCell::new();
+		let _ = cell.set(v);
+		Self(Cc::new(cell))
 	}
 	/// # Panics
 	/// If wrapper is filled already
 	pub fn fill(self, value: T) {
-		assert!(self.0.borrow().is_none(), "wrapper is filled already");
-		self.0.borrow_mut().replace(value);
+		self.0
+			.set(value)
+			.map_err(|_| ())
+			.expect("wrapper is filled already")
 	}
 }
 impl<T: Clone + Trace + 'static> Pending<T> {
 	/// # Panics
 	/// If wrapper is not yet filled
 	pub fn unwrap(&self) -> T {
-		self.0.borrow().as_ref().cloned().unwrap()
+		self.0.get().cloned().expect("pending was not filled")
+	}
+	pub fn try_get(&self) -> Option<T> {
+		self.0.get().cloned()
+	}
+}
+
+impl<T: Trace + Clone> ThunkValue for Pending<T> {
+	type Output = T;
+
+	fn get(self: Box<Self>) -> Result<Self::Output> {
+		let Some(value) = self.0.get() else {
+			throw!(InfiniteRecursionDetected);
+		};
+		Ok(value.clone())
 	}
 }
 
 impl<T: Trace + 'static> Default for Pending<T> {
 	fn default() -> Self {
 		Self::new()
+	}
+}
+
+impl<T: Trace + Clone> Into<Thunk<T>> for Pending<T> {
+	fn into(self) -> Thunk<T> {
+		Thunk::new(self)
 	}
 }

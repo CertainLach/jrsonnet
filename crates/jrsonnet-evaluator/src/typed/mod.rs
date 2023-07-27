@@ -252,6 +252,7 @@ impl CheckType for ComplexValType {
 				}
 				Ok(())
 			}
+			Self::Lazy(_lazy) => Ok(()),
 		}
 	}
 }

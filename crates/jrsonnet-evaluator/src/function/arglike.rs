@@ -48,28 +48,22 @@ impl<T> ArgLike for T
 where
 	T: Typed + Clone,
 {
-	fn evaluate_arg(&self, _ctx: Context, _tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+		if T::provides_lazy() && !tailstrict {
+			return Ok(T::into_lazy_untyped(self.clone()));
+		}
 		let val = T::into_untyped(self.clone())?;
 		Ok(Thunk::evaluated(val))
 	}
 }
 impl<T> OptionalContext for T where T: Typed + Clone {}
 
-impl ArgLike for Thunk<Val> {
-	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
-		if tailstrict {
-			self.force()?;
-		}
-		Ok(self.clone())
-	}
-}
-impl OptionalContext for Thunk<Val> {}
-
 #[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
 	Code(LocExpr),
 	Val(Val),
+	Lazy(Thunk<Val>),
 }
 impl ArgLike for TlaArg {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
@@ -84,6 +78,7 @@ impl ArgLike for TlaArg {
 				})
 			}),
 			TlaArg::Val(val) => Ok(Thunk::evaluated(val.clone())),
+			TlaArg::Lazy(lazy) => Ok(lazy.clone()),
 		}
 	}
 }

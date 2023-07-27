@@ -15,7 +15,9 @@ use crate::{
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	tb, throw, MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	tb, throw,
+	val::ThunkValue,
+	MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]

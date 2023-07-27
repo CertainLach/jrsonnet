@@ -1,6 +1,6 @@
-use std::ops::Deref;
+use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
 
-use jrsonnet_gcmodule::Cc;
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
@@ -11,9 +11,27 @@ use crate::{
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	throw,
 	typed::CheckType,
-	val::{IndexableVal, StrValue},
-	ObjValue, ObjValueBuilder, Val,
+	val::{IndexableVal, StrValue, ThunkMapper},
+	ObjValue, ObjValueBuilder, Thunk, Val,
 };
+
+#[derive(Trace)]
+struct FromUntyped<K: Trace>(PhantomData<fn() -> K>);
+impl<K> ThunkMapper<Val> for FromUntyped<K>
+where
+	K: Typed + Trace,
+{
+	type Output = K;
+
+	fn map(self, from: Val) -> Result<Self::Output> {
+		K::from_untyped(from)
+	}
+}
+impl<K: Trace> Default for FromUntyped<K> {
+	fn default() -> Self {
+		Self(PhantomData)
+	}
+}
 
 pub trait TypedObj: Typed {
 	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
@@ -28,7 +46,23 @@ pub trait TypedObj: Typed {
 pub trait Typed: Sized {
 	const TYPE: &'static ComplexValType;
 	fn into_untyped(typed: Self) -> Result<Val>;
+	fn into_lazy_untyped(typed: Self) -> Thunk<Val> {
+		Thunk::from(Self::into_untyped(typed))
+	}
 	fn from_untyped(untyped: Val) -> Result<Self>;
+	fn from_lazy_untyped(lazy: Thunk<Val>) -> Result<Self> {
+		Self::from_untyped(lazy.evaluate()?)
+	}
+
+	// Whatever caller should use `into_lazy_untyped` instead of `into_untyped`
+	fn provides_lazy() -> bool {
+		false
+	}
+
+	// Whatever caller should use `from_lazy_untyped` instead of `from_untyped` when possible
+	fn wants_lazy() -> bool {
+		false
+	}
 
 	/// Hack to make builtins be able to return non-result values, and make macros able to convert those values to result
 	/// This method returns identity in impl Typed for Result, and should not be overriden
@@ -36,6 +70,54 @@ pub trait Typed: Sized {
 	fn into_result(typed: Self) -> Result<Val> {
 		let value = Self::into_untyped(typed)?;
 		Ok(value)
+	}
+}
+
+impl<T> Typed for Thunk<T>
+where
+	T: Typed + Trace + Clone,
+{
+	const TYPE: &'static ComplexValType = &ComplexValType::Lazy(T::TYPE);
+
+	fn into_untyped(typed: Self) -> Result<Val> {
+		T::into_untyped(typed.evaluate()?)
+	}
+
+	fn from_untyped(untyped: Val) -> Result<Self> {
+		Self::from_lazy_untyped(Thunk::evaluated(untyped))
+	}
+
+	fn provides_lazy() -> bool {
+		true
+	}
+
+	fn into_lazy_untyped(inner: Self) -> Thunk<Val> {
+		#[derive(Trace)]
+		struct IntoUntyped<K: Trace>(PhantomData<fn() -> K>);
+		impl<K> ThunkMapper<K> for IntoUntyped<K>
+		where
+			K: Typed + Trace,
+		{
+			type Output = Val;
+
+			fn map(self, from: K) -> Result<Self::Output> {
+				K::into_untyped(from)
+			}
+		}
+		impl<K: Trace> Default for IntoUntyped<K> {
+			fn default() -> Self {
+				Self(PhantomData)
+			}
+		}
+		inner.map(<IntoUntyped<T>>::default())
+	}
+
+	fn wants_lazy() -> bool {
+		true
+	}
+
+	fn from_lazy_untyped(inner: Thunk<Val>) -> Result<Self> {
+		Ok(inner.map(<FromUntyped<T>>::default()))
 	}
 }
 

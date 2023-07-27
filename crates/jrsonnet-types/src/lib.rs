@@ -128,10 +128,12 @@ pub enum ComplexValType {
 	Array(Box<ComplexValType>),
 	ArrayRef(&'static ComplexValType),
 	ObjectRef(&'static [(&'static str, &'static ComplexValType)]),
+	AttrsOf(&'static ComplexValType),
 	Union(Vec<ComplexValType>),
 	UnionRef(&'static [&'static ComplexValType]),
 	Sum(Vec<ComplexValType>),
 	SumRef(&'static [&'static ComplexValType]),
+	Lazy(&'static ComplexValType),
 }
 
 impl From<ValType> for ComplexValType {
@@ -195,10 +197,18 @@ impl Display for ComplexValType {
 				}
 				write!(f, "}}")?;
 			}
+			ComplexValType::AttrsOf(a) => {
+				if matches!(a, ComplexValType::Any) {
+					write!(f, "object")?;
+				} else {
+					write!(f, "AttrsOf<{a}>")?;
+				}
+			}
 			ComplexValType::Union(v) => write_union(f, true, v.iter())?,
 			ComplexValType::UnionRef(v) => write_union(f, true, v.iter().copied())?,
 			ComplexValType::Sum(v) => write_union(f, false, v.iter())?,
 			ComplexValType::SumRef(v) => write_union(f, false, v.iter().copied())?,
+			ComplexValType::Lazy(lazy) => write!(f, "Lazy<{lazy}>")?,
 		};
 		Ok(())
 	}

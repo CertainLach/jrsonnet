@@ -88,6 +88,54 @@ where
 	}
 }
 
+pub trait ThunkMapper<Input>: Trace {
+	type Output;
+	fn map(self, from: Input) -> Result<Self::Output>;
+}
+impl<Input> Thunk<Input>
+where
+	Input: Trace + Clone,
+{
+	pub fn map<M>(self, mapper: M) -> Thunk<M::Output>
+	where
+		M: ThunkMapper<Input>,
+		M::Output: Trace,
+	{
+		#[derive(Trace)]
+		struct Mapped<Input: Trace, Mapper: Trace> {
+			inner: Thunk<Input>,
+			mapper: Mapper,
+		}
+		impl<Input, Mapper> ThunkValue for Mapped<Input, Mapper>
+		where
+			Input: Trace + Clone,
+			Mapper: ThunkMapper<Input>,
+		{
+			type Output = Mapper::Output;
+
+			fn get(self: Box<Self>) -> Result<Self::Output> {
+				let value = self.inner.evaluate()?;
+				let mapped = self.mapper.map(value)?;
+				Ok(mapped)
+			}
+		}
+
+		Thunk::new(Mapped::<Input, M> {
+			inner: self,
+			mapper,
+		})
+	}
+}
+
+impl<T: Trace> From<Result<T>> for Thunk<T> {
+	fn from(value: Result<T>) -> Self {
+		match value {
+			Ok(o) => Self::evaluated(o),
+			Err(e) => Self::errored(e),
+		}
+	}
+}
+
 type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
 
 #[derive(Trace, Clone)]
@@ -270,6 +318,11 @@ impl From<&str> for StrValue {
 impl From<String> for StrValue {
 	fn from(value: String) -> Self {
 		Self::Flat(value.into())
+	}
+}
+impl From<IStr> for StrValue {
+	fn from(value: IStr) -> Self {
+		Self::Flat(value)
 	}
 }
 impl Display for StrValue {

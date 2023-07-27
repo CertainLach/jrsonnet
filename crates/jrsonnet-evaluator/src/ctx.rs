@@ -81,7 +81,7 @@ impl Context {
 	#[must_use]
 	pub fn into_future(self, ctx: Pending<Self>) -> Self {
 		{
-			ctx.0.borrow_mut().replace(self);
+			ctx.clone().fill(self);
 		}
 		ctx.unwrap()
 	}
