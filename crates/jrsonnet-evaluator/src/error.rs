@@ -202,8 +202,6 @@ pub enum ErrorKind {
 	RuntimeError(IStr),
 	#[error("stack overflow, try to reduce recursion, or set --max-stack to bigger value")]
 	StackOverflow,
-	#[error("infinite recursion detected")]
-	InfiniteRecursionDetected,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
 	#[error("attempted to divide by zero")]

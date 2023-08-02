@@ -5,6 +5,7 @@ use std::{
 
 use jrsonnet_evaluator::{
 	manifest::JsonFormat,
+	stack::limit_stack_depth,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State,
 };
@@ -13,6 +14,7 @@ use jrsonnet_stdlib::StateExt;
 mod common;
 
 fn run(file: &Path) -> String {
+	let _stack_depth_override = limit_stack_depth(20);
 	let s = State::default();
 	s.with_stdlib();
 	common::with_test(&s);

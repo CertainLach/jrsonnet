@@ -69,7 +69,7 @@ where
 		match &*self.0.borrow() {
 			ThunkInner::Computed(v) => return Ok(v.clone()),
 			ThunkInner::Errored(e) => return Err(e.clone()),
-			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
+			ThunkInner::Pending => (),
 			ThunkInner::Waiting(..) => (),
 		};
 		let ThunkInner::Waiting(value) = replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)

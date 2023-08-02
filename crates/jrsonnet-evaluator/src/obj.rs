@@ -416,12 +416,12 @@ impl ObjValue {
 		self.run_assertions()?;
 		let cache_key = (key.clone(), None);
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
-			return Ok(match v {
-				CacheValue::Cached(v) => Some(v.clone()),
-				CacheValue::NotFound => None,
-				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+			match v {
+				CacheValue::Cached(v) => return Ok(Some(v.clone())),
+				CacheValue::NotFound => return Ok(None),
+				CacheValue::Pending => {}
 				CacheValue::Errored(e) => return Err(e.clone()),
-			});
+			};
 		}
 		self.0
 			.value_cache
@@ -448,12 +448,12 @@ impl ObjValue {
 		self.run_assertions()?;
 		let cache_key = (key.clone(), Some(this.clone().downgrade()));
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
-			return Ok(match v {
-				CacheValue::Cached(v) => Some(v.clone()),
-				CacheValue::NotFound => None,
-				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+			match v {
+				CacheValue::Cached(v) => return Ok(Some(v.clone())),
+				CacheValue::NotFound => return Ok(None),
+				CacheValue::Pending => (),
 				CacheValue::Errored(e) => return Err(e.clone()),
-			});
+			};
 		}
 		self.0
 			.value_cache

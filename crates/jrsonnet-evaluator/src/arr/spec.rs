@@ -6,7 +6,6 @@ use jrsonnet_parser::LocExpr;
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected,
 	evaluate,
 	function::FuncVal,
 	val::{StrValue, ThunkValue},
@@ -174,7 +173,7 @@ impl ArrayLike for ExprArray {
 		match &self.0.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
-			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
+			ArrayThunk::Pending => {}
 			ArrayThunk::Waiting(..) => {}
 		};
 
@@ -487,7 +486,7 @@ impl ArrayLike for MappedArray {
 		match &self.0.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
-			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
+			ArrayThunk::Pending => {}
 			ArrayThunk::Waiting(..) => {}
 		};
 

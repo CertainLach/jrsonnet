@@ -209,8 +209,6 @@ struct FileData {
 	bytes: Option<IBytes>,
 	parsed: Option<LocExpr>,
 	evaluated: Option<Val>,
-
-	evaluating: bool,
 }
 impl FileData {
 	fn new_string(data: IStr) -> Self {
@@ -219,7 +217,6 @@ impl FileData {
 			bytes: None,
 			parsed: None,
 			evaluated: None,
-			evaluating: false,
 		}
 	}
 	fn new_bytes(data: IBytes) -> Self {
@@ -228,7 +225,6 @@ impl FileData {
 			bytes: Some(data),
 			parsed: None,
 			evaluated: None,
-			evaluating: false,
 		}
 	}
 	pub(crate) fn get_string(&mut self) -> Option<IStr> {
@@ -351,10 +347,6 @@ impl State {
 			);
 		}
 		let parsed = file.parsed.as_ref().expect("just set").clone();
-		if file.evaluating {
-			throw!(InfiniteRecursionDetected)
-		}
-		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too
 		drop(file_cache);
 		let res = evaluate(self.create_default_context(file_name), &parsed);
@@ -366,7 +358,6 @@ impl State {
 			unreachable!("this file was just here!")
 		};
 		let file = file.get_mut();
-		file.evaluating = false;
 		match res {
 			Ok(v) => {
 				file.evaluated = Some(v.clone());
