@@ -136,6 +136,12 @@ impl<T: Trace> From<Result<T>> for Thunk<T> {
 	}
 }
 
+impl<T: Trace + Default> Default for Thunk<T> {
+	fn default() -> Self {
+		Self::evaluated(T::default())
+	}
+}
+
 type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
 
 #[derive(Trace, Clone)]
@@ -358,11 +364,12 @@ impl Ord for StrValue {
 }
 
 /// Represents any valid Jsonnet value.
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Default)]
 pub enum Val {
 	/// Represents a Jsonnet boolean.
 	Bool(bool),
 	/// Represents a Jsonnet null value.
+	#[default]
 	Null,
 	/// Represents a Jsonnet string.
 	Str(StrValue),
