@@ -6,7 +6,7 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_const_for_fn)]
 use std::{
-	borrow::Cow,
+	borrow::{Borrow, Cow},
 	cell::RefCell,
 	fmt::{self, Display},
 	hash::{BuildHasherDefault, Hash, Hasher},
@@ -54,6 +54,17 @@ impl Deref for IStr {
 	fn deref(&self) -> &Self::Target {
 		// SAFETY: Inner::check_utf8 is called on IStr construction, data is utf-8
 		unsafe { self.0.as_str_unchecked() }
+	}
+}
+
+impl Borrow<str> for IStr {
+	fn borrow(&self) -> &str {
+		self.as_str()
+	}
+}
+impl Borrow<[u8]> for IStr {
+	fn borrow(&self) -> &[u8] {
+		self.as_bytes()
 	}
 }
 
@@ -131,6 +142,12 @@ impl Deref for IBytes {
 	type Target = [u8];
 
 	fn deref(&self) -> &Self::Target {
+		self.0.as_slice()
+	}
+}
+
+impl Borrow<[u8]> for IBytes {
+	fn borrow(&self) -> &[u8] {
 		self.0.as_slice()
 	}
 }

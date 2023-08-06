@@ -3,6 +3,7 @@ use std::{cell::RefCell, rc::Rc};
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{builtin, ArgLike, CallLocation, FuncVal},
+	manifest::JsonFormat,
 	throw,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
