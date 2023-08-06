@@ -17,7 +17,7 @@ use crate::{
 	operator::evaluate_add_op,
 	tb, throw,
 	val::ThunkValue,
-	MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	MaybeUnbound, Result, ResultExt, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -413,40 +413,14 @@ impl ObjValue {
 		}))
 	}
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
-		self.run_assertions()?;
-		let cache_key = (key.clone(), None);
-		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
-			return Ok(match v {
-				CacheValue::Cached(v) => Some(v.clone()),
-				CacheValue::NotFound => None,
-				CacheValue::Pending => throw!(InfiniteRecursionDetected),
-				CacheValue::Errored(e) => return Err(e.clone()),
-			});
-		}
-		self.0
-			.value_cache
-			.borrow_mut()
-			.insert(cache_key.clone(), CacheValue::Pending);
-		let value = self
-			.get_raw(key, self.0.this.clone().unwrap_or_else(|| self.clone()))
-			.map_err(|e| {
-				self.0
-					.value_cache
-					.borrow_mut()
-					.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
-				e
-			})?;
-		self.0.value_cache.borrow_mut().insert(
-			cache_key,
-			value
-				.as_ref()
-				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),
-		);
-		Ok(value)
+		self.get_for(key, self.0.this.clone().unwrap_or_else(|| self.clone()))
 	}
 	pub fn get_for(&self, key: IStr, this: Self) -> Result<Option<Val>> {
 		self.run_assertions()?;
-		let cache_key = (key.clone(), Some(this.clone().downgrade()));
+		let cache_key = (
+			key.clone(),
+			(!ObjValue::ptr_eq(&this, self)).then(|| this.clone().downgrade()),
+		);
 		if let Some(v) = self.0.value_cache.borrow().get(&cache_key) {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
