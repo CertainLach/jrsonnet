@@ -55,10 +55,25 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 pub fn builtin_trace(
 	this: &builtin_trace,
 	loc: CallLocation,
-	str: IStr,
+	str: Val,
 	rest: Thunk<Val>,
 ) -> Result<Val> {
-	this.settings.borrow().trace_printer.print_trace(loc, str);
+	this.settings.borrow().trace_printer.print_trace(
+		loc,
+		match str {
+			Val::Str(s) => s.into_flat(),
+			Val::Func(f) => format!("{f:?}").into(),
+			v => v
+				.manifest(JsonFormat::std_to_json(
+					String::from("  "),
+					"\n",
+					": ",
+					#[cfg(feature = "exp-preserve-order")]
+					true,
+				))?
+				.into(),
+		},
+	);
 	rest.evaluate()
 }
 
