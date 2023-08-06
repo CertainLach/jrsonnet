@@ -8,7 +8,7 @@ use jrsonnet_parser::{Destruct, Expr, ExprLocation, LocExpr, ParamsDesc};
 
 use self::{
 	arglike::OptionalContext,
-	builtin::{Builtin, StaticBuiltin},
+	builtin::{Builtin, BuiltinParam, ParamName, StaticBuiltin},
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
@@ -113,17 +113,45 @@ impl Debug for FuncVal {
 	}
 }
 
+#[allow(clippy::unnecessary_wraps)]
+#[builtin]
+const fn builtin_id(x: Val) -> Val {
+	x
+}
+static ID: &builtin_id = &builtin_id {};
+
 impl FuncVal {
 	pub fn builtin(builtin: impl Builtin) -> Self {
 		Self::Builtin(Cc::new(tb!(builtin)))
+	}
+
+	pub fn params(&self) -> Vec<BuiltinParam> {
+		match self {
+			Self::Id => ID.params().to_vec(),
+			Self::StaticBuiltin(i) => i.params().to_vec(),
+			Self::Builtin(i) => i.params().to_vec(),
+			Self::Normal(p) => p
+				.params
+				.iter()
+				.map(|p| {
+					BuiltinParam::new(
+						p.0.name()
+							.as_ref()
+							.map(IStr::to_string)
+							.map_or(ParamName::ANONYMOUS, ParamName::new_dynamic),
+						p.1.is_some(),
+					)
+				})
+				.collect(),
+		}
 	}
 	/// Amount of non-default required arguments
 	pub fn params_len(&self) -> usize {
 		match self {
 			Self::Id => 1,
 			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
-			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default).count(),
-			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default).count(),
+			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
+			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
 		}
 	}
 	/// Function name, as defined in code.
@@ -146,16 +174,7 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			Self::Id => {
-				#[allow(clippy::unnecessary_wraps)]
-				#[builtin]
-				const fn builtin_id(x: Val) -> Val {
-					x
-				}
-				static ID: &builtin_id = &builtin_id {};
-
-				ID.call(call_ctx, loc, args)
-			}
+			Self::Id => ID.call(call_ctx, loc, args),
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
 				evaluate(body_ctx, &func.body)

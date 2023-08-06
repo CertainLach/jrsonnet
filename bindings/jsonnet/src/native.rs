@@ -1,5 +1,4 @@
 use std::{
-	borrow::Cow,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 };
@@ -82,7 +81,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		let param = CStr::from_ptr(*raw_params)
 			.to_str()
 			.expect("param name is not utf-8");
-		params.push(Cow::Owned(param.into()));
+		params.push(param.into());
 		raw_params = raw_params.offset(1);
 	}
 

@@ -1,18 +1,56 @@
 use std::{any::Any, borrow::Cow};
 
 use jrsonnet_gcmodule::Trace;
+use jrsonnet_interner::IStr;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
 use crate::{error::Result, gc::TraceBox, tb, Context, Val};
 
-pub type BuiltinParamName = Cow<'static, str>;
+/// Can't have str | IStr, because constant BuiltinParam causes
+/// E0492: constant functions cannot refer to interior mutable data
+#[derive(Clone, Trace)]
+pub struct ParamName(Option<Cow<'static, str>>);
+impl ParamName {
+	pub const ANONYMOUS: Self = Self(None);
+	pub const fn new_static(name: &'static str) -> Self {
+		Self(Some(Cow::Borrowed(name)))
+	}
+	pub fn new_dynamic(name: String) -> Self {
+		Self(Some(Cow::Owned(name)))
+	}
+	pub fn as_str(&self) -> Option<&str> {
+		self.0.as_deref()
+	}
+	pub fn is_anonymous(&self) -> bool {
+		self.0.is_none()
+	}
+}
+impl PartialEq<IStr> for ParamName {
+	fn eq(&self, other: &IStr) -> bool {
+		match &self.0 {
+			Some(s) => s.as_bytes() == other.as_bytes(),
+			None => false,
+		}
+	}
+}
 
 #[derive(Clone, Trace)]
 pub struct BuiltinParam {
+	name: ParamName,
+	has_default: bool,
+}
+impl BuiltinParam {
+	pub const fn new(name: ParamName, has_default: bool) -> Self {
+		Self { name, has_default }
+	}
 	/// Parameter name for named call parsing
-	pub name: Option<BuiltinParamName>,
+	pub fn name(&self) -> &ParamName {
+		&self.name
+	}
 	/// Is implementation allowed to return empty value
-	pub has_default: bool,
+	pub fn has_default(&self) -> bool {
+		self.has_default
+	}
 }
 
 /// Description of function defined by native code
@@ -44,12 +82,12 @@ pub struct NativeCallback {
 }
 impl NativeCallback {
 	#[deprecated = "prefer using builtins directly, use this interface only for bindings"]
-	pub fn new(params: Vec<Cow<'static, str>>, handler: impl NativeCallbackHandler) -> Self {
+	pub fn new(params: Vec<String>, handler: impl NativeCallbackHandler) -> Self {
 		Self {
 			params: params
 				.into_iter()
 				.map(|n| BuiltinParam {
-					name: Some(n),
+					name: ParamName::new_dynamic(n.to_string()),
 					has_default: false,
 				})
 				.collect(),

@@ -163,7 +163,7 @@ pub fn parse_builtin_call(
 			params.len(),
 			params
 				.iter()
-				.map(|p| (p.name.as_ref().map(|v| v.as_ref().into()), p.has_default))
+				.map(|p| (p.name().as_str().map(IStr::from), p.has_default()))
 				.collect()
 		))
 	}
@@ -180,7 +180,7 @@ pub fn parse_builtin_call(
 		// FIXME: O(n) for arg existence check
 		let id = params
 			.iter()
-			.position(|p| p.name.as_ref().map_or(false, |v| v as &str == name as &str))
+			.position(|p| p.name() == name)
 			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
 		if replace(&mut passed_args[id], Some(arg)).is_some() {
 			throw!(BindingParameterASecondTime(name.clone()));
@@ -190,7 +190,7 @@ pub fn parse_builtin_call(
 	})?;
 
 	if filled_args < params.len() {
-		for (id, _) in params.iter().enumerate().filter(|(_, p)| p.has_default) {
+		for (id, _) in params.iter().enumerate().filter(|(_, p)| p.has_default()) {
 			if passed_args[id].is_some() {
 				continue;
 			}
@@ -202,20 +202,16 @@ pub fn parse_builtin_call(
 			for param in params.iter().skip(args.unnamed_len()) {
 				let mut found = false;
 				args.named_names(&mut |name| {
-					if param
-						.name
-						.as_ref()
-						.map_or(false, |v| v as &str == name as &str)
-					{
+					if param.name() == name {
 						found = true;
 					}
 				});
 				if !found {
 					throw!(FunctionParameterNotBoundInCall(
-						param.name.as_ref().map(|v| v.as_ref().into()),
+						param.name().as_str().map(IStr::from),
 						params
 							.iter()
-							.map(|p| (p.name.as_ref().map(|p| p.as_ref().into()), p.has_default))
+							.map(|p| (p.name().as_str().map(IStr::from), p.has_default()))
 							.collect()
 					));
 				}
