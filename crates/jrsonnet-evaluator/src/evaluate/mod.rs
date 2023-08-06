@@ -461,6 +461,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				))
 			};
 			let Some(super_obj) = ctx.super_obj() else {
+				#[cfg(feature = "exp-null-coaelse")]
+				if *null_coaelse {
+					return Ok(Val::Null);
+				}
 				throw!(NoSuperFound)
 			};
 			let this = ctx

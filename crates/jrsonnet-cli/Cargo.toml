@@ -16,6 +16,10 @@ exp-bigint = [
     "jrsonnet-evaluator/exp-bigint",
     "jrsonnet-stdlib/exp-bigint",
 ]
+exp-null-coaelse = [
+    "jrsonnet-evaluator/exp-null-coaelse",
+    "jrsonnet-stdlib/exp-null-coaelse",
+]
 legacy-this-file = ["jrsonnet-stdlib/legacy-this-file"]
 
 [dependencies]
