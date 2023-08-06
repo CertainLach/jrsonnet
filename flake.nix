@@ -16,7 +16,7 @@
           inherit system;
           overlays = [ rust-overlay.overlays.default ];
         };
-        rust = ((pkgs.rustChannelOf { date = "2023-07-23"; channel = "nightly"; }).default.override {
+        rust = ((pkgs.rustChannelOf { date = "2023-08-02"; channel = "nightly"; }).default.override {
           extensions = [ "rust-src" "miri" "rust-analyzer" "clippy" ];
         });
       in
@@ -65,7 +65,7 @@
             jrsonnetVariants = [
               { drv = jrsonnet; name = "current"; }
               { drv = jrsonnet-nightly; name = "current-nightly"; }
-              { drv = jrsonnet-release; name = "before-str-extend"; }
+              { drv = jrsonnet-release; name = "release"; }
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
@@ -74,12 +74,13 @@
             jrsonnetVariants = [
               { drv = jrsonnet; name = "current"; }
               { drv = jrsonnet-nightly; name = "current-nightly"; }
-              { drv = jrsonnet-release; name = "before-str-extend"; }
+              { drv = jrsonnet-release; name = "release"; }
             ];
           };
         };
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;[
+            alejandra
             rust
             cargo-edit
             cargo-asm

@@ -2,13 +2,13 @@
 
 stdenv.mkDerivation rec {
   pname = "jsonnet";
-  version = "0.19.1";
+  version = "0.20.0";
 
   src = fetchFromGitHub {
     rev = "v${version}";
     owner = "google";
-    repo = "jsonnet";
-    hash = "sha256-q1MNdbyrx4vvN5woe0o90pPqaNtsZjI5RQ7KJt7rOpU=";
+    repo = pname;
+    hash = "sha256-FtVJE9alEl56Uik+nCpJMV5DMVVmRCnE1xMAiWdK39Y=";
   };
 
   makeFlags = [
