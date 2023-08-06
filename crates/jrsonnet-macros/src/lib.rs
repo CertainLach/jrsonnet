@@ -87,6 +87,8 @@ mod kw {
 	syn::custom_keyword!(fields);
 	syn::custom_keyword!(rename);
 	syn::custom_keyword!(flatten);
+	syn::custom_keyword!(add);
+	syn::custom_keyword!(hide);
 	syn::custom_keyword!(ok);
 }
 
@@ -230,26 +232,20 @@ fn builtin_inner(
 		} => {
 			let name = name
 				.as_ref()
-				.map(|n| quote! {Some(std::borrow::Cow::Borrowed(#n))})
+				.map(|n| quote! {ParamName::new_static(#n)})
 				.unwrap_or_else(|| quote! {None});
 			Some(quote! {
 				#(#cfg_attrs)*
-				BuiltinParam {
-					name: #name,
-					has_default: #is_option,
-				},
+				BuiltinParam::new(#name, #is_option),
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
 			let name = name
 				.as_ref()
-				.map(|n| quote! {Some(std::borrow::Cow::Borrowed(#n))})
+				.map(|n| quote! {ParamName::new_static(#n)})
 				.unwrap_or_else(|| quote! {None});
 			Some(quote! {
-				BuiltinParam {
-					name: #name,
-					has_default: #is_option,
-				},
+				BuiltinParam::new(#name, #is_option),
 			})
 		}
 		ArgInfo::Context => None,
@@ -355,7 +351,7 @@ fn builtin_inner(
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				State, Val,
-				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam}, CallLocation, ArgsLike, parse::parse_builtin_call},
+				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				error::Result, Context, typed::Typed,
 				parser::ExprLocation,
 			};
@@ -395,6 +391,10 @@ struct TypedAttr {
 	/// flatten(ok) strategy for flattened optionals
 	/// field would be None in case of any parsing error (as in serde)
 	flatten_ok: bool,
+	// Should it be `field+:` instead of `field:`
+	add: bool,
+	// Should it be `field::` instead of `field:`
+	hide: bool,
 }
 impl Parse for TypedAttr {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
@@ -426,6 +426,12 @@ impl Parse for TypedAttr {
 						return Err(lookahead.error());
 					}
 				}
+			} else if lookahead.peek(kw::add) {
+				input.parse::<kw::add>()?;
+				out.add = true;
+			} else if lookahead.peek(kw::hide) {
+				input.parse::<kw::hide>()?;
+				out.hide = true;
 			} else if input.is_empty() {
 				break;
 			} else {
@@ -544,15 +550,31 @@ impl TypedField {
 		let ident = &self.ident;
 		let ty = &self.ty;
 		Ok(if let Some(name) = self.name() {
+			let hide = if self.attr.hide {
+				quote! {.hide()}
+			} else {
+				quote! {}
+			};
+			let add = if self.attr.add {
+				quote! {.add()}
+			} else {
+				quote! {}
+			};
 			if self.is_option {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into()).value(<#ty as Typed>::into_untyped(value)?)?;
+						out.member(#name.into())
+							#hide
+							#add
+							.value(<#ty as Typed>::into_untyped(value)?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into()).value(<#ty as Typed>::into_untyped(self.#ident)?)?;
+					out.member(#name.into())
+						#hide
+						#add
+						.value(<#ty as Typed>::into_untyped(self.#ident)?)?;
 				}
 			}
 		} else if self.is_option {
