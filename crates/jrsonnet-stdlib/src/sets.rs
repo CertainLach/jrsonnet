@@ -7,7 +7,6 @@ use jrsonnet_evaluator::{
 	val::ArrValue,
 	Thunk, Val,
 };
-use jrsonnet_gcmodule::Cc;
 use jrsonnet_parser::BinaryOpType;
 
 #[builtin]
@@ -70,5 +69,5 @@ pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 			}
 		};
 	}
-	Ok(ArrValue::lazy(Cc::new(out)))
+	Ok(ArrValue::lazy(out))
 }

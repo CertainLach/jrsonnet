@@ -6,7 +6,7 @@ pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
-	arr::ArrValue,
+	arr::{ArrValue, BytesArray},
 	error::Result,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	throw,
@@ -434,12 +434,13 @@ impl Typed for IBytes {
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
-		if let Val::Arr(ArrValue::Bytes(bytes)) = value {
-			return Ok(bytes.0);
-		}
-		<Self as Typed>::TYPE.check(&value)?;
-		match value {
+		match &value {
 			Val::Arr(a) => {
+				if let Some(bytes) = a.as_any().downcast_ref::<BytesArray>() {
+					return Ok(bytes.0.as_slice().into());
+				};
+				<Self as Typed>::TYPE.check(&value)?;
+				// Any::downcast_ref::<ByteArray>(&a);
 				let mut out = Vec::with_capacity(a.len());
 				for e in a.iter() {
 					let r = e?;
@@ -447,7 +448,10 @@ impl Typed for IBytes {
 				}
 				Ok(out.as_slice().into())
 			}
-			_ => unreachable!(),
+			_ => {
+				<Self as Typed>::TYPE.check(&value)?;
+				unreachable!()
+			}
 		}
 	}
 }

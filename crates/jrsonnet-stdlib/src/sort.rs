@@ -10,7 +10,6 @@ use jrsonnet_evaluator::{
 	val::{equals, ArrValue},
 	Thunk, Val,
 };
-use jrsonnet_gcmodule::Cc;
 use jrsonnet_parser::BinaryOpType;
 
 use crate::eval_on_empty;
@@ -136,7 +135,7 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 			values.iter().collect::<Result<Vec<Val>>>()?,
 		)?))
 	} else {
-		Ok(ArrValue::lazy(Cc::new(sort_keyf(values, key_getter)?)))
+		Ok(ArrValue::lazy(sort_keyf(values, key_getter)?))
 	}
 }
 
@@ -186,7 +185,7 @@ pub fn builtin_uniq(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 			arr.iter().collect::<Result<Vec<Val>>>()?,
 		)?))
 	} else {
-		Ok(ArrValue::lazy(Cc::new(uniq_keyf(arr, keyF)?)))
+		Ok(ArrValue::lazy(uniq_keyf(arr, keyF)?))
 	}
 }
 
@@ -204,8 +203,8 @@ pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 		Ok(ArrValue::eager(arr))
 	} else {
 		let arr = sort_keyf(arr, keyF.clone())?;
-		let arr = uniq_keyf(ArrValue::lazy(Cc::new(arr)), keyF)?;
-		Ok(ArrValue::lazy(Cc::new(arr)))
+		let arr = uniq_keyf(ArrValue::lazy(arr), keyF)?;
+		Ok(ArrValue::lazy(arr))
 	}
 }
 

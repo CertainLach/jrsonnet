@@ -17,7 +17,7 @@ use crate::{
 	operator::evaluate_add_op,
 	tb, throw,
 	val::ThunkValue,
-	MaybeUnbound, Result, ResultExt, State, Thunk, Unbound, Val,
+	MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]

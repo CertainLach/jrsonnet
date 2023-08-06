@@ -9,7 +9,7 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 
-pub use crate::arr::ArrValue;
+pub use crate::arr::{ArrValue, ArrayLike};
 use crate::{
 	error::{Error, ErrorKind::*},
 	function::FuncVal,

@@ -573,10 +573,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						evaluate(self.ctx, &self.item)
 					}
 				}
-				Val::Arr(ArrValue::lazy(Cc::new(vec![Thunk::new(ArrayElement {
+				Val::Arr(ArrValue::lazy(vec![Thunk::new(ArrayElement {
 					ctx,
 					item: items[0].clone(),
-				})])))
+				})]))
 			} else {
 				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
 			}

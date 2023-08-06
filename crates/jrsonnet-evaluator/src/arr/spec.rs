@@ -1,4 +1,4 @@
-use std::{cell::RefCell, iter, mem::replace, rc::Rc};
+use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
@@ -13,7 +13,7 @@ use crate::{
 	Context, Error, Result, Thunk, Val,
 };
 
-pub trait ArrayLike: Sized + Into<ArrValue> {
+pub trait ArrayLike: Any + Trace + Debug {
 	fn len(&self) -> usize;
 	fn is_empty(&self) -> bool {
 		self.len() == 0
@@ -22,12 +22,10 @@ pub trait ArrayLike: Sized + Into<ArrValue> {
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>>;
 	fn get_cheap(&self, index: usize) -> Option<Val>;
 
-	fn reverse(self) -> ArrValue {
-		ArrValue::Reverse(Cc::new(ReverseArray(self.into())))
-	}
+	fn is_cheap(&self) -> bool;
 }
 
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Trace)]
 pub struct SliceArray {
 	pub(crate) inner: ArrValue,
 	pub(crate) from: u32,
@@ -81,15 +79,13 @@ impl ArrayLike for SliceArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.iter_cheap()?.nth(index)
 	}
-}
-impl From<SliceArray> for ArrValue {
-	fn from(value: SliceArray) -> Self {
-		Self::Slice(Cc::new(value))
+	fn is_cheap(&self) -> bool {
+		self.inner.is_cheap()
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
-pub struct CharArray(pub Rc<Vec<char>>);
+#[derive(Trace, Debug)]
+pub struct CharArray(pub Vec<char>);
 impl ArrayLike for CharArray {
 	fn len(&self) -> usize {
 		self.0.len()
@@ -108,14 +104,12 @@ impl ArrayLike for CharArray {
 			.get(index)
 			.map(|v| Val::Str(StrValue::Flat(IStr::from(*v))))
 	}
-}
-impl From<CharArray> for ArrValue {
-	fn from(value: CharArray) -> Self {
-		ArrValue::Chars(value)
+	fn is_cheap(&self) -> bool {
+		true
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
+#[derive(Trace, Debug)]
 pub struct BytesArray(pub IBytes);
 impl ArrayLike for BytesArray {
 	fn len(&self) -> usize {
@@ -133,10 +127,8 @@ impl ArrayLike for BytesArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get(index).map(|v| Val::Num(f64::from(*v)))
 	}
-}
-impl From<BytesArray> for ArrValue {
-	fn from(value: BytesArray) -> Self {
-		ArrValue::Bytes(value)
+	fn is_cheap(&self) -> bool {
+		true
 	}
 }
 
@@ -148,30 +140,30 @@ enum ArrayThunk<T: 'static + Trace> {
 	Pending,
 }
 
-#[derive(Debug, Trace)]
-pub struct ExprArrayInner {
-	ctx: Context,
-	cached: RefCell<Vec<ArrayThunk<LocExpr>>>,
-}
 #[derive(Debug, Trace, Clone)]
-pub struct ExprArray(pub Cc<ExprArrayInner>);
+pub struct ExprArray {
+	ctx: Context,
+	cached: Cc<RefCell<Vec<ArrayThunk<LocExpr>>>>,
+}
 impl ExprArray {
 	pub fn new(ctx: Context, items: impl IntoIterator<Item = LocExpr>) -> Self {
-		Self(Cc::new(ExprArrayInner {
+		Self {
 			ctx,
-			cached: RefCell::new(items.into_iter().map(ArrayThunk::Waiting).collect()),
-		}))
+			cached: Cc::new(RefCell::new(
+				items.into_iter().map(ArrayThunk::Waiting).collect(),
+			)),
+		}
 	}
 }
 impl ArrayLike for ExprArray {
 	fn len(&self) -> usize {
-		self.0.cached.borrow().len()
+		self.cached.borrow().len()
 	}
 	fn get(&self, index: usize) -> Result<Option<Val>> {
 		if index >= self.len() {
 			return Ok(None);
 		}
-		match &self.0.cached.borrow()[index] {
+		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
@@ -179,19 +171,19 @@ impl ArrayLike for ExprArray {
 		};
 
 		let ArrayThunk::Waiting(expr) =
-			replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending)
+			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
 		};
 
-		let new_value = match evaluate(self.0.ctx.clone(), &expr) {
+		let new_value = match evaluate(self.ctx.clone(), &expr) {
 			Ok(v) => v,
 			Err(e) => {
-				self.0.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
+				self.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
 				return Err(e);
 			}
 		};
-		self.0.cached.borrow_mut()[index] = ArrayThunk::Computed(new_value.clone());
+		self.cached.borrow_mut()[index] = ArrayThunk::Computed(new_value.clone());
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
@@ -215,7 +207,7 @@ impl ArrayLike for ExprArray {
 		if index >= self.len() {
 			return None;
 		}
-		match &self.0.cached.borrow()[index] {
+		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
@@ -229,14 +221,12 @@ impl ArrayLike for ExprArray {
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
 	}
-}
-impl From<ExprArray> for ArrValue {
-	fn from(value: ExprArray) -> Self {
-		Self::Expr(value)
+	fn is_cheap(&self) -> bool {
+		false
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
+#[derive(Trace, Debug)]
 pub struct ExtendedArray {
 	pub a: ArrValue,
 	pub b: ArrValue,
@@ -319,15 +309,13 @@ impl ArrayLike for ExtendedArray {
 			self.b.get_cheap(index - self.split)
 		}
 	}
-}
-impl From<ExtendedArray> for ArrValue {
-	fn from(value: ExtendedArray) -> Self {
-		Self::Extended(Cc::new(value))
+	fn is_cheap(&self) -> bool {
+		self.a.is_cheap() && self.b.is_cheap()
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
-pub struct LazyArray(pub Cc<Vec<Thunk<Val>>>);
+#[derive(Trace, Debug)]
+pub struct LazyArray(pub Vec<Thunk<Val>>);
 impl ArrayLike for LazyArray {
 	fn len(&self) -> usize {
 		self.0.len()
@@ -344,15 +332,13 @@ impl ArrayLike for LazyArray {
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		self.0.get(index).cloned()
 	}
-}
-impl From<LazyArray> for ArrValue {
-	fn from(value: LazyArray) -> Self {
-		Self::Lazy(value)
+	fn is_cheap(&self) -> bool {
+		false
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
-pub struct EagerArray(pub Cc<Vec<Val>>);
+#[derive(Trace, Debug)]
+pub struct EagerArray(pub Vec<Val>);
 impl ArrayLike for EagerArray {
 	fn len(&self) -> usize {
 		self.0.len()
@@ -369,15 +355,13 @@ impl ArrayLike for EagerArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get(index).cloned()
 	}
-}
-impl From<EagerArray> for ArrValue {
-	fn from(value: EagerArray) -> Self {
-		Self::Eager(value)
+	fn is_cheap(&self) -> bool {
+		true
 	}
 }
 
 /// Inclusive range type
-#[derive(Debug, Trace, Clone, PartialEq, Eq)]
+#[derive(Debug, Trace, PartialEq, Eq)]
 pub struct RangeArray {
 	start: i32,
 	end: i32,
@@ -422,14 +406,12 @@ impl ArrayLike for RangeArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.range().nth(index).map(|i| Val::Num(f64::from(i)))
 	}
-}
-impl From<RangeArray> for ArrValue {
-	fn from(value: RangeArray) -> Self {
-		Self::Range(value)
+	fn is_cheap(&self) -> bool {
+		true
 	}
 }
 
-#[derive(Debug, Trace, Clone)]
+#[derive(Debug, Trace)]
 pub struct ReverseArray(pub ArrValue);
 impl ArrayLike for ReverseArray {
 	fn len(&self) -> usize {
@@ -447,44 +429,37 @@ impl ArrayLike for ReverseArray {
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get_cheap(self.0.len() - index - 1)
 	}
-	fn reverse(self) -> ArrValue {
-		self.0
-	}
-}
-impl From<ReverseArray> for ArrValue {
-	fn from(value: ReverseArray) -> Self {
-		Self::Reverse(Cc::new(value))
+	fn is_cheap(&self) -> bool {
+		self.0.is_cheap()
 	}
 }
 
-#[derive(Trace, Debug)]
-pub struct MappedArrayInner {
+#[derive(Trace, Debug, Clone)]
+pub struct MappedArray {
 	inner: ArrValue,
-	cached: RefCell<Vec<ArrayThunk<()>>>,
+	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
 	mapper: FuncVal,
 }
-#[derive(Trace, Debug, Clone)]
-pub struct MappedArray(Cc<MappedArrayInner>);
 impl MappedArray {
 	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
 		let len = inner.len();
-		Self(Cc::new(MappedArrayInner {
+		Self {
 			inner,
-			cached: RefCell::new(vec![ArrayThunk::Waiting(()); len]),
+			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting(()); len])),
 			mapper,
-		}))
+		}
 	}
 }
 impl ArrayLike for MappedArray {
 	fn len(&self) -> usize {
-		self.0.cached.borrow().len()
+		self.cached.borrow().len()
 	}
 
 	fn get(&self, index: usize) -> Result<Option<Val>> {
 		if index >= self.len() {
 			return Ok(None);
 		}
-		match &self.0.cached.borrow()[index] {
+		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
@@ -492,27 +467,26 @@ impl ArrayLike for MappedArray {
 		};
 
 		let ArrayThunk::Waiting(_) =
-			replace(&mut self.0.cached.borrow_mut()[index], ArrayThunk::Pending)
+			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
 		};
 
 		let val = self
-			.0
 			.inner
 			.get(index)
 			.transpose()
 			.expect("index checked")
-			.and_then(|r| self.0.mapper.evaluate_simple(&(r,), false));
+			.and_then(|r| self.mapper.evaluate_simple(&(r,), false));
 
 		let new_value = match val {
 			Ok(v) => v,
 			Err(e) => {
-				self.0.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
+				self.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
 				return Err(e);
 			}
 		};
-		self.0.cached.borrow_mut()[index] = ArrayThunk::Computed(new_value.clone());
+		self.cached.borrow_mut()[index] = ArrayThunk::Computed(new_value.clone());
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
@@ -536,7 +510,7 @@ impl ArrayLike for MappedArray {
 		if index >= self.len() {
 			return None;
 		}
-		match &self.0.cached.borrow()[index] {
+		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
@@ -551,82 +525,54 @@ impl ArrayLike for MappedArray {
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
 	}
-}
-impl From<MappedArray> for ArrValue {
-	fn from(value: MappedArray) -> Self {
-		Self::Mapped(value)
+	fn is_cheap(&self) -> bool {
+		false
 	}
 }
 
 #[derive(Trace, Debug)]
-pub struct RepeatedArrayInner {
+pub struct RepeatedArray {
 	data: ArrValue,
 	repeats: usize,
 	total_len: usize,
 }
-#[derive(Trace, Debug, Clone)]
-pub struct RepeatedArray(Cc<RepeatedArrayInner>);
 impl RepeatedArray {
 	pub fn new(data: ArrValue, repeats: usize) -> Option<Self> {
 		let total_len = data.len().checked_mul(repeats)?;
-		Some(Self(Cc::new(RepeatedArrayInner {
+		Some(Self {
 			data,
 			repeats,
 			total_len,
-		})))
-	}
-	pub fn is_cheap(&self) -> bool {
-		self.0.data.is_cheap()
+		})
 	}
 }
 
 impl ArrayLike for RepeatedArray {
 	fn len(&self) -> usize {
-		self.0.total_len
+		self.total_len
 	}
 
 	fn get(&self, index: usize) -> Result<Option<Val>> {
-		if index > self.0.total_len {
+		if index > self.total_len {
 			return Ok(None);
 		}
-		self.0.data.get(index % self.0.data.len())
+		self.data.get(index % self.data.len())
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		if index > self.0.total_len {
+		if index > self.total_len {
 			return None;
 		}
-		self.0.data.get_lazy(index % self.0.data.len())
+		self.data.get_lazy(index % self.data.len())
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		if index > self.0.total_len {
+		if index > self.total_len {
 			return None;
 		}
-		self.0.data.get_cheap(index % self.0.data.len())
+		self.data.get_cheap(index % self.data.len())
+	}
+	fn is_cheap(&self) -> bool {
+		self.data.is_cheap()
 	}
 }
-impl From<RepeatedArray> for ArrValue {
-	fn from(value: RepeatedArray) -> Self {
-		Self::Repeated(value)
-	}
-}
-
-macro_rules! pass {
-	($t:ident.$m:ident($($ident:ident),*)) => {
-		match $t {
-			Self::Bytes(e) => e.$m($($ident)*),
-			Self::Chars(e) => e.$m($($ident)*),
-			Self::Expr(e) => e.$m($($ident)*),
-			Self::Lazy(e) => e.$m($($ident)*),
-			Self::Eager(e) => e.$m($($ident)*),
-			Self::Range(e) => e.$m($($ident)*),
-			Self::Slice(e) => e.$m($($ident)*),
-			Self::Extended(e) => e.$m($($ident)*),
-			Self::Reverse(e) => e.$m($($ident)*),
-			Self::Mapped(e) => e.$m($($ident)*),
-			Self::Repeated(e) => e.$m($($ident)*),
-		}
-	};
-}
-pub(super) use pass;
