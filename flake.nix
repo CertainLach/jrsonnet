@@ -81,14 +81,10 @@
         devShell = pkgs.mkShell {
           nativeBuildInputs = with pkgs;[
             rust
-            cargo-edit
             cargo-asm
             cargo-outdated
             lld
             hyperfine
-            valgrind
-            kcachegrind
-            graphviz
           ];
         };
       }
