@@ -80,7 +80,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("any", builtin_any::INST),
 		("all", builtin_all::INST),
 		("member", builtin_member::INST),
-		("contains", builtin_member::INST),
+		("contains", builtin_contains::INST),
 		("count", builtin_count::INST),
 		("avg", builtin_avg::INST),
 		("removeAt", builtin_remove_at::INST),

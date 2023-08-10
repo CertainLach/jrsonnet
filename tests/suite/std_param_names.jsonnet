@@ -126,7 +126,32 @@ local names = {
     decodeUTF8: ['arr'],
 
     sum: ['arr'],
+    avg: ['arr', 'onEmpty'],
+    minArray: ['arr', 'keyF', 'onEmpty'],
+    maxArray: ['arr', 'keyF', 'onEmpty'],
+    remove: ['arr', 'elem'],
+    contains: ['arr', 'elem'],
+    removeAt: ['arr', 'at'],
+
+    equalsIgnoreCase: ['str1', 'str2'],
+    isEmpty: ['str'],
+
     xor: ['x', 'y'],
+    xnor: ['x', 'y'],
+    isInteger: ['x'],
+    isDecimal: ['x'],
+    isEven: ['x'],
+    isOdd: ['x'],
+    round: ['x'],
+
+    sha1: ['str'],
+    sha256: ['str'],
+    sha512: ['str'],
+    sha3: ['str'],
+
+    objectKeysValues: ['o'],
+    objectKeysValuesAll: ['o'],
+    objectRemoveKey: ['obj', 'key'],
 
     // C++ jsonnet undocumented
     __compare: ['v1', 'v2'],
@@ -138,3 +163,9 @@ local names = {
 };
 
 std.all(std.map(function(key) assertNames(key, names[key]), std.objectFields(names)))
+&& std.all([
+    assert std.objectHasAll(names, key): ('function "%s" is not defined in names'
+        % key); true,
+    for key in std.objectFieldsAll(std)
+    if key != 'thisFile'
+])

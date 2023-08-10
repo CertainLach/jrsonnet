@@ -57,12 +57,12 @@ pub fn builtin_trace(
 	this: &builtin_trace,
 	loc: CallLocation,
 	str: Val,
-	rest: Thunk<Val>,
+	rest: Option<Thunk<Val>>,
 ) -> Result<Val> {
 	this.settings.borrow().trace_printer.print_trace(
 		loc,
-		match str {
-			Val::Str(s) => s.into_flat(),
+		match &str {
+			Val::Str(s) => s.clone().into_flat(),
 			Val::Func(f) => format!("{f:?}").into(),
 			v => v
 				.manifest(JsonFormat::std_to_json(
@@ -75,7 +75,11 @@ pub fn builtin_trace(
 				.into(),
 		},
 	);
-	rest.evaluate()
+	if let Some(rest) = rest {
+		rest.evaluate()
+	} else {
+		Ok(str)
+	}
 }
 
 #[allow(clippy::comparison_chain)]

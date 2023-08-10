@@ -33,8 +33,8 @@ pub fn builtin_is_empty(str: String) -> bool {
 }
 
 #[builtin]
-pub fn builtin_equals_ignore_case(x: String, y: String) -> bool {
-	x.to_ascii_lowercase() == y.to_ascii_lowercase()
+pub fn builtin_equals_ignore_case(str1: String, str2: String) -> bool {
+	str1.to_ascii_lowercase() == str2.to_ascii_lowercase()
 }
 
 #[builtin]

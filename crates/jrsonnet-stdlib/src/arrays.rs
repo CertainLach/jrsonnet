@@ -255,9 +255,9 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 }
 
 #[builtin]
-pub fn builtin_remove_at(arr: ArrValue, index: usize) -> Result<ArrValue> {
-	let newArrLeft = arr.clone().slice(None, Some(index), None);
-	let newArrRight = arr.slice(Some(index + 1), None, None);
+pub fn builtin_remove_at(arr: ArrValue, at: usize) -> Result<ArrValue> {
+	let newArrLeft = arr.clone().slice(None, Some(at), None);
+	let newArrRight = arr.slice(Some(at + 1), None, None);
 
 	Ok(ArrValue::extended(
 		newArrLeft.unwrap_or(ArrValue::empty()),
