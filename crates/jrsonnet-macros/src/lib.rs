@@ -69,6 +69,7 @@ fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
 }
 
 struct Field {
+	attrs: Vec<Attribute>,
 	name: Ident,
 	_colon: Token![:],
 	ty: Type,
@@ -76,6 +77,7 @@ struct Field {
 impl Parse for Field {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		Ok(Self {
+			attrs: input.call(Attribute::parse_outer)?,
 			name: input.parse()?,
 			_colon: input.parse()?,
 			ty: input.parse()?,
@@ -314,9 +316,11 @@ fn builtin_inner(
 		});
 
 	let fields = attr.fields.iter().map(|field| {
+		let attrs = &field.attrs;
 		let name = &field.name;
 		let ty = &field.ty;
 		quote! {
+			#(#attrs)*
 			pub #name: #ty,
 		}
 	});
