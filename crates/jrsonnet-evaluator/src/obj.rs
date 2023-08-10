@@ -349,10 +349,19 @@ impl ObjValue {
 		ObjValueBuilder::with_capacity(capacity)
 	}
 	pub(crate) fn extend_with_raw_member(self, key: IStr, value: ObjMember) -> Self {
-		// let mut new = GcHashMap::with_capacity(1);
-		// new.insert(key, value);
-		// Self::new(Some(self), Cc::new(new), Cc::new(Vec::new()))
-		todo!()
+		let mut out = ObjValueBuilder::with_capacity(1);
+		out.with_super(self);
+		let mut member = out.member(key);
+		if value.flags.add() {
+			member = member.add()
+		}
+		if let Some(loc) = value.location {
+			member = member.with_location(loc);
+		}
+		let _ = member
+			.with_visibility(value.flags.visibility())
+			.binding(value.invoke);
+		out.build()
 	}
 	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder<'_>> {
 		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
