@@ -9,8 +9,9 @@ use crate::{
 	error::ErrorKind::InfiniteRecursionDetected,
 	evaluate,
 	function::FuncVal,
+	typed::Typed,
 	val::{StrValue, ThunkValue},
-	Context, Error, Result, Thunk, Val,
+	Context, Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -574,5 +575,105 @@ impl ArrayLike for RepeatedArray {
 	}
 	fn is_cheap(&self) -> bool {
 		self.data.is_cheap()
+	}
+}
+
+#[derive(Trace, Debug)]
+pub struct PickObjectValues {
+	obj: ObjValue,
+	keys: Vec<IStr>,
+}
+
+impl PickObjectValues {
+	pub fn new(obj: ObjValue, keys: Vec<IStr>) -> Self {
+		Self { obj, keys }
+	}
+}
+
+impl ArrayLike for PickObjectValues {
+	fn len(&self) -> usize {
+		self.keys.len()
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		let Some(key) = self.keys.get(index) else {
+			return Ok(None);
+		};
+		Ok(Some(self.obj.get_or_bail(key.clone())?))
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		let Some(key) = self.keys.get(index) else {
+			return None;
+		};
+		Some(self.obj.get_lazy_or_bail(key.clone()))
+	}
+
+	fn get_cheap(&self, _index: usize) -> Option<Val> {
+		None
+	}
+
+	fn is_cheap(&self) -> bool {
+		false
+	}
+}
+
+#[derive(Trace, Debug)]
+pub struct PickObjectKeyValues {
+	obj: ObjValue,
+	keys: Vec<IStr>,
+}
+
+impl PickObjectKeyValues {
+	pub fn new(obj: ObjValue, keys: Vec<IStr>) -> Self {
+		Self { obj, keys }
+	}
+}
+
+#[derive(Typed)]
+pub struct KeyValue {
+	key: IStr,
+	value: Thunk<Val>,
+}
+
+impl ArrayLike for PickObjectKeyValues {
+	fn len(&self) -> usize {
+		self.keys.len()
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		let Some(key) = self.keys.get(index) else {
+			return Ok(None);
+		};
+		Ok(Some(
+			KeyValue::into_untyped(KeyValue {
+				key: key.clone(),
+				value: Thunk::evaluated(self.obj.get_or_bail(key.clone())?),
+			})
+			.expect("convertible"),
+		))
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		let Some(key) = self.keys.get(index) else {
+			return None;
+		};
+		// Nothing can fail in the key part, yet value is still
+		// lazy-evaluated
+		Some(Thunk::evaluated(
+			KeyValue::into_untyped(KeyValue {
+				key: key.clone(),
+				value: self.obj.get_lazy_or_bail(key.clone()),
+			})
+			.expect("convertible"),
+		))
+	}
+
+	fn get_cheap(&self, _index: usize) -> Option<Val> {
+		None
+	}
+
+	fn is_cheap(&self) -> bool {
+		false
 	}
 }

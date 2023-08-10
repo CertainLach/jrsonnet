@@ -1,7 +1,6 @@
 use std::{
 	cell::RefCell,
 	fmt::{self, Debug, Display},
-	hash::Hasher,
 	mem::replace,
 	rc::Rc,
 };
@@ -9,7 +8,6 @@ use std::{
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
-use rustc_hash::FxHasher;
 
 pub use crate::arr::{ArrValue, ArrayLike};
 use crate::{
@@ -49,6 +47,12 @@ impl<T: Trace> Thunk<T> {
 	}
 	pub fn errored(e: Error) -> Self {
 		Self(Cc::new(RefCell::new(ThunkInner::Errored(e))))
+	}
+	pub fn result(res: Result<T, Error>) -> Self {
+		match res {
+			Ok(o) => Self::evaluated(o),
+			Err(e) => Self::errored(e),
+		}
 	}
 }
 

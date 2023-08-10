@@ -12,12 +12,13 @@ use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 
 use crate::{
-	error::{Error, ErrorKind::*},
+	arr::{PickObjectKeyValues, PickObjectValues},
+	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
 	tb, throw,
-	val::ThunkValue,
+	val::{ArrValue, ThunkValue},
 	MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
@@ -398,6 +399,14 @@ impl ObjValue {
 		self.0.get_for(key, this)
 	}
 
+	pub fn get_or_bail(&self, key: IStr) -> Result<Val> {
+		let Some(value) = self.get(key.clone())? else {
+			let suggestions = suggest_object_fields(self, key.clone());
+			throw!(NoSuchField(key, suggestions))
+		};
+		Ok(value)
+	}
+
 	fn get_raw(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
 		self.0.get_for_uncached(key, this)
 	}
@@ -451,6 +460,25 @@ impl ObjValue {
 			obj: self.clone(),
 			key,
 		}))
+	}
+	pub fn get_lazy_or_bail(&self, key: IStr) -> Thunk<Val> {
+		#[derive(Trace)]
+		struct ThunkGet {
+			obj: ObjValue,
+			key: IStr,
+		}
+		impl ThunkValue for ThunkGet {
+			type Output = Val;
+
+			fn get(self: Box<Self>) -> Result<Self::Output> {
+				Ok(self.obj.get_or_bail(self.key)?)
+			}
+		}
+
+		Thunk::new(ThunkGet {
+			obj: self.clone(),
+			key,
+		})
 	}
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		Cc::ptr_eq(&a.0, &b.0)
@@ -524,6 +552,51 @@ impl ObjValue {
 	}
 	pub fn fields(&self, #[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> Vec<IStr> {
 		self.fields_ex(
+			false,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		)
+	}
+	pub fn values_ex(
+		&self,
+		include_hidden: bool,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> ArrValue {
+		ArrValue::new(PickObjectValues::new(
+			self.clone(),
+			self.fields_ex(
+				include_hidden,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			),
+		))
+	}
+	pub fn values(&self, #[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> ArrValue {
+		self.values_ex(
+			false,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		)
+	}
+	pub fn key_values_ex(
+		&self,
+		include_hidden: bool,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> ArrValue {
+		ArrValue::new(PickObjectKeyValues::new(
+			self.clone(),
+			self.fields_ex(
+				include_hidden,
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			),
+		))
+	}
+	pub fn key_values(
+		&self,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> ArrValue {
+		self.key_values_ex(
 			false,
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order,

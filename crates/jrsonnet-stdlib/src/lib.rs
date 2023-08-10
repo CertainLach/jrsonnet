@@ -138,6 +138,10 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("base64DecodeBytes", builtin_base64_decode_bytes::INST),
 		// Objects
 		("objectFieldsEx", builtin_object_fields_ex::INST),
+		("objectValues", builtin_object_values::INST),
+		("objectValuesAll", builtin_object_values_all::INST),
+		("objectKeysValues", builtin_object_keys_values::INST),
+		("objectKeysValuesAll", builtin_object_keys_values_all::INST),
 		("objectHasEx", builtin_object_has_ex::INST),
 		("objectRemoveKey", builtin_object_remove_key::INST),
 		// Manifest

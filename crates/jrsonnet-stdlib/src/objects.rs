@@ -1,6 +1,6 @@
 use jrsonnet_evaluator::{
 	function::builtin,
-	val::{StrValue, Val},
+	val::{ArrValue, StrValue, Val},
 	IStr, ObjValue, ObjValueBuilder,
 };
 
@@ -21,6 +21,82 @@ pub fn builtin_object_fields_ex(
 		.map(StrValue::Flat)
 		.map(Val::Str)
 		.collect::<Vec<_>>()
+}
+
+pub fn builtin_object_values_ex(
+	o: ObjValue,
+	include_hidden: bool,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	#[cfg(feature = "exp-preserve-order")]
+	let preserve_order = preserve_order.unwrap_or(false);
+	o.values_ex(
+		include_hidden,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+#[builtin]
+pub fn builtin_object_values(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	builtin_object_values_ex(
+		o,
+		false,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+#[builtin]
+pub fn builtin_object_values_all(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	builtin_object_values_ex(
+		o,
+		true,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+
+pub fn builtin_object_keys_values_ex(
+	o: ObjValue,
+	include_hidden: bool,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	#[cfg(feature = "exp-preserve-order")]
+	let preserve_order = preserve_order.unwrap_or(false);
+	o.key_values_ex(
+		include_hidden,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+#[builtin]
+pub fn builtin_object_keys_values(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	builtin_object_keys_values_ex(
+		o,
+		false,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+#[builtin]
+pub fn builtin_object_keys_values_all(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> ArrValue {
+	builtin_object_keys_values_ex(
+		o,
+		true,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
 }
 
 #[builtin]
