@@ -446,108 +446,113 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index {
-			indexable: LocExpr(v, _),
-			index,
-			#[cfg(feature = "exp-null-coaelse")]
-			null_coaelse,
-		} if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
-			let name = evaluate(ctx.clone(), index)?;
-			let Val::Str(name) = name else {
-				throw!(ValueIndexMustBeTypeGot(
-					ValType::Obj,
-					ValType::Str,
-					name.value_type(),
-				))
-			};
-			let Some(super_obj) = ctx.super_obj() else {
-				#[cfg(feature = "exp-null-coaelse")]
-				if *null_coaelse {
-					return Ok(Val::Null);
-				}
-				throw!(NoSuperFound)
-			};
-			let this = ctx
-				.this()
-				.expect("no this found, while super present, should not happen");
-			let key = name.into_flat();
-			match super_obj.get_for(key.clone(), this.clone())? {
-				Some(v) => v,
-				#[cfg(feature = "exp-null-coaelse")]
-				None if *null_coaelse => Val::Null,
-				None => {
-					let suggestions = suggest_object_fields(super_obj, key.clone());
+		Index { indexable, parts } => {
+			let mut parts = parts.iter();
+			let mut indexable = match &indexable {
+				// Cheaper to execute than creating object with overriden `this`
+				LocExpr(v, _) if matches!(&**v, Expr::Literal(LiteralType::Super)) => {
+					let part = parts.next().expect("at least part should exist");
+					let Some(super_obj) = ctx.super_obj() else {
+						#[cfg(feature = "exp-null-coaelse")]
+						if part.null_coaelse {
+							return Ok(Val::Null);
+						}
+						throw!(NoSuperFound)
+					};
+					let name = evaluate(ctx.clone(), &part.value)?;
 
-					throw!(NoSuchField(key, suggestions))
-				}
-			}
-		}
-		Index {
-			indexable,
-			index,
-			#[cfg(feature = "exp-null-coaelse")]
-			null_coaelse,
-		} => match (evaluate(ctx.clone(), indexable)?, evaluate(ctx, index)?) {
-			(Val::Obj(v), Val::Str(key)) => State::push(
-				CallLocation::new(loc),
-				|| format!("field <{key}> access"),
-				|| match v.get(key.clone().into_flat()) {
-					Ok(Some(v)) => Ok(v),
-					#[cfg(feature = "exp-null-coaelse")]
-					Ok(None) if *null_coaelse => Ok(Val::Null),
-					Ok(None) => {
-						let suggestions = suggest_object_fields(&v, key.clone().into_flat());
+					let Val::Str(name) = name else {
+						throw!(ValueIndexMustBeTypeGot(
+							ValType::Obj,
+							ValType::Str,
+							name.value_type(),
+						))
+					};
 
-						throw!(NoSuchField(key.clone().into_flat(), suggestions))
+					let this = ctx
+						.this()
+						.expect("no this found, while super present, should not happen");
+					let name = name.into_flat();
+					match super_obj
+						.get_for(name.clone(), this.clone())
+						.with_description_src(&part.value, || format!("field <{name}> access"))?
+					{
+						Some(v) => v,
+						#[cfg(feature = "exp-null-coaelse")]
+						None if part.null_coaelse => return Ok(Val::Null),
+						None => {
+							let suggestions = suggest_object_fields(super_obj, name.clone());
+
+							throw!(NoSuchField(name, suggestions))
+						}
 					}
-					Err(e) => Err(e),
-				},
-			)?,
-			(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Obj,
-				ValType::Str,
-				n.value_type(),
-			)),
-
-			(Val::Arr(v), Val::Num(n)) => {
-				if n.fract() > f64::EPSILON {
-					throw!(FractionalIndex)
 				}
-				v.get(n as usize)?
-					.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+				e => evaluate(ctx.clone(), e)?,
+			};
+
+			for part in parts {
+				indexable = match (indexable, evaluate(ctx.clone(), &part.value)?) {
+					(Val::Obj(v), Val::Str(key)) => match v
+						.get(key.clone().into_flat())
+						.with_description_src(&part.value, || format!("field <{key}> access"))?
+					{
+						Some(v) => v,
+						#[cfg(feature = "exp-null-coaelse")]
+						None if part.null_coaelse => return Ok(Val::Null),
+						None => {
+							let suggestions = suggest_object_fields(&v, key.clone().into_flat());
+
+							throw!(NoSuchField(key.clone().into_flat(), suggestions))
+						}
+					},
+					(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
+						ValType::Obj,
+						ValType::Str,
+						n.value_type(),
+					)),
+					(Val::Arr(v), Val::Num(n)) => {
+						if n.fract() > f64::EPSILON {
+							throw!(FractionalIndex)
+						}
+						v.get(n as usize)?
+							.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+					}
+					(Val::Arr(_), Val::Str(n)) => {
+						throw!(AttemptedIndexAnArrayWithString(n.into_flat()))
+					}
+					(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
+						ValType::Arr,
+						ValType::Num,
+						n.value_type(),
+					)),
+
+					(Val::Str(s), Val::Num(n)) => Val::Str({
+						let v: IStr = s
+							.clone()
+							.into_flat()
+							.chars()
+							.skip(n as usize)
+							.take(1)
+							.collect::<String>()
+							.into();
+						if v.is_empty() {
+							let size = s.into_flat().chars().count();
+							throw!(StringBoundsError(n as usize, size))
+						}
+						StrValue::Flat(v)
+					}),
+					(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
+						ValType::Str,
+						ValType::Num,
+						n.value_type(),
+					)),
+					#[cfg(feature = "exp-null-coaelse")]
+					(Val::Null, _) if part.null_coaelse => return Ok(Val::Null),
+					(v, _) => throw!(CantIndexInto(v.value_type())),
+				};
 			}
-			(Val::Arr(_), Val::Str(n)) => throw!(AttemptedIndexAnArrayWithString(n.into_flat())),
-			(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Arr,
-				ValType::Num,
-				n.value_type(),
-			)),
-
-			(Val::Str(s), Val::Num(n)) => Val::Str({
-				let v: IStr = s
-					.clone()
-					.into_flat()
-					.chars()
-					.skip(n as usize)
-					.take(1)
-					.collect::<String>()
-					.into();
-				if v.is_empty() {
-					let size = s.into_flat().chars().count();
-					throw!(StringBoundsError(n as usize, size))
-				}
-				StrValue::Flat(v)
-			}),
-			(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
-				ValType::Str,
-				ValType::Num,
-				n.value_type(),
-			)),
-			#[cfg(feature = "exp-null-coaelse")]
-			(Val::Null, _) if *null_coaelse => Val::Null,
-
-			(v, _) => throw!(CantIndexInto(v.value_type())),
-		},
+			indexable
+		}
 		LocalExpr(bindings, returned) => {
 			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
 				GcHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());

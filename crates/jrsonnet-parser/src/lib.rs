@@ -337,22 +337,24 @@ parser! {
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
 				--
 				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
-				indexable:(@) _ null_coaelse:("?" _ ensure_null_coaelse())? "."  _ index:id_loc(s) {Expr::Index{
-					indexable, index,
-					#[cfg(feature = "exp-null-coaelse")]
-					null_coaelse: null_coaelse.is_some(),
-				}}
-				indexable:(@) _ null_coaelse:("?" _ "." _ ensure_null_coaelse())? "[" _ index:expr(s) _ "]" {Expr::Index{
-					indexable, index,
-					#[cfg(feature = "exp-null-coaelse")]
-					null_coaelse: null_coaelse.is_some(),
-				}}
+				indexable:(@) _ parts:index_part(s)+ {Expr::Index{indexable, parts}}
 				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
 				--
 				e:expr_basic(s) {e}
 				"(" _ e:expr(s) _ ")" {Expr::Parened(e)}
 			}
+		pub rule index_part(s: &ParserSettings) -> IndexPart
+		= n:("?" _ ensure_null_coaelse())? "." _ value:id_loc(s) {IndexPart {
+			value,
+			#[cfg(feature = "exp-null-coaelse")]
+			null_coaelse: n.is_some(),
+		}}
+		/ n:("?" _ "." _ ensure_null_coaelse())? "[" _ value:expr(s) _ "]" {IndexPart {
+			value,
+			#[cfg(feature = "exp-null-coaelse")]
+			null_coaelse: n.is_some(),
+		}}
 
 		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
 	}

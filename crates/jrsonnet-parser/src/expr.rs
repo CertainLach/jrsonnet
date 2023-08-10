@@ -406,9 +406,7 @@ pub enum Expr {
 	/// a[b], a.b, a?.b
 	Index {
 		indexable: LocExpr,
-		index: LocExpr,
-		#[cfg(feature = "exp-null-coaelse")]
-		null_coaelse: bool,
+		parts: Vec<IndexPart>,
 	},
 	/// function(x) x
 	Function(ParamsDesc, LocExpr),
@@ -419,6 +417,15 @@ pub enum Expr {
 		cond_else: Option<LocExpr>,
 	},
 	Slice(LocExpr, SliceDesc),
+}
+
+#[cfg_attr(feature = "structdump", derive(Codegen))]
+#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
+#[derive(Debug, PartialEq, Trace)]
+pub struct IndexPart {
+	pub value: LocExpr,
+	#[cfg(feature = "exp-null-coaelse")]
+	pub null_coaelse: bool,
 }
 
 /// file, begin offset, end offset
