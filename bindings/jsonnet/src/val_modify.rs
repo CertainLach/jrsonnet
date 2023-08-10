@@ -25,7 +25,7 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &VM, arr: &mut Val, val:
 			}
 
 			new.push(Thunk::evaluated(val.clone()));
-			*arr = Val::Arr(ArrValue::lazy(Cc::new(new)));
+			*arr = Val::Arr(ArrValue::lazy(new));
 		}
 		_ => panic!("should receive array"),
 	}
