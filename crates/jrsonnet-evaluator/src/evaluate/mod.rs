@@ -18,8 +18,8 @@ use crate::{
 	throw,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
-	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, State,
-	Unbound, Val,
+	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt,
+	State, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -134,13 +134,13 @@ pub fn evaluate_comp(
 
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
-					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(Cc::new(vec![
+					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
 						Thunk::evaluated(Val::Str(StrValue::Flat(field.clone()))),
 						Thunk::new(ObjectFieldThunk {
 							field: field.clone(),
 							obj: obj.clone(),
 						}),
-					]))));
+					])));
 					destruct(var, value, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx
 						.clone()

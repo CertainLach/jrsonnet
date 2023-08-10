@@ -26,6 +26,7 @@ pub enum FieldName {
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[repr(u8)]
 pub enum Visibility {
 	/// :
 	Normal,
