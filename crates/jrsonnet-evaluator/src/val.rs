@@ -1,6 +1,7 @@
 use std::{
 	cell::RefCell,
 	fmt::{self, Debug, Display},
+	hash::Hasher,
 	mem::replace,
 	rc::Rc,
 };
@@ -8,6 +9,7 @@ use std::{
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
+use rustc_hash::FxHasher;
 
 pub use crate::arr::{ArrValue, ArrayLike};
 use crate::{

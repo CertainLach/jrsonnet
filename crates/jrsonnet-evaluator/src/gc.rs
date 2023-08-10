@@ -116,7 +116,10 @@ impl<V> Default for GcHashSet<V> {
 	}
 }
 
-pub struct GcHashMap<K, V>(pub HashMap<K, V, BuildHasherDefault<FxHasher>>);
+#[derive(Debug)]
+pub struct GcHashMap<K, V>(
+	pub HashMap<K, V, BuildHasherDefault<FxHasher>>
+);
 impl<K, V> GcHashMap<K, V> {
 	pub fn new() -> Self {
 		Self(HashMap::default())
