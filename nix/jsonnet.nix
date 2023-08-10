@@ -15,7 +15,7 @@ stdenv.mkDerivation rec {
     "jsonnet"
   ];
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     mkdir -p $out/bin

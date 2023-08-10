@@ -33,7 +33,7 @@ rustPlatform.buildRustPackage rec {
   ];
   cargoBuildFlags = cargoTestFlags;
 
-  buildInputs = [ makeWrapper ];
+  nativeBuildInputs = [ makeWrapper ];
 
   postInstall = ''
     wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000 --os-stack=200000"

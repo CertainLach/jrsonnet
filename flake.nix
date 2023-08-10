@@ -9,22 +9,34 @@
       inputs.flake-utils.follows = "flake-utils";
     };
   };
-  outputs = { nixpkgs, flake-utils, rust-overlay, ... }:
-    flake-utils.lib.eachDefaultSystem (system:
-      let
+  outputs = {
+    nixpkgs,
+    flake-utils,
+    rust-overlay,
+    ...
+  }:
+    flake-utils.lib.eachSystem (with flake-utils.lib.system; [x86_64-linux x86_64-windows]) (
+      system: let
         pkgs = import nixpkgs {
           inherit system;
-          overlays = [ rust-overlay.overlays.default ];
+          overlays = [rust-overlay.overlays.default];
+          config.allowUnsupportedSystem = true;
         };
-        rust = ((pkgs.rustChannelOf { date = "2023-08-02"; channel = "nightly"; }).default.override {
-          extensions = [ "rust-src" "miri" "rust-analyzer" "clippy" ];
-        });
-      in
-      rec {
+        lib = pkgs.lib;
+        rust =
+          (pkgs.rustChannelOf {
+            date = "2023-08-02";
+            channel = "nightly";
+          })
+          .default
+          .override {
+            extensions = ["rust-src" "miri" "rust-analyzer" "clippy"];
+          };
+      in rec {
         packages = rec {
-          go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix { };
-          sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix { };
-          jsonnet = pkgs.callPackage ./nix/jsonnet.nix { };
+          go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
+          sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
+          jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
           # I didn't managed to build it, and nixpkgs version is marked as broken
           # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
@@ -50,36 +62,70 @@
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = ""; }
+              {
+                drv = jrsonnet;
+                name = "";
+              }
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             quick = true;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = ""; }
+              {
+                drv = jrsonnet;
+                name = "";
+              }
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = "current"; }
-              { drv = jrsonnet-nightly; name = "current-nightly"; }
-              { drv = jrsonnet-release; name = "release"; }
+              {
+                drv = jrsonnet;
+                name = "current";
+              }
+              {
+                drv = jrsonnet-nightly;
+                name = "current-nightly";
+              }
+              {
+                drv = jrsonnet-release;
+                name = "release";
+              }
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
             inherit go-jsonnet sjsonnet jsonnet;
             quick = true;
             jrsonnetVariants = [
-              { drv = jrsonnet; name = "current"; }
-              { drv = jrsonnet-nightly; name = "current-nightly"; }
-              { drv = jrsonnet-release; name = "release"; }
+              {
+                drv = jrsonnet;
+                name = "current";
+              }
+              {
+                drv = jrsonnet-nightly;
+                name = "current-nightly";
+              }
+              {
+                drv = jrsonnet-release;
+                name = "release";
+              }
             ];
           };
         };
-        devShell = pkgs.mkShell {
-          nativeBuildInputs = with pkgs;[
+        packagesCross = lib.genAttrs ["mingwW64"] (crossSystem: let
+          callPackage = pkgs.pkgsCross.${crossSystem}.callPackage;
+        in {
+          jrsonnet = callPackage ./nix/jrsonnet.nix {
+            # rustPlatform = pkgs.makeRustPlatform {
+            #   rustc = rust;
+            #   cargo = rust;
+            # };
+          };
+        });
+        devShells.default = pkgs.mkShell {
+          nativeBuildInputs = with pkgs; [
             alejandra
             rust
             cargo-edit
@@ -87,8 +133,6 @@
             cargo-outdated
             lld
             hyperfine
-            valgrind
-            kcachegrind
             graphviz
           ];
         };

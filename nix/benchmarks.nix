@@ -38,13 +38,13 @@ let
       src = fetchFromGitHub {
         owner = "prometheus-operator";
         repo = "kube-prometheus";
-        rev = "6a570e3154eac26e32da61d784fbe626da4804df";
-        hash = "sha256-s6BK8KQiSjql2w6R+8m5pvPPAcKW+SKjQwqxZHjimFw=";
+        rev = "d3889807798d1697ea0691f10caf1b6a1997a8bd";
+        hash = "sha256-TeYWHzoZAmDp2PzT7EH8XRUcvb3tR8Qfxel7o2QBvIM=";
       };
     in
     runCommand "kube-prometheus-vendor"
       {
-        outputHash = "sha256-R60RI/7FQPOHisnzANb34m9WPj5D9FeMVoGOjB19zl8=";
+        outputHash = "sha256-AGc0dHlD/Ld7I5b1+gOotzJkYrn+bB1VjISdD5NITtw=";
         outputHashMode = "recursive";
         buildInputs = [ cacert ];
       }
