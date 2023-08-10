@@ -332,6 +332,7 @@ parser! {
 				a:(@) _ binop(<"/">) _ b:@ {expr_bin!(a Div b)}
 				a:(@) _ binop(<"%">) _ b:@ {expr_bin!(a Mod b)}
 				--
+						unaryop(<"+">) _ b:@ {expr_un!(Plus b)}
 						unaryop(<"-">) _ b:@ {expr_un!(Minus b)}
 						unaryop(<"!">) _ b:@ {expr_un!(Not b)}
 						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}

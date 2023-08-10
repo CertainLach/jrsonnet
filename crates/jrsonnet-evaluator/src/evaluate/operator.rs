@@ -17,9 +17,10 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	use UnaryOpType::*;
 	use Val::*;
 	Ok(match (op, b) {
-		(Not, Bool(v)) => Bool(!v),
+		(Plus, Num(n)) => Num(*n),
 		(Minus, Num(n)) => Num(-*n),
-		(BitNot, Num(n)) => Num(f64::from(!(*n as i32))),
+		(Not, Bool(v)) => Bool(!v),
+		(BitNot, Num(n)) => Num(!(*n as i64) as f64),
 		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
@@ -29,7 +30,6 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Str(v1), Str(v2)) => Str(StrValue::concat(v1.clone(), v2.clone())),
 
-		// Can't use generic json serialization way, because it depends on number to string concatenation (std.jsonnet:890)
 		(Num(a), Str(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
 		(Str(a), Num(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
 
@@ -166,20 +166,22 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		(Num(v1), Sub, Num(v2)) => Val::new_checked_num(v1 - v2)?,
 
-		(Num(v1), BitAnd, Num(v2)) => Num(f64::from((*v1 as i32) & (*v2 as i32))),
-		(Num(v1), BitOr, Num(v2)) => Num(f64::from((*v1 as i32) | (*v2 as i32))),
-		(Num(v1), BitXor, Num(v2)) => Num(f64::from((*v1 as i32) ^ (*v2 as i32))),
+		(Num(v1), BitAnd, Num(v2)) => Num((*v1 as i64 & *v2 as i64) as f64),
+		(Num(v1), BitOr, Num(v2)) => Num((*v1 as i64 | *v2 as i64) as f64),
+		(Num(v1), BitXor, Num(v2)) => Num((*v1 as i64 ^ *v2 as i64) as f64),
 		(Num(v1), Lhs, Num(v2)) => {
 			if *v2 < 0.0 {
 				throw!("shift by negative exponent")
 			}
-			Num(f64::from((*v1 as i32) << (*v2 as i32)))
+			let exp = ((*v2 as i64) & 63) as u32;
+			Num((*v1 as i64).wrapping_shl(exp) as f64)
 		}
 		(Num(v1), Rhs, Num(v2)) => {
 			if *v2 < 0.0 {
 				throw!("shift by negative exponent")
 			}
-			Num(f64::from((*v1 as i32) >> (*v2 as i32)))
+			let exp = ((*v2 as i64) & 63) as u32;
+			Num((*v1 as i64).wrapping_shr(exp) as f64)
 		}
 
 		// Bigint X Bigint
