@@ -67,6 +67,8 @@ pub struct JsonFormat<'s> {
 	key_val_sep: &'s str,
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
+	#[cfg(feature = "exp-bigint")]
+	preserve_bigints: bool,
 }
 
 impl<'s> JsonFormat<'s> {
@@ -79,6 +81,8 @@ impl<'s> JsonFormat<'s> {
 			key_val_sep: ":",
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: false,
 		}
 	}
 	// Same format as std.toString
@@ -90,6 +94,8 @@ impl<'s> JsonFormat<'s> {
 			key_val_sep: ": ",
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order: false,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: false,
 		}
 	}
 	pub fn std_to_json(
@@ -105,6 +111,8 @@ impl<'s> JsonFormat<'s> {
 			key_val_sep,
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: false,
 		}
 	}
 	// Same format as CLI manifestification
@@ -125,6 +133,8 @@ impl<'s> JsonFormat<'s> {
 			key_val_sep: ": ",
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: false,
 		}
 	}
 }
@@ -137,6 +147,8 @@ impl Default for JsonFormat<'static> {
 			key_val_sep: ": ",
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order: false,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: false,
 		}
 	}
 }
@@ -165,7 +177,11 @@ fn manifest_json_ex_buf(
 		Val::Str(s) => escape_string_json_buf(&s.clone().into_flat(), buf),
 		Val::Num(n) => write!(buf, "{n}").unwrap(),
 		#[cfg(feature = "exp-bigint")]
-		Val::BigInt(n) => write!(buf, "{n}").unwrap(),
+		Val::BigInt(n) => if options.preserve_bigints {
+			write!(buf, "{n}").unwrap()
+		} else {
+			write!(buf, "{:?}", n.to_string()).unwrap()
+		},
 		Val::Arr(items) => {
 			buf.push('[');
 			if !items.is_empty() {
