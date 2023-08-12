@@ -58,7 +58,7 @@ mod ordering {
 
 #[cfg(feature = "exp-preserve-order")]
 mod ordering {
-	use std::cmp::{Ordering, Reverse};
+	use std::cmp::Reverse;
 
 	use jrsonnet_gcmodule::Trace;
 
@@ -83,13 +83,6 @@ mod ordering {
 	impl FieldSortKey {
 		pub fn new(depth: SuperDepth, index: FieldIndex) -> Self {
 			Self(Reverse(depth), index)
-		}
-		pub fn collide(self, other: Self) -> Self {
-			match self.0 .0.cmp(&other.0 .0) {
-				Ordering::Greater => self,
-				Ordering::Less => other,
-				Ordering::Equal => unreachable!("object can't have two fields with the same name"),
-			}
 		}
 	}
 }
