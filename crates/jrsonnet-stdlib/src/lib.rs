@@ -175,6 +175,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		// Sets
 		("setMember", builtin_set_member::INST),
 		("setInter", builtin_set_inter::INST),
+		("setDiff", builtin_set_diff::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
 	]

@@ -214,21 +214,6 @@
           aux(a, b, i, j + 1, acc + [b[j]]) tailstrict;
     aux(a, b, 0, 0, []),
 
-  setDiff(a, b, keyF=id)::
-    local aux(a, b, i, j, acc) =
-      if i >= std.length(a) then
-        acc
-      else if j >= std.length(b) then
-        acc + a[i:]
-      else
-        if keyF(a[i]) == keyF(b[j]) then
-          aux(a, b, i + 1, j + 1, acc) tailstrict
-        else if keyF(a[i]) < keyF(b[j]) then
-          aux(a, b, i + 1, j, acc + [a[i]]) tailstrict
-        else
-          aux(a, b, i, j + 1, acc) tailstrict;
-    aux(a, b, 0, 0, []) tailstrict,
-
   mergePatch(target, patch)::
     if std.isObject(patch) then
       local target_object =
