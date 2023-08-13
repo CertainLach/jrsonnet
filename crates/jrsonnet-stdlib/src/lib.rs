@@ -237,7 +237,7 @@ pub struct Settings {
 	/// Used for `std.extVar`
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
-	pub ext_natives: HashMap<IStr, Cc<TraceBox<dyn Builtin>>>,
+	pub ext_natives: HashMap<IStr, FuncVal>,
 	/// Used for `std.trace`
 	pub trace_printer: Box<dyn TracePrinter>,
 	/// Used for `std.thisFile`
