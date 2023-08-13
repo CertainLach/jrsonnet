@@ -7,7 +7,7 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{self, Comma},
-	Attribute, DeriveInput, Error, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
+	Attribute, DeriveInput, Error, Expr, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
 	PathArguments, Result, ReturnType, Token, Type,
 };
 
@@ -676,4 +676,103 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 			}
 		};
 	})
+}
+
+struct FormatInput {
+	formatting: LitStr,
+	arguments: Vec<Expr>,
+}
+impl Parse for FormatInput {
+	fn parse(input: ParseStream) -> Result<Self> {
+		let formatting = input.parse()?;
+		let mut arguments = Vec::new();
+
+		while input.peek(Token![,]) {
+			input.parse::<Token![,]>()?;
+			if input.is_empty() {
+				// Trailing comma
+				break;
+			}
+			let expr = input.parse()?;
+			arguments.push(expr);
+		}
+
+		if !input.is_empty() {
+			return Err(syn::Error::new(input.span(), "unexpected trailing input"));
+		}
+
+		Ok(Self {
+			formatting,
+			arguments,
+		})
+	}
+}
+fn is_format_str(i: &str) -> bool {
+	let mut is_plain = true;
+	// -1 = {
+	// +1 = }
+	let mut is_bracket = 0i8;
+	for ele in i.chars() {
+		match ele {
+			'{' if is_bracket == -1 => {
+				is_bracket = 0;
+			}
+			'}' if is_bracket == -1 => {
+				is_plain = false;
+				break;
+			}
+			'}' if is_bracket == 1 => {
+				is_bracket = 0;
+			}
+			'{' if is_bracket == 1 => {
+				is_plain = false;
+				break;
+			}
+			'{' => {
+				is_bracket = -1;
+			}
+			'}' => {
+				is_bracket = 1;
+			}
+			_ if is_bracket != 0 => {
+				is_plain = false;
+				break;
+			}
+			_ => {}
+		}
+	}
+	!is_plain || is_bracket != 0
+}
+impl FormatInput {
+	fn expand(self) -> TokenStream {
+		let format = self.formatting;
+		if is_format_str(&format.value()) {
+			let args = self.arguments;
+			quote! {
+				::jrsonnet_evaluator::IStr::from(format!(#format #(, #args)*))
+			}
+		} else {
+			if let Some(first) = self.arguments.first() {
+				return syn::Error::new(
+					first.span(),
+					"string has no formatting codes, it should not have the arguments",
+				)
+				.into_compile_error();
+			}
+			quote! {
+				::jrsonnet_evaluator::IStr::from(#format)
+			}
+		}
+	}
+}
+
+/// IStr formatting helper
+///
+/// Using `format!("literal with no codes").into()` is slower than just `"literal with no codes".into()`
+/// This macro looks for formatting codes in the input string, and uses
+/// `format!()` only when necessary
+#[proc_macro]
+pub fn format_istr(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(input as FormatInput);
+	input.expand().into()
 }

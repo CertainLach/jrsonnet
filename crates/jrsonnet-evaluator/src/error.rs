@@ -378,13 +378,13 @@ macro_rules! bail {
 		return Err($w$(::$i)*$({$($tt)*})?.into())
 	};
 	($l:literal$(, $($tt:tt)*)?) => {
-		return Err($crate::error::ErrorKind::RuntimeError(format!($l$(, $($tt)*)?).into()).into())
+		return Err($crate::error::ErrorKind::RuntimeError($crate::jrsonnet_macros::format_istr!($l$(, $($tt)*)?)).into())
 	};
 }
 
 #[macro_export]
 macro_rules! runtime_error {
 	($l:literal$(, $($tt:tt)*)?) => {
-		$crate::error::Error::from($crate::error::ErrorKind::RuntimeError(format!($l$(, $($tt)*)?).into()))
+		$crate::error::Error::from($crate::error::ErrorKind::RuntimeError($crate::jrsonnet_macros::format_istr!($l$(, $($tt)*)?)))
 	};
 }

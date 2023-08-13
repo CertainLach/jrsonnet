@@ -84,6 +84,8 @@ use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
 use jrsonnet_gcmodule::{Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
+#[doc(hidden)]
+pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::*;
 pub use obj::*;
