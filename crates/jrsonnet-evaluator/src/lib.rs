@@ -498,7 +498,7 @@ impl State {
 pub struct InitialUnderscore(pub Thunk<Val>);
 impl ContextInitializer for InitialUnderscore {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
-		builder.bind("_".into(), self.0.clone());
+		builder.bind("_", self.0.clone());
 	}
 
 	fn as_any(&self) -> &dyn Any {

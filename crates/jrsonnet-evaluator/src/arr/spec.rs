@@ -6,12 +6,8 @@ use jrsonnet_parser::LocExpr;
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected,
-	evaluate,
-	function::FuncVal,
-	typed::Typed,
-	val::{StrValue, ThunkValue},
-	Context, Error, ObjValue, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
+	val::ThunkValue, Context, Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -101,9 +97,7 @@ impl ArrayLike for CharArray {
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		self.0
-			.get(index)
-			.map(|v| Val::Str(StrValue::Flat(IStr::from(*v))))
+		self.0.get(index).map(|v| Val::string(*v))
 	}
 	fn is_cheap(&self) -> bool {
 		true

@@ -69,10 +69,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	ctx: *const c_void,
 	mut raw_params: *const *const c_char,
 ) {
-	let name = CStr::from_ptr(name)
-		.to_str()
-		.expect("name is not utf-8")
-		.into();
+	let name = CStr::from_ptr(name).to_str().expect("name is not utf-8");
 	let mut params = Vec::new();
 	loop {
 		if (*raw_params).is_null() {

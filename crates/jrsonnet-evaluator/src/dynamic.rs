@@ -52,9 +52,3 @@ impl<T: Trace + 'static> Default for Pending<T> {
 		Self::new()
 	}
 }
-
-impl<T: Trace + Clone> From<Pending<T>> for Thunk<T> {
-	fn from(value: Pending<T>) -> Self {
-		Self::new(value)
-	}
-}

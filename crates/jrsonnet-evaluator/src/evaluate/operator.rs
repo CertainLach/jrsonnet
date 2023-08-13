@@ -30,18 +30,12 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Str(v1), Str(v2)) => Str(StrValue::concat(v1.clone(), v2.clone())),
 
-		(Num(a), Str(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
-		(Str(a), Num(b)) => Str(StrValue::Flat(format!("{a}{b}").into())),
+		(Num(a), Str(b)) => Val::string(format!("{a}{b}")),
+		(Str(a), Num(b)) => Val::string(format!("{a}{b}")),
 
-		(Str(a), o) | (o, Str(a)) if a.is_empty() => {
-			Val::Str(StrValue::Flat(o.clone().to_string()?))
-		}
-		(Str(a), o) => Str(StrValue::Flat(
-			format!("{a}{}", o.clone().to_string()?).into(),
-		)),
-		(o, Str(a)) => Str(StrValue::Flat(
-			format!("{}{a}", o.clone().to_string()?).into(),
-		)),
+		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::string(o.clone().to_string()?),
+		(Str(a), o) => Val::string(format!("{a}{}", o.clone().to_string()?)),
+		(o, Str(a)) => Val::string(format!("{}{a}", o.clone().to_string()?)),
 
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => Val::Arr(ArrValue::extended(a.clone(), b.clone())),
@@ -149,7 +143,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone().into_flat(), true)),
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
-		(Str(v1), Mul, Num(v2)) => Str(StrValue::Flat(v1.to_string().repeat(*v2 as usize).into())),
+		(Str(v1), Mul, Num(v2)) => Val::string(v1.to_string().repeat(*v2 as usize)),
 
 		// Bool X Bool
 		(Bool(a), And, Bool(b)) => Bool(*a && *b),

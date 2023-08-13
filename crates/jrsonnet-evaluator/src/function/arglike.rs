@@ -61,7 +61,7 @@ pub enum TlaArg {
 impl ArgLike for TlaArg {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		match self {
-			TlaArg::String(s) => Ok(Thunk::evaluated(Val::Str(StrValue::Flat(s.clone())))),
+			TlaArg::String(s) => Ok(Thunk::evaluated(Val::string(s.clone()))),
 			TlaArg::Code(code) => Ok(if tailstrict {
 				Thunk::evaluated(evaluate(ctx, code)?)
 			} else {

@@ -36,7 +36,7 @@ fn call_from_code() -> Result<()> {
 	s.with_stdlib();
 	s.add_global(
 		"nativeAdd".into(),
-		Thunk::evaluated(Val::Func(FuncVal::StaticBuiltin(native_add::INST))),
+		Thunk::evaluated(Val::function(native_add::INST)),
 	);
 
 	let v = s.evaluate_snippet(
@@ -69,7 +69,7 @@ fn nonstatic_builtin() -> Result<()> {
 	s.with_stdlib();
 	s.add_global(
 		"curryAdd".into(),
-		Thunk::evaluated(Val::Func(FuncVal::StaticBuiltin(curry_add::INST))),
+		Thunk::evaluated(Val::function(curry_add::INST)),
 	);
 
 	let v = s.evaluate_snippet(

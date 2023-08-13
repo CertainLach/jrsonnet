@@ -6,13 +6,12 @@ use std::{
 
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
-	function::{builtin::Builtin, CallLocation, FuncVal, TlaArg},
-	gc::TraceBox,
+	function::{CallLocation, FuncVal, TlaArg},
 	tb,
 	trace::PathResolver,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
 
 mod expr;
@@ -182,38 +181,24 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	.iter()
 	.cloned()
 	{
-		builder
-			.member(name.into())
-			.hide()
-			.value(Val::Func(FuncVal::StaticBuiltin(builtin)))
-			.expect("no conflict");
+		builder.method(name, builtin);
 	}
 
-	builder
-		.member("extVar".into())
-		.hide()
-		.value(Val::Func(FuncVal::builtin(builtin_ext_var {
+	builder.method(
+		"extVar",
+		builtin_ext_var {
 			settings: settings.clone(),
-		})))
-		.expect("no conflict");
-	builder
-		.member("native".into())
-		.hide()
-		.value(Val::Func(FuncVal::builtin(builtin_native {
+		},
+	);
+	builder.method(
+		"native",
+		builtin_native {
 			settings: settings.clone(),
-		})))
-		.expect("no conflict");
-	builder
-		.member("trace".into())
-		.hide()
-		.value(Val::Func(FuncVal::builtin(builtin_trace { settings })))
-		.expect("no conflict");
+		},
+	);
+	builder.method("trace", builtin_trace { settings });
 
-	builder
-		.member("id".into())
-		.hide()
-		.value(Val::Func(FuncVal::Id))
-		.expect("no conflict");
+	builder.method("id", FuncVal::Id);
 
 	builder.build()
 }
@@ -293,7 +278,7 @@ impl ContextInitializer {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
 				let mut context = ContextBuilder::with_capacity(_s, 1);
-				context.bind("std".into(), stdlib_thunk.clone());
+				context.bind("std", stdlib_thunk.clone());
 				context.build()
 			},
 			#[cfg(not(feature = "legacy-this-file"))]
@@ -338,10 +323,10 @@ impl ContextInitializer {
 			.insert(name.into(), TlaArg::Code(parsed));
 		Ok(())
 	}
-	pub fn add_native(&self, name: IStr, cb: impl Builtin) {
+	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {
 		self.settings_mut()
 			.ext_natives
-			.insert(name, Cc::new(tb!(cb)));
+			.insert(name.into(), cb.into());
 	}
 }
 impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
@@ -354,7 +339,7 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	}
 	#[cfg(not(feature = "legacy-this-file"))]
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
-		builder.bind("std".into(), self.stdlib_thunk.clone());
+		builder.bind("std", self.stdlib_thunk.clone());
 	}
 	#[cfg(feature = "legacy-this-file")]
 	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
@@ -362,14 +347,14 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
-		std.member("thisFile".into())
+		std.field("thisFile".into())
 			.hide()
-			.value(Val::Str(StrValue::Flat(
+			.value(Val::string(
 				match source.source_path().path() {
 					Some(p) => self.settings().path_resolver.resolve(p).into(),
 					None => source.source_path().to_string().into(),
 				},
-			)))
+			))
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = std.build();
 

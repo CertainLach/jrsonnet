@@ -11,10 +11,8 @@ use serde::{
 };
 
 use crate::{
-	arr::ArrValue,
-	error::{Error as JrError, ErrorKind, Result},
-	val::StrValue,
-	ObjValue, ObjValueBuilder, State, Val,
+	arr::ArrValue, runtime_error, Error as JrError, ObjValue, ObjValueBuilder,
+	Result, State, Val,
 };
 
 impl<'de> Deserialize<'de> for Val {
@@ -57,7 +55,7 @@ impl<'de> Deserialize<'de> for Val {
 			where
 				E: serde::de::Error,
 			{
-				Ok(Val::Str(StrValue::Flat(v.into())))
+				Ok(Val::string(v))
 			}
 
 			// visit_num! {
@@ -138,7 +136,7 @@ impl<'de> Deserialize<'de> for Val {
 
 				while let Some((k, v)) = map.next_entry::<Cow<'de, str>, Val>()? {
 					// Jsonnet ignores duplicate keys
-					out.member(k.into()).value_unchecked(v);
+					out.field(k).value(v);
 				}
 
 				Ok(Val::Obj(out.build()))
@@ -264,7 +262,7 @@ impl SerializeSeq for IntoVecValSerializer {
 		let inner = Val::Arr(ArrValue::eager(self.data));
 		if let Some(variant) = self.variant {
 			let mut out = ObjValue::builder_with_capacity(1);
-			out.member(variant).value_unchecked(inner);
+			out.field(variant).value(inner);
 			Ok(Val::Obj(out.build()))
 		} else {
 			Ok(inner)
@@ -365,7 +363,7 @@ impl SerializeMap for IntoObjValueSerializer {
 	{
 		let key = self.key.take().expect("no serialize_key called");
 		let value = value.serialize(IntoValSerializer)?;
-		self.data.member(key).value(value)?;
+		self.data.field(key).try_value(value)?;
 		Ok(())
 	}
 
@@ -378,7 +376,7 @@ impl SerializeMap for IntoObjValueSerializer {
 		let key = key.serialize(IntoValSerializer)?;
 		let key = key.to_string()?;
 		let value = value.serialize(IntoValSerializer)?;
-		self.data.member(key).value(value)?;
+		self.data.field(key).try_value(value)?;
 		Ok(())
 	}
 
@@ -386,7 +384,7 @@ impl SerializeMap for IntoObjValueSerializer {
 		let inner = Val::Obj(self.data.build());
 		if let Some(variant) = self.variant {
 			let mut out = ObjValue::builder_with_capacity(1);
-			out.member(variant).value_unchecked(inner);
+			out.field(variant).value(inner);
 			Ok(Val::Obj(out.build()))
 		} else {
 			Ok(inner)
@@ -550,7 +548,7 @@ impl Serializer for IntoValSerializer {
 	{
 		let mut out = ObjValue::builder_with_capacity(1);
 		let value = value.serialize(self)?;
-		out.member(variant.into()).value_unchecked(value);
+		out.field(variant).value(value);
 		Ok(Val::Obj(out.build()))
 	}
 

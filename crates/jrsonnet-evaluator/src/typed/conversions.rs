@@ -276,7 +276,7 @@ impl Typed for IStr {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Str);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(StrValue::Flat(value)))
+		Ok(Val::string(value))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -292,7 +292,7 @@ impl Typed for String {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Str);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(StrValue::Flat(value.into())))
+		Ok(Val::string(value))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -308,7 +308,7 @@ impl Typed for char {
 	const TYPE: &'static ComplexValType = &ComplexValType::Char;
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Str(StrValue::Flat(value.to_string().into())))
+		Ok(Val::string(value))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -356,7 +356,7 @@ impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
 				bail!("map key should serialize to string");
 			};
 			let value = V::into_untyped(v)?;
-			out.member(key).value_unchecked(value);
+			out.field(key).value(value);
 		}
 		Ok(Val::Obj(out.build()))
 	}
@@ -611,7 +611,7 @@ impl Typed for IndexableVal {
 
 	fn into_untyped(value: Self) -> Result<Val> {
 		match value {
-			IndexableVal::Str(s) => Ok(Val::Str(StrValue::Flat(s))),
+			IndexableVal::Str(s) => Ok(Val::string(s)),
 			IndexableVal::Arr(a) => Ok(Val::Arr(a)),
 		}
 	}

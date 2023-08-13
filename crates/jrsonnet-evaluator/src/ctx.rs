@@ -87,9 +87,9 @@ impl Context {
 	}
 
 	#[must_use]
-	pub fn with_var(self, name: IStr, value: Val) -> Self {
+	pub fn with_var(self, name: impl Into<IStr>, value: Val) -> Self {
 		let mut new_bindings = GcHashMap::with_capacity(1);
-		new_bindings.insert(name, Thunk::evaluated(value));
+		new_bindings.insert(name.into(), Thunk::evaluated(value));
 		self.extend(new_bindings, None, None, None)
 	}
 
@@ -161,8 +161,8 @@ impl ContextBuilder {
 	}
 	/// # Panics
 	/// If `name` is already bound
-	pub fn bind(&mut self, name: IStr, value: Thunk<Val>) -> &mut Self {
-		let old = self.bindings.insert(name, value);
+	pub fn bind(&mut self, name: impl Into<IStr>, value: Thunk<Val>) -> &mut Self {
+		let old = self.bindings.insert(name.into(), value);
 		assert!(old.is_none(), "variable bound twice in single context call");
 		self
 	}

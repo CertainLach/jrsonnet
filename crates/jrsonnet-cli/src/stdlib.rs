@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{error::Result, trace::PathResolver, State};
+use jrsonnet_evaluator::{trace::PathResolver, Result, State};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone)]

@@ -2,7 +2,7 @@ use super::{
 	arglike::{ArgLike, OptionalContext},
 	FuncVal,
 };
-use crate::{error::Result, typed::Typed};
+use crate::{typed::Typed, Result};
 
 pub trait NativeDesc {
 	type Value;

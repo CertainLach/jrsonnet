@@ -36,7 +36,7 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 #[builtin]
 pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Val> {
 	Ok(match what {
-		Either2::A(s) => Val::Str(StrValue::Flat(s.repeat(count).into())),
+		Either2::A(s) => Val::string(s.repeat(count)),
 		Either2::B(arr) => Val::Arr(
 			ArrValue::repeated(arr, count)
 				.ok_or_else(|| runtime_error!("repeated length overflow"))?,

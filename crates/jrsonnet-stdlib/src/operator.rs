@@ -16,7 +16,7 @@ pub fn builtin_mod(a: Either![f64, IStr], b: Val) -> Result<Val> {
 	evaluate_mod_op(
 		&match a {
 			A(v) => Val::Num(v),
-			B(s) => Val::Str(StrValue::Flat(s)),
+			B(s) => Val::string(s),
 		},
 		&b,
 	)

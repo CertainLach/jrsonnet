@@ -1,11 +1,10 @@
 use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
-	error::Result,
 	function::{builtin, FuncVal},
 	operator::evaluate_compare_op,
 	val::ArrValue,
-	Thunk, Val,
+	Result, Thunk, Val,
 };
 use jrsonnet_parser::BinaryOpType;
 
@@ -108,7 +107,7 @@ pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Resu
 			}
 		};
 	}
-	while let Some(ac) = &ak {
+	while let Some(_ac) = &ak {
 		// In a, but not in b
 		out.push(av.clone().expect("ak != None"));
 		av = a.next();

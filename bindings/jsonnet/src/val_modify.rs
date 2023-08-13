@@ -5,7 +5,6 @@
 use std::{ffi::CStr, os::raw::c_char};
 
 use jrsonnet_evaluator::{val::ArrValue, Thunk, Val};
-use jrsonnet_gcmodule::Cc;
 
 use crate::VM;
 

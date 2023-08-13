@@ -15,7 +15,7 @@ use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
 	bail,
 	error::{suggest_object_fields, Error, ErrorKind::*},
-	function::CallLocation,
+	function::{CallLocation, FuncVal},
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
 	tb,
@@ -345,7 +345,7 @@ impl ObjValue {
 	pub(crate) fn extend_with_raw_member(self, key: IStr, value: ObjMember) -> Self {
 		let mut out = ObjValueBuilder::with_capacity(1);
 		out.with_super(self);
-		let mut member = out.member(key);
+		let mut member = out.field(key);
 		if value.flags.add() {
 			member = member.add()
 		}
@@ -848,10 +848,26 @@ impl ObjValueBuilder {
 		self.assertions.push(tb!(assertion));
 		self
 	}
-	pub fn member(&mut self, name: IStr) -> ObjMemberBuilder<ValueBuilder<'_>> {
+	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
 		let field_index = self.next_field_index;
 		self.next_field_index = self.next_field_index.next();
-		ObjMemberBuilder::new(ValueBuilder(self), name, field_index)
+		ObjMemberBuilder::new(ValueBuilder(self), name.into(), field_index)
+	}
+	/// Preset for common method definiton pattern:
+	/// Create a hidden field with the function value.
+	///
+	/// `.field(name).hide().value(Val::function(value))`
+	pub fn method(&mut self, name: impl Into<IStr>, value: impl Into<FuncVal>) -> &mut Self {
+		self.field(name).hide().value(Val::Func(value.into()));
+		self
+	}
+	pub fn try_method(
+		&mut self,
+		name: impl Into<IStr>,
+		value: impl Into<FuncVal>,
+	) -> Result<&mut Self> {
+		self.field(name).hide().try_value(Val::Func(value.into()))?;
+		Ok(self)
 	}
 
 	pub fn build(self) -> ObjValue {
@@ -930,18 +946,19 @@ impl<Kind> ObjMemberBuilder<Kind> {
 pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
 impl ObjMemberBuilder<ValueBuilder<'_>> {
 	/// Inserts value, replacing if it is already defined
-	pub fn value_unchecked(self, value: Val) {
+	pub fn value(self, value: impl Into<Val>) {
 		let (receiver, name, member) =
-			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value)));
+			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
 		let entry = receiver.0.map.entry(name);
 		entry.insert(member);
 	}
 
-	pub fn value(self, value: Val) -> Result<()> {
-		self.thunk(Thunk::evaluated(value))
+	/// Tries to insert value, returns an error if it was already defined
+	pub fn try_value(self, value: impl Into<Val>) -> Result<()> {
+		self.thunk(Thunk::evaluated(value.into()))
 	}
-	pub fn thunk(self, value: Thunk<Val>) -> Result<()> {
-		self.binding(MaybeUnbound::Bound(value))
+	pub fn thunk(self, value: impl Into<Thunk<Val>>) -> Result<()> {
+		self.binding(MaybeUnbound::Bound(value.into()))
 	}
 	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {
 		self.binding(MaybeUnbound::Unbound(Cc::new(tb!(bindable))))
@@ -963,8 +980,8 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 
 pub struct ExtendBuilder<'v>(&'v mut ObjValue);
 impl ObjMemberBuilder<ExtendBuilder<'_>> {
-	pub fn value(self, value: Val) {
-		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value)));
+	pub fn value(self, value: impl Into<Val>) {
+		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
 	}
 	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) {
 		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));

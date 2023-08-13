@@ -77,12 +77,8 @@ fn param_names(fun: FuncVal) -> Vec<String> {
 #[allow(dead_code)]
 pub fn with_test(s: &State) {
 	let mut bobj = ObjValueBuilder::new();
-	bobj.member("assertThrow".into())
-		.hide()
-		.value_unchecked(Val::Func(FuncVal::StaticBuiltin(assert_throw::INST)));
-	bobj.member("paramNames".into())
-		.hide()
-		.value_unchecked(Val::Func(FuncVal::StaticBuiltin(param_names::INST)));
+	bobj.method("assertThrow", assert_throw::INST);
+	bobj.method("paramNames", param_names::INST);
 
 	s.add_global("test".into(), Thunk::evaluated(Val::Obj(bobj.build())))
 }

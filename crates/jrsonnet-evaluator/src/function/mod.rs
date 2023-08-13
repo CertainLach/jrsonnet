@@ -12,7 +12,10 @@ use self::{
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result, Val};
+use crate::{
+	evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result,
+	Val,
+};
 
 pub mod arglike;
 pub mod builtin;
@@ -123,6 +126,9 @@ static ID: &builtin_id = &builtin_id {};
 impl FuncVal {
 	pub fn builtin(builtin: impl Builtin) -> Self {
 		Self::Builtin(Cc::new(tb!(builtin)))
+	}
+	pub fn static_builtin(static_builtin: &'static dyn StaticBuiltin) -> Self {
+		Self::StaticBuiltin(static_builtin)
 	}
 
 	pub fn params(&self) -> Vec<BuiltinParam> {
@@ -237,5 +243,19 @@ impl FuncVal {
 			FuncVal::Normal(n) => n.evaluate_trivial(),
 			_ => None,
 		}
+	}
+}
+
+impl<T> From<T> for FuncVal
+where
+	T: Builtin,
+{
+	fn from(value: T) -> Self {
+		Self::builtin(value)
+	}
+}
+impl From<&'static dyn StaticBuiltin> for FuncVal {
+	fn from(value: &'static dyn StaticBuiltin) -> Self {
+		Self::static_builtin(value)
 	}
 }

@@ -142,6 +142,14 @@ impl<T: Trace> From<Result<T>> for Thunk<T> {
 		}
 	}
 }
+impl<T, V: Trace> From<T> for Thunk<V>
+where
+	T: ThunkValue<Output = V>,
+{
+	fn from(value: T) -> Self {
+		Thunk::new(value)
+	}
+}
 
 impl<T: Trace + Default> Default for Thunk<T> {
 	fn default() -> Self {
@@ -323,19 +331,12 @@ impl StrValue {
 		}
 	}
 }
-impl From<&str> for StrValue {
-	fn from(value: &str) -> Self {
-		Self::Flat(value.into())
-	}
-}
-impl From<String> for StrValue {
-	fn from(value: String) -> Self {
-		Self::Flat(value.into())
-	}
-}
-impl From<IStr> for StrValue {
-	fn from(value: IStr) -> Self {
-		Self::Flat(value)
+impl<T> From<T> for StrValue
+where
+	IStr: From<T>,
+{
+	fn from(value: T) -> Self {
+		Self::Flat(IStr::from(value))
 	}
 }
 impl Display for StrValue {
@@ -401,7 +402,7 @@ static_assertions::assert_eq_size!(Val, [u8; 24]);
 impl From<IndexableVal> for Val {
 	fn from(v: IndexableVal) -> Self {
 		match v {
-			IndexableVal::Str(s) => Self::Str(StrValue::Flat(s)),
+			IndexableVal::Str(s) => Self::string(s),
 			IndexableVal::Arr(a) => Self::Arr(a),
 		}
 	}
@@ -498,6 +499,34 @@ impl Val {
 			Val::Arr(arr) => IndexableVal::Arr(arr),
 			_ => bail!(ValueIsNotIndexable(self.value_type())),
 		})
+	}
+
+	pub fn function(function: impl Into<FuncVal>) -> Self {
+		Self::Func(function.into())
+	}
+	pub fn string(string: impl Into<StrValue>) -> Self {
+		Self::Str(string.into())
+	}
+}
+
+impl From<IStr> for Val {
+	fn from(value: IStr) -> Self {
+		Self::string(value)
+	}
+}
+impl From<String> for Val {
+	fn from(value: String) -> Self {
+		Self::string(value)
+	}
+}
+impl From<&str> for Val {
+	fn from(value: &str) -> Self {
+		Self::string(value)
+	}
+}
+impl From<ObjValue> for Val {
+	fn from(value: ObjValue) -> Self {
+		Self::Obj(value)
 	}
 }
 

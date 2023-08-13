@@ -36,7 +36,7 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 		}
 	}
 	Some(match &*expr.0 {
-		Expr::Str(s) => Val::Str(StrValue::Flat(s.clone())),
+		Expr::Str(s) => Val::string(s.clone()),
 		Expr::Num(n) => Val::Num(*n),
 		Expr::Literal(LiteralType::False) => Val::Bool(false),
 		Expr::Literal(LiteralType::True) => Val::Bool(true),
@@ -135,7 +135,7 @@ pub fn evaluate_comp(
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
-						Thunk::evaluated(Val::Str(StrValue::Flat(field.clone()))),
+						Thunk::evaluated(Val::string(field.clone())),
 						Thunk::new(ObjectFieldThunk {
 							field: field.clone(),
 							obj: obj.clone(),
@@ -226,7 +226,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			}
 
 			builder
-				.member(name.clone())
+				.field(name.clone())
 				.with_add(*plus)
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
@@ -262,7 +262,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			}
 
 			builder
-				.member(name.clone())
+				.field(name.clone())
 				.with_visibility(*visibility)
 				.with_location(value.1.clone())
 				.bindable(UnboundMethod {
@@ -437,7 +437,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(ctx, e)?,
-		Str(v) => Val::Str(StrValue::Flat(v.clone())),
+		Str(v) => Val::string(v.clone()),
 		Num(v) => Val::new_checked_num(*v)?,
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
@@ -672,7 +672,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					|| format!("import {:?}", path.clone()),
 					|| s.import_resolved(resolved_path),
 				)?,
-				ImportStr(_) => Val::Str(StrValue::Flat(s.import_resolved_str(resolved_path)?)),
+				ImportStr(_) => Val::string(s.import_resolved_str(resolved_path)?),
 				ImportBin(_) => Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?)),
 				_ => unreachable!(),
 			}

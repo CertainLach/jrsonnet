@@ -3,7 +3,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::builtin,
 	typed::{Either2, M1},
-	val::{ArrValue, StrValue},
+	val::ArrValue,
 	Either, IStr, Val,
 };
 
@@ -41,14 +41,8 @@ pub fn builtin_equals_ignore_case(str1: String, str2: String) -> bool {
 pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> ArrValue {
 	use Either2::*;
 	match maxsplits {
-		A(n) => str
-			.splitn(n + 1, &c as &str)
-			.map(|s| Val::Str(StrValue::Flat(s.into())))
-			.collect(),
-		B(_) => str
-			.split(&c as &str)
-			.map(|s| Val::Str(StrValue::Flat(s.into())))
-			.collect(),
+		A(n) => str.splitn(n + 1, &c as &str).map(Val::string).collect(),
+		B(_) => str.split(&c as &str).map(Val::string).collect(),
 	}
 }
 

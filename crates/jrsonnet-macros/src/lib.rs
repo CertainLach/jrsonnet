@@ -567,18 +567,18 @@ impl TypedField {
 			if self.is_option {
 				quote! {
 					if let Some(value) = self.#ident {
-						out.member(#name.into())
+						out.field(#name)
 							#hide
 							#add
-							.value(<#ty as Typed>::into_untyped(value)?)?;
+							.try_value(<#ty as Typed>::into_untyped(value)?)?;
 					}
 				}
 			} else {
 				quote! {
-					out.member(#name.into())
+					out.field(#name)
 						#hide
 						#add
-						.value(<#ty as Typed>::into_untyped(self.#ident)?)?;
+						.try_value(<#ty as Typed>::into_untyped(self.#ident)?)?;
 				}
 			}
 		} else if self.is_option {
