@@ -3,12 +3,11 @@
 use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
-	error::Result,
+	bail,
 	function::{builtin, FuncVal},
 	operator::evaluate_compare_op,
-	throw,
 	val::{equals, ArrValue},
-	Thunk, Val,
+	Result, Thunk, Val,
 };
 use jrsonnet_parser::BinaryOpType;
 
@@ -44,7 +43,7 @@ fn get_sort_type<T>(values: &[T], key_getter: impl Fn(&T) -> &Val) -> Result<Sor
 			(Val::Num(_), SortKeyType::Unknown) => sort_type = SortKeyType::Number,
 			(Val::Str(_), SortKeyType::String) | (Val::Num(_), SortKeyType::Number) => {}
 			(Val::Str(_) | Val::Num(_), _) => {
-				throw!("sort elements should have the same types")
+				bail!("sort elements should have the same types")
 			}
 			_ => {}
 		}

@@ -11,11 +11,12 @@ use jrsonnet_types::ValType;
 
 pub use crate::arr::{ArrValue, ArrayLike};
 use crate::{
+	bail,
 	error::{Error, ErrorKind::*},
 	function::FuncVal,
 	gc::{GcHashMap, TraceBox},
 	manifest::{ManifestFormat, ToStringFormat},
-	tb, throw,
+	tb,
 	typed::BoundedUsize,
 	ObjValue, Result, Unbound, WeakObjValue,
 };
@@ -456,7 +457,7 @@ impl Val {
 		if num.is_finite() {
 			Ok(Self::Num(num))
 		} else {
-			throw!("overflow")
+			bail!("overflow")
 		}
 	}
 
@@ -495,7 +496,7 @@ impl Val {
 		Ok(match self {
 			Val::Str(s) => IndexableVal::Str(s.into_flat()),
 			Val::Arr(arr) => IndexableVal::Arr(arr),
-			_ => throw!(ValueIsNotIndexable(self.value_type())),
+			_ => bail!(ValueIsNotIndexable(self.value_type())),
 		})
 	}
 }
@@ -514,13 +515,13 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		#[cfg(feature = "exp-bigint")]
 		(Val::BigInt(a), Val::BigInt(b)) => a == b,
 		(Val::Arr(_), Val::Arr(_)) => {
-			throw!("primitiveEquals operates on primitive types, got array")
+			bail!("primitiveEquals operates on primitive types, got array")
 		}
 		(Val::Obj(_), Val::Obj(_)) => {
-			throw!("primitiveEquals operates on primitive types, got object")
+			bail!("primitiveEquals operates on primitive types, got object")
 		}
 		(a, b) if is_function_like(a) && is_function_like(b) => {
-			throw!("cannot test equality of functions")
+			bail!("cannot test equality of functions")
 		}
 		(_, _) => false,
 	})

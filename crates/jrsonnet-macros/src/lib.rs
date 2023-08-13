@@ -356,7 +356,7 @@ fn builtin_inner(
 			use ::jrsonnet_evaluator::{
 				State, Val,
 				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName}, CallLocation, ArgsLike, parse::parse_builtin_call},
-				error::Result, Context, typed::Typed,
+				Result, Context, typed::Typed,
 				parser::ExprLocation,
 			};
 			const PARAMS: &'static [BuiltinParam] = &[

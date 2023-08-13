@@ -1,10 +1,10 @@
 use std::{cell::RefCell, rc::Rc};
 
 use jrsonnet_evaluator::{
+	bail,
 	error::{ErrorKind::*, Result},
 	function::{builtin, ArgLike, CallLocation, FuncVal},
 	manifest::JsonFormat,
-	throw,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
 	Context, Either, IStr, ObjValue, Thunk, Val,
@@ -103,7 +103,7 @@ pub fn builtin_starts_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue
 				true
 			}
 		}
-		_ => throw!("both arguments should be of the same type"),
+		_ => bail!("both arguments should be of the same type"),
 	})
 }
 
@@ -129,6 +129,6 @@ pub fn builtin_ends_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue])
 				true
 			}
 		}
-		_ => throw!("both arguments should be of the same type"),
+		_ => bail!("both arguments should be of the same type"),
 	})
 }

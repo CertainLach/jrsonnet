@@ -7,8 +7,8 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
+	bail,
 	error::{format_found, suggest_object_fields, ErrorKind::*},
-	throw,
 	typed::Typed,
 	Error, ObjValue, Result, Val,
 };
@@ -611,12 +611,12 @@ pub fn format_code(
 			Val::Str(s) => {
 				let s = s.into_flat();
 				if s.chars().count() != 1 {
-					throw!("%c expected 1 char string, got {}", s.chars().count(),);
+					bail!("%c expected 1 char string, got {}", s.chars().count());
 				}
 				tmp_out.push_str(&s);
 			}
 			_ => {
-				throw!(TypeMismatch(
+				bail!(TypeMismatch(
 					"%c requires number/string",
 					vec![ValType::Num, ValType::Str],
 					value.value_type(),
@@ -657,7 +657,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 				let width = match c.width {
 					Width::Star => {
 						if values.is_empty() {
-							throw!(NotEnoughValues);
+							bail!(NotEnoughValues);
 						}
 						let value = &values[0];
 						values = &values[1..];
@@ -668,7 +668,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 				let precision = match c.precision {
 					Some(Width::Star) => {
 						if values.is_empty() {
-							throw!(NotEnoughValues);
+							bail!(NotEnoughValues);
 						}
 						let value = &values[0];
 						values = &values[1..];
@@ -683,7 +683,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 					&Val::Null
 				} else {
 					if values.is_empty() {
-						throw!(NotEnoughValues);
+						bail!(NotEnoughValues);
 					}
 					let value = &values[0];
 					values = &values[1..];
@@ -696,7 +696,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 	}
 
 	if !values.is_empty() {
-		throw!(
+		bail!(
 			"too many values to format, expected {value_count}, got {}",
 			value_count + values.len()
 		)
@@ -717,7 +717,7 @@ fn get_dotted_field(obj: ObjValue, field: &str) -> Result<Val> {
 				let current = &field[name_offset..end_offset];
 				let full = &field[..name_offset];
 				let found = Box::new(suggest_object_fields(&obj, current.into()));
-				throw!(SubfieldNotFound {
+				bail!(SubfieldNotFound {
 					current: current.into(),
 					full: full.into(),
 					found,
@@ -726,7 +726,7 @@ fn get_dotted_field(obj: ObjValue, field: &str) -> Result<Val> {
 		} else {
 			// No underflow may happen, initially we always start with an object
 			let subfield = &field[..name_offset - 1];
-			throw!(SubfieldDidntYieldAnObject(
+			bail!(SubfieldDidntYieldAnObject(
 				subfield.into(),
 				current.value_type()
 			));
@@ -750,13 +750,13 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 				let f: IStr = c.mkey.into();
 				let width = match c.width {
 					Width::Star => {
-						throw!(CannotUseStarWidthWithObject);
+						bail!(CannotUseStarWidthWithObject);
 					}
 					Width::Fixed(n) => n,
 				};
 				let precision = match c.precision {
 					Some(Width::Star) => {
-						throw!(CannotUseStarWidthWithObject);
+						bail!(CannotUseStarWidthWithObject);
 					}
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,
@@ -766,7 +766,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 					Val::Null
 				} else {
 					if f.is_empty() {
-						throw!(MappingKeysRequired);
+						bail!(MappingKeysRequired);
 					}
 					if let Some(v) = values.get(f.clone())? {
 						v

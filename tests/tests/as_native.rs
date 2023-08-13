@@ -1,4 +1,4 @@
-use jrsonnet_evaluator::{error::Result, State};
+use jrsonnet_evaluator::{Result, State};
 use jrsonnet_stdlib::StateExt;
 
 mod common;

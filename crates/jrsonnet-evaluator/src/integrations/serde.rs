@@ -620,6 +620,6 @@ impl serde::ser::Error for JrError {
 	where
 		T: std::fmt::Display,
 	{
-		JrError::new(ErrorKind::RuntimeError(format!("serde: {msg}").into()))
+		runtime_error!("serde: {msg}")
 	}
 }

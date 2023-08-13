@@ -11,11 +11,11 @@ use jrsonnet_types::ValType;
 use self::destructure::destruct;
 use crate::{
 	arr::ArrValue,
+	bail,
 	destructure::evaluate_dest,
 	error::{suggest_object_fields, ErrorKind::*},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
-	throw,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt,
@@ -150,7 +150,7 @@ pub fn evaluate_comp(
 					evaluate_comp(ctx, &specs[1..], callback)?;
 				}
 			}
-			_ => throw!(InComprehensionCanOnlyIterateOverArray),
+			_ => bail!(InComprehensionCanOnlyIterateOverArray),
 		},
 	}
 	Ok(())
@@ -375,7 +375,7 @@ pub fn evaluate_apply(
 				State::push(loc, || format!("function <{}> call", f.name()), body)?
 			}
 		}
-		v => throw!(OnlyFunctionsCanBeCalledGot(v.value_type())),
+		v => bail!(OnlyFunctionsCanBeCalledGot(v.value_type())),
 	})
 }
 
@@ -393,9 +393,9 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 			|| "assertion failure".to_owned(),
 			|| {
 				if let Some(msg) = msg {
-					throw!(AssertionFailed(evaluate(ctx, msg)?.to_string()?));
+					bail!(AssertionFailed(evaluate(ctx, msg)?.to_string()?));
 				}
-				throw!(AssertionFailed(Val::Null.to_string()?));
+				bail!(AssertionFailed(Val::Null.to_string()?));
 			},
 		)?;
 	}
@@ -457,12 +457,12 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						if part.null_coaelse {
 							return Ok(Val::Null);
 						}
-						throw!(NoSuperFound)
+						bail!(NoSuperFound)
 					};
 					let name = evaluate(ctx.clone(), &part.value)?;
 
 					let Val::Str(name) = name else {
-						throw!(ValueIndexMustBeTypeGot(
+						bail!(ValueIndexMustBeTypeGot(
 							ValType::Obj,
 							ValType::Str,
 							name.value_type(),
@@ -483,7 +483,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						None => {
 							let suggestions = suggest_object_fields(super_obj, name.clone());
 
-							throw!(NoSuchField(name, suggestions))
+							bail!(NoSuchField(name, suggestions))
 						}
 					}
 				}
@@ -502,25 +502,25 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						None => {
 							let suggestions = suggest_object_fields(&v, key.clone().into_flat());
 
-							throw!(NoSuchField(key.clone().into_flat(), suggestions))
+							bail!(NoSuchField(key.clone().into_flat(), suggestions))
 						}
 					},
-					(Val::Obj(_), n) => throw!(ValueIndexMustBeTypeGot(
+					(Val::Obj(_), n) => bail!(ValueIndexMustBeTypeGot(
 						ValType::Obj,
 						ValType::Str,
 						n.value_type(),
 					)),
 					(Val::Arr(v), Val::Num(n)) => {
 						if n.fract() > f64::EPSILON {
-							throw!(FractionalIndex)
+							bail!(FractionalIndex)
 						}
 						v.get(n as usize)?
 							.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
 					}
 					(Val::Arr(_), Val::Str(n)) => {
-						throw!(AttemptedIndexAnArrayWithString(n.into_flat()))
+						bail!(AttemptedIndexAnArrayWithString(n.into_flat()))
 					}
-					(Val::Arr(_), n) => throw!(ValueIndexMustBeTypeGot(
+					(Val::Arr(_), n) => bail!(ValueIndexMustBeTypeGot(
 						ValType::Arr,
 						ValType::Num,
 						n.value_type(),
@@ -537,18 +537,18 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 							.into();
 						if v.is_empty() {
 							let size = s.into_flat().chars().count();
-							throw!(StringBoundsError(n as usize, size))
+							bail!(StringBoundsError(n as usize, size))
 						}
 						StrValue::Flat(v)
 					}),
-					(Val::Str(_), n) => throw!(ValueIndexMustBeTypeGot(
+					(Val::Str(_), n) => bail!(ValueIndexMustBeTypeGot(
 						ValType::Str,
 						ValType::Num,
 						n.value_type(),
 					)),
 					#[cfg(feature = "exp-null-coaelse")]
 					(Val::Null, _) if part.null_coaelse => return Ok(Val::Null),
-					(v, _) => throw!(CantIndexInto(v.value_type())),
+					(v, _) => bail!(CantIndexInto(v.value_type())),
 				};
 			}
 			indexable
@@ -612,7 +612,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		ErrorStmt(e) => State::push(
 			CallLocation::new(loc),
 			|| "error statement".to_owned(),
-			|| throw!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
+			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
 		IfElse {
 			cond,
@@ -661,7 +661,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
 			let Expr::Str(path) = &*path.0 else {
-				throw!("computed imports are not supported")
+				bail!("computed imports are not supported")
 			};
 			let tmp = loc.clone().0;
 			let s = ctx.state();

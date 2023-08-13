@@ -1,8 +1,8 @@
 use std::borrow::Cow;
 
 use jrsonnet_evaluator::{
+	bail,
 	manifest::{escape_string_json_buf, ManifestFormat},
-	throw,
 	val::ArrValue,
 	IStr, ObjValue, Result, Val,
 };
@@ -157,10 +157,10 @@ fn manifest_value(
 			buf.push_str(" }");
 		}
 		Val::Null => {
-			throw!("tried to manifest null")
+			bail!("tried to manifest null")
 		}
 		Val::Func(_) => {
-			throw!("tried to manifest function")
+			bail!("tried to manifest function")
 		}
 	}
 	Ok(())
@@ -290,7 +290,7 @@ impl ManifestFormat for TomlFormat<'_> {
 			Val::Obj(obj) => {
 				manifest_table_internal(&obj, &mut Vec::new(), buf, &mut String::new(), self)
 			}
-			_ => throw!("toml body should be object"),
+			_ => bail!("toml body should be object"),
 		}
 	}
 }

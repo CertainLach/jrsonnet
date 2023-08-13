@@ -54,7 +54,7 @@ impl Context {
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
 		use std::cmp::Ordering;
 
-		use crate::throw;
+		use crate::bail;
 
 		if let Some(val) = self.0.bindings.get(&name).cloned() {
 			return Ok(val);
@@ -70,7 +70,7 @@ impl Context {
 		});
 		heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
-		throw!(VariableIsNotDefined(
+		bail!(VariableIsNotDefined(
 			name,
 			heap.into_iter().map(|(_, k)| k).collect()
 		))

@@ -1,14 +1,10 @@
-use jrsonnet_evaluator::{
-	error::{ErrorKind::RuntimeError, Result},
-	function::builtin,
-	IStr, Val,
-};
+use jrsonnet_evaluator::{function::builtin, runtime_error, IStr, Result, Val};
 use serde::Deserialize;
 
 #[builtin]
 pub fn builtin_parse_json(str: IStr) -> Result<Val> {
-	let value: Val = serde_json::from_str(&str)
-		.map_err(|e| RuntimeError(format!("failed to parse json: {e}").into()))?;
+	let value: Val =
+		serde_json::from_str(&str).map_err(|e| runtime_error!("failed to parse json: {e}"))?;
 	Ok(value)
 }
 
@@ -21,8 +17,8 @@ pub fn builtin_parse_yaml(str: IStr) -> Result<Val> {
 	);
 	let mut out = vec![];
 	for item in value {
-		let val = Val::deserialize(item)
-			.map_err(|e| RuntimeError(format!("failed to parse yaml: {e}").into()))?;
+		let val =
+			Val::deserialize(item).map_err(|e| runtime_error!("failed to parse yaml: {e}"))?;
 		out.push(val);
 	}
 	Ok(if out.is_empty() {

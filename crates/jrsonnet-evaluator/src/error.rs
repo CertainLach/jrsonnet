@@ -370,17 +370,21 @@ impl<T> ResultExt for Result<T, Error> {
 }
 
 #[macro_export]
-macro_rules! throw {
+macro_rules! bail {
 	($w:ident$(::$i:ident)*$(($($tt:tt)*))?) => {
 		return Err($w$(::$i)*$(($($tt)*))?.into())
 	};
 	($w:ident$(::$i:ident)*$({$($tt:tt)*})?) => {
 		return Err($w$(::$i)*$({$($tt)*})?.into())
 	};
-	($l:literal) => {
-		return Err($crate::error::ErrorKind::RuntimeError($l.into()).into())
+	($l:literal$(, $($tt:tt)*)?) => {
+		return Err($crate::error::ErrorKind::RuntimeError(format!($l$(, $($tt)*)?).into()).into())
 	};
-	($l:literal, $($tt:tt)*) => {
-		return Err($crate::error::ErrorKind::RuntimeError(format!($l, $($tt)*).into()).into())
+}
+
+#[macro_export]
+macro_rules! runtime_error {
+	($l:literal$(, $($tt:tt)*)?) => {
+		$crate::error::Error::from($crate::error::ErrorKind::RuntimeError(format!($l$(, $($tt)*)?).into()))
 	};
 }

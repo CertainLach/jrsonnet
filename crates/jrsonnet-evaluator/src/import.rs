@@ -12,8 +12,8 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::{
+	bail,
 	error::{ErrorKind::*, Result},
-	throw,
 };
 
 /// Implements file resolution logic for `import` and `importStr`
@@ -25,14 +25,14 @@ pub trait ImportResolver: Trace {
 	/// `from` should only be returned from [`ImportResolver::resolve`], or from other defined file, any other value
 	/// may result in panic
 	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		throw!(ImportNotSupported(from.clone(), path.into()))
+		bail!(ImportNotSupported(from.clone(), path.into()))
 	}
 	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
 	}
 	/// Resolves absolute path, doesn't supports jpath and other fancy things
 	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		throw!(AbsoluteImportNotSupported(path.to_owned()))
+		bail!(AbsoluteImportNotSupported(path.to_owned()))
 	}
 
 	/// Load resolved file
@@ -110,16 +110,16 @@ impl ImportResolver for FileImportResolver {
 					)));
 				}
 			}
-			throw!(ImportFileNotFound(from.clone(), path.to_owned()))
+			bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 		}
 	}
 	fn resolve(&self, path: &Path) -> Result<SourcePath> {
 		let meta = match fs::metadata(path) {
 			Ok(v) => v,
 			Err(e) if e.kind() == ErrorKind::NotFound => {
-				throw!(AbsoluteImportFileNotFound(path.to_owned()))
+				bail!(AbsoluteImportFileNotFound(path.to_owned()))
 			}
-			Err(e) => throw!(ImportIo(e.to_string())),
+			Err(e) => bail!(ImportIo(e.to_string())),
 		};
 		if meta.is_file() {
 			Ok(SourcePath::new(SourceFile::new(
@@ -138,7 +138,7 @@ impl ImportResolver for FileImportResolver {
 		let path = if let Some(f) = id.downcast_ref::<SourceFile>() {
 			f.path()
 		} else if id.downcast_ref::<SourceDirectory>().is_some() || id.is_default() {
-			throw!(ImportIsADirectory(id.clone()))
+			bail!(ImportIsADirectory(id.clone()))
 		} else {
 			unreachable!("other types are not supported in resolve");
 		};

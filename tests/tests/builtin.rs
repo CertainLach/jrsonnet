@@ -1,10 +1,9 @@
 mod common;
 
 use jrsonnet_evaluator::{
-	error::Result,
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
 	typed::Typed,
-	ContextBuilder, State, Thunk, Val,
+	ContextBuilder, Result, State, Thunk, Val,
 };
 use jrsonnet_stdlib::StateExt;
 

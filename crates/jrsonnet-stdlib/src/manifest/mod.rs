@@ -2,10 +2,9 @@ mod toml;
 mod yaml;
 
 use jrsonnet_evaluator::{
-	error::Result,
 	function::builtin,
 	manifest::{escape_string_json, JsonFormat},
-	IStr, ObjValue, Val,
+	IStr, ObjValue, Result, Val,
 };
 pub use toml::TomlFormat;
 pub use yaml::YamlFormat;

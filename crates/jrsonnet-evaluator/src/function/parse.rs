@@ -6,11 +6,11 @@ use jrsonnet_parser::{LocExpr, ParamsDesc};
 
 use super::{arglike::ArgsLike, builtin::BuiltinParam};
 use crate::{
+	bail,
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
 	evaluate_named,
 	gc::GcHashMap,
-	throw,
 	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
@@ -47,7 +47,7 @@ pub fn parse_function_call(
 	let mut passed_args =
 		GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 	if args.unnamed_len() > params.len() {
-		throw!(TooManyArgsFunctionHas(
+		bail!(TooManyArgsFunctionHas(
 			params.len(),
 			params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
 		))
@@ -71,10 +71,10 @@ pub fn parse_function_call(
 	args.named_iter(ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
 		if !params.iter().any(|p| p.0.name().as_ref() == Some(name)) {
-			throw!(UnknownFunctionParameter((name as &str).to_owned()));
+			bail!(UnknownFunctionParameter((name as &str).to_owned()));
 		}
 		if passed_args.insert(name.clone(), value).is_some() {
-			throw!(BindingParameterASecondTime(name.clone()));
+			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_named += 1;
 		Ok(())
@@ -125,7 +125,7 @@ pub fn parse_function_call(
 					}
 				});
 				if !found {
-					throw!(FunctionParameterNotBoundInCall(
+					bail!(FunctionParameterNotBoundInCall(
 						param.0.clone().name(),
 						params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
 					));
@@ -159,7 +159,7 @@ pub fn parse_builtin_call(
 ) -> Result<Vec<Option<Thunk<Val>>>> {
 	let mut passed_args: Vec<Option<Thunk<Val>>> = vec![None; params.len()];
 	if args.unnamed_len() > params.len() {
-		throw!(TooManyArgsFunctionHas(
+		bail!(TooManyArgsFunctionHas(
 			params.len(),
 			params
 				.iter()
@@ -183,7 +183,7 @@ pub fn parse_builtin_call(
 			.position(|p| p.name() == name)
 			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
 		if replace(&mut passed_args[id], Some(arg)).is_some() {
-			throw!(BindingParameterASecondTime(name.clone()));
+			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_args += 1;
 		Ok(())
@@ -207,7 +207,7 @@ pub fn parse_builtin_call(
 					}
 				});
 				if !found {
-					throw!(FunctionParameterNotBoundInCall(
+					bail!(FunctionParameterNotBoundInCall(
 						param.name().as_str().map(IStr::from),
 						params
 							.iter()

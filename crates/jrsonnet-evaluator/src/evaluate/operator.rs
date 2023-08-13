@@ -4,10 +4,10 @@ use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
 use crate::{
 	arr::ArrValue,
+	bail,
 	error::ErrorKind::*,
 	evaluate,
 	stdlib::std_format,
-	throw,
 	typed::Typed,
 	val::{equals, StrValue},
 	Context, Result, Val,
@@ -21,7 +21,7 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(Minus, Num(n)) => Num(-*n),
 		(Not, Bool(v)) => Bool(!v),
 		(BitNot, Num(n)) => Num(!(*n as i64) as f64),
-		(op, o) => throw!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
+		(op, o) => bail!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
 
@@ -49,7 +49,7 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Num(v1), Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new((&**a).clone() + (&**b).clone())),
-		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
+		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type(),
 			b.value_type(),
@@ -62,14 +62,14 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 	match (a, b) {
 		(Num(a), Num(b)) => {
 			if *b == 0.0 {
-				throw!(DivisionByZero)
+				bail!(DivisionByZero)
 			}
 			Ok(Num(a % b))
 		}
 		(Str(str), vals) => {
 			String::into_untyped(std_format(&str.clone().into_flat(), vals.clone())?)
 		}
-		(a, b) => throw!(BinaryOperatorDoesNotOperateOnValues(
+		(a, b) => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mod,
 			a.value_type(),
 			b.value_type()
@@ -124,7 +124,7 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 			}
 			a.len().cmp(&b.len())
 		}
-		(_, _) => throw!(BinaryOperatorDoesNotOperateOnValues(
+		(_, _) => bail!(BinaryOperatorDoesNotOperateOnValues(
 			op,
 			a.value_type(),
 			b.value_type()
@@ -159,7 +159,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Num(v1), Mul, Num(v2)) => Val::new_checked_num(v1 * v2)?,
 		(Num(v1), Div, Num(v2)) => {
 			if *v2 == 0.0 {
-				throw!(DivisionByZero)
+				bail!(DivisionByZero)
 			}
 			Val::new_checked_num(v1 / v2)?
 		}
@@ -171,14 +171,14 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Num(v1), BitXor, Num(v2)) => Num((*v1 as i64 ^ *v2 as i64) as f64),
 		(Num(v1), Lhs, Num(v2)) => {
 			if *v2 < 0.0 {
-				throw!("shift by negative exponent")
+				bail!("shift by negative exponent")
 			}
 			let exp = ((*v2 as i64) & 63) as u32;
 			Num((*v1 as i64).wrapping_shl(exp) as f64)
 		}
 		(Num(v1), Rhs, Num(v2)) => {
 			if *v2 < 0.0 {
-				throw!("shift by negative exponent")
+				bail!("shift by negative exponent")
 			}
 			let exp = ((*v2 as i64) & 63) as u32;
 			Num((*v1 as i64).wrapping_shr(exp) as f64)
@@ -190,7 +190,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), Sub, BigInt(b)) => BigInt(Box::new((&**a).clone() - (&**b).clone())),
 
-		_ => throw!(BinaryOperatorDoesNotOperateOnValues(
+		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			op,
 			a.value_type(),
 			b.value_type(),

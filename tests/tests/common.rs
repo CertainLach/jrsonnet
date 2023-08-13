@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
-	error::Result,
+	bail,
 	function::{builtin, FuncVal},
-	throw, ObjValueBuilder, State, Thunk, Val,
+	ObjValueBuilder, Result, State, Thunk, Val,
 };
 
 #[macro_export]
@@ -10,7 +10,7 @@ macro_rules! ensure_eq {
 		let a = &$a;
 		let b = &$b;
 		if a != b {
-			::jrsonnet_evaluator::throw!("assertion failed: a != b\na={:#?}\nb={:#?}", a, b)
+			::jrsonnet_evaluator::bail!("assertion failed: a != b\na={a:#?}\nb={b:#?}")
 		}
 	}};
 }
@@ -19,7 +19,7 @@ macro_rules! ensure_eq {
 macro_rules! ensure {
 	($v:expr $(,)?) => {
 		if !$v {
-			::jrsonnet_evaluator::throw!("assertion failed: {}", stringify!($v))
+			::jrsonnet_evaluator::bail!("assertion failed: {}", stringify!($v))
 		}
 	};
 }
@@ -29,7 +29,7 @@ macro_rules! ensure_val_eq {
 	($a:expr, $b:expr) => {{
 		if !::jrsonnet_evaluator::val::equals(&$a.clone(), &$b.clone())? {
 			use ::jrsonnet_evaluator::manifest::JsonFormat;
-			::jrsonnet_evaluator::throw!(
+			::jrsonnet_evaluator::bail!(
 				"assertion failed: a != b\na={:#?}\nb={:#?}",
 				$a.manifest(JsonFormat::default())?,
 				$b.manifest(JsonFormat::default())?,
@@ -42,7 +42,7 @@ macro_rules! ensure_val_eq {
 fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 	match lazy.evaluate() {
 		Ok(_) => {
-			throw!("expected argument to throw on evaluation, but it returned instead")
+			bail!("expected argument to throw on evaluation, but it returned instead")
 		}
 		Err(e) => {
 			let error = format!("{}", e.error());

@@ -1,9 +1,6 @@
 use std::{borrow::Cow, fmt::Write};
 
-use crate::{
-	error::{ErrorKind::*, Result},
-	throw, State, Val,
-};
+use crate::{bail, Result, State, Val};
 
 pub trait ManifestFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
@@ -268,7 +265,7 @@ fn manifest_json_ex_buf(
 			}
 			buf.push('}');
 		}
-		Val::Func(_) => throw!(RuntimeError("tried to manifest function".into())),
+		Val::Func(_) => bail!("tried to manifest function"),
 	};
 	Ok(())
 }
@@ -292,7 +289,7 @@ pub struct StringFormat;
 impl ManifestFormat for StringFormat {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
 		let Val::Str(s) = val else {
-			throw!(
+			bail!(
 				"output should be string for string manifest format, got {}",
 				val.value_type()
 			)
@@ -309,7 +306,7 @@ pub struct YamlStreamFormat<I>(pub I);
 impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
 		let Val::Arr(arr) = val else {
-			throw!(
+			bail!(
 				"output should be array for yaml stream format, got {}",
 				val.value_type()
 			)

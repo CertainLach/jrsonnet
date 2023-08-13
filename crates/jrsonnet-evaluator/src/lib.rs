@@ -354,7 +354,7 @@ impl State {
 		}
 		let parsed = file.parsed.as_ref().expect("just set").clone();
 		if file.evaluating {
-			throw!(InfiniteRecursionDetected)
+			bail!(InfiniteRecursionDetected)
 		}
 		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too

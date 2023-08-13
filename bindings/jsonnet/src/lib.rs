@@ -19,12 +19,12 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	apply_tla,
+	apply_tla, bail,
 	function::TlaArg,
 	gc::GcHashMap,
 	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
 	stack::set_stack_depth_limit,
-	tb, throw,
+	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, IStr, Result, State, Val,
 };
@@ -249,7 +249,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 
 fn val_to_multi(val: Val, format: &dyn ManifestFormat) -> Result<Vec<(IStr, IStr)>> {
 	let Val::Obj(val) = val else {
-		throw!("expected object as multi output")
+		bail!("expected object as multi output")
 	};
 	let mut out = Vec::new();
 	for (k, v) in val.iter(
@@ -336,7 +336,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 
 fn val_to_stream(val: Val, format: &dyn ManifestFormat) -> Result<Vec<IStr>> {
 	let Val::Arr(val) = val else {
-		throw!("expected array as stream output")
+		bail!("expected array as stream output")
 	};
 	let mut out = Vec::new();
 	for item in val.iter() {

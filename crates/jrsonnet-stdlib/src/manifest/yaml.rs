@@ -1,8 +1,9 @@
 use std::{borrow::Cow, fmt::Write};
 
 use jrsonnet_evaluator::{
+	bail,
 	manifest::{escape_string_json_buf, ManifestFormat},
-	throw, Result, Val,
+	Result, Val,
 };
 
 pub struct YamlFormat<'s> {
@@ -219,7 +220,7 @@ fn manifest_yaml_ex_buf(
 				}
 			}
 		}
-		Val::Func(_) => throw!("tried to manifest function"),
+		Val::Func(_) => bail!("tried to manifest function"),
 	}
 	Ok(())
 }

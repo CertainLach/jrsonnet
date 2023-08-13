@@ -1,8 +1,7 @@
 use jrsonnet_evaluator::{
-	error::Result,
-	throw,
+	bail,
 	trace::{CompactFormat, TraceFormat},
-	State, Val,
+	Result, State, Val,
 };
 use jrsonnet_stdlib::StateExt;
 
@@ -29,14 +28,14 @@ fn assert_negative() -> Result<()> {
 
 	{
 		let Err(e) = s.evaluate_snippet("snip".to_owned(), "assert 1 == 2: 'fail'; null") else {
-			throw!("assertion should fail");
+			bail!("assertion should fail");
 		};
 		let e = trace_format.format(&e).unwrap();
 		ensure!(e.starts_with("assert failed: fail\n"));
 	}
 	{
 		let Err(e) = s.evaluate_snippet("snip".to_owned(), "std.assertEqual(1, 2)") else {
-			throw!("assertion should fail")
+			bail!("assertion should fail")
 		};
 		let e = trace_format.format(&e).unwrap();
 		ensure!(e.starts_with("runtime error: Assertion failed. 1 != 2"))

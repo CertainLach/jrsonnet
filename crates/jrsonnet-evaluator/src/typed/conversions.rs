@@ -7,12 +7,11 @@ use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
 	arr::{ArrValue, BytesArray},
-	error::Result,
+	bail,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
-	throw,
 	typed::CheckType,
-	val::{IndexableVal, StrValue, ThunkMapper},
-	ObjValue, ObjValueBuilder, Thunk, Val,
+	val::{IndexableVal, ThunkMapper},
+	ObjValue, ObjValueBuilder, Result, Thunk, Val,
 };
 
 #[derive(Trace)]
@@ -134,7 +133,7 @@ macro_rules! impl_int {
 					Val::Num(n) => {
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
-							throw!(
+							bail!(
 								"cannot convert number with fractional part to {}",
 								stringify!($ty)
 							)
@@ -189,7 +188,7 @@ macro_rules! impl_bounded_int {
 					Val::Num(n) => {
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
-							throw!(
+							bail!(
 								"cannot convert number with fractional part to {}",
 								stringify!($ty)
 							)
@@ -253,7 +252,7 @@ impl Typed for usize {
 
 	fn into_untyped(value: Self) -> Result<Val> {
 		if value > MAX_SAFE_INTEGER as Self {
-			throw!("number is too large")
+			bail!("number is too large")
 		}
 		Ok(Val::Num(value as f64))
 	}
@@ -264,7 +263,7 @@ impl Typed for usize {
 			Val::Num(n) => {
 				#[allow(clippy::float_cmp)]
 				if n.trunc() != n {
-					throw!("cannot convert number with fractional part to usize")
+					bail!("cannot convert number with fractional part to usize")
 				}
 				Ok(n as Self)
 			}
@@ -354,7 +353,7 @@ impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
 		let mut out = ObjValueBuilder::with_capacity(typed.len());
 		for (k, v) in typed {
 			let Some(key) = K::into_untyped(k)?.as_str() else {
-				throw!("map key should serialize to string");
+				bail!("map key should serialize to string");
 			};
 			let value = V::into_untyped(v)?;
 			out.member(key).value_unchecked(value);
@@ -567,7 +566,7 @@ impl Typed for Cc<FuncDesc> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
 			Val::Func(FuncVal::Normal(desc)) => Ok(desc),
-			Val::Func(_) => throw!("expected normal function, not builtin"),
+			Val::Func(_) => bail!("expected normal function, not builtin"),
 			_ => unreachable!(),
 		}
 	}
@@ -649,7 +648,7 @@ impl<D: NativeDesc> Typed for NativeFn<D> {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
 
 	fn into_untyped(_typed: Self) -> Result<Val> {
-		throw!("can only convert functions from jsonnet to native")
+		bail!("can only convert functions from jsonnet to native")
 	}
 
 	fn from_untyped(untyped: Val) -> Result<Self> {

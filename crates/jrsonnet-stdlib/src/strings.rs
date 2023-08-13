@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
+	bail,
 	error::{ErrorKind::*, Result},
 	function::builtin,
-	throw,
 	typed::{Either2, M1},
 	val::{ArrValue, StrValue},
 	Either, IStr, Val,
@@ -91,13 +91,13 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> ArrValue {
 pub fn builtin_parse_int(str: IStr) -> Result<f64> {
 	if let Some(raw) = str.strip_prefix('-') {
 		if raw.is_empty() {
-			throw!("integer only consists of a minus")
+			bail!("integer only consists of a minus")
 		}
 
 		parse_nat::<10>(raw).map(|value| -value)
 	} else {
 		if str.is_empty() {
-			throw!("empty integer")
+			bail!("empty integer")
 		}
 
 		parse_nat::<10>(str.as_str())
@@ -107,7 +107,7 @@ pub fn builtin_parse_int(str: IStr) -> Result<f64> {
 #[builtin]
 pub fn builtin_parse_octal(str: IStr) -> Result<f64> {
 	if str.is_empty() {
-		throw!("empty octal integer");
+		bail!("empty octal integer");
 	}
 
 	parse_nat::<8>(str.as_str())
@@ -116,7 +116,7 @@ pub fn builtin_parse_octal(str: IStr) -> Result<f64> {
 #[builtin]
 pub fn builtin_parse_hex(str: IStr) -> Result<f64> {
 	if str.is_empty() {
-		throw!("empty hexadecimal integer");
+		bail!("empty hexadecimal integer");
 	}
 
 	parse_nat::<16>(str.as_str())
@@ -156,7 +156,7 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 		if digit < BASE {
 			Ok(base * aggregate + digit as f64)
 		} else {
-			throw!("{raw:?} is not a base {BASE} integer",);
+			bail!("{raw:?} is not a base {BASE} integer");
 		}
 	})
 }
@@ -164,13 +164,14 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 #[cfg(feature = "exp-bigint")]
 #[builtin]
 pub fn builtin_bigint(v: Either![f64, IStr]) -> Result<Val> {
+	use jrsonnet_evaluator::runtime_error;
 	use Either2::*;
 	Ok(match v {
 		A(a) => Val::BigInt(Box::new((a as i64).into())),
 		B(b) => Val::BigInt(Box::new(
 			b.as_str()
 				.parse()
-				.map_err(|e| RuntimeError(format!("bad bigint: {e}").into()))?,
+				.map_err(|e| runtime_error!("bad bigint: {e}"))?,
 		)),
 	})
 }

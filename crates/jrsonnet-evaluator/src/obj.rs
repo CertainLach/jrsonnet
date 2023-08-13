@@ -13,11 +13,12 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
+	bail,
 	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::CallLocation,
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	operator::evaluate_add_op,
-	tb, throw,
+	tb,
 	val::{ArrValue, ThunkValue},
 	MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
@@ -404,7 +405,7 @@ impl ObjValue {
 	pub fn get_or_bail(&self, key: IStr) -> Result<Val> {
 		let Some(value) = self.get(key.clone())? else {
 			let suggestions = suggest_object_fields(self, key.clone());
-			throw!(NoSuchField(key, suggestions))
+			bail!(NoSuchField(key, suggestions))
 		};
 		Ok(value)
 	}
@@ -723,7 +724,7 @@ impl ObjectLike for OopObject {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
 				CacheValue::NotFound => None,
-				CacheValue::Pending => throw!(InfiniteRecursionDetected),
+				CacheValue::Pending => bail!(InfiniteRecursionDetected),
 				CacheValue::Errored(e) => return Err(e.clone()),
 			});
 		}
@@ -953,7 +954,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 			State::push(
 				CallLocation(location.as_ref()),
 				|| format!("field <{}> initializtion", name.clone()),
-				|| throw!(DuplicateFieldName(name.clone())),
+				|| bail!(DuplicateFieldName(name.clone())),
 			)?;
 		}
 		Ok(())

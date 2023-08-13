@@ -1,19 +1,19 @@
 #![allow(non_snake_case)]
 
 use jrsonnet_evaluator::{
-	error::{ErrorKind::RuntimeError, Result},
+	bail,
 	function::{builtin, FuncVal},
-	throw,
+	runtime_error,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
-	val::{equals, ArrValue, IndexableVal, StrValue},
-	Either, IStr, Thunk, Val,
+	val::{equals, ArrValue, IndexableVal},
+	Either, IStr, Result, Thunk, Val,
 };
 
 pub(crate) fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
 	if let Some(on_empty) = on_empty {
 		on_empty.evaluate()
 	} else {
-		throw!("expected non-empty array")
+		bail!("expected non-empty array")
 	}
 }
 
@@ -39,7 +39,7 @@ pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Val
 		Either2::A(s) => Val::Str(StrValue::Flat(s.repeat(count).into())),
 		Either2::B(arr) => Val::Arr(
 			ArrValue::repeated(arr, count)
-				.ok_or_else(|| RuntimeError("repeated length overflow".into()))?,
+				.ok_or_else(|| runtime_error!("repeated length overflow"))?,
 		),
 	})
 }
@@ -73,7 +73,7 @@ pub fn builtin_flatmap(
 				match func(Either2::A(c.to_string()))? {
 					Val::Str(o) => write!(out, "{o}").unwrap(),
 					Val::Null => continue,
-					_ => throw!("in std.join all items should be strings"),
+					_ => bail!("in std.join all items should be strings"),
 				};
 			}
 			Ok(IndexableVal::Str(out.into()))
@@ -89,7 +89,7 @@ pub fn builtin_flatmap(
 						}
 					}
 					Val::Null => continue,
-					_ => throw!("in std.join all items should be arrays"),
+					_ => bail!("in std.join all items should be arrays"),
 				};
 			}
 			Ok(IndexableVal::Arr(out.into()))
@@ -154,7 +154,7 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {
-					throw!("in std.join all items should be arrays");
+					bail!("in std.join all items should be arrays");
 				}
 			}
 
@@ -175,7 +175,7 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {
-					throw!("in std.join all items should be strings");
+					bail!("in std.join all items should be strings");
 				}
 			}
 

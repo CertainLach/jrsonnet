@@ -2,7 +2,7 @@ mod common;
 
 use std::fmt::Debug;
 
-use jrsonnet_evaluator::{error::Result, typed::Typed, State};
+use jrsonnet_evaluator::{typed::Typed, Result, State};
 use jrsonnet_stdlib::StateExt;
 
 #[derive(Clone, Typed, PartialEq, Debug)]

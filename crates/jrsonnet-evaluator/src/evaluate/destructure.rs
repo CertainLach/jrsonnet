@@ -3,10 +3,10 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct, LocExpr, ParamsDesc};
 
 use crate::{
+	bail,
 	error::{ErrorKind::*, Result},
 	evaluate, evaluate_method, evaluate_named,
 	gc::GcHashMap,
-	throw,
 	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
@@ -23,7 +23,7 @@ pub fn destruct(
 		Destruct::Full(v) => {
 			let old = new_bindings.insert(v.clone(), parent);
 			if old.is_some() {
-				throw!(DuplicateLocalVar(v.clone()))
+				bail!(DuplicateLocalVar(v.clone()))
 			}
 		}
 		#[cfg(feature = "exp-destruct")]
@@ -46,14 +46,14 @@ pub fn destruct(
 				fn get(self: Box<Self>) -> Result<Self::Output> {
 					let v = self.parent.evaluate()?;
 					let Val::Arr(arr) = v else {
-						throw!("expected array");
+						bail!("expected array");
 					};
 					if !self.has_rest {
 						if arr.len() != self.min_len {
-							throw!("expected {} elements, got {}", self.min_len, arr.len())
+							bail!("expected {} elements, got {}", self.min_len, arr.len())
 						}
 					} else if arr.len() < self.min_len {
-						throw!(
+						bail!(
 							"expected at least {} elements, but array was only {}",
 							self.min_len,
 							arr.len()
@@ -178,17 +178,17 @@ pub fn destruct(
 				fn get(self: Box<Self>) -> Result<Self::Output> {
 					let v = self.parent.evaluate()?;
 					let Val::Obj(obj) = v else {
-						throw!("expected object");
+						bail!("expected object");
 					};
 					for field in &self.field_names {
 						if !obj.has_field_ex(field.clone(), true) {
-							throw!("missing field: {}", field);
+							bail!("missing field: {field}");
 						}
 					}
 					if !self.has_rest {
 						let len = obj.len();
 						if len != self.field_names.len() {
-							throw!("too many fields, and rest not found");
+							bail!("too many fields, and rest not found");
 						}
 					}
 					Ok(obj)
@@ -310,7 +310,7 @@ pub fn evaluate_dest(
 				}),
 			);
 			if old.is_some() {
-				throw!(DuplicateLocalVar(name.clone()))
+				bail!(DuplicateLocalVar(name.clone()))
 			}
 		}
 	}

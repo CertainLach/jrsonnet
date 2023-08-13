@@ -7,9 +7,9 @@ use clap::{CommandFactory, Parser};
 use clap_complete::Shell;
 use jrsonnet_cli::{GcOpts, ManifestOpts, MiscOpts, OutputOpts, StdOpts, TlaOpts, TraceOpts};
 use jrsonnet_evaluator::{
-	apply_tla,
+	apply_tla, bail,
 	error::{Error as JrError, ErrorKind},
-	throw, ResultExt, State, Val,
+	ResultExt, State, Val,
 };
 
 #[cfg(feature = "mimalloc")]
@@ -208,7 +208,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 			create_dir_all(dir)?;
 		}
 		let Val::Obj(obj) = val else {
-			throw!(
+			bail!(
 				"value should be object for --multi manifest, got {}",
 				val.value_type()
 			)

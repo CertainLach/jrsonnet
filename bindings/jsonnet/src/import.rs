@@ -13,8 +13,9 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
+	bail,
 	error::{ErrorKind::*, Result},
-	throw, FileImportResolver, ImportResolver,
+	FileImportResolver, ImportResolver,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
@@ -80,7 +81,7 @@ impl ImportResolver for CallbackImportResolver {
 		assert!(success == 0 || success == 1);
 		if success == 0 {
 			let result = String::from_utf8(buf_intern).expect("error should be valid string");
-			throw!(ImportCallbackError(result));
+			bail!(ImportCallbackError(result));
 		}
 
 		let found_here_raw = unsafe { CStr::from_ptr(found_here) };

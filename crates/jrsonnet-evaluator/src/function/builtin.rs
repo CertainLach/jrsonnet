@@ -4,7 +4,7 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{error::Result, gc::TraceBox, tb, Context, Val};
+use crate::{gc::TraceBox, tb, Context, Result, Val};
 
 /// Can't have str | IStr, because constant BuiltinParam causes
 /// E0492: constant functions cannot refer to interior mutable data
