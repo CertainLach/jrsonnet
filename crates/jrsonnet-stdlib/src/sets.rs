@@ -70,6 +70,7 @@ pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 	}
 	Ok(ArrValue::lazy(out))
 }
+
 #[builtin]
 #[allow(non_snake_case, clippy::redundant_closure)]
 pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
@@ -112,6 +113,60 @@ pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Resu
 		out.push(av.clone().expect("ak != None"));
 		av = a.next();
 		ak = av.clone().map(keyF).transpose()?;
+	}
+	Ok(ArrValue::lazy(out))
+}
+
+#[builtin]
+#[allow(non_snake_case, clippy::redundant_closure)]
+pub fn builtin_set_union(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+	let mut a = a.iter_lazy();
+	let mut b = b.iter_lazy();
+
+	let keyF = keyF
+		.unwrap_or(FuncVal::identity())
+		.into_native::<((Thunk<Val>,), Val)>();
+	let keyF = |v| keyF(v);
+
+	let mut av = a.next();
+	let mut bv = b.next();
+	let mut ak = av.clone().map(keyF).transpose()?;
+	let mut bk = bv.clone().map(keyF).transpose()?;
+
+	let mut out = Vec::new();
+	while let (Some(ac), Some(bc)) = (&ak, &bk) {
+		match evaluate_compare_op(ac, bc, BinaryOpType::Lt)? {
+			Ordering::Less => {
+				out.push(av.clone().expect("ak != None"));
+				av = a.next();
+				ak = av.clone().map(keyF).transpose()?;
+			}
+			Ordering::Greater => {
+				out.push(bv.clone().expect("bk != None"));
+				bv = b.next();
+				bk = bv.clone().map(keyF).transpose()?;
+			}
+			Ordering::Equal => {
+				// NOTE: order matters, values in `a` win
+				out.push(av.clone().expect("ak != None"));
+				av = a.next();
+				ak = av.clone().map(keyF).transpose()?;
+				bv = b.next();
+				bk = bv.clone().map(keyF).transpose()?;
+			}
+		};
+	}
+	// a.len() > b.len()
+	while let Some(_ac) = &ak {
+		out.push(av.clone().expect("ak != None"));
+		av = a.next();
+		ak = av.clone().map(keyF).transpose()?;
+	}
+	// b.len() > a.len()
+	while let Some(_bc) = &bk {
+		out.push(bv.clone().expect("ak != None"));
+		bv = b.next();
+		bk = bv.clone().map(keyF).transpose()?;
 	}
 	Ok(ArrValue::lazy(out))
 }

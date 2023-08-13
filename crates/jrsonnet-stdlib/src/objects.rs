@@ -1,6 +1,6 @@
 use jrsonnet_evaluator::{
 	function::builtin,
-	val::{ArrValue, StrValue, Val},
+	val::{ArrValue, Val},
 	IStr, ObjValue, ObjValueBuilder,
 };
 
@@ -17,10 +17,33 @@ pub fn builtin_object_fields_ex(
 		#[cfg(feature = "exp-preserve-order")]
 		preserve_order,
 	);
-	out.into_iter()
-		.map(StrValue::Flat)
-		.map(Val::Str)
-		.collect::<Vec<_>>()
+	out.into_iter().map(Val::string).collect::<Vec<_>>()
+}
+
+#[builtin]
+pub fn builtin_object_fields(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> Vec<Val> {
+	builtin_object_fields_ex(
+		o,
+		false,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
+}
+
+#[builtin]
+pub fn builtin_object_fields_all(
+	o: ObjValue,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+) -> Vec<Val> {
+	builtin_object_fields_ex(
+		o,
+		true,
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	)
 }
 
 pub fn builtin_object_values_ex(
@@ -102,6 +125,16 @@ pub fn builtin_object_keys_values_all(
 #[builtin]
 pub fn builtin_object_has_ex(obj: ObjValue, fname: IStr, hidden: bool) -> bool {
 	obj.has_field_ex(fname, hidden)
+}
+
+#[builtin]
+pub fn builtin_object_has(o: ObjValue, f: IStr) -> bool {
+	o.has_field(f)
+}
+
+#[builtin]
+pub fn builtin_object_has_all(o: ObjValue, f: IStr) -> bool {
+	o.has_field_include_hidden(f)
 }
 
 #[builtin]

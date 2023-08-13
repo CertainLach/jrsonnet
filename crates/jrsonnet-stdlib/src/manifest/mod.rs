@@ -60,3 +60,8 @@ pub fn builtin_manifest_toml_ex(
 		preserve_order.unwrap_or(false),
 	))
 }
+
+#[builtin]
+pub fn builtin_to_string(a: Val) -> Result<IStr> {
+	a.to_string()
+}

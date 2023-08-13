@@ -198,3 +198,8 @@ mod tests {
 		assert_eq!(parse_nat::<16>("BbC").unwrap(), 0xBBC as f64);
 	}
 }
+
+#[builtin]
+pub fn builtin_string_chars(str: IStr) -> ArrValue {
+	ArrValue::chars(str.chars())
+}

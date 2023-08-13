@@ -103,6 +103,15 @@ pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
 }
 
 #[builtin]
+pub fn builtin_filter_map(
+	filter_func: FuncVal,
+	map_func: FuncVal,
+	arr: ArrValue,
+) -> Result<ArrValue> {
+	Ok(builtin_filter(filter_func, arr)?.map(map_func))
+}
+
+#[builtin]
 pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
 	let mut acc = init;
 	for i in arr.iter() {
@@ -273,4 +282,23 @@ pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
 		}
 	}
 	Ok(arr)
+}
+
+#[builtin]
+pub fn builtin_flatten_arrays(arrs: Vec<ArrValue>) -> ArrValue {
+	pub fn flatten_inner(values: &[ArrValue]) -> ArrValue {
+		if values.len() == 1 {
+			return values[0].clone();
+		} else if values.len() == 2 {
+			return ArrValue::extended(values[0].clone(), values[1].clone());
+		}
+		let (a, b) = values.split_at(values.len() / 2);
+		ArrValue::extended(flatten_inner(a), flatten_inner(b))
+	}
+	if arrs.is_empty() {
+		return ArrValue::empty();
+	} else if arrs.len() == 1 {
+		return arrs.into_iter().next().expect("single");
+	}
+	flatten_inner(&arrs)
 }

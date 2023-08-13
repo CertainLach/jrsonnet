@@ -84,6 +84,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("avg", builtin_avg::INST),
 		("removeAt", builtin_remove_at::INST),
 		("remove", builtin_remove::INST),
+		("flattenArrays", builtin_flatten_arrays::INST),
+		("filterMap", builtin_filter_map::INST),
 		// Math
 		("abs", builtin_abs::INST),
 		("sign", builtin_sign::INST),
@@ -137,17 +139,22 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("base64DecodeBytes", builtin_base64_decode_bytes::INST),
 		// Objects
 		("objectFieldsEx", builtin_object_fields_ex::INST),
+		("objectFields", builtin_object_fields::INST),
+		("objectFieldsAll", builtin_object_fields_all::INST),
 		("objectValues", builtin_object_values::INST),
 		("objectValuesAll", builtin_object_values_all::INST),
 		("objectKeysValues", builtin_object_keys_values::INST),
 		("objectKeysValuesAll", builtin_object_keys_values_all::INST),
 		("objectHasEx", builtin_object_has_ex::INST),
+		("objectHas", builtin_object_has::INST),
+		("objectHasAll", builtin_object_has_all::INST),
 		("objectRemoveKey", builtin_object_remove_key::INST),
 		// Manifest
 		("escapeStringJson", builtin_escape_string_json::INST),
 		("manifestJsonEx", builtin_manifest_json_ex::INST),
 		("manifestYamlDoc", builtin_manifest_yaml_doc::INST),
 		("manifestTomlEx", builtin_manifest_toml_ex::INST),
+		("toString", builtin_to_string::INST),
 		// Parsing
 		("parseJson", builtin_parse_json::INST),
 		("parseYaml", builtin_parse_yaml::INST),
@@ -167,6 +174,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("bigint", builtin_bigint::INST),
 		("parseOctal", builtin_parse_octal::INST),
 		("parseHex", builtin_parse_hex::INST),
+		("stringChars", builtin_string_chars::INST),
 		// Misc
 		("length", builtin_length::INST),
 		("startsWith", builtin_starts_with::INST),
@@ -175,6 +183,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("setMember", builtin_set_member::INST),
 		("setInter", builtin_set_inter::INST),
 		("setDiff", builtin_set_diff::INST),
+		("setUnion", builtin_set_union::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
 	]
@@ -347,19 +356,15 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
-		std.field("thisFile".into())
+		std.field("thisFile")
 			.hide()
-			.value(Val::string(match source.source_path().path() {
-				Some(p) => self.settings().path_resolver.resolve(p).into(),
-				None => source.source_path().to_string().into(),
-			}))
-			.expect("this object builder is empty");
+			.value(match source.source_path().path() {
+				Some(p) => self.settings().path_resolver.resolve(p),
+				None => source.source_path().to_string(),
+			});
 		let stdlib_with_this_file = std.build();
 
-		builder.bind(
-			"std".into(),
-			Thunk::evaluated(Val::Obj(stdlib_with_this_file)),
-		);
+		builder.bind("std", Thunk::evaluated(Val::Obj(stdlib_with_this_file)));
 	}
 	fn as_any(&self) -> &dyn std::any::Any {
 		self
