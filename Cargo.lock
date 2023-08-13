@@ -326,7 +326,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 
 [[package]]
 name = "jrsonnet"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "clap",
  "clap_complete",
@@ -340,7 +340,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-cli"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
@@ -351,7 +351,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "annotate-snippets",
  "anyhow",
@@ -396,7 +396,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-interner"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "hashbrown 0.13.2",
  "jrsonnet-gcmodule",
@@ -407,7 +407,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-macros"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -416,7 +416,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
@@ -428,7 +428,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "base64",
  "bincode",
@@ -449,7 +449,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-types"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "jrsonnet-gcmodule",
  "peg",
@@ -472,7 +472,7 @@ checksum = "b4668fb0ea861c1df094127ac5f1da3409a82116a4ba74fca2e58ef927159bb3"
 
 [[package]]
 name = "libjsonnet"
-version = "0.5.0-pre94"
+version = "0.5.0-pre95"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
