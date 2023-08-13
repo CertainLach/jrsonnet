@@ -635,13 +635,11 @@ pub mod tests {
 							el!(
 								Index {
 									indexable: el!(Var("std".into()), 1, 4),
-									parts: vec![
-										IndexPart {
-											value: el!(Str("deepJoin".into()), 5, 13),
-											#[cfg(feature = "exp-null-coaelse")]
-											null_coaelse: false,
-										},
-									],
+									parts: vec![IndexPart {
+										value: el!(Str("deepJoin".into()), 5, 13),
+										#[cfg(feature = "exp-null-coaelse")]
+										null_coaelse: false,
+									}],
 								},
 								1,
 								13

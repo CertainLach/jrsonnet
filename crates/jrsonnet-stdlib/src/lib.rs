@@ -349,12 +349,10 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 		std.with_super(self.stdlib_obj.clone());
 		std.field("thisFile".into())
 			.hide()
-			.value(Val::string(
-				match source.source_path().path() {
-					Some(p) => self.settings().path_resolver.resolve(p).into(),
-					None => source.source_path().to_string().into(),
-				},
-			))
+			.value(Val::string(match source.source_path().path() {
+				Some(p) => self.settings().path_resolver.resolve(p).into(),
+				None => source.source_path().to_string().into(),
+			}))
 			.expect("this object builder is empty");
 		let stdlib_with_this_file = std.build();
 

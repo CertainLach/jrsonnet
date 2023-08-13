@@ -11,8 +11,7 @@ use serde::{
 };
 
 use crate::{
-	arr::ArrValue, runtime_error, Error as JrError, ObjValue, ObjValueBuilder,
-	Result, State, Val,
+	arr::ArrValue, runtime_error, Error as JrError, ObjValue, ObjValueBuilder, Result, State, Val,
 };
 
 impl<'de> Deserialize<'de> for Val {

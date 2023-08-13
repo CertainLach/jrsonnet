@@ -12,10 +12,7 @@ use self::{
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{
-	evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result,
-	Val,
-};
+use crate::{evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result, Val};
 
 pub mod arglike;
 pub mod builtin;
