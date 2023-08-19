@@ -30,7 +30,7 @@ jrsonnet-gcmodule.workspace = true
 # Used for stdlib AST serialization
 bincode = { version = "1.3", optional = true }
 # Used both for stdlib AST serialization and std.parseJson/std.parseYaml
-serde = "1.0"
+serde.workspace = true
 
 # std.md5
 md5 = "0.7.0"

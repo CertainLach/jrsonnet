@@ -19,7 +19,7 @@ serde = ["dep:serde"]
 [dependencies]
 jrsonnet-gcmodule.workspace = true
 
-serde = { version = "1.0", optional = true }
+serde = { workspace = true, optional = true }
 structdump = { version = "0.2.0", optional = true }
 
 rustc-hash = "1.1"

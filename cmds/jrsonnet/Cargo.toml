@@ -42,3 +42,5 @@ mimallocator = { version = "0.1.3", optional = true }
 thiserror = "1.0"
 clap = { version = "4.1", features = ["derive"] }
 clap_complete = { version = "4.1" }
+serde_json = "1.0.104"
+serde = { workspace = true, features = ["derive"] }

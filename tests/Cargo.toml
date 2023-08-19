@@ -8,4 +8,4 @@ publish = false
 jrsonnet-evaluator.workspace = true
 jrsonnet-gcmodule.workspace = true
 jrsonnet-stdlib.workspace = true
-serde = "1.0.142"
+serde.workspace = true

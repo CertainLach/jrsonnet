@@ -16,6 +16,9 @@ jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre95" }
 
 jrsonnet-gcmodule = "0.3.6"
 
+# <= 1.0.171 due to serde-rs/serde#2538
+serde = { version = ">= 1.0.126, <= 1.0.171" }
+
 #[profile.test]
 #opt-level = 1
 
