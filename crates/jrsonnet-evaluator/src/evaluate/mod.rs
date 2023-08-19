@@ -19,7 +19,7 @@ use crate::{
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
 	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt,
-	State, Unbound, Val,
+	State, Unbound, Val, Error,
 };
 pub mod destructure;
 pub mod operator;
@@ -502,7 +502,11 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						None => {
 							let suggestions = suggest_object_fields(&v, key.clone().into_flat());
 
-							bail!(NoSuchField(key.clone().into_flat(), suggestions))
+							return Err(Error::from(NoSuchField(
+								key.clone().into_flat(),
+								suggestions,
+							)))
+							.with_description_src(&part.value, || format!("field <{key}> access"));
 						}
 					},
 					(Val::Obj(_), n) => bail!(ValueIndexMustBeTypeGot(
