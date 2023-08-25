@@ -511,13 +511,13 @@ decl_either!(
 );
 #[macro_export]
 macro_rules! Either {
-	($a:ty) => {Either1<$a>};
-	($a:ty, $b:ty) => {Either2<$a, $b>};
-	($a:ty, $b:ty, $c:ty) => {Either3<$a, $b, $c>};
-	($a:ty, $b:ty, $c:ty, $d:ty) => {Either4<$a, $b, $c, $d>};
-	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty) => {Either5<$a, $b, $c, $d, $e>};
-	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty) => {Either6<$a, $b, $c, $d, $e, $f>};
-	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty, $g:ty) => {Either7<$a, $b, $c, $d, $e, $f, $g>};
+	($a:ty) => {$crate::typed::Either1<$a>};
+	($a:ty, $b:ty) => {$crate::typed::Either2<$a, $b>};
+	($a:ty, $b:ty, $c:ty) => {$crate::typed::Either3<$a, $b, $c>};
+	($a:ty, $b:ty, $c:ty, $d:ty) => {$crate::typed::Either4<$a, $b, $c, $d>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty) => {$crate::typed::Either5<$a, $b, $c, $d, $e>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty) => {$crate::typed::Either6<$a, $b, $c, $d, $e, $f>};
+	($a:ty, $b:ty, $c:ty, $d:ty, $e:ty, $f:ty, $g:ty) => {$crate::typed::Either7<$a, $b, $c, $d, $e, $f, $g>};
 }
 pub use Either;
 

@@ -64,15 +64,7 @@ pub fn builtin_trace(
 		match &str {
 			Val::Str(s) => s.clone().into_flat(),
 			Val::Func(f) => format!("{f:?}").into(),
-			v => v
-				.manifest(JsonFormat::std_to_json(
-					String::from("  "),
-					"\n",
-					": ",
-					#[cfg(feature = "exp-preserve-order")]
-					true,
-				))?
-				.into(),
+			v => v.manifest(JsonFormat::debug())?.into(),
 		},
 	);
 	if let Some(rest) = rest {
