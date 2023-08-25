@@ -66,6 +66,7 @@ pub struct JsonFormat<'s> {
 	preserve_order: bool,
 	#[cfg(feature = "exp-bigint")]
 	preserve_bigints: bool,
+	debug_truncate_strings: Option<usize>,
 }
 
 impl<'s> JsonFormat<'s> {
@@ -80,6 +81,7 @@ impl<'s> JsonFormat<'s> {
 			preserve_order,
 			#[cfg(feature = "exp-bigint")]
 			preserve_bigints: false,
+			debug_truncate_strings: None,
 		}
 	}
 	// Same format as std.toString
@@ -93,6 +95,7 @@ impl<'s> JsonFormat<'s> {
 			preserve_order: false,
 			#[cfg(feature = "exp-bigint")]
 			preserve_bigints: false,
+			debug_truncate_strings: None,
 		}
 	}
 	pub fn std_to_json(
@@ -110,6 +113,7 @@ impl<'s> JsonFormat<'s> {
 			preserve_order,
 			#[cfg(feature = "exp-bigint")]
 			preserve_bigints: false,
+			debug_truncate_strings: None,
 		}
 	}
 	// Same format as CLI manifestification
@@ -132,6 +136,21 @@ impl<'s> JsonFormat<'s> {
 			preserve_order,
 			#[cfg(feature = "exp-bigint")]
 			preserve_bigints: false,
+			debug_truncate_strings: None,
+		}
+	}
+	// Same format as CLI manifestification
+	pub fn debug() -> Self {
+		Self {
+			padding: Cow::Borrowed("   "),
+			mtype: JsonFormatting::Manifest,
+			newline: "\n",
+			key_val_sep: ": ",
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order: true,
+			#[cfg(feature = "exp-bigint")]
+			preserve_bigints: true,
+			debug_truncate_strings: Some(256),
 		}
 	}
 }
@@ -146,6 +165,7 @@ impl Default for JsonFormat<'static> {
 			preserve_order: false,
 			#[cfg(feature = "exp-bigint")]
 			preserve_bigints: false,
+			debug_truncate_strings: None,
 		}
 	}
 }
@@ -171,7 +191,20 @@ fn manifest_json_ex_buf(
 			}
 		}
 		Val::Null => buf.push_str("null"),
-		Val::Str(s) => escape_string_json_buf(&s.clone().into_flat(), buf),
+		Val::Str(s) => {
+			let flat = s.clone().into_flat();
+			if let Some(truncate) = options.debug_truncate_strings {
+				if flat.len() > truncate {
+					let (start, end) = flat.split_at(truncate / 2);
+					let (_, end) = end.split_at(end.len() - truncate / 2);
+					escape_string_json_buf(&format!("{start}..{end}"), buf);
+				} else {
+					escape_string_json_buf(&flat, buf);
+				}
+			} else {
+				escape_string_json_buf(&flat, buf);
+			}
+		}
 		Val::Num(n) => write!(buf, "{n}").unwrap(),
 		#[cfg(feature = "exp-bigint")]
 		Val::BigInt(n) => {
