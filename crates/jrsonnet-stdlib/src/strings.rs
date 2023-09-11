@@ -161,7 +161,11 @@ pub fn builtin_bigint(v: Either![f64, IStr]) -> Result<Val> {
 	use jrsonnet_evaluator::runtime_error;
 	use Either2::*;
 	Ok(match v {
-		A(a) => Val::BigInt(Box::new((a as i64).into())),
+		A(a) => {
+			Val::BigInt(Box::new(a.to_string().parse().map_err(|e| {
+				runtime_error!("number is not convertible to bigint: {e}")
+			})?))
+		}
 		B(b) => Val::BigInt(Box::new(
 			b.as_str()
 				.parse()
