@@ -37,15 +37,15 @@ struct DebugOpts {
 #[derive(Parser)]
 #[clap(next_help_heading = "INPUT")]
 struct InputOpts {
-	/// Treat input as code, evaluate them instead of reading file
+	/// Treat input as code, evaluate it instead of reading file.
 	#[clap(long, short = 'e')]
 	pub exec: bool,
 
-	/// Path to the file to be compiled if `--evaluate` is unset, otherwise code itself
+	/// Path to the file to be compiled if `--exec` is unset, otherwise code itself.
 	pub input: Option<String>,
 
 	/// After executing input, apply specified code.
-	/// Output of the initial input will be accessible using `$`
+	/// Output of the initial input will be accessible using `_`.
 	#[cfg(feature = "exp-apply")]
 	#[clap(long)]
 	pub exp_apply: Vec<String>,

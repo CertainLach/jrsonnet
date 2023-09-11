@@ -24,11 +24,11 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintIte
 				let sliced = &text[..pos];
 				p!(pi: string(sliced.to_string()));
 				text = &text[pos..];
-				if! text.is_empty(){
+				if !text.is_empty() {
 					match text.as_bytes()[0] {
 						b'\n' => p!(pi: nl),
 						b'\t' => p!(pi: tab),
-						_ => unreachable!()
+						_ => unreachable!(),
 					}
 					text = &text[1..];
 				}
@@ -69,7 +69,10 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintIte
 					lines.pop();
 				}
 				if lines.len() == 1 && !doc {
-					p!(pi: str("/* ") string(lines[0].trim().to_string()) str(" */") nl)
+					if matches!(loc, CommentLocation::ItemInline) {
+						p!(pi: str(" "));
+					}
+					p!(pi: str("/* ") string(lines[0].trim().to_string()) str(" */"))
 				} else if !lines.is_empty() {
 					fn common_ws_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 						let offset = a

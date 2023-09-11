@@ -99,15 +99,19 @@ pub fn children_between<T: AstNode + Debug>(
 	node: SyntaxNode,
 	start: Option<&SyntaxElement>,
 	end: Option<&SyntaxElement>,
+	trailing: Option<ChildTrivia>,
 ) -> (Vec<Child<T>>, EndingComments) {
 	let mut iter = node.children_with_tokens().peekable();
-	while iter.peek() != start {
+	if start.is_some() {
+		while iter.peek() != start {
+			iter.next();
+		}
 		iter.next();
 	}
-	iter.next();
 	children(
 		iter.take_while(|i| Some(i) != end),
-		start.is_none() || end.is_none(),
+		start.is_none() && end.is_none(),
+		trailing,
 	)
 }
 
@@ -165,6 +169,7 @@ fn count_newlines_after(tt: &ChildTrivia) -> usize {
 pub fn children<T: AstNode + Debug>(
 	items: impl Iterator<Item = SyntaxElement>,
 	loose: bool,
+	mut trailing: Option<ChildTrivia>,
 ) -> (Vec<Child<T>>, EndingComments) {
 	let mut out = Vec::new();
 	let mut current_child = None::<Child<T>>;
@@ -175,7 +180,12 @@ pub fn children<T: AstNode + Debug>(
 
 	for item in items {
 		if let Some(value) = item.as_node().cloned().and_then(T::cast) {
-			let before_trivia = mem::take(&mut next);
+			let before_trivia = if let Some(trailing) = trailing.take() {
+				assert!(next.is_empty());
+				trailing
+			} else {
+				mem::take(&mut next)
+			};
 			let last_child = current_child.replace(Child {
 				// First item should not start with newline
 				should_start_with_newline: had_some
@@ -195,7 +205,10 @@ pub fn children<T: AstNode + Debug>(
 		} else if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
 			let is_single_line_comment = trivia.kind() == TriviaKind::SingleLineHashComment
 				|| trivia.kind() == TriviaKind::SingleLineSlashComment;
-			if started_next
+			if trailing.is_some() {
+				// Someone have already parsed trivia for us
+				continue;
+			} else if started_next
 				|| current_child.is_none()
 				|| trivia.text().contains('\n') && !is_single_line_comment
 			{
@@ -270,5 +283,8 @@ pub struct EndingComments {
 impl EndingComments {
 	pub fn is_empty(&self) -> bool {
 		!self.should_start_with_newline && self.trivia.is_empty()
+	}
+	pub fn extract_trailing(&mut self) -> ChildTrivia {
+		mem::take(&mut self.trivia)
 	}
 }

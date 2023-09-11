@@ -1,15 +1,21 @@
-use std::any::type_name;
+use std::{
+	any::type_name,
+	fs,
+	io::{self, Write},
+	path::PathBuf,
+	process,
+};
 
 use children::{children_between, trivia_before};
+use clap::Parser;
 use dprint_core::formatting::{PrintItems, PrintOptions};
 use jrsonnet_rowan_parser::{
 	nodes::{
 		ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
-		DestructRest, Expr, FieldName, ForSpec, IfSpec, ImportKind, LhsExpr, Literal, Member, Name,
-		Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Text, UnaryOperator,
-		Visibility, VisibilityKind,
+		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
+		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
+		UnaryOperator, Visibility,
 	},
-	rowan::NodeOrToken,
 	AstNode, AstToken, SyntaxToken,
 };
 
@@ -287,7 +293,9 @@ impl Printable for Member {
 			Member::MemberFieldNormal(n) => {
 				p!(new: {n.field_name()} if(n.plus_token().is_some())({n.plus_token()}) {n.visibility()} str(" ") {n.expr()})
 			}
-			Member::MemberFieldMethod(_) => todo!(),
+			Member::MemberFieldMethod(m) => {
+				p!(new: {m.field_name()} {m.params_desc()} {m.visibility()} str(" ") {m.expr()})
+			}
 		}
 	}
 }
@@ -296,7 +304,7 @@ impl Printable for ObjBody {
 	fn print(&self) -> PrintItems {
 		match self {
 			ObjBody::ObjBodyComp(l) => {
-				let (children, end_comments) = children_between::<Member>(
+				let (children, mut end_comments) = children_between::<Member>(
 					l.syntax().clone(),
 					l.l_brace_token().map(Into::into).as_ref(),
 					Some(
@@ -307,7 +315,9 @@ impl Printable for ObjBody {
 							.clone())
 						.into(),
 					),
+					None,
 				);
+				let trailing_for_comp = end_comments.extract_trailing();
 				let mut pi = p!(new: str("{") >i nl);
 				for mem in children.into_iter() {
 					if mem.should_start_with_newline {
@@ -333,6 +343,7 @@ impl Printable for ObjBody {
 						.or_else(|| l.l_brace_token().map(Into::into))
 						.as_ref(),
 					l.r_brace_token().map(Into::into).as_ref(),
+					Some(trailing_for_comp),
 				);
 				for mem in compspecs.into_iter() {
 					if mem.should_start_with_newline {
@@ -347,7 +358,7 @@ impl Printable for ObjBody {
 				}
 				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
 
-				p!(pi: <i str("}"));
+				p!(pi: nl <i str("}"));
 				pi
 			}
 			ObjBody::ObjBodyMemberList(l) => {
@@ -355,6 +366,7 @@ impl Printable for ObjBody {
 					l.syntax().clone(),
 					l.l_brace_token().map(Into::into).as_ref(),
 					l.r_brace_token().map(Into::into).as_ref(),
+					None,
 				);
 				if children.is_empty() && end_comments.is_empty() {
 					return p!(new: str("{ }"));
@@ -412,11 +424,6 @@ impl Printable for ImportKind {
 		p!(new: string(self.syntax().to_string()))
 	}
 }
-impl Printable for LhsExpr {
-	fn print(&self) -> PrintItems {
-		p!(new: {self.expr()})
-	}
-}
 impl Printable for ForSpec {
 	fn print(&self) -> PrintItems {
 		p!(new: str("for ") {self.bind()} str(" in ") {self.expr()})
@@ -437,62 +444,75 @@ impl Printable for CompSpec {
 }
 impl Printable for Expr {
 	fn print(&self) -> PrintItems {
+		let mut o = p!(new:);
+		let (stmts, ending) = children_between::<Stmt>(
+			self.syntax().clone(),
+			None,
+			self.expr_base()
+				.as_ref()
+				.map(ExprBase::syntax)
+				.cloned()
+				.map(Into::into)
+				.as_ref(),
+			None,
+		);
+		for stmt in stmts {
+			p!(o: {stmt.value});
+		}
+		p!(o: {self.expr_base()});
+		let (suffixes, ending) = children_between::<Suffix>(
+			self.syntax().clone(),
+			self.expr_base()
+				.as_ref()
+				.map(ExprBase::syntax)
+				.cloned()
+				.map(Into::into)
+				.as_ref(),
+			None,
+			None,
+		);
+		for suffix in suffixes {
+			p!(o: {suffix.value});
+		}
+		o
+	}
+}
+impl Printable for Suffix {
+	fn print(&self) -> PrintItems {
+		let mut o = p!(new:);
 		match self {
-			Expr::ExprBinary(b) => {
-				p!(new: {b.lhs()} str(" ") {b.binary_operator()} str(" ") {b.rhs()})
-			}
-			Expr::ExprUnary(u) => p!(new: {u.unary_operator()} {u.rhs()}),
-			Expr::ExprSlice(s) => {
-				p!(new: {s.expr()} {s.slice_desc()})
-			}
-			Expr::ExprIndex(i) => {
-				p!(new: {i.expr()} str(".") {i.index()})
-			}
-			Expr::ExprIndexExpr(i) => p!(new: {i.base()} str("[") {i.index()} str("]")),
-			Expr::ExprApply(a) => {
-				let mut pi = p!(new: {a.expr()} {a.args_desc()});
-				if a.tailstrict_kw_token().is_some() {
-					p!(pi: str(" tailstrict"));
+			Suffix::SuffixIndex(i) => {
+				if i.question_mark_token().is_some() {
+					p!(o: str("?"));
 				}
-				pi
+				p!(o: str(".") {i.index()});
 			}
-			Expr::ExprObjExtend(ex) => {
-				p!(new: {ex.lhs_expr()} str(" ") {ex.expr()})
-			}
-			Expr::ExprParened(p) => {
-				p!(new: str("(") {p.expr()} str(")"))
-			}
-			Expr::ExprString(s) => p!(new: {s.text()}),
-			Expr::ExprNumber(n) => p!(new: {n.number()}),
-			Expr::ExprArray(a) => {
-				let mut pi = p!(new: str("[") >i nl);
-				for el in a.exprs() {
-					p!(pi: {el} str(",") nl);
+			Suffix::SuffixIndexExpr(e) => {
+				if e.question_mark_token().is_some() {
+					p!(o: str(".?"));
 				}
-				p!(pi: <i str("]"));
-				pi
+				p!(o: str("[") {e.index()} str("]"))
 			}
-			Expr::ExprObject(o) => {
-				p!(new: {o.obj_body()})
+			Suffix::SuffixSlice(d) => {
+				p!(o: {d.slice_desc()})
 			}
-			Expr::ExprArrayComp(arr) => {
-				let mut pi = p!(new: str("[") {arr.expr()});
-				for spec in arr.comp_specs() {
-					p!(pi: str(" ") {spec});
-				}
-				p!(pi: str("]"));
-				pi
+			Suffix::SuffixApply(a) => {
+				p!(o: {a.args_desc()})
 			}
-			Expr::ExprImport(v) => {
-				p!(new: {v.import_kind()} str(" ") {v.text()})
-			}
-			Expr::ExprVar(n) => p!(new: {n.name()}),
-			Expr::ExprLocal(l) => {
+		}
+		o
+	}
+}
+impl Printable for Stmt {
+	fn print(&self) -> PrintItems {
+		match self {
+			Stmt::StmtLocal(l) => {
 				let mut pi = p!(new:);
 				let (binds, end_comments) = children_between::<Bind>(
 					l.syntax().clone(),
 					l.local_kw_token().map(Into::into).as_ref(),
 					l.semi_token().map(Into::into).as_ref(),
+					None,
 				);
 				if binds.len() == 1 {
 					let bind = &binds[0];
@@ -516,24 +536,69 @@ impl Printable for Expr {
 					p!(pi: <i);
 				}
 				p!(pi: str(";") nl);
-
-				let expr_comments = trivia_between(
-					l.syntax().clone(),
-					l.semi_token().map(Into::into).as_ref(),
-					l.expr()
-						.map(|e| e.syntax().clone())
-						.map(Into::into)
-						.as_ref(),
-				);
-
-				if expr_comments.should_start_with_newline {
-					p!(pi: nl);
-				}
-				p!(pi: items(format_comments(&expr_comments.trivia, CommentLocation::AboveItem)));
-				p!(pi: {l.expr()});
 				pi
 			}
-			Expr::ExprIfThenElse(ite) => {
+			Stmt::StmtAssert(a) => {
+				p!(new: {a.assertion()} str(";") nl)
+			}
+		}
+	}
+}
+impl Printable for ExprBase {
+	fn print(&self) -> PrintItems {
+		match self {
+			Self::ExprBinary(b) => {
+				p!(new: {b.lhs_work()} str(" ") {b.binary_operator()} str(" ") {b.rhs_work()})
+			}
+			Self::ExprUnary(u) => p!(new: {u.unary_operator()} {u.rhs()}),
+			// Self::ExprSlice(s) => {
+			// 	p!(new: {s.expr()} {s.slice_desc()})
+			// }
+			// Self::ExprIndex(i) => {
+			// 	p!(new: {i.expr()} str(".") {i.index()})
+			// }
+			// Self::ExprIndexExpr(i) => p!(new: {i.base()} str("[") {i.index()} str("]")),
+			// Self::ExprApply(a) => {
+			// 	let mut pi = p!(new: {a.expr()} {a.args_desc()});
+			// 	if a.tailstrict_kw_token().is_some() {
+			// 		p!(pi: str(" tailstrict"));
+			// 	}
+			// 	pi
+			// }
+			Self::ExprObjExtend(ex) => {
+				p!(new: {ex.lhs_work()} str(" ") {ex.rhs_work()})
+			}
+			Self::ExprParened(p) => {
+				p!(new: str("(") {p.expr()} str(")"))
+			}
+			Self::ExprString(s) => p!(new: {s.text()}),
+			Self::ExprNumber(n) => p!(new: {n.number()}),
+			Self::ExprArray(a) => {
+				let mut pi = p!(new: str("[") >i nl);
+				for el in a.exprs() {
+					p!(pi: {el} str(",") nl);
+				}
+				p!(pi: <i str("]"));
+				pi
+			}
+			Self::ExprObject(obj) => {
+				p!(new: {obj.obj_body()})
+			}
+			Self::ExprArrayComp(arr) => {
+				let mut pi = p!(new: str("[") {arr.expr()});
+				for spec in arr.comp_specs() {
+					p!(pi: str(" ") {spec});
+				}
+				p!(pi: str("]"));
+				pi
+			}
+			Self::ExprImport(v) => {
+				p!(new: {v.import_kind()} str(" ") {v.text()})
+			}
+			Self::ExprVar(n) => p!(new: {n.name()}),
+			// Self::ExprLocal(l) => {
+			// }
+			Self::ExprIfThenElse(ite) => {
 				let mut pi =
 					p!(new: str("if ") {ite.cond()} str(" then ") {ite.then().map(|t| t.expr())});
 				if ite.else_kw_token().is_some() || ite.else_().is_some() {
@@ -541,10 +606,10 @@ impl Printable for Expr {
 				}
 				pi
 			}
-			Expr::ExprFunction(f) => p!(new: str("function") {f.params_desc()} str(" ") {f.expr()}),
-			Expr::ExprAssert(a) => p!(new: {a.assertion()} str("; ") {a.expr()}),
-			Expr::ExprError(e) => p!(new: str("error ") {e.expr()}),
-			Expr::ExprLiteral(l) => {
+			Self::ExprFunction(f) => p!(new: str("function") {f.params_desc()} nl {f.expr()}),
+			// Self::ExprAssert(a) => p!(new: {a.assertion()} str("; ") {a.expr()}),
+			Self::ExprError(e) => p!(new: str("error ") {e.expr()}),
+			Self::ExprLiteral(l) => {
 				p!(new: {l.literal()})
 			}
 		}
@@ -575,7 +640,11 @@ impl Printable for SourceFile {
 	}
 }
 
-fn format(input: &str) -> String {
+struct FormatOptions {
+	// 0 for hard tabs
+	indent: u8,
+}
+fn format(input: &str, opts: &FormatOptions) -> Option<String> {
 	let (parsed, errors) = jrsonnet_rowan_parser::parse(input);
 	if !errors.is_empty() {
 		let mut builder = ass_stroke::SnippetBuilder::new(input);
@@ -593,160 +662,143 @@ fn format(input: &str) -> String {
 		}
 		let snippet = builder.build();
 		let ansi = ass_stroke::source_to_ansi(&snippet);
-		println!("{ansi}");
+		eprintln!("{ansi}");
+		// It is possible to recover from this failure, but the output may be broken, as formatter is free to skip
+		// ERROR rowan nodes.
+		// Recovery needs to be enabled for LSP, though.
+		//
+		// TODO: Verify how formatter interacts in cases of missing positional values, i.e `if cond then /*missing Expr*/ else residual`.
+		return None;
 	}
-	dprint_core::formatting::format(
+	Some(dprint_core::formatting::format(
 		|| parsed.print(),
 		PrintOptions {
-			indent_width: 2,
+			indent_width: if opts.indent == 0 {
+				// Reasonable max length for both 2 and 4 space sized tabs.
+				3
+			} else {
+				opts.indent
+			},
 			max_width: 100,
-			use_tabs: false,
+			use_tabs: opts.indent == 0,
 			new_line_text: "\n",
 		},
-	)
+	))
 }
-fn main() {
-	let input = r#"
 
+#[derive(Parser)]
+struct Opts {
+	/// Treat input as code, reformat it instead of reading file.
+	#[clap(long, short = 'e')]
+	exec: bool,
+	/// Path to be reformatted if `--exec` if unset, otherwise code itself.
+	input: String,
+	/// Replace code with formatted in-place, instead of printing it to stdout.
+	/// Only applicable if `--exec` is unset.
+	#[clap(long, short = 'i')]
+	in_place: bool,
 
-		# Edit me!
-		local b = import "b.libsonnet";  # comment
-		local a = import "a.libsonnet";
+	/// Exit with error if formatted does not match input
+	#[arg(long)]
+	test: bool,
+	/// Number of spaces to indent with
+	///
+	/// 0 for guess from input (default), and use hard tabs if unable to guess.
+	#[arg(long, default_value = "0")]
+	indent: u8,
+	/// Force hard tab for indentation
+	#[arg(long)]
+	hard_tabs: bool,
 
-		local f(x,y)=x+y;
+	/// Debug option: how many times to call reformatting in case of unstable dprint output resolution.
+	///
+	/// 0 for not retrying to reformat.
+	#[arg(long, default_value = "0")]
+	conv_limit: usize,
+}
 
-		local {a: [b, ..., c], d, ...e} = null;
+#[derive(thiserror::Error, Debug)]
+enum Error {
+	#[error("--in-place is incompatible with --exec")]
+	InPlaceExec,
+	#[error("io: {0}")]
+	Io(#[from] io::Error),
+	#[error("persist: {0}")]
+	Persist(#[from] tempfile::PersistError),
+	#[error("parsing failed, refusing to reformat corrupted input")]
+	ParseError,
+}
 
-		local ass = assert false : false; false;
+fn main_result() -> Result<(), Error> {
+	eprintln!("jrsonnet-fmt is a prototype of a jsonnet code formatter, do not expect it to produce meaningful results right now.");
+	eprintln!("It is not expected for its output to match other implementations, it will be completly separate implementation with maybe different name.");
+	let mut opts = Opts::parse();
+	let input = if opts.exec {
+		if opts.in_place {
+			return Err(Error::InPlaceExec);
+		}
+		opts.input.clone()
+	} else {
+		fs::read_to_string(&opts.input)?
+	};
 
-		local fn = function(a, b, c = 3) 4;
-
-		local comp = [a for b in c if d == e];
-		local ocomp = {[k]: 1 for k in v};
-
-		local ? = skip;
-
-		local ie = a[expr];
-
-		local unary = !a;
-
-		local
-			//   I am comment
-			singleLocalWithItemComment = 1,
-		;
-
-		// Comment between local and expression
-
-		local
-			a = 1, //   Inline
-			// Comment above b
-			b = 4,
-
-			// c needs some space
-			c = 5,
-
-			// Comment after everything
-		;
-
-
-		local Template = {z: "foo"};
-
-		{
-						local
-
-					h = 3,
-					assert self.a == 1
-
-					: "error",
-		"f": ((((((3)))))) ,
-		"g g":
-		f(4,2),
-		arr: [[
-		  1, 2,
-		  ],
-		  3,
-		  {
-			  b: {
-				  c: {
-					  k: [16]
-				  }
-			  }
-		  }
-		  ],
-		  m: a[1::],
-		  m: b[::],
-
-		  comments: {
-			_: '',
-			//     Plain comment
-			a: '',
-
-			#    Plain comment with empty line before
-			b: '',
-			/*Single-line multiline comment
-
-			*/
-			c: '',
-
-			/**Single-line multiline doc comment
-
-			*/
-			c: '',
-
-			/**multiline doc comment
-			s
-			*/
-			c: '',
-
-			/*
-
-	Multi-line
-
-	comment
-			*/
-			d: '',
-
-			e: '', // Inline comment
-
-			k: '',
-
-			// Text after everything
-		  },
-		  comments2: {
-			k: '',
-			// Text after everything, but no newline above
-		  },
-		  k: if a         == b    then
-
-
-		  2
-
-		  else Template {},
-
-		  compspecs: {
-			obj_with_no_item: {a:1, for i in [1, 2, 3]},
-			obj_with_2_items: {a:1, /*b:2,*/ for i in [1,2,3]},
-		  }
-
-		} + Template
-"#;
+	if opts.indent == 0 {
+		// Sane default.
+		// TODO: Implement actual guessing.
+		opts.hard_tabs = true;
+	}
 
 	let mut iteration = 0;
-	let mut a = input.to_string();
-	let mut b;
+	let mut formatted = input.clone();
+	let mut tmp;
 	// https://github.com/dprint/dprint/pull/423
 	loop {
-		b = format(&a).trim().to_owned();
-		if a == b {
+		let Some(reformatted) = format(
+			&formatted,
+			&FormatOptions {
+				indent: if opts.indent == 0 || opts.hard_tabs {
+					0
+				} else {
+					opts.indent
+				},
+			},
+		) else {
+			return Err(Error::ParseError);
+		};
+		tmp = reformatted.trim().to_owned();
+		if formatted == tmp {
 			break;
 		}
-		println!("{b}");
-		a = b;
-		iteration += 1;
-		if iteration > 5 {
-			panic!("formatting not converged");
+		formatted = tmp;
+		if opts.conv_limit == 0 {
 			break;
+		}
+		iteration += 1;
+		if iteration > opts.conv_limit {
+			panic!("formatting not converged");
 		}
 	}
-	println!("{a}");
+	formatted.push('\n');
+	if opts.test && formatted != input {
+		process::exit(1);
+	}
+	if opts.in_place {
+		let path = PathBuf::from(opts.input);
+		let mut temp = tempfile::NamedTempFile::new_in(path.parent().expect(
+			"not failed during read, this path is not a directory, and there is a parent",
+		))?;
+		temp.write_all(formatted.as_bytes())?;
+		temp.flush()?;
+		temp.persist(&path)?;
+	} else {
+		print!("{formatted}")
+	}
+	Ok(())
+}
+
+fn main() {
+	if let Err(e) = main_result() {
+		eprintln!("{e}");
+		process::exit(1);
+	}
 }
