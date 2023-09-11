@@ -3,19 +3,21 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "local a =\n"
 ---
 SOURCE_FILE@0..10
-  STMT_LOCAL@0..10
-    LOCAL_KW@0..5 "local"
-    WHITESPACE@5..6 " "
-    BIND_DESTRUCT@6..10
-      DESTRUCT_FULL@6..7
-        NAME@6..7
-          IDENT@6..7 "a"
-      WHITESPACE@7..8 " "
-      ASSIGN@8..9 "="
-      WHITESPACE@9..10 "\n"
+  EXPR@0..10
+    STMT_LOCAL@0..10
+      LOCAL_KW@0..5 "local"
+      WHITESPACE@5..6 " "
+      BIND_DESTRUCT@6..10
+        DESTRUCT_FULL@6..7
+          NAME@6..7
+            IDENT@6..7 "a"
+        WHITESPACE@7..8 " "
+        ASSIGN@8..9 "="
+        WHITESPACE@9..10 "\n"
+        EXPR@10..10
+          ERROR_MISSING_TOKEN@10..10
       ERROR_MISSING_TOKEN@10..10
     ERROR_MISSING_TOKEN@10..10
-  ERROR_MISSING_TOKEN@10..10
 ===
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
 LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([SEMI, COMMA])) }, range: 10..10 }

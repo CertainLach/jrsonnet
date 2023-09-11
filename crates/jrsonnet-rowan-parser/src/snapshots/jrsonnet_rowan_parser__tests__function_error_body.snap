@@ -3,23 +3,25 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "function(a, b)\n"
 ---
 SOURCE_FILE@0..15
-  EXPR_FUNCTION@0..15
-    FUNCTION_KW@0..8 "function"
-    PARAMS_DESC@8..14
-      L_PAREN@8..9 "("
-      PARAM@9..10
-        DESTRUCT_FULL@9..10
-          NAME@9..10
-            IDENT@9..10 "a"
-      COMMA@10..11 ","
-      WHITESPACE@11..12 " "
-      PARAM@12..13
-        DESTRUCT_FULL@12..13
-          NAME@12..13
-            IDENT@12..13 "b"
-      R_PAREN@13..14 ")"
-    WHITESPACE@14..15 "\n"
-    ERROR_MISSING_TOKEN@15..15
+  EXPR@0..15
+    EXPR_FUNCTION@0..15
+      FUNCTION_KW@0..8 "function"
+      PARAMS_DESC@8..14
+        L_PAREN@8..9 "("
+        PARAM@9..10
+          DESTRUCT_FULL@9..10
+            NAME@9..10
+              IDENT@9..10 "a"
+        COMMA@10..11 ","
+        WHITESPACE@11..12 " "
+        PARAM@12..13
+          DESTRUCT_FULL@12..13
+            NAME@12..13
+              IDENT@12..13 "b"
+        R_PAREN@13..14 ")"
+      WHITESPACE@14..15 "\n"
+      EXPR@15..15
+        ERROR_MISSING_TOKEN@15..15
 ===
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 15..15 }
 ===

@@ -23,61 +23,70 @@ pub struct Expr {
 	pub(crate) syntax: SyntaxNode,
 }
 impl Expr {
-	pub fn stmt_locals(&self) -> AstChildren<StmtLocal> {
+	pub fn stmts(&self) -> AstChildren<Stmt> {
 		support::children(&self.syntax)
 	}
 	pub fn expr_base(&self) -> Option<ExprBase> {
 		support::child(&self.syntax)
 	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprBinary {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprBinary {
-	pub fn lhs(&self) -> Option<LhsExpr> {
-		support::child(&self.syntax)
-	}
-	pub fn binary_operator(&self) -> Option<BinaryOperator> {
-		support::token_child(&self.syntax)
-	}
-	pub fn rhs(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+	pub fn suffixs(&self) -> AstChildren<Suffix> {
+		support::children(&self.syntax)
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct LhsExpr {
+pub struct SuffixIndex {
 	pub(crate) syntax: SyntaxNode,
 }
-impl LhsExpr {
-	pub fn expr(&self) -> Option<Expr> {
+impl SuffixIndex {
+	pub fn question_mark_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![?])
+	}
+	pub fn dot_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![.])
+	}
+	pub fn index(&self) -> Option<Name> {
 		support::child(&self.syntax)
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprUnary {
+pub struct Name {
 	pub(crate) syntax: SyntaxNode,
 }
-impl ExprUnary {
-	pub fn unary_operator(&self) -> Option<UnaryOperator> {
-		support::token_child(&self.syntax)
-	}
-	pub fn rhs(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+impl Name {
+	pub fn ident_lit(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, IDENT)
 	}
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprSlice {
+pub struct SuffixIndexExpr {
 	pub(crate) syntax: SyntaxNode,
 }
-impl ExprSlice {
-	pub fn expr(&self) -> Option<Expr> {
+impl SuffixIndexExpr {
+	pub fn question_mark_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![?])
+	}
+	pub fn dot_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![.])
+	}
+	pub fn l_brack_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T!['['])
+	}
+	pub fn index(&self) -> Option<Expr> {
 		support::child(&self.syntax)
 	}
+	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![']'])
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct SuffixSlice {
+	pub(crate) syntax: SyntaxNode,
+}
+impl SuffixSlice {
 	pub fn slice_desc(&self) -> Option<SliceDesc> {
 		support::child(&self.syntax)
 	}
@@ -109,58 +118,10 @@ impl SliceDesc {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprIndex {
+pub struct SuffixApply {
 	pub(crate) syntax: SyntaxNode,
 }
-impl ExprIndex {
-	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-	pub fn dot_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![.])
-	}
-	pub fn index(&self) -> Option<Name> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Name {
-	pub(crate) syntax: SyntaxNode,
-}
-impl Name {
-	pub fn ident_lit(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, IDENT)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprIndexExpr {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprIndexExpr {
-	pub fn base(&self) -> Option<LhsExpr> {
-		support::child(&self.syntax)
-	}
-	pub fn l_brack_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T!['['])
-	}
-	pub fn index(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![']'])
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprApply {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprApply {
-	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
+impl SuffixApply {
 	pub fn args_desc(&self) -> Option<ArgsDesc> {
 		support::child(&self.syntax)
 	}
@@ -186,13 +147,87 @@ impl ArgsDesc {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StmtLocal {
+	pub(crate) syntax: SyntaxNode,
+}
+impl StmtLocal {
+	pub fn local_kw_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![local])
+	}
+	pub fn binds(&self) -> AstChildren<Bind> {
+		support::children(&self.syntax)
+	}
+	pub fn semi_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![;])
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct StmtAssert {
+	pub(crate) syntax: SyntaxNode,
+}
+impl StmtAssert {
+	pub fn assertion(&self) -> Option<Assertion> {
+		support::child(&self.syntax)
+	}
+	pub fn semi_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![;])
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Assertion {
+	pub(crate) syntax: SyntaxNode,
+}
+impl Assertion {
+	pub fn assert_kw_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![assert])
+	}
+	pub fn condition(&self) -> Option<Expr> {
+		support::child(&self.syntax)
+	}
+	pub fn colon_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![:])
+	}
+	pub fn message(&self) -> Option<Expr> {
+		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExprBinary {
+	pub(crate) syntax: SyntaxNode,
+}
+impl ExprBinary {
+	pub fn lhs(&self) -> Option<Expr> {
+		support::child(&self.syntax)
+	}
+	pub fn binary_operator(&self) -> Option<BinaryOperator> {
+		support::token_child(&self.syntax)
+	}
+	pub fn rhs(&self) -> Option<Expr> {
+		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct ExprUnary {
+	pub(crate) syntax: SyntaxNode,
+}
+impl ExprUnary {
+	pub fn unary_operator(&self) -> Option<UnaryOperator> {
+		support::token_child(&self.syntax)
+	}
+	pub fn rhs(&self) -> Option<Expr> {
+		support::child(&self.syntax)
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprObjExtend {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ExprObjExtend {
-	pub fn lhs_expr(&self) -> Option<LhsExpr> {
-		support::child(&self.syntax)
-	}
 	pub fn expr(&self) -> Option<Expr> {
 		support::child(&self.syntax)
 	}
@@ -399,41 +434,6 @@ impl ParamsDesc {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct ExprAssert {
-	pub(crate) syntax: SyntaxNode,
-}
-impl ExprAssert {
-	pub fn assertion(&self) -> Option<Assertion> {
-		support::child(&self.syntax)
-	}
-	pub fn semi_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![;])
-	}
-	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Assertion {
-	pub(crate) syntax: SyntaxNode,
-}
-impl Assertion {
-	pub fn assert_kw_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![assert])
-	}
-	pub fn condition(&self) -> Option<LhsExpr> {
-		support::child(&self.syntax)
-	}
-	pub fn colon_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![:])
-	}
-	pub fn message(&self) -> Option<Expr> {
-		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub struct ExprError {
 	pub(crate) syntax: SyntaxNode,
 }
@@ -443,22 +443,6 @@ impl ExprError {
 	}
 	pub fn expr(&self) -> Option<Expr> {
 		support::child(&self.syntax)
-	}
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct StmtLocal {
-	pub(crate) syntax: SyntaxNode,
-}
-impl StmtLocal {
-	pub fn local_kw_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![local])
-	}
-	pub fn binds(&self) -> AstChildren<Bind> {
-		support::children(&self.syntax)
-	}
-	pub fn semi_token(&self) -> Option<SyntaxToken> {
-		support::token(&self.syntax, T![;])
 	}
 }
 
@@ -641,7 +625,7 @@ impl ForSpec {
 	pub fn for_kw_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![for])
 	}
-	pub fn bind(&self) -> Option<Name> {
+	pub fn bind(&self) -> Option<Destruct> {
 		support::child(&self.syntax)
 	}
 	pub fn in_kw_token(&self) -> Option<SyntaxToken> {
@@ -820,6 +804,26 @@ impl DestructArrayElement {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Suffix {
+	SuffixIndex(SuffixIndex),
+	SuffixIndexExpr(SuffixIndexExpr),
+	SuffixSlice(SuffixSlice),
+	SuffixApply(SuffixApply),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Bind {
+	BindDestruct(BindDestruct),
+	BindFunction(BindFunction),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub enum Stmt {
+	StmtLocal(StmtLocal),
+	StmtAssert(StmtAssert),
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ObjBody {
 	ObjBodyComp(ObjBodyComp),
 	ObjBodyMemberList(ObjBodyMemberList),
@@ -832,19 +836,9 @@ pub enum CompSpec {
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub enum Bind {
-	BindDestruct(BindDestruct),
-	BindFunction(BindFunction),
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
 pub enum ExprBase {
 	ExprBinary(ExprBinary),
 	ExprUnary(ExprUnary),
-	ExprSlice(ExprSlice),
-	ExprIndex(ExprIndex),
-	ExprIndexExpr(ExprIndexExpr),
-	ExprApply(ExprApply),
 	ExprObjExtend(ExprObjExtend),
 	ExprParened(ExprParened),
 	ExprString(ExprString),
@@ -857,7 +851,6 @@ pub enum ExprBase {
 	ExprVar(ExprVar),
 	ExprIfThenElse(ExprIfThenElse),
 	ExprFunction(ExprFunction),
-	ExprAssert(ExprAssert),
 	ExprError(ExprError),
 }
 
@@ -905,6 +898,7 @@ pub struct BinaryOperator {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
 pub enum BinaryOperatorKind {
 	Or,
+	NullCoaelse,
 	And,
 	BitOr,
 	BitXor,
@@ -1078,84 +1072,9 @@ impl AstNode for Expr {
 		&self.syntax
 	}
 }
-impl AstNode for ExprBinary {
+impl AstNode for SuffixIndex {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_BINARY
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for LhsExpr {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == LHS_EXPR
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprUnary {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_UNARY
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprSlice {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_SLICE
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for SliceDesc {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == SLICE_DESC
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for ExprIndex {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_INDEX
+		kind == SUFFIX_INDEX
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1183,9 +1102,9 @@ impl AstNode for Name {
 		&self.syntax
 	}
 }
-impl AstNode for ExprIndexExpr {
+impl AstNode for SuffixIndexExpr {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_INDEX_EXPR
+		kind == SUFFIX_INDEX_EXPR
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1198,9 +1117,39 @@ impl AstNode for ExprIndexExpr {
 		&self.syntax
 	}
 }
-impl AstNode for ExprApply {
+impl AstNode for SuffixSlice {
 	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_APPLY
+		kind == SUFFIX_SLICE
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for SliceDesc {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == SLICE_DESC
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for SuffixApply {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == SUFFIX_APPLY
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1216,6 +1165,81 @@ impl AstNode for ExprApply {
 impl AstNode for ArgsDesc {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == ARGS_DESC
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for StmtLocal {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == STMT_LOCAL
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for StmtAssert {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == STMT_ASSERT
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for Assertion {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == ASSERTION
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for ExprBinary {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == EXPR_BINARY
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for ExprUnary {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == EXPR_UNARY
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1453,54 +1477,9 @@ impl AstNode for ParamsDesc {
 		&self.syntax
 	}
 }
-impl AstNode for ExprAssert {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == EXPR_ASSERT
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for Assertion {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == ASSERTION
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
 impl AstNode for ExprError {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == EXPR_ERROR
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		if Self::can_cast(syntax.kind()) {
-			Some(Self { syntax })
-		} else {
-			None
-		}
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		&self.syntax
-	}
-}
-impl AstNode for StmtLocal {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		kind == STMT_LOCAL
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -1873,6 +1852,116 @@ impl AstNode for DestructArrayElement {
 		&self.syntax
 	}
 }
+impl From<SuffixIndex> for Suffix {
+	fn from(node: SuffixIndex) -> Suffix {
+		Suffix::SuffixIndex(node)
+	}
+}
+impl From<SuffixIndexExpr> for Suffix {
+	fn from(node: SuffixIndexExpr) -> Suffix {
+		Suffix::SuffixIndexExpr(node)
+	}
+}
+impl From<SuffixSlice> for Suffix {
+	fn from(node: SuffixSlice) -> Suffix {
+		Suffix::SuffixSlice(node)
+	}
+}
+impl From<SuffixApply> for Suffix {
+	fn from(node: SuffixApply) -> Suffix {
+		Suffix::SuffixApply(node)
+	}
+}
+impl AstNode for Suffix {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			SUFFIX_INDEX | SUFFIX_INDEX_EXPR | SUFFIX_SLICE | SUFFIX_APPLY => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let res = match syntax.kind() {
+			SUFFIX_INDEX => Suffix::SuffixIndex(SuffixIndex { syntax }),
+			SUFFIX_INDEX_EXPR => Suffix::SuffixIndexExpr(SuffixIndexExpr { syntax }),
+			SUFFIX_SLICE => Suffix::SuffixSlice(SuffixSlice { syntax }),
+			SUFFIX_APPLY => Suffix::SuffixApply(SuffixApply { syntax }),
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			Suffix::SuffixIndex(it) => &it.syntax,
+			Suffix::SuffixIndexExpr(it) => &it.syntax,
+			Suffix::SuffixSlice(it) => &it.syntax,
+			Suffix::SuffixApply(it) => &it.syntax,
+		}
+	}
+}
+impl From<BindDestruct> for Bind {
+	fn from(node: BindDestruct) -> Bind {
+		Bind::BindDestruct(node)
+	}
+}
+impl From<BindFunction> for Bind {
+	fn from(node: BindFunction) -> Bind {
+		Bind::BindFunction(node)
+	}
+}
+impl AstNode for Bind {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			BIND_DESTRUCT | BIND_FUNCTION => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let res = match syntax.kind() {
+			BIND_DESTRUCT => Bind::BindDestruct(BindDestruct { syntax }),
+			BIND_FUNCTION => Bind::BindFunction(BindFunction { syntax }),
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			Bind::BindDestruct(it) => &it.syntax,
+			Bind::BindFunction(it) => &it.syntax,
+		}
+	}
+}
+impl From<StmtLocal> for Stmt {
+	fn from(node: StmtLocal) -> Stmt {
+		Stmt::StmtLocal(node)
+	}
+}
+impl From<StmtAssert> for Stmt {
+	fn from(node: StmtAssert) -> Stmt {
+		Stmt::StmtAssert(node)
+	}
+}
+impl AstNode for Stmt {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		match kind {
+			STMT_LOCAL | STMT_ASSERT => true,
+			_ => false,
+		}
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		let res = match syntax.kind() {
+			STMT_LOCAL => Stmt::StmtLocal(StmtLocal { syntax }),
+			STMT_ASSERT => Stmt::StmtAssert(StmtAssert { syntax }),
+			_ => return None,
+		};
+		Some(res)
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		match self {
+			Stmt::StmtLocal(it) => &it.syntax,
+			Stmt::StmtAssert(it) => &it.syntax,
+		}
+	}
+}
 impl From<ObjBodyComp> for ObjBody {
 	fn from(node: ObjBodyComp) -> ObjBody {
 		ObjBody::ObjBodyComp(node)
@@ -1937,38 +2026,6 @@ impl AstNode for CompSpec {
 		}
 	}
 }
-impl From<BindDestruct> for Bind {
-	fn from(node: BindDestruct) -> Bind {
-		Bind::BindDestruct(node)
-	}
-}
-impl From<BindFunction> for Bind {
-	fn from(node: BindFunction) -> Bind {
-		Bind::BindFunction(node)
-	}
-}
-impl AstNode for Bind {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		match kind {
-			BIND_DESTRUCT | BIND_FUNCTION => true,
-			_ => false,
-		}
-	}
-	fn cast(syntax: SyntaxNode) -> Option<Self> {
-		let res = match syntax.kind() {
-			BIND_DESTRUCT => Bind::BindDestruct(BindDestruct { syntax }),
-			BIND_FUNCTION => Bind::BindFunction(BindFunction { syntax }),
-			_ => return None,
-		};
-		Some(res)
-	}
-	fn syntax(&self) -> &SyntaxNode {
-		match self {
-			Bind::BindDestruct(it) => &it.syntax,
-			Bind::BindFunction(it) => &it.syntax,
-		}
-	}
-}
 impl From<ExprBinary> for ExprBase {
 	fn from(node: ExprBinary) -> ExprBase {
 		ExprBase::ExprBinary(node)
@@ -1977,26 +2034,6 @@ impl From<ExprBinary> for ExprBase {
 impl From<ExprUnary> for ExprBase {
 	fn from(node: ExprUnary) -> ExprBase {
 		ExprBase::ExprUnary(node)
-	}
-}
-impl From<ExprSlice> for ExprBase {
-	fn from(node: ExprSlice) -> ExprBase {
-		ExprBase::ExprSlice(node)
-	}
-}
-impl From<ExprIndex> for ExprBase {
-	fn from(node: ExprIndex) -> ExprBase {
-		ExprBase::ExprIndex(node)
-	}
-}
-impl From<ExprIndexExpr> for ExprBase {
-	fn from(node: ExprIndexExpr) -> ExprBase {
-		ExprBase::ExprIndexExpr(node)
-	}
-}
-impl From<ExprApply> for ExprBase {
-	fn from(node: ExprApply) -> ExprBase {
-		ExprBase::ExprApply(node)
 	}
 }
 impl From<ExprObjExtend> for ExprBase {
@@ -2059,11 +2096,6 @@ impl From<ExprFunction> for ExprBase {
 		ExprBase::ExprFunction(node)
 	}
 }
-impl From<ExprAssert> for ExprBase {
-	fn from(node: ExprAssert) -> ExprBase {
-		ExprBase::ExprAssert(node)
-	}
-}
 impl From<ExprError> for ExprBase {
 	fn from(node: ExprError) -> ExprBase {
 		ExprBase::ExprError(node)
@@ -2072,10 +2104,9 @@ impl From<ExprError> for ExprBase {
 impl AstNode for ExprBase {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			EXPR_BINARY | EXPR_UNARY | EXPR_SLICE | EXPR_INDEX | EXPR_INDEX_EXPR | EXPR_APPLY
-			| EXPR_OBJ_EXTEND | EXPR_PARENED | EXPR_STRING | EXPR_NUMBER | EXPR_LITERAL
-			| EXPR_ARRAY | EXPR_OBJECT | EXPR_ARRAY_COMP | EXPR_IMPORT | EXPR_VAR
-			| EXPR_IF_THEN_ELSE | EXPR_FUNCTION | EXPR_ASSERT | EXPR_ERROR => true,
+			EXPR_BINARY | EXPR_UNARY | EXPR_OBJ_EXTEND | EXPR_PARENED | EXPR_STRING
+			| EXPR_NUMBER | EXPR_LITERAL | EXPR_ARRAY | EXPR_OBJECT | EXPR_ARRAY_COMP
+			| EXPR_IMPORT | EXPR_VAR | EXPR_IF_THEN_ELSE | EXPR_FUNCTION | EXPR_ERROR => true,
 			_ => false,
 		}
 	}
@@ -2083,10 +2114,6 @@ impl AstNode for ExprBase {
 		let res = match syntax.kind() {
 			EXPR_BINARY => ExprBase::ExprBinary(ExprBinary { syntax }),
 			EXPR_UNARY => ExprBase::ExprUnary(ExprUnary { syntax }),
-			EXPR_SLICE => ExprBase::ExprSlice(ExprSlice { syntax }),
-			EXPR_INDEX => ExprBase::ExprIndex(ExprIndex { syntax }),
-			EXPR_INDEX_EXPR => ExprBase::ExprIndexExpr(ExprIndexExpr { syntax }),
-			EXPR_APPLY => ExprBase::ExprApply(ExprApply { syntax }),
 			EXPR_OBJ_EXTEND => ExprBase::ExprObjExtend(ExprObjExtend { syntax }),
 			EXPR_PARENED => ExprBase::ExprParened(ExprParened { syntax }),
 			EXPR_STRING => ExprBase::ExprString(ExprString { syntax }),
@@ -2099,7 +2126,6 @@ impl AstNode for ExprBase {
 			EXPR_VAR => ExprBase::ExprVar(ExprVar { syntax }),
 			EXPR_IF_THEN_ELSE => ExprBase::ExprIfThenElse(ExprIfThenElse { syntax }),
 			EXPR_FUNCTION => ExprBase::ExprFunction(ExprFunction { syntax }),
-			EXPR_ASSERT => ExprBase::ExprAssert(ExprAssert { syntax }),
 			EXPR_ERROR => ExprBase::ExprError(ExprError { syntax }),
 			_ => return None,
 		};
@@ -2109,10 +2135,6 @@ impl AstNode for ExprBase {
 		match self {
 			ExprBase::ExprBinary(it) => &it.syntax,
 			ExprBase::ExprUnary(it) => &it.syntax,
-			ExprBase::ExprSlice(it) => &it.syntax,
-			ExprBase::ExprIndex(it) => &it.syntax,
-			ExprBase::ExprIndexExpr(it) => &it.syntax,
-			ExprBase::ExprApply(it) => &it.syntax,
 			ExprBase::ExprObjExtend(it) => &it.syntax,
 			ExprBase::ExprParened(it) => &it.syntax,
 			ExprBase::ExprString(it) => &it.syntax,
@@ -2125,7 +2147,6 @@ impl AstNode for ExprBase {
 			ExprBase::ExprVar(it) => &it.syntax,
 			ExprBase::ExprIfThenElse(it) => &it.syntax,
 			ExprBase::ExprFunction(it) => &it.syntax,
-			ExprBase::ExprAssert(it) => &it.syntax,
 			ExprBase::ExprError(it) => &it.syntax,
 		}
 	}
@@ -2344,14 +2365,16 @@ impl AstToken for BinaryOperator {
 impl BinaryOperatorKind {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		match kind {
-			OR | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE | IN_KW | LHS
-			| RHS | PLUS | MINUS | MUL | DIV | MODULO | META_OBJECT_APPLY | ERROR_NO_OPERATOR => true,
+			OR | NULL_COAELSE | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE
+			| IN_KW | LHS | RHS | PLUS | MINUS | MUL | DIV | MODULO | META_OBJECT_APPLY
+			| ERROR_NO_OPERATOR => true,
 			_ => false,
 		}
 	}
 	pub fn cast(kind: SyntaxKind) -> Option<Self> {
 		let res = match kind {
 			OR => Self::Or,
+			NULL_COAELSE => Self::NullCoaelse,
 			AND => Self::And,
 			BIT_OR => Self::BitOr,
 			BIT_XOR => Self::BitXor,
@@ -2742,17 +2765,27 @@ impl std::fmt::Display for CustomError {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
+impl std::fmt::Display for Suffix {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for Bind {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for Stmt {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
 impl std::fmt::Display for ObjBody {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
 impl std::fmt::Display for CompSpec {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for Bind {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2797,32 +2830,7 @@ impl std::fmt::Display for Expr {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ExprBinary {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for LhsExpr {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprUnary {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprSlice {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for SliceDesc {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for ExprIndex {
+impl std::fmt::Display for SuffixIndex {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2832,17 +2840,52 @@ impl std::fmt::Display for Name {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ExprIndexExpr {
+impl std::fmt::Display for SuffixIndexExpr {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ExprApply {
+impl std::fmt::Display for SuffixSlice {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for SliceDesc {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for SuffixApply {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
 impl std::fmt::Display for ArgsDesc {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for StmtLocal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for StmtAssert {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for Assertion {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for ExprBinary {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for ExprUnary {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
@@ -2922,22 +2965,7 @@ impl std::fmt::Display for ParamsDesc {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl std::fmt::Display for ExprAssert {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for Assertion {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
 impl std::fmt::Display for ExprError {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
-impl std::fmt::Display for StmtLocal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

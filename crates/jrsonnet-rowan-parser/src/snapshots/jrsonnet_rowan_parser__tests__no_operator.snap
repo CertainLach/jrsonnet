@@ -3,8 +3,9 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "2 2\n"
 ---
 SOURCE_FILE@0..4
-  EXPR_NUMBER@0..1
-    FLOAT@0..1 "2"
+  EXPR@0..1
+    EXPR_NUMBER@0..1
+      FLOAT@0..1 "2"
   WHITESPACE@1..2 " "
   ERROR_CUSTOM@2..3
     FLOAT@2..3 "2"

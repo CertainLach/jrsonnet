@@ -149,7 +149,7 @@ pub fn lower(kinds: &KindsSrc, grammar: &Grammar) -> AstSrc {
 					let mut types = HashMap::new();
 					for field in fields.iter().filter(|f| f.token_name().is_none()) {
 						if let Some(old) = types.insert(field.ty(), field.method_name(kinds)) {
-							panic!("{name}.{} has same type as {name}.{}, resolve conflict by wrapping one field: {}", old, field.method_name(kinds), field.ty());
+							// panic!("{name}.{} has same type as {name}.{}, resolve conflict by wrapping one field: {}", old, field.method_name(kinds), field.ty());
 						}
 						// TODO: check for assignable field types, i.e you can have
 						// ```

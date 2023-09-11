@@ -212,6 +212,7 @@ pub fn jsonnet_kinds() -> KindsSrc {
 	let mut kinds = KindsSrc::new();
 	define_kinds![kinds =
 		"||" => "OR";
+		"??" => "NULL_COAELSE";
 		"&&" => "AND";
 		"|" => "BIT_OR";
 		"^" => "BIT_XOR";

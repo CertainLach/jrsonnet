@@ -72,7 +72,7 @@ fn process(text: &str) -> String {
 			styles: ThemeStyles::none(),
 		});
 
-		write!(out, "===").unwrap();
+		writeln!(out, "===").unwrap();
 		handler
 			.render_report(&mut out, &diag)
 			.expect("fmt error?..");

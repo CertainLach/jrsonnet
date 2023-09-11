@@ -293,30 +293,38 @@ impl fmt::Display for ExpectedSyntax {
 }
 
 fn expr(p: &mut Parser) -> CompletedMarker {
-	while p.at(T![local]) {
+	let m = p.start();
+	while p.at(T![local]) || p.at(T![assert]) {
 		let m = p.start();
 
-		p.bump();
-		loop {
-			if p.at(T![;]) {
-				p.bump();
+		if p.at(T![local]) {
+			p.bump();
+			loop {
+				if p.at(T![;]) {
+					p.bump();
+					break;
+				}
+				bind(p);
+
+				if p.at(T![,]) {
+					p.bump();
+					continue;
+				}
+				p.expect(T![;]);
 				break;
 			}
-			bind(p);
-
-			if p.at(T![,]) {
-				p.bump();
-				continue;
-			}
+			m.complete(p, STMT_LOCAL);
+		} else {
+			assertion(p);
 			p.expect(T![;]);
-			break;
+			m.complete(p, STMT_ASSERT);
 		}
-		m.complete(p, STMT_LOCAL);
 	}
 	match expr_binding_power(p, 0) {
 		Ok(m) => m,
 		Err(m) => m,
-	}
+	};
+	m.complete(p, EXPR)
 }
 fn expr_binding_power(
 	p: &mut Parser,
@@ -337,8 +345,10 @@ fn expr_binding_power(
 			p.bump();
 		}
 
-		let m = lhs.wrap(p, LHS_EXPR).precede(p);
-		let parsed_rhs = expr_binding_power(p, right_binding_power).is_ok();
+		let m = lhs.wrap(p, EXPR).precede(p);
+		let parsed_rhs = expr_binding_power(p, right_binding_power)
+			.map(|v| v.precede(p).complete(p, EXPR))
+			.is_ok();
 		lhs = m.complete(
 			p,
 			if op == BinaryOperatorKind::MetaObjectApply {
@@ -361,7 +371,7 @@ fn compspec(p: &mut Parser) -> CompletedMarker {
 	if p.at(T![for]) {
 		let m = p.start();
 		p.bump();
-		name(p);
+		destruct(p);
 		p.expect(T![in]);
 		expr(p);
 		m.complete(p, FOR_SPEC)
@@ -420,7 +430,7 @@ fn visibility(p: &mut Parser) {
 fn assertion(p: &mut Parser) {
 	let m = p.start();
 	p.bump_assert(T![assert]);
-	expr(p).wrap(p, LHS_EXPR);
+	expr(p);
 	if p.at(T![:]) {
 		p.bump();
 		expr(p);
@@ -504,7 +514,7 @@ fn object(p: &mut Parser) -> CompletedMarker {
 		for errored in compspecs {
 			errored.wrap_error(
 				p,
-				"compspec may only be used if there is only one array element",
+				"compspec may only be used if there is only one object element",
 			);
 		}
 		m.complete(p, OBJ_BODY_MEMBER_LIST);
@@ -612,8 +622,8 @@ fn array(p: &mut Parser) -> CompletedMarker {
 			p.expect(T![']']);
 			break;
 		}
-		elems += 1;
 		expr(p);
+		elems += 1;
 		while p.at_ts(COMPSPEC) {
 			compspecs.push(compspec(p));
 		}
@@ -679,32 +689,47 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 	true
 }
 
-fn lhs(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
-	let mut lhs = lhs_basic(p)?;
-
+fn suffix(p: &mut Parser) {
 	loop {
-		if p.at(T![.]) {
-			let m = lhs.precede(p);
+		let start = p.start();
+		let _marker: CompletedMarker = if p.at(T![?]) {
+			p.bump();
+			p.expect(T![.]);
+			if p.at(IDENT) {
+				name(p);
+				start.complete(p, SUFFIX_INDEX)
+			} else if p.at(T!['[']) {
+				p.bump();
+				expr(p);
+				p.expect(T![']']);
+				start.complete(p, SUFFIX_INDEX_EXPR)
+			} else {
+				start.complete_missing(p, ExpectedSyntax::Named("index"))
+			}
+		} else if p.at(T![.]) {
 			p.bump();
 			name(p);
-			lhs = m.complete(p, EXPR_INDEX);
+			start.complete(p, SUFFIX_INDEX)
 		} else if p.at(T!['[']) {
 			if slice_desc_or_index(p) {
-				lhs = lhs.precede(p).complete(p, EXPR_SLICE);
+				start.complete(p, SUFFIX_SLICE)
 			} else {
-				lhs = lhs
-					.wrap(p, LHS_EXPR)
-					.precede(p)
-					.complete(p, EXPR_INDEX_EXPR);
+				start.complete(p, SUFFIX_INDEX_EXPR)
 			}
 		} else if p.at(T!['(']) {
-			let m = lhs.precede(p);
 			args_desc(p);
-			lhs = m.complete(p, EXPR_APPLY);
+			start.complete(p, SUFFIX_APPLY)
 		} else {
+			start.forget(p);
 			break;
-		}
+		};
 	}
+}
+
+fn lhs(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
+	let lhs = lhs_basic(p)?;
+
+	suffix(p);
 
 	Ok(lhs)
 }
@@ -885,12 +910,6 @@ fn lhs_basic(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 		p.bump();
 		expr(p);
 		m.complete(p, EXPR_ERROR)
-	} else if p.at(T![assert]) {
-		let m = p.start();
-		assertion(p);
-		p.expect(T![;]);
-		expr(p);
-		m.complete(p, EXPR_ASSERT)
 	} else if p.at(T![import]) || p.at(T![importstr]) || p.at(T![importbin]) {
 		let m = p.start();
 		p.bump();

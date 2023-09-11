@@ -13,6 +13,7 @@ impl BinaryOperatorKind {
 			Self::BitXor => (8, 9),
 			Self::BitOr => (6, 7),
 			Self::And => (4, 5),
+			Self::NullCoaelse => (2, 3),
 			Self::Or => (2, 3),
 			Self::ErrorNoOperator => (0, 1),
 		}

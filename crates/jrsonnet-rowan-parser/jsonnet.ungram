@@ -5,31 +5,46 @@
 
 SourceFile = Expr
 
+SuffixIndex =
+    '?'?
+    '.'
+    index:Name
+SuffixIndexExpr =
+    ('?' '.')?
+    '['
+    index:Expr
+    ']'
+SuffixSlice =
+    SliceDesc
+SuffixApply =
+    ArgsDesc
+    'tailstrict'?
+Suffix =
+    SuffixIndex
+|   SuffixIndexExpr
+|   SuffixSlice
+|   SuffixApply
+
+StmtLocal =
+    'local'
+    (Bind (',' Bind)* ','?)
+    ';'
+StmtAssert =
+    Assertion
+    ';'
+Stmt =
+    StmtLocal
+|   StmtAssert
+
 ExprBinary =
-    lhs:LhsExpr
+    lhs:Expr
     BinaryOperator
     rhs:Expr
 ExprUnary =
     UnaryOperator
     rhs:Expr
-ExprSlice =
-    Expr
-    SliceDesc
-ExprIndex =
-    Expr
-    '.'
-    index:Name
-ExprIndexExpr =
-    base:LhsExpr
-    '['
-    index:Expr
-    ']'
-ExprApply =
-    Expr
-    ArgsDesc
-    'tailstrict'?
 ExprObjExtend =
-    LhsExpr
+    Expr
     Expr
 ExprParened =
     '('
@@ -79,29 +94,18 @@ ExprFunction =
     ParamsDesc
     ')'
     Expr
-ExprAssert =
-    Assertion
-    ';'
-    Expr
 ExprError =
     'error'
     Expr
 
-StmtLocal =
-    'local'
-    (Bind (',' Bind)* ','?)
-    ';'
-
 Expr =
-    StmtLocal*
+    Stmt*
     ExprBase
+    Suffix*
+
 ExprBase =
     ExprBinary
 |   ExprUnary
-|   ExprSlice
-|   ExprIndex
-|   ExprIndexExpr
-|   ExprApply
 |   ExprObjExtend
 |   ExprParened
 |   ExprString
@@ -114,11 +118,10 @@ ExprBase =
 |   ExprVar
 |   ExprIfThenElse
 |   ExprFunction
-|   ExprAssert
 |   ExprError
 
 BinaryOperator =
-    '||' | '&&'
+    '||' | '??' | '&&'
 |   '|' | '^' | '&'
 |   '==' | '!=' | '<' | '>' | '<=' | '>=' | 'in'
 |   '<<' | '>>'
@@ -242,7 +245,7 @@ Number =
 
 ForSpec =
     'for'
-    bind:Name
+    bind:Destruct
     'in'
     Expr
 IfSpec =
@@ -278,7 +281,7 @@ Param =
 
 Assertion =
     'assert'
-    condition:LhsExpr
+    condition:Expr
     (
         ':'
         message:Expr
@@ -336,7 +339,6 @@ DestructObjectField =
 // Aliases used to resolve node type conflicts
 TrueExpr=Expr
 FalseExpr=Expr
-LhsExpr=Expr
 
 // Trivia - tokens which will be implicitly skipped for parser
 Trivia =

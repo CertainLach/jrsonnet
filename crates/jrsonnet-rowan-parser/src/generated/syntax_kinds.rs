@@ -19,6 +19,8 @@ pub enum SyntaxKind {
 	EOF,
 	#[token("||")]
 	OR,
+	#[token("??")]
+	NULL_COAELSE,
 	#[token("&&")]
 	AND,
 	#[token("|")]
@@ -137,6 +139,8 @@ pub enum SyntaxKind {
 	ERROR_COMMENT_UNTERMINATED,
 	#[token("tailstrict")]
 	TAILSTRICT_KW,
+	#[token("local")]
+	LOCAL_KW,
 	#[token("importstr")]
 	IMPORTSTR_KW,
 	#[token("importbin")]
@@ -153,8 +157,6 @@ pub enum SyntaxKind {
 	FUNCTION_KW,
 	#[token("error")]
 	ERROR_KW,
-	#[token("local")]
-	LOCAL_KW,
 	#[token("in")]
 	IN_KW,
 	META_OBJECT_APPLY,
@@ -181,16 +183,18 @@ pub enum SyntaxKind {
 	LEXING_ERROR,
 	SOURCE_FILE,
 	EXPR,
-	EXPR_BINARY,
-	LHS_EXPR,
-	EXPR_UNARY,
-	EXPR_SLICE,
-	SLICE_DESC,
-	EXPR_INDEX,
+	SUFFIX_INDEX,
 	NAME,
-	EXPR_INDEX_EXPR,
-	EXPR_APPLY,
+	SUFFIX_INDEX_EXPR,
+	SUFFIX_SLICE,
+	SLICE_DESC,
+	SUFFIX_APPLY,
 	ARGS_DESC,
+	STMT_LOCAL,
+	STMT_ASSERT,
+	ASSERTION,
+	EXPR_BINARY,
+	EXPR_UNARY,
 	EXPR_OBJ_EXTEND,
 	EXPR_PARENED,
 	EXPR_LITERAL,
@@ -206,10 +210,7 @@ pub enum SyntaxKind {
 	FALSE_EXPR,
 	EXPR_FUNCTION,
 	PARAMS_DESC,
-	EXPR_ASSERT,
-	ASSERTION,
 	EXPR_ERROR,
-	STMT_LOCAL,
 	SLICE_DESC_END,
 	SLICE_DESC_STEP,
 	ARG,
@@ -234,9 +235,11 @@ pub enum SyntaxKind {
 	DESTRUCT_OBJECT_FIELD,
 	DESTRUCT_REST,
 	DESTRUCT_ARRAY_ELEMENT,
+	SUFFIX,
+	BIND,
+	STMT,
 	OBJ_BODY,
 	COMP_SPEC,
-	BIND,
 	EXPR_BASE,
 	MEMBER_COMP,
 	MEMBER,
@@ -259,21 +262,21 @@ use self::SyntaxKind::*;
 impl SyntaxKind {
 	pub fn is_keyword(self) -> bool {
 		match self {
-			OR | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE | LHS | RHS
-			| PLUS | MINUS | MUL | DIV | MODULO | NOT | BIT_NOT | L_BRACK | R_BRACK | L_PAREN
-			| R_PAREN | L_BRACE | R_BRACE | COLON | COLONCOLON | COLONCOLONCOLON | SEMI | DOT
-			| DOTDOTDOT | COMMA | DOLLAR | ASSIGN | QUESTION_MARK | TAILSTRICT_KW
-			| IMPORTSTR_KW | IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW | FUNCTION_KW
-			| ERROR_KW | LOCAL_KW | IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW | SUPER_KW
-			| FOR_KW | ASSERT_KW => true,
+			OR | NULL_COAELSE | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE
+			| LHS | RHS | PLUS | MINUS | MUL | DIV | MODULO | NOT | BIT_NOT | L_BRACK | R_BRACK
+			| L_PAREN | R_PAREN | L_BRACE | R_BRACE | COLON | COLONCOLON | COLONCOLONCOLON
+			| SEMI | DOT | DOTDOTDOT | COMMA | DOLLAR | ASSIGN | QUESTION_MARK | TAILSTRICT_KW
+			| LOCAL_KW | IMPORTSTR_KW | IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW
+			| FUNCTION_KW | ERROR_KW | IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW
+			| SUPER_KW | FOR_KW | ASSERT_KW => true,
 			_ => false,
 		}
 	}
 	pub fn is_enum(self) -> bool {
 		match self {
-			OBJ_BODY | COMP_SPEC | BIND | EXPR_BASE | MEMBER_COMP | MEMBER | FIELD_NAME
-			| DESTRUCT | DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR | LITERAL
-			| TEXT | NUMBER | IMPORT_KIND | VISIBILITY | TRIVIA | CUSTOM_ERROR => true,
+			SUFFIX | BIND | STMT | OBJ_BODY | COMP_SPEC | EXPR_BASE | MEMBER_COMP | MEMBER
+			| FIELD_NAME | DESTRUCT | DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR
+			| LITERAL | TEXT | NUMBER | IMPORT_KIND | VISIBILITY | TRIVIA | CUSTOM_ERROR => true,
 			_ => false,
 		}
 	}
@@ -286,5 +289,5 @@ impl SyntaxKind {
 	}
 }
 #[macro_export]
-macro_rules ! T { [||] => { $ crate :: SyntaxKind :: OR } ; [&&] => { $ crate :: SyntaxKind :: AND } ; [|] => { $ crate :: SyntaxKind :: BIT_OR } ; [^] => { $ crate :: SyntaxKind :: BIT_XOR } ; [&] => { $ crate :: SyntaxKind :: BIT_AND } ; [==] => { $ crate :: SyntaxKind :: EQ } ; [!=] => { $ crate :: SyntaxKind :: NE } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LE } ; [>=] => { $ crate :: SyntaxKind :: GE } ; [<<] => { $ crate :: SyntaxKind :: LHS } ; [>>] => { $ crate :: SyntaxKind :: RHS } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: MUL } ; [/] => { $ crate :: SyntaxKind :: DIV } ; [%] => { $ crate :: SyntaxKind :: MODULO } ; [!] => { $ crate :: SyntaxKind :: NOT } ; [~] => { $ crate :: SyntaxKind :: BIT_NOT } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['{'] => { $ crate :: SyntaxKind :: L_BRACE } ; ['}'] => { $ crate :: SyntaxKind :: R_BRACE } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [::] => { $ crate :: SyntaxKind :: COLONCOLON } ; [:::] => { $ crate :: SyntaxKind :: COLONCOLONCOLON } ; [;] => { $ crate :: SyntaxKind :: SEMI } ; [.] => { $ crate :: SyntaxKind :: DOT } ; [...] => { $ crate :: SyntaxKind :: DOTDOTDOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['$'] => { $ crate :: SyntaxKind :: DOLLAR } ; [=] => { $ crate :: SyntaxKind :: ASSIGN } ; [?] => { $ crate :: SyntaxKind :: QUESTION_MARK } ; [tailstrict] => { $ crate :: SyntaxKind :: TAILSTRICT_KW } ; [importstr] => { $ crate :: SyntaxKind :: IMPORTSTR_KW } ; [importbin] => { $ crate :: SyntaxKind :: IMPORTBIN_KW } ; [import] => { $ crate :: SyntaxKind :: IMPORT_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [function] => { $ crate :: SyntaxKind :: FUNCTION_KW } ; [error] => { $ crate :: SyntaxKind :: ERROR_KW } ; [local] => { $ crate :: SyntaxKind :: LOCAL_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [null] => { $ crate :: SyntaxKind :: NULL_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [self] => { $ crate :: SyntaxKind :: SELF_KW } ; [super] => { $ crate :: SyntaxKind :: SUPER_KW } ; [for] => { $ crate :: SyntaxKind :: FOR_KW } ; [assert] => { $ crate :: SyntaxKind :: ASSERT_KW } }
+macro_rules ! T { [||] => { $ crate :: SyntaxKind :: OR } ; [??] => { $ crate :: SyntaxKind :: NULL_COAELSE } ; [&&] => { $ crate :: SyntaxKind :: AND } ; [|] => { $ crate :: SyntaxKind :: BIT_OR } ; [^] => { $ crate :: SyntaxKind :: BIT_XOR } ; [&] => { $ crate :: SyntaxKind :: BIT_AND } ; [==] => { $ crate :: SyntaxKind :: EQ } ; [!=] => { $ crate :: SyntaxKind :: NE } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LE } ; [>=] => { $ crate :: SyntaxKind :: GE } ; [<<] => { $ crate :: SyntaxKind :: LHS } ; [>>] => { $ crate :: SyntaxKind :: RHS } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: MUL } ; [/] => { $ crate :: SyntaxKind :: DIV } ; [%] => { $ crate :: SyntaxKind :: MODULO } ; [!] => { $ crate :: SyntaxKind :: NOT } ; [~] => { $ crate :: SyntaxKind :: BIT_NOT } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['{'] => { $ crate :: SyntaxKind :: L_BRACE } ; ['}'] => { $ crate :: SyntaxKind :: R_BRACE } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [::] => { $ crate :: SyntaxKind :: COLONCOLON } ; [:::] => { $ crate :: SyntaxKind :: COLONCOLONCOLON } ; [;] => { $ crate :: SyntaxKind :: SEMI } ; [.] => { $ crate :: SyntaxKind :: DOT } ; [...] => { $ crate :: SyntaxKind :: DOTDOTDOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['$'] => { $ crate :: SyntaxKind :: DOLLAR } ; [=] => { $ crate :: SyntaxKind :: ASSIGN } ; [?] => { $ crate :: SyntaxKind :: QUESTION_MARK } ; [tailstrict] => { $ crate :: SyntaxKind :: TAILSTRICT_KW } ; [local] => { $ crate :: SyntaxKind :: LOCAL_KW } ; [importstr] => { $ crate :: SyntaxKind :: IMPORTSTR_KW } ; [importbin] => { $ crate :: SyntaxKind :: IMPORTBIN_KW } ; [import] => { $ crate :: SyntaxKind :: IMPORT_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [function] => { $ crate :: SyntaxKind :: FUNCTION_KW } ; [error] => { $ crate :: SyntaxKind :: ERROR_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [null] => { $ crate :: SyntaxKind :: NULL_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [self] => { $ crate :: SyntaxKind :: SELF_KW } ; [super] => { $ crate :: SyntaxKind :: SUPER_KW } ; [for] => { $ crate :: SyntaxKind :: FOR_KW } ; [assert] => { $ crate :: SyntaxKind :: ASSERT_KW } }
 pub use T;

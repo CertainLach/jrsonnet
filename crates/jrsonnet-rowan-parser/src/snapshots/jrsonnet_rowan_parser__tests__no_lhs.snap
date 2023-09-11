@@ -3,7 +3,8 @@ source: crates/jrsonnet-rowan-parser/src/tests.rs
 expression: "+ 2\n"
 ---
 SOURCE_FILE@0..4
-  ERROR_MISSING_TOKEN@0..0
+  EXPR@0..0
+    ERROR_MISSING_TOKEN@0..0
   ERROR_CUSTOM@0..3
     PLUS@0..1 "+"
     WHITESPACE@1..2 " "
