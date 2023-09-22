@@ -1,0 +1,13 @@
+[package]
+name = "jrsonnet-lsp"
+version.workspace = true
+edition = "2021"
+
+[dependencies]
+anyhow = "1.0.48"
+jrsonnet-evaluator.workspace = true
+jrsonnet-rowan-parser.workspace = true
+lsp-server = "0.6.0"
+lsp-types = "0.93.0"
+serde = "1.0.130"
+serde_json = "1.0.71"

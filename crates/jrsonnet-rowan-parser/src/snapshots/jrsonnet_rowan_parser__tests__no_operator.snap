@@ -1,0 +1,21 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "2 2\n"
+---
+SOURCE_FILE@0..4
+  EXPR@0..1
+    EXPR_NUMBER@0..1
+      FLOAT@0..1 "2"
+  WHITESPACE@1..2 " "
+  ERROR_CUSTOM@2..3
+    FLOAT@2..3 "2"
+  WHITESPACE@3..4 "\n"
+===
+LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 2..3 }
+===
+  x syntax error
+   ,----
+ 1 | 2 2
+   :   |
+   :   `-- unexpected tokens after end
+   `----

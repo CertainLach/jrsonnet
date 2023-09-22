@@ -131,6 +131,8 @@
             cargo-edit
             cargo-asm
             cargo-outdated
+            cargo-watch
+            cargo-insta
             lld
             hyperfine
             graphviz

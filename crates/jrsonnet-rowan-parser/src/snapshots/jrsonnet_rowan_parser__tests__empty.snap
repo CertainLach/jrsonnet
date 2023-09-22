@@ -1,0 +1,17 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: " "
+---
+SOURCE_FILE@0..1
+  WHITESPACE@0..1 " "
+  EXPR@1..1
+    ERROR_MISSING_TOKEN@1..1
+===
+LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 1..1 }
+===
+  x syntax error
+   ,----
+ 1 |
+   :  ^
+   :  `-- missing expression
+   `----

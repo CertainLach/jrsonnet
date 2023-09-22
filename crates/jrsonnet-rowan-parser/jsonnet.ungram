@@ -1,0 +1,355 @@
+// This file describes structure of jsonnet source code
+// It is also used to generate files in src/generated
+
+// Token names ending with `!` are considered meta, and handled specifically
+
+SourceFile = Expr
+
+SuffixIndex =
+    '?'?
+    '.'
+    index:Name
+SuffixIndexExpr =
+    ('?' '.')?
+    '['
+    index:Expr
+    ']'
+SuffixSlice =
+    SliceDesc
+SuffixApply =
+    ArgsDesc
+    'tailstrict'?
+Suffix =
+    SuffixIndex
+|   SuffixIndexExpr
+|   SuffixSlice
+|   SuffixApply
+
+StmtLocal =
+    'local'
+    (Bind (',' Bind)* ','?)
+    ';'
+StmtAssert =
+    Assertion
+    ';'
+Stmt =
+    StmtLocal
+|   StmtAssert
+
+ExprBinary =
+    lhs:Expr
+    BinaryOperator
+    rhs:Expr
+ExprUnary =
+    UnaryOperator
+    rhs:Expr
+ExprObjExtend =
+    Expr
+    Expr
+ExprParened =
+    '('
+    Expr
+    ')'
+
+ExprLiteral =
+    Literal
+ExprString =
+    Text
+ExprNumber =
+    Number
+ExprArray =
+    '['
+    (Expr (',' Expr)* ','?)?
+    ']'
+ExprObject =
+    ObjBody
+ExprArrayComp =
+    '['
+    Expr
+    ','?
+    CompSpec*
+    ']'
+
+ExprImport =
+    ImportKind Text
+
+ImportKind =
+    'importstr'
+|   'importbin'
+|   'import'
+
+ExprVar =
+    name:Name
+
+ExprIfThenElse =
+    'if'
+    cond:Expr
+    'then'
+    then:TrueExpr
+    ('else' else_:FalseExpr)?
+
+ExprFunction =
+    'function'
+    '('
+    ParamsDesc
+    ')'
+    Expr
+ExprError =
+    'error'
+    Expr
+
+Expr =
+    Stmt*
+    ExprBase
+    Suffix*
+
+ExprBase =
+    ExprBinary
+|   ExprUnary
+|   ExprObjExtend
+|   ExprParened
+|   ExprString
+|   ExprNumber
+|   ExprLiteral
+|   ExprArray
+|   ExprObject
+|   ExprArrayComp
+|   ExprImport
+|   ExprVar
+|   ExprIfThenElse
+|   ExprFunction
+|   ExprError
+
+BinaryOperator =
+    '||' | '??' | '&&'
+|   '|' | '^' | '&'
+|   '==' | '!=' | '<' | '>' | '<=' | '>=' | 'in'
+|   '<<' | '>>'
+|   '+' | '-'
+|   '*' | '/' | '%'
+|   'META_OBJECT_APPLY!'
+|   'ERROR_NO_OPERATOR!'
+
+UnaryOperator =
+    '-' | '!' | '~'
+
+SliceDescEnd=Expr
+SliceDescStep=Expr
+SliceDesc =
+    '['
+    from:Expr?
+    ':'
+    (
+        end:SliceDescEnd?
+        (
+            ':'
+            step:SliceDescStep?
+        )?
+    )?
+    ']'
+
+Name =
+    'LIT_IDENT!'
+
+ArgsDesc =
+    '('
+    (Arg (',' Arg)* ','?)?
+    ')'
+Arg =
+    (name:Name '=')? Expr
+
+ObjBodyComp =
+    '{'
+    (MemberComp (',' MemberComp)* ','?)?
+    CompSpec*
+    '}'
+ObjBodyMemberList =
+    '{'
+    (Member (',' Member)* ','?)?
+    '}'
+ObjBody =
+    ObjBodyComp
+|   ObjBodyMemberList
+
+MemberBindStmt = ObjLocal
+MemberAssertStmt = Assertion
+MemberFieldNormal =
+    FieldName
+    '+'?
+    Visibility
+    Expr
+MemberFieldMethod =
+    FieldName
+    ParamsDesc
+    Visibility
+    Expr
+MemberComp =
+    MemberBindStmt
+|    MemberFieldNormal
+|   MemberFieldMethod
+Member =
+    MemberBindStmt
+|   MemberAssertStmt
+|   MemberFieldNormal
+|   MemberFieldMethod
+
+ObjLocal =
+    'local'
+    Bind
+
+FieldNameFixed =
+    id:Name
+|   Text
+FieldNameDynamic =
+    '['
+    Expr
+    ']'
+FieldName =
+    FieldNameFixed
+|   FieldNameDynamic
+
+Visibility =
+    ':::'
+|   '::'
+|   ':'
+
+Literal =
+    'null'
+|   'true'
+|   'false'
+|   'self'
+|   '$'
+|   'super'
+
+Text =
+    'LIT_STRING_DOUBLE!'
+|   'ERROR_STRING_DOUBLE_UNTERMINATED!'
+|   'LIT_STRING_SINGLE!'
+|   'ERROR_STRING_SINGLE_UNTERMINATED!'
+|   'LIT_STRING_DOUBLE_VERBATIM!'
+|   'ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED!'
+|   'LIT_STRING_SINGLE_VERBATIM!'
+|   'ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED!'
+|   'ERROR_STRING_VERBATIM_MISSING_QUOTES!'
+|   'LIT_STRING_BLOCK!'
+|   'ERROR_STRING_BLOCK_UNEXPECTED_END!'
+|   'ERROR_STRING_BLOCK_MISSING_NEW_LINE!'
+|   'ERROR_STRING_BLOCK_MISSING_TERMINATION!'
+|   'ERROR_STRING_BLOCK_MISSING_INDENT!'
+
+Number =
+    'LIT_FLOAT!'
+|   'ERROR_FLOAT_JUNK_AFTER_POINT!'
+|   'ERROR_FLOAT_JUNK_AFTER_EXPONENT!'
+|   'ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN!'
+
+ForSpec =
+    'for'
+    bind:Destruct
+    'in'
+    Expr
+IfSpec =
+    'if'
+    Expr
+CompSpec =
+    ForSpec
+|   IfSpec
+
+BindDestruct =
+    into:Destruct
+    '='
+    value:Expr
+BindFunction =
+    name:Name
+    params:ParamsDesc
+    '='
+    value:Expr
+Bind =
+    BindDestruct
+|   BindFunction
+
+ParamsDesc =
+    '('
+    (Param (',' Param)* ','?)?
+    ')'
+Param =
+    Destruct
+    (
+        '='
+        Expr
+    )?
+
+Assertion =
+    'assert'
+    condition:Expr
+    (
+        ':'
+        message:Expr
+    )?
+
+DestructFull =
+    Name
+DestructSkip =
+    '?'
+DestructArray =
+    '['
+    (
+        DestructArrayPart
+        (',' DestructArrayPart)*
+        ','?
+    )?
+    ']'
+DestructObject =
+    '{'
+    (
+        DestructObjectField
+        (',' DestructObjectField)*
+        ','?
+    )?
+    DestructRest?
+    ','?
+    '}'
+Destruct =
+    DestructFull
+|   DestructSkip
+|   DestructArray
+|   DestructObject
+
+DestructArrayElement =
+    Destruct
+DestructArrayPart =
+    DestructArrayElement
+|   DestructRest
+
+DestructRest =
+    '...'
+    into:Name?
+
+DestructObjectField =
+    field:Name
+    (
+        ':'
+        Destruct
+    )?
+    (
+        '='
+        Expr
+    )?
+
+// Aliases used to resolve node type conflicts
+TrueExpr=Expr
+FalseExpr=Expr
+
+// Trivia - tokens which will be implicitly skipped for parser
+Trivia =
+    'LIT_WHITESPACE!'
+|   'LIT_MULTI_LINE_COMMENT!'
+|   'ERROR_COMMENT_TOO_SHORT!'
+|   'ERROR_COMMENT_UNTERMINATED!'
+|   'LIT_SINGLE_LINE_HASH_COMMENT!'
+|   'LIT_SINGLE_LINE_SLASH_COMMENT!'
+
+CustomError =
+    'ERROR_MISSING_TOKEN!'
+|   'ERROR_UNEXPECTED_TOKEN!'
+|   'ERROR_CUSTOM!'
