@@ -1,109 +1,123 @@
-# Features
+= Features
 
 Some features, which exists in jrsonnet, but not yet in other implementations.
 
 Any of those features may be enabled during build time using feature flags, i.e: `--features=exp-destruct`.
 
-## `exp-destruct`
+== `exp-destruct`
 
 Destructuring assignment, upstream issue: https://github.com/google/jsonnet/issues/307
 
 Destructuring object:
 
-```jsonnet
+[source,jsonnet]
+----
 local {a: b} = obj; ...
 // Same as
 local b = obj.a; ...
-```
+----
 
 Field name may be omitted:
 
-> However, field name omission looks off here, as currently jsonnet doesn't allows `local a = 1; {a}` as a sugar for `local a = 1; {a: a}`, this causing asymmetry
+> However, field name omission looks off here, as currently jsonnet doesn't allows `local a = 1; {a}`
+as a sugar for `local a = 1; {a: a}`, this causing asymmetry
 
-```jsonnet
+[source,jsonnet]
+----
 local {a} = obj; ...
 // Same as
 local a = obj.a; ...
-```
+----
 
 Rest of fields may be collected into another object:
 
-```jsonnet
+[source,jsonnet]
+----
 local {a, ...rest} = obj; ...
-```
+----
 
 And it is possible to set field defaults:
 
-```jsonnet
+[source,jsonnet]
+----
 local {a = 1} = {};
 
 a == 1
-```
+----
 
 Destructuring arrays:
 
-```jsonnet
+[source,jsonnet]
+----
 local [a, b, c] = array; ...
-```
+----
 
 Rest of fields in any position may be collected into other array:
 
-```jsonnet
+[source,jsonnet]
+----
 local [...rest, a] = array; ...
 local [a, ...rest] = array; ...
 local [a, ...rest, b] = array; ...
-```
+----
 
 In case of not needed fields there is `?` (because `_` is not reserved):
 
-```jsonnet
+[source,jsonnet]
+----
 local [?, b, c] = ["a", "b", "c"]; ...
-```
+----
 
 Recursive destructuring also works:
 
-```jsonnet
+[source,jsonnet]
+----
 local {a: [{b: {c: d}}]} = {a:[{b:{c:5}}]}; d == 5
-```
+----
 
-Also mutually recursive declaration works:
+Also, mutually recursive declaration works:
 
-```jsonnet
+[source,jsonnet]
+----
 local
   {a, b, c} = {a: y, b: c, c: x},
   {x, y, z} = {x: a, y: 2, z: b};
 z == 2
-```
+----
 
 This feature also works in function arguments:
 > It is impossible to reference those parameters using named argument syntax
 
-```jsonnet
+[source,jsonnet]
+----
 local myFun({a, b, c}) = a + b + c;
 
 myFun({a: 1, b: 2, c: 3})
-```
+----
 
-## `exp-preserve-order`
+== `exp-preserve-order`
 
 Object field order preservation during manifestification, upstream issue: https://github.com/google/jsonnet/issues/903
 
-This feature adds a new CLI argument: `--preserve-order`, as well as additional `std.manifest*/std.objectFields*` standard library functions argument `preserve_order`.
+This feature adds a new CLI argument: `--preserve-order`,
+as well as additional `std.manifest*/std.objectFields*` standard library functions argument `preserve_order`.
 
 Using this argument, it is possible to have same field order in manifestification, as in declaration:
 
-```jsonnet
+[source,jsonnet]
+----
 std.objectFields({c: 1, b: 2, a: 3}, preserve_order = false) == ['a', 'b', 'c'] # Fields were sorted
 std.manifestJson({c: 1, b: 2, a: 3}, preserve_order = true) == ['c', 'b', 'a'] # Fields were serialized in declaration order
-```
+----
 
-## `exp-object-iteration`
+== `exp-object-iteration`
 
 Iteration over object fields in comprehensions, upstream issue: https://github.com/google/jsonnet/issues/543
 
 This feature is not implemented as proposed in upstream, it only yields `[key, value]` arrays per element:
 
-```jsonnet
+[source,jsonnet]
+----
 {
     [i[0] + '!']: i[1] + '!'
     for i in {
@@ -116,11 +130,12 @@ This feature is not implemented as proposed in upstream, it only yields `[key, v
     'b!': '2!',
     'c!': '3!',
 }
-```
+----
 
 However, it may be combined with `exp-destruct`, to implement syntax close to proposed:
 
-```jsonnet
+[source,jsonnet]
+----
 {
     [k + '!']: v + '!'
     for [k, v] in {
@@ -133,11 +148,13 @@ However, it may be combined with `exp-destruct`, to implement syntax close to pr
     'b!': '2!',
     'c!': '3!',
 }
-```
+----
 
-Unfortunately, there is no integration with the `exp-preserve-order` feature, fields will be still iterated in sorted order, and using old syntax is required:
+Unfortunately, there is no integration with the `exp-preserve-order` feature,
+fields will still be iterated in sorted order, and using old syntax is required:
 
-```jsonnet
+[source,jsonnet]
+----
 local obj = {
     c: 3,
     b: 2,
@@ -152,9 +169,9 @@ local obj = {
     'b!': '2!',
     'a!': '1!',
 }
-```
+----
 
-## `exp-null-coalescing`
+== `exp-null-coalescing`
 
 Provides a new operator and new indexing syntax sugar:
 

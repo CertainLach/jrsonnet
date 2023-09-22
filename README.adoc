@@ -1,0 +1,88 @@
+= jrsonnet
+
+image:https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge[alt=release, link=https://github.com/CertainLach/jrsonnet/releases]
+image:https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge[alt=license, ./LICENSE]
+image:https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge[alt=opencollective, link=https://opencollective.com/jrsonnet]
+
+== What is it
+
+https://jsonnet.org/[Jsonnet] is a data templating language
+
+This Rust crate implements both jsonnet library and an alternative `jsonnet` executable based on it.
+For more information see [bindings](#Bindings).
+
+== Install
+
+=== NixOS
+
+jrsonnet is packaged in nixpkgs and maintained by @CertainLach
+
+[source,sh]
+----
+nix-env -iA nixpkgs.jrsonnet
+----
+
+=== MacOS
+
+jrsonnet is packaged to brew and maintained by @messense
+
+[source,sh]
+----
+brew install jrsonnet
+----
+
+=== Windows/other linux distributions
+
+You can get latest build of jrsonnet in https://github.com/CertainLach/jrsonnet/releases[releases].
+
+=== Build from sources
+
+jrsonnet should build on latest stable Rust version (probably on the oldest, but there is no MSRV policy provided)
+
+Debug build will work too, but it is much slower than release
+
+[source]
+----
+cargo build --release
+----
+
+== Why?
+
+There already are multiple implementations of this standard implemented in different languages:
+
+* https://github.com/google/jsonnet[C++];
+* https://github.com/google/go-jsonnet/[Go];
+* https://github.com/databricks/sjsonnet[Scala].
+
+This implementation shows performance better than all existing implementations.
+For more information see link:./docs/benchmarks.md[benchmarks]
+
+Also, I wanted to experiment on new syntax features, and jrsonnet implements some of them.
+For more information see link:./docs/features.adoc[features]
+
+In the end, it's always fun to implement something in Rust.
+
+== Bindings
+
+=== Rust
+
+image:https://img.shields.io/crates/v/jrsonnet-evaluator[alt=crates.io, link=https://crates.io/crates/jrsonnet-evaluator]
+image:https://docs.rs/jrsonnet-evaluator/badge.svg[alt=docs.rs, link=https://docs.rs/jrsonnet-evaluator]
+
+Jrsonnet is written in rust itself, so just add it as dependency
+
+=== Python
+
+image:https://img.shields.io/pypi/v/rjsonnet[alt=crates.io, link=https://pypi.org/project/rjsonnet/]
+
+Bindings are created and maintained by @messense
+
+=== C/C++
+
+Jrsonnet provides a standard `libjsonnet.so` shared library and should work as drop-in replacement for it
+
+=== Other
+
+WASM bingings are also available, Java bindings (Both JNI and WASM compiled to `.class`) are in progress
+
+See link:./bindings/[bindings] for more information.
