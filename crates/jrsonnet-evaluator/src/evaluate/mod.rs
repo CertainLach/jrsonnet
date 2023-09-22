@@ -18,8 +18,8 @@ use crate::{
 	function::{CallLocation, FuncDesc, FuncVal},
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
-	Context, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt,
-	State, Unbound, Val, Error,
+	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
+	ResultExt, State, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -518,8 +518,11 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						if n.fract() > f64::EPSILON {
 							bail!(FractionalIndex)
 						}
+						if n < 0.0 {
+							bail!(ArrayBoundsError(n as isize, v.len()));
+						}
 						v.get(n as usize)?
-							.ok_or_else(|| ArrayBoundsError(n as usize, v.len()))?
+							.ok_or_else(|| ArrayBoundsError(n as isize, v.len()))?
 					}
 					(Val::Arr(_), Val::Str(n)) => {
 						bail!(AttemptedIndexAnArrayWithString(n.into_flat()))

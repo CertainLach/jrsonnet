@@ -114,7 +114,7 @@ pub enum ErrorKind {
 	InComprehensionCanOnlyIterateOverArray,
 
 	#[error("array out of bounds: {0} is not within [0,{1})")]
-	ArrayBoundsError(usize, usize),
+	ArrayBoundsError(isize, usize),
 	#[error("string out of bounds: {0} is not within [0,{1})")]
 	StringBoundsError(usize, usize),
 
