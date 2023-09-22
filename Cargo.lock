@@ -95,17 +95,6 @@ checksum = "a4668cab20f66d8d020e1fbc0ebe47217433c1b6c8f2040faf858554e394ace6"
 [[package]]
 name = "ass-stroke"
 version = "0.1.0"
-dependencies = [
- "num-traits",
- "rand 0.8.5",
- "random_color",
- "range-map",
- "smallvec",
-]
-
-[[package]]
-name = "ass-stroke"
-version = "0.1.0"
 source = "git+https://github.com/CertainLach/ass-stroke#c98c0213b9c5f775c0bddaa7b233a38c60859008"
 dependencies = [
  "num-traits",
@@ -566,7 +555,7 @@ checksum = "af150ab688ff2122fcef229be89cb50dd66af9e01a4ff320cc137eecc9bacc38"
 name = "jrsonnet"
 version = "0.5.0-pre95"
 dependencies = [
- "ass-stroke 0.1.0 (git+https://github.com/CertainLach/ass-stroke)",
+ "ass-stroke",
  "clap",
  "clap_complete",
  "jrsonnet-cli",
@@ -618,7 +607,7 @@ dependencies = [
 name = "jrsonnet-fmt"
 version = "0.5.0-pre95"
 dependencies = [
- "ass-stroke 0.1.0",
+ "ass-stroke",
  "clap",
  "dprint-core",
  "indoc",
