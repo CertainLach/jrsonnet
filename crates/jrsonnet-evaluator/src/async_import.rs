@@ -217,7 +217,8 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 	}
 }
 
-#[allow(async_fn_in_trait)] // we don't care about `Send` bound
+// we don't care about `Send` bound
+#[allow(async_fn_in_trait)]
 pub trait AsyncImportResolver {
 	type Error;
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
