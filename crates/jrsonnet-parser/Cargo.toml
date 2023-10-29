@@ -31,9 +31,9 @@ serde = ["dep:serde"]
 jrsonnet-interner.workspace = true
 jrsonnet-gcmodule.workspace = true
 
-static_assertions = "1.1"
+static_assertions.workspace = true
 
-peg = "0.8.1"
+peg.workspace = true
 
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
-structdump = { version = "0.2.0", features = ["derive"], optional = true }
+structdump = { workspace = true, features = ["derive"], optional = true }
