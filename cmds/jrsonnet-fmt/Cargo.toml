@@ -4,11 +4,11 @@ version.workspace = true
 edition = "2021"
 
 [dependencies]
-dprint-core = "0.63.2"
+dprint-core.workspace = true
 jrsonnet-rowan-parser.workspace = true
-insta = "1.15"
-indoc = "1.0"
-ass-stroke = { git = "https://github.com/CertainLach/ass-stroke.git", version = "0.1.0" }
-clap = { version = "4.4.2", features = ["derive"] }
-tempfile = "3.8.0"
-thiserror = "1.0.48"
+insta.workspace = true
+indoc.workspace = true
+ass-stroke.workspace = true
+clap = { workspace = true, features = ["derive"] }
+tempfile.workspace = true
+thiserror.workspace = true
