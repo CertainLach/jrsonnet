@@ -1,6 +1,5 @@
-use std::{cell::RefCell, path::Path};
+use std::{cell::RefCell, future::Future, path::Path};
 
-use async_trait::async_trait;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
@@ -218,26 +217,37 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 	}
 }
 
-#[async_trait(?Send)]
 pub trait AsyncImportResolver {
 	type Error;
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
 	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
 	/// where `${vendor}` is a library path.
 	///
-	/// `from` should only be returned from [`ImportResolver::resolve`], or from other defined file, any other value
-	/// may result in panic
-	async fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath, Self::Error>;
-	async fn resolve_from_default(&self, path: &str) -> Result<SourcePath, Self::Error> {
-		self.resolve_from(&SourcePath::default(), path).await
+	/// `from` should only be returned from [`ImportResolver::resolve`],
+	/// or from other defined file, any other value may result in panic
+	fn resolve_from(
+		&self,
+		from: &SourcePath,
+		path: &str,
+	) -> impl Future<Output = Result<SourcePath, Self::Error>>;
+	fn resolve_from_default(
+		&self,
+		path: &str,
+	) -> impl Future<Output = Result<SourcePath, Self::Error>> {
+		async { self.resolve_from(&SourcePath::default(), path).await }
 	}
 	/// Resolves absolute path, doesn't supports jpath and other fancy things
-	async fn resolve(&self, path: &Path) -> Result<SourcePath, Self::Error>;
+	fn resolve(&self, path: &Path) -> impl Future<Output = Result<SourcePath, Self::Error>>;
 
 	/// Load resolved file
-	/// This should only be called with value returned from [`ImportResolver::resolve_file`]/[`ImportResolver::resolve`],
-	/// this cannot be resolved using associated type, as evaluator uses object instead of generic for [`ImportResolver`]
-	async fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>, Self::Error>;
+	/// This should only be called with value returned
+	/// from [`ImportResolver::resolve_file`]/[`ImportResolver::resolve`],
+	/// this cannot be resolved using associated type,
+	/// as the evaluator uses object instead of generic for [`ImportResolver`]
+	fn load_file_contents(
+		&self,
+		resolved: &SourcePath,
+	) -> impl Future<Output = Result<Vec<u8>, Self::Error>>;
 }
 
 #[derive(Trace)]
