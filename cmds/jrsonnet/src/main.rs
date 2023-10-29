@@ -186,7 +186,13 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		s.import(&input)?
 	};
 
-	let tla = opts.tla.tla_opts()?;
+	let (tla, tla_str_paths, tla_code_paths) = opts.tla.tla_opts()?;
+	for path in tla_str_paths {
+		s.import_str(path)?;
+	}
+	for path in tla_code_paths {
+		s.import(path)?;
+	}
 	#[allow(unused_mut)]
 	let mut val = apply_tla(s.clone(), &tla, val)?;
 

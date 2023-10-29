@@ -393,6 +393,10 @@ impl State {
 		let resolved = self.resolve(path)?;
 		self.import_resolved(resolved)
 	}
+	pub fn import_str(&self, path: impl AsRef<Path>) -> Result<IStr> {
+		let resolved = self.resolve(path)?;
+		self.import_resolved_str(resolved)
+	}
 
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self, source: Source) -> Context {
@@ -558,13 +562,17 @@ impl State {
 
 /// Settings utilities
 impl State {
-	// Only panics in case of [`ImportResolver`] contract violation
+	// # Panics
+	//
+	// If [`ImportResolver`] contract is violated.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
 		self.import_resolver().resolve_from(from, path.as_ref())
 	}
 
-	// Only panics in case of [`ImportResolver`] contract violation
+	// # Panics
+	//
+	// If [`ImportResolver`] contract is violated.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())

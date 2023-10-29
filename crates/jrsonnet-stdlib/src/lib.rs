@@ -352,8 +352,6 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	}
 	#[cfg(feature = "legacy-this-file")]
 	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
-		use jrsonnet_evaluator::val::StrValue;
-
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
 		std.field("thisFile")

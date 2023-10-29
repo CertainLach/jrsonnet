@@ -6,8 +6,9 @@ use jrsonnet_evaluator::{
 	IStr,
 };
 use jrsonnet_parser::{ParserSettings, Source};
+use std::path::PathBuf;
 
-use crate::{ExtFile, ExtStr};
+use crate::ExtStr;
 
 #[derive(Parser)]
 #[clap(next_help_heading = "TOP LEVEL ARGUMENTS")]
@@ -21,7 +22,7 @@ pub struct TlaOpts {
 	/// Read top level argument string from file.
 	/// See also `--tla-str`
 	#[clap(long, name = "name=tla path", number_of_values = 1)]
-	tla_str_file: Vec<ExtFile>,
+	tla_str_file: Vec<PathBuf>,
 	/// Add top level argument from code.
 	/// See also `--tla-str`
 	#[clap(long, name = "name[=tla source]", number_of_values = 1)]
@@ -29,25 +30,15 @@ pub struct TlaOpts {
 	/// Read top level argument code from file.
 	/// See also `--tla-str`
 	#[clap(long, name = "name=tla code path", number_of_values = 1)]
-	tla_code_file: Vec<ExtFile>,
+	tla_code_file: Vec<PathBuf>,
 }
 impl TlaOpts {
-	pub fn tla_opts(&self) -> Result<GcHashMap<IStr, TlaArg>> {
+	pub fn tla_opts(&self) -> Result<(GcHashMap<IStr, TlaArg>, &Vec<PathBuf>, &Vec<PathBuf>)> {
 		let mut out = GcHashMap::new();
-		for (name, value) in self
-			.tla_str
-			.iter()
-			.map(|c| (&c.name, &c.value))
-			.chain(self.tla_str_file.iter().map(|c| (&c.name, &c.value)))
-		{
+		for (name, value) in self.tla_str.iter().map(|c| (&c.name, &c.value)) {
 			out.insert(name.into(), TlaArg::String(value.into()));
 		}
-		for (name, code) in self
-			.tla_code
-			.iter()
-			.map(|c| (&c.name, &c.value))
-			.chain(self.tla_code_file.iter().map(|c| (&c.name, &c.value)))
-		{
+		for (name, code) in self.tla_code.iter().map(|c| (&c.name, &c.value)) {
 			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
 			out.insert(
 				(name as &str).into(),
@@ -65,6 +56,6 @@ impl TlaOpts {
 				),
 			);
 		}
-		Ok(out)
+		Ok((out, &self.tla_str_file, &self.tla_code_file))
 	}
 }
