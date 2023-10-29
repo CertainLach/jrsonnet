@@ -9,7 +9,7 @@ use jrsonnet_parser::{
 	SourcePath,
 };
 
-use crate::{gc::GcHashMap, throw, FileData, ImportResolver, State};
+use crate::{bail, gc::GcHashMap, FileData, ImportResolver, State};
 
 pub struct Import {
 	path: IStr,
@@ -179,9 +179,11 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			find_imports(expr, out);
 			in_args(args, out);
 		}
-		Expr::Index(expr, index) => {
-			find_imports(expr, out);
-			find_imports(index, out);
+		Expr::Index { indexable, parts } => {
+			find_imports(indexable, out);
+			for part in parts {
+				find_imports(&part.value, out);
+			}
 		}
 		Expr::Function(params, expr) => {
 			in_params(params, out);
@@ -262,7 +264,7 @@ impl ImportResolver for ResolvedImportResolver {
 	}
 
 	fn resolve(&self, path: &Path) -> crate::Result<SourcePath> {
-		throw!(crate::error::ErrorKind::AbsoluteImportNotSupported(
+		bail!(crate::error::ErrorKind::AbsoluteImportNotSupported(
 			path.to_owned()
 		))
 	}
