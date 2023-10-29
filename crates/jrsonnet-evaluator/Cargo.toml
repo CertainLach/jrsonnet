@@ -14,7 +14,7 @@ explaining-traces = ["annotate-snippets"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
 # Adds ability to build import closure in async
-async-import = ["async-trait"]
+async-import = []
 
 # Allows to preserve field order in objects
 exp-preserve-order = []
@@ -54,8 +54,6 @@ anyhow = { workspace = true, optional = true }
 bincode = { workspace = true, optional = true }
 # Explaining traces
 annotate-snippets = { workspace = true, features = ["color"], optional = true }
-# Async imports
-async-trait = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 derivative.workspace = true

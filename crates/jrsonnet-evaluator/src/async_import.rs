@@ -1,6 +1,5 @@
 use std::{cell::RefCell, path::Path};
 
-use async_trait::async_trait;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
@@ -218,7 +217,7 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 	}
 }
 
-#[async_trait(?Send)]
+#[allow(async_fn_in_trait)] // we don't care about `Send` bound
 pub trait AsyncImportResolver {
 	type Error;
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
