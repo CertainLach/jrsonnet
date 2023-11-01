@@ -1,12 +1,15 @@
+use std::path::PathBuf;
+
 use clap::Parser;
 use jrsonnet_evaluator::{
 	error::{ErrorKind, Result},
 	function::TlaArg,
 	gc::GcHashMap,
-	IStr,
+	val::ThunkValue,
+	IStr, State, Thunk, Val,
 };
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{ParserSettings, Source};
-use std::path::PathBuf;
 
 use crate::ExtStr;
 
@@ -33,15 +36,24 @@ pub struct TlaOpts {
 	tla_code_file: Vec<PathBuf>,
 }
 impl TlaOpts {
-	pub fn tla_opts(&self) -> Result<(GcHashMap<IStr, TlaArg>, &Vec<PathBuf>, &Vec<PathBuf>)> {
+	pub fn into_args_in(self, state: &State) -> Result<GcHashMap<IStr, TlaArg>> {
 		let mut out = GcHashMap::new();
 		for (name, value) in self.tla_str.iter().map(|c| (&c.name, &c.value)) {
 			out.insert(name.into(), TlaArg::String(value.into()));
 		}
+		for path in self.tla_str_file {
+			out.insert(
+				path.to_string_lossy().into(),
+				TlaArg::Lazy(Thunk::new(ImportStrThunk {
+					state: state.clone(),
+					path,
+				})),
+			);
+		}
 		for (name, code) in self.tla_code.iter().map(|c| (&c.name, &c.value)) {
 			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
 			out.insert(
-				(name as &str).into(),
+				name.as_str().into(),
 				TlaArg::Code(
 					jrsonnet_parser::parse(
 						code,
@@ -56,6 +68,41 @@ impl TlaOpts {
 				),
 			);
 		}
-		Ok((out, &self.tla_str_file, &self.tla_code_file))
+		for path in self.tla_code_file {
+			out.insert(
+				path.to_string_lossy().into(),
+				TlaArg::Lazy(Thunk::new(ImportCodeThunk {
+					state: state.clone(),
+					path,
+				})),
+			);
+		}
+		Ok(out)
+	}
+}
+
+#[derive(Trace)]
+struct ImportStrThunk {
+	path: PathBuf,
+	state: State,
+}
+impl ThunkValue for ImportStrThunk {
+	type Output = Val;
+
+	fn get(self: Box<Self>) -> Result<Self::Output> {
+		self.state.import_str(self.path).map(|s| Val::Str(s.into()))
+	}
+}
+
+#[derive(Trace)]
+struct ImportCodeThunk {
+	path: PathBuf,
+	state: State,
+}
+impl ThunkValue for ImportCodeThunk {
+	type Output = Val;
+
+	fn get(self: Box<Self>) -> Result<Self::Output> {
+		self.state.import(self.path)
 	}
 }

@@ -9,7 +9,7 @@ use jrsonnet_cli::{GcOpts, ManifestOpts, MiscOpts, OutputOpts, StdOpts, TlaOpts,
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	error::{Error as JrError, ErrorKind},
-	ResultExt, State, Val,
+	ImportResolver, ResultExt, State, Val,
 };
 
 #[cfg(feature = "mimalloc")]
@@ -186,13 +186,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		s.import(&input)?
 	};
 
-	let (tla, tla_str_paths, tla_code_paths) = opts.tla.tla_opts()?;
-	for path in tla_str_paths {
-		s.import_str(path)?;
-	}
-	for path in tla_code_paths {
-		s.import(path)?;
-	}
+	let tla = opts.tla.into_args_in(s)?;
 	#[allow(unused_mut)]
 	let mut val = apply_tla(s.clone(), &tla, val)?;
 

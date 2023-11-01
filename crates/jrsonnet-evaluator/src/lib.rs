@@ -346,7 +346,7 @@ impl State {
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
-				jrsonnet_parser::parse(
+				parse(
 					&code,
 					&ParserSettings {
 						source: file_name.clone(),
@@ -522,7 +522,7 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
@@ -543,7 +543,7 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
