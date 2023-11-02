@@ -1,7 +1,12 @@
-use std::path::PathBuf;
+use std::{
+	ffi::{OsStr, OsString},
+	os::unix::ffi::OsStrExt,
+	path::{Path, PathBuf},
+};
 
 use clap::Parser;
 use jrsonnet_evaluator::{
+	bail,
 	error::{ErrorKind, Result},
 	function::TlaArg,
 	gc::GcHashMap,
@@ -25,7 +30,7 @@ pub struct TlaOpts {
 	/// Read top level argument string from file.
 	/// See also `--tla-str`
 	#[clap(long, name = "name=tla path", number_of_values = 1)]
-	tla_str_file: Vec<PathBuf>,
+	tla_str_file: Vec<OsString>,
 	/// Add top level argument from code.
 	/// See also `--tla-str`
 	#[clap(long, name = "name[=tla source]", number_of_values = 1)]
@@ -33,7 +38,7 @@ pub struct TlaOpts {
 	/// Read top level argument code from file.
 	/// See also `--tla-str`
 	#[clap(long, name = "name=tla code path", number_of_values = 1)]
-	tla_code_file: Vec<PathBuf>,
+	tla_code_file: Vec<OsString>,
 }
 impl TlaOpts {
 	pub fn into_args_in(self, state: &State) -> Result<GcHashMap<IStr, TlaArg>> {
@@ -41,9 +46,10 @@ impl TlaOpts {
 		for (name, value) in self.tla_str.iter().map(|c| (&c.name, &c.value)) {
 			out.insert(name.into(), TlaArg::String(value.into()));
 		}
-		for path in self.tla_str_file {
+		for file in self.tla_str_file {
+			let (key, path) = parse_named_tla_path(&file)?;
 			out.insert(
-				path.to_string_lossy().into(),
+				key.into(),
 				TlaArg::Lazy(Thunk::new(ImportStrThunk {
 					state: state.clone(),
 					path,
@@ -53,7 +59,7 @@ impl TlaOpts {
 		for (name, code) in self.tla_code.iter().map(|c| (&c.name, &c.value)) {
 			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
 			out.insert(
-				name.as_str().into(),
+				name.into(),
 				TlaArg::Code(
 					jrsonnet_parser::parse(
 						code,
@@ -68,9 +74,10 @@ impl TlaOpts {
 				),
 			);
 		}
-		for path in self.tla_code_file {
+		for file in self.tla_code_file {
+			let (key, path) = parse_named_tla_path(&file)?;
 			out.insert(
-				path.to_string_lossy().into(),
+				key.into(),
 				TlaArg::Lazy(Thunk::new(ImportCodeThunk {
 					state: state.clone(),
 					path,
@@ -79,6 +86,22 @@ impl TlaOpts {
 		}
 		Ok(out)
 	}
+}
+
+fn parse_named_tla_path(raw: &OsString) -> Result<(&str, PathBuf)> {
+	let mut parts = raw.as_bytes().splitn(2, |&byte| byte == b'=');
+	let Some(key) = parts.next() else {
+		bail!("No TLA key was specified");
+	};
+
+	let Ok(key) = std::str::from_utf8(key) else {
+		bail!("Invalid TLA map");
+	};
+	Ok(if let Some(value) = parts.next() {
+		(key, Path::new(OsStr::from_bytes(value)).to_owned())
+	} else {
+		(key, std::env::var_os(key).unwrap_or_default().into())
+	})
 }
 
 #[derive(Trace)]

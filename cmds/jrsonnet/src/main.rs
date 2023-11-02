@@ -9,7 +9,7 @@ use jrsonnet_cli::{GcOpts, ManifestOpts, MiscOpts, OutputOpts, StdOpts, TlaOpts,
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	error::{Error as JrError, ErrorKind},
-	ImportResolver, ResultExt, State, Val,
+	ResultExt, State, Val,
 };
 
 #[cfg(feature = "mimalloc")]
