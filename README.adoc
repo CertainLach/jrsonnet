@@ -1,15 +1,21 @@
 = jrsonnet
 
+[.text-center]
+image:./docs/logowide.svg[Interactive,470, alt=jrsonnet logo]
+
+[.text-center]
+--
 image:https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge[alt=release, link=https://github.com/CertainLach/jrsonnet/releases]
 image:https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge[alt=license, ./LICENSE]
 image:https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge[alt=opencollective, link=https://opencollective.com/jrsonnet]
+--
 
 == What is it
 
 https://jsonnet.org/[Jsonnet] is a data templating language
 
 This Rust crate implements both jsonnet library and an alternative `jsonnet` executable based on it.
-For more information see [bindings](#Bindings).
+For more information see <<bindings,Bindings>>.
 
 == Install
 
@@ -62,7 +68,7 @@ For more information see link:./docs/features.adoc[features]
 
 In the end, it's always fun to implement something in Rust.
 
-== Bindings
+== Bindings [[bindings]]
 
 === Rust
 
