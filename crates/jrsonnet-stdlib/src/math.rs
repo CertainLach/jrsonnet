@@ -90,6 +90,11 @@ pub fn builtin_atan(x: f64) -> f64 {
 }
 
 #[builtin]
+pub fn builtin_atan2(y: f64, x: f64) -> f64 {
+	y.atan2(x)
+}
+
+#[builtin]
 pub fn builtin_exp(x: f64) -> f64 {
 	x.exp()
 }

@@ -104,6 +104,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("asin", builtin_asin::INST),
 		("acos", builtin_acos::INST),
 		("atan", builtin_atan::INST),
+		("atan2", builtin_atan2::INST),
 		("exp", builtin_exp::INST),
 		("mantissa", builtin_mantissa::INST),
 		("exponent", builtin_exponent::INST),
