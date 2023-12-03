@@ -667,7 +667,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
 		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
-			let Expr::Str(path) = &*path.0 else {
+			let Str(path) = &*path.0 else {
 				bail!("computed imports are not supported")
 			};
 			let tmp = loc.clone().0;

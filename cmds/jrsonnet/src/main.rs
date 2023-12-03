@@ -186,7 +186,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 		s.import(&input)?
 	};
 
-	let tla = opts.tla.tla_opts()?;
+	let tla = opts.tla.into_args_in(s)?;
 	#[allow(unused_mut)]
 	let mut val = apply_tla(s.clone(), &tla, val)?;
 

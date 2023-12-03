@@ -346,7 +346,7 @@ impl State {
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
-				jrsonnet_parser::parse(
+				parse(
 					&code,
 					&ParserSettings {
 						source: file_name.clone(),
@@ -392,6 +392,10 @@ impl State {
 	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
 		let resolved = self.resolve(path)?;
 		self.import_resolved(resolved)
+	}
+	pub fn import_str(&self, path: impl AsRef<Path>) -> Result<IStr> {
+		let resolved = self.resolve(path)?;
+		self.import_resolved_str(resolved)
 	}
 
 	/// Creates context with all passed global variables
@@ -518,7 +522,7 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
@@ -539,7 +543,7 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
@@ -558,13 +562,17 @@ impl State {
 
 /// Settings utilities
 impl State {
-	// Only panics in case of [`ImportResolver`] contract violation
+	// # Panics
+	//
+	// If [`ImportResolver`] contract is violated.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
 		self.import_resolver().resolve_from(from, path.as_ref())
 	}
 
-	// Only panics in case of [`ImportResolver`] contract violation
+	// # Panics
+	//
+	// If [`ImportResolver`] contract is violated.
 	#[allow(clippy::missing_panics_doc)]
 	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())
