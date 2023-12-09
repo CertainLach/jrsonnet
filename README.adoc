@@ -1,14 +1,24 @@
 = jrsonnet
 
-[.text-center]
-image:./docs/logowide.svg[Interactive,470, alt=jrsonnet logo]
+++++
+<p align="center"><a href="https://github.com/CertainLach/jrsonnet"><img alt="jrsonnet logo" src="./docs/logowide.svg" width="470px"></img></a></p>
+<p align="center">
+  <a href="https://github.com/CertainLach/jrsonnet/releases"><img alt="release" src="https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge"></img></a>
+  <a href="./LICENSE"><img alt="license" src="https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge"></img></a>
+  <a href="https://opencollective.com/jrsonnet"><img alt="opencollective" src="https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge"></img></a>
+</p>
+++++
 
-[.text-center]
---
-image:https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge[alt=release, link=https://github.com/CertainLach/jrsonnet/releases]
-image:https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge[alt=license, ./LICENSE]
-image:https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge[alt=opencollective, link=https://opencollective.com/jrsonnet]
---
+// Github sucks: I can't center those images the normal way: https://github.com/github/markup/issues/984 
+// [.text-center]
+// image:./docs/logowide.svg[Interactive,470, alt=jrsonnet logo]
+//
+// [.text-center]
+// --
+// image:https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge[alt=release, link=https://github.com/CertainLach/jrsonnet/releases]
+// image:https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge[alt=license, ./LICENSE]
+// image:https://img.shields.io/opencollective/all/jrsonnet?color=%238ec07c&style=for-the-badge[alt=opencollective, link=https://opencollective.com/jrsonnet]
+// --
 
 == What is it
 
