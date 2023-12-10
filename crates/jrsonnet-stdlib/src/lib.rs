@@ -43,6 +43,10 @@ mod sets;
 pub use sets::*;
 mod compat;
 pub use compat::*;
+#[cfg(feature = "exp-regex")]
+mod regex;
+#[cfg(feature = "exp-regex")]
+pub use crate::regex::*;
 
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
@@ -185,6 +189,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("setInter", builtin_set_inter::INST),
 		("setDiff", builtin_set_diff::INST),
 		("setUnion", builtin_set_union::INST),
+		// Regex
+		#[cfg(feature = "exp-regex")]
+		("regexQuoteMeta", builtin_regex_quote_meta::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
 	]
@@ -207,8 +214,37 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		},
 	);
 	builder.method("trace", builtin_trace { settings });
-
 	builder.method("id", FuncVal::Id);
+
+	#[cfg(feature = "exp-regex")]
+	{
+		// Regex
+		let regex_cache = RegexCache::default();
+		builder.method(
+			"regexFullMatch",
+			builtin_regex_full_match {
+				cache: regex_cache.clone(),
+			},
+		);
+		builder.method(
+			"regexPartialMatch",
+			builtin_regex_partial_match {
+				cache: regex_cache.clone(),
+			},
+		);
+		builder.method(
+			"regexReplace",
+			builtin_regex_replace {
+				cache: regex_cache.clone(),
+			},
+		);
+		builder.method(
+			"regexGlobalReplace",
+			builtin_regex_global_replace {
+				cache: regex_cache.clone(),
+			},
+		);
+	};
 
 	builder.build()
 }

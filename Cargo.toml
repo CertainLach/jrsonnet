@@ -64,6 +64,9 @@ clap_complete = "4.4"
 lsp-server = "0.7.4"
 lsp-types = "0.94.1"
 
+regex = "1.8.4"
+lru = "0.10.0"
+
 #[profile.test]
 #opt-level = 1
 

@@ -10,7 +10,7 @@ use crate::{
 	bail,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	typed::CheckType,
-	val::{IndexableVal, ThunkMapper},
+	val::{IndexableVal, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, Thunk, Val,
 };
 
@@ -299,6 +299,22 @@ impl Typed for String {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
 			Val::Str(s) => Ok(s.to_string()),
+			_ => unreachable!(),
+		}
+	}
+}
+
+impl Typed for StrValue {
+	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Str);
+
+	fn into_untyped(value: Self) -> Result<Val> {
+		Ok(Val::Str(value))
+	}
+
+	fn from_untyped(value: Val) -> Result<Self> {
+		<Self as Typed>::TYPE.check(&value)?;
+		match value {
+			Val::Str(s) => Ok(s),
 			_ => unreachable!(),
 		}
 	}
