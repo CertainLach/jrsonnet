@@ -45,7 +45,7 @@ pub fn regex_match_inner(regex: &Regex, str: String) -> Result<Val> {
 	let mut named_captures = ObjValueBuilder::with_capacity(regex.capture_names().len());
 
 	let Some(captured) = regex.captures(&str) else {
-		return Ok(Val::Null)
+		return Ok(Val::Null);
 	};
 
 	for ele in captured.iter().skip(1) {
@@ -62,15 +62,14 @@ pub fn regex_match_inner(regex: &Regex, str: String) -> Result<Val> {
 		.flat_map(|(i, v)| Some((i, v?)))
 	{
 		let capture = captures[i].clone();
-		named_captures.member(name.into()).value(capture)?;
+		named_captures.field(name).try_value(capture)?;
 	}
 
-	out.member("string".into())
-		.value_unchecked(Val::Str(captured.get(0).unwrap().as_str().into()));
-	out.member("captures".into())
-		.value_unchecked(Val::Arr(captures.into()));
-	out.member("namedCaptures".into())
-		.value_unchecked(Val::Obj(named_captures.build()));
+	out.field("string")
+		.value(Val::Str(captured.get(0).unwrap().as_str().into()));
+	out.field("captures").value(Val::Arr(captures.into()));
+	out.field("namedCaptures")
+		.value(Val::Obj(named_captures.build()));
 
 	Ok(Val::Obj(out.build()))
 }

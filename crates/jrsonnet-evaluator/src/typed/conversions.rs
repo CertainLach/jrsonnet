@@ -10,7 +10,7 @@ use crate::{
 	bail,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	typed::CheckType,
-	val::{IndexableVal, ThunkMapper},
+	val::{IndexableVal, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, Thunk, Val,
 };
 
