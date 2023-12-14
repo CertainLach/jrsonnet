@@ -596,10 +596,24 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		ArrComp(expr, comp_specs) => {
 			let mut out = Vec::new();
 			evaluate_comp(ctx, comp_specs, &mut |ctx| {
-				out.push(evaluate(ctx, expr)?);
+				#[derive(Trace)]
+				struct EvaluateThunk {
+					ctx: Context,
+					expr: LocExpr,
+				}
+				impl ThunkValue for EvaluateThunk {
+					type Output = Val;
+					fn get(self: Box<Self>) -> Result<Val> {
+						evaluate(self.ctx, &self.expr)
+					}
+				}
+				out.push(Thunk::new(EvaluateThunk {
+					ctx,
+					expr: expr.clone(),
+				}));
 				Ok(())
 			})?;
-			Val::Arr(ArrValue::eager(out))
+			Val::Arr(ArrValue::lazy(out))
 		}
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
 		ObjExtend(a, b) => evaluate_add_op(

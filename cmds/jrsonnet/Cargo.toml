@@ -15,6 +15,7 @@ experimental = [
     "exp-object-iteration",
     "exp-bigint",
     "exp-apply",
+    "exp-regex",
 ]
 # Use mimalloc as allocator
 mimalloc = ["mimallocator"]
