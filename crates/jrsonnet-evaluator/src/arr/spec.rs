@@ -1,6 +1,6 @@
 use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace};
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Finalize, Gc, GcRefCell, Trace};
 use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_parser::LocExpr;
 
@@ -22,7 +22,7 @@ pub trait ArrayLike: Any + Trace + Debug {
 	fn is_cheap(&self) -> bool;
 }
 
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Finalize)]
 pub struct SliceArray {
 	pub(crate) inner: ArrValue,
 	pub(crate) from: u32,
@@ -81,7 +81,7 @@ impl ArrayLike for SliceArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct CharArray(pub Vec<char>);
 impl ArrayLike for CharArray {
 	fn len(&self) -> usize {
@@ -104,7 +104,7 @@ impl ArrayLike for CharArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct BytesArray(pub IBytes);
 impl ArrayLike for BytesArray {
 	fn len(&self) -> usize {
@@ -127,7 +127,8 @@ impl ArrayLike for BytesArray {
 	}
 }
 
-#[derive(Debug, Trace, Clone)]
+#[derive(Debug, Trace, Clone, Finalize)]
+#[boa_gc(unsafe_no_drop)]
 enum ArrayThunk<T: 'static + Trace> {
 	Computed(Val),
 	Errored(Error),
@@ -135,18 +136,16 @@ enum ArrayThunk<T: 'static + Trace> {
 	Pending,
 }
 
-#[derive(Debug, Trace, Clone)]
+#[derive(Debug, Trace, Finalize, Clone)]
 pub struct ExprArray {
 	ctx: Context,
-	cached: Cc<RefCell<Vec<ArrayThunk<LocExpr>>>>,
+	cached: GcRefCell<Vec<ArrayThunk<LocExpr>>>,
 }
 impl ExprArray {
 	pub fn new(ctx: Context, items: impl IntoIterator<Item = LocExpr>) -> Self {
 		Self {
 			ctx,
-			cached: Cc::new(RefCell::new(
-				items.into_iter().map(ArrayThunk::Waiting).collect(),
-			)),
+			cached: GcRefCell::new(items.into_iter().map(ArrayThunk::Waiting).collect()),
 		}
 	}
 }
@@ -182,7 +181,8 @@ impl ArrayLike for ExprArray {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
+		#[derive(Trace, Finalize)]
+		#[boa_gc(unsafe_no_drop)]
 		struct ArrayElement {
 			arr_thunk: ExprArray,
 			index: usize,
@@ -221,7 +221,7 @@ impl ArrayLike for ExprArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct ExtendedArray {
 	pub a: ArrValue,
 	pub b: ArrValue,
@@ -309,7 +309,7 @@ impl ArrayLike for ExtendedArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct LazyArray(pub Vec<Thunk<Val>>);
 impl ArrayLike for LazyArray {
 	fn len(&self) -> usize {
@@ -332,7 +332,7 @@ impl ArrayLike for LazyArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct EagerArray(pub Vec<Val>);
 impl ArrayLike for EagerArray {
 	fn len(&self) -> usize {
@@ -356,7 +356,7 @@ impl ArrayLike for EagerArray {
 }
 
 /// Inclusive range type
-#[derive(Debug, Trace, PartialEq, Eq)]
+#[derive(Debug, Trace, Finalize, PartialEq, Eq)]
 pub struct RangeArray {
 	start: i32,
 	end: i32,
@@ -406,7 +406,7 @@ impl ArrayLike for RangeArray {
 	}
 }
 
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Finalize)]
 pub struct ReverseArray(pub ArrValue);
 impl ArrayLike for ReverseArray {
 	fn len(&self) -> usize {
@@ -429,10 +429,10 @@ impl ArrayLike for ReverseArray {
 	}
 }
 
-#[derive(Trace, Debug, Clone)]
+#[derive(Trace, Finalize, Debug, Clone)]
 pub struct MappedArray {
 	inner: ArrValue,
-	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
+	cached: GcRefCell<Vec<ArrayThunk<()>>>,
 	mapper: FuncVal,
 }
 impl MappedArray {
@@ -440,7 +440,7 @@ impl MappedArray {
 		let len = inner.len();
 		Self {
 			inner,
-			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting(()); len])),
+			cached: GcRefCell::new(vec![ArrayThunk::Waiting(()); len]),
 			mapper,
 		}
 	}
@@ -485,7 +485,8 @@ impl ArrayLike for MappedArray {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
+		#[derive(Trace, Finalize)]
+		#[boa_gc(unsafe_no_drop)]
 		struct ArrayElement {
 			arr_thunk: MappedArray,
 			index: usize,
@@ -525,7 +526,7 @@ impl ArrayLike for MappedArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct RepeatedArray {
 	data: ArrValue,
 	repeats: usize,
@@ -572,7 +573,7 @@ impl ArrayLike for RepeatedArray {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct PickObjectValues {
 	obj: ObjValue,
 	keys: Vec<IStr>,
@@ -612,7 +613,7 @@ impl ArrayLike for PickObjectValues {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 pub struct PickObjectKeyValues {
 	obj: ObjValue,
 	keys: Vec<IStr>,

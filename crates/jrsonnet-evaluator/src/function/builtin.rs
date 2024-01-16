@@ -1,15 +1,15 @@
 use std::{any::Any, borrow::Cow};
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Finalize, GcBox, Trace};
 use jrsonnet_interner::IStr;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{gc::TraceBox, tb, Context, Result, Val};
+use crate::{dyn_gc_box, Context, DynGcBox, Result, Val};
 
 /// Can't have str | IStr, because constant BuiltinParam causes
 /// E0492: constant functions cannot refer to interior mutable data
-#[derive(Clone, Trace)]
-pub struct ParamName(Option<Cow<'static, str>>);
+#[derive(Clone, Trace, Finalize)]
+pub struct ParamName(#[unsafe_ignore_trace] Option<Cow<'static, str>>);
 impl ParamName {
 	pub const ANONYMOUS: Self = Self(None);
 	pub const fn new_static(name: &'static str) -> Self {
@@ -34,7 +34,7 @@ impl PartialEq<IStr> for ParamName {
 	}
 }
 
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Finalize)]
 pub struct BuiltinParam {
 	name: ParamName,
 	has_default: bool,
@@ -56,7 +56,7 @@ impl BuiltinParam {
 /// Description of function defined by native code
 ///
 /// Prefer to use #[builtin] macro, instead of manual implementation of this trait
-pub trait Builtin: Trace {
+pub trait Builtin: Trace + 'static {
 	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
 	/// Parameter names for named calls
@@ -75,10 +75,10 @@ where
 	// const INST: &'static Self;
 }
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct NativeCallback {
 	pub(crate) params: Vec<BuiltinParam>,
-	handler: TraceBox<dyn NativeCallbackHandler>,
+	handler: DynGcBox<dyn NativeCallbackHandler>,
 }
 impl NativeCallback {
 	#[deprecated = "prefer using builtins directly, use this interface only for bindings"]
@@ -91,7 +91,7 @@ impl NativeCallback {
 					has_default: false,
 				})
 				.collect(),
-			handler: tb!(handler),
+			handler: dyn_gc_box!(handler),
 		}
 	}
 }
@@ -122,6 +122,6 @@ impl Builtin for NativeCallback {
 	}
 }
 
-pub trait NativeCallbackHandler: Trace {
+pub trait NativeCallbackHandler: Trace + 'static {
 	fn call(&self, args: &[Val]) -> Result<Val>;
 }

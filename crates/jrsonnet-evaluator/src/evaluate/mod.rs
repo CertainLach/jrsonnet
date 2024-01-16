@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Finalize, Gc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
@@ -58,7 +58,7 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 }
 
 pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
-	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
+	Val::Func(FuncVal::Normal(Gc::new(FuncDesc {
 		name,
 		ctx,
 		params,
@@ -117,7 +117,7 @@ pub fn evaluate_comp(
 					#[cfg(feature = "exp-preserve-order")]
 					false,
 				) {
-					#[derive(Trace)]
+					#[derive(Trace, Finalize)]
 					struct ObjectFieldThunk {
 						obj: ObjValue,
 						field: IStr,
@@ -163,9 +163,10 @@ fn evaluate_object_locals(
 	fctx: Pending<Context>,
 	locals: Rc<Vec<BindSpec>>,
 ) -> impl CloneableUnbound<Context> {
-	#[derive(Trace, Clone)]
+	#[derive(Trace, Finalize, Clone)]
 	struct UnboundLocals {
 		fctx: Pending<Context>,
+		#[unsafe_ignore_trace]
 		locals: Rc<Vec<BindSpec>>,
 	}
 	impl Unbound for UnboundLocals {
@@ -212,7 +213,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			value,
 			..
 		} => {
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
 			struct UnboundValue<B: Trace> {
 				uctx: B,
 				value: LocExpr,
@@ -242,7 +243,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			value,
 			..
 		} => {
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
 			struct UnboundMethod<B: Trace> {
 				uctx: B,
 				value: LocExpr,
@@ -300,7 +301,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
 			}
 			Member::AssertStmt(stmt) => {
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
 				struct ObjectAssert<B: Trace> {
 					uctx: B,
 					assert: AssertStmt,
@@ -574,7 +575,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			if items.is_empty() {
 				Val::Arr(ArrValue::empty())
 			} else if items.len() == 1 {
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
+				#[boa_gc(unsafe_no_drop)]
 				struct ArrayElement {
 					ctx: Context,
 					item: LocExpr,
@@ -596,7 +598,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		ArrComp(expr, comp_specs) => {
 			let mut out = Vec::new();
 			evaluate_comp(ctx, comp_specs, &mut |ctx| {
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
+				#[boa_gc(unsafe_no_drop)]
 				struct EvaluateThunk {
 					ctx: Context,
 					expr: LocExpr,

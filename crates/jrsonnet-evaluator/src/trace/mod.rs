@@ -3,13 +3,13 @@ use std::{
 	path::{Path, PathBuf},
 };
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use jrsonnet_parser::{CodeLocation, Source};
 
 use crate::{error::ErrorKind, Error};
 
 /// The way paths should be displayed
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Finalize)]
 pub enum PathResolver {
 	/// Only filename
 	FileName,
@@ -87,7 +87,7 @@ fn print_code_location(
 }
 
 /// vanilla-like jsonnet formatting
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct CompactFormat {
 	pub resolver: PathResolver,
 	pub max_trace: usize,
@@ -196,7 +196,7 @@ impl TraceFormat for CompactFormat {
 	}
 }
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct JsFormat {
 	pub max_trace: usize,
 }
@@ -240,7 +240,7 @@ impl TraceFormat for JsFormat {
 
 /// rustc-like trace displaying
 #[cfg(feature = "explaining-traces")]
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct ExplainingFormat {
 	pub resolver: PathResolver,
 	pub max_trace: usize,

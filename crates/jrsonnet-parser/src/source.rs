@@ -6,7 +6,7 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{Trace, Tracer};
+use boa_gc::{Trace, Finalize};
 use jrsonnet_interner::IStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -82,13 +82,14 @@ any_ext!(SourcePathT);
 /// search location is applicable
 ///
 /// Resolver may also return custom implementations of this trait, for example it may return http url in case of remotely loaded files
-#[derive(Eq, Debug, Clone)]
+#[derive(Eq, Debug, Clone, Trace, Finalize)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct SourcePath(Rc<dyn SourcePathT>);
 impl SourcePath {
-	pub fn new(inner: impl SourcePathT) -> Self {
+	pub fn new(inner: impl SourcePathT + 'static) -> Self {
 		Self(Rc::new(inner))
 	}
-	pub fn downcast_ref<T: SourcePathT>(&self) -> Option<&T> {
+	pub fn downcast_ref<T: SourcePathT + 'static>(&self) -> Option<&T> {
 		self.0.as_any().downcast_ref()
 	}
 	pub fn is_default(&self) -> bool {
@@ -107,18 +108,6 @@ impl PartialEq for SourcePath {
 	#[allow(clippy::op_ref)]
 	fn eq(&self, other: &Self) -> bool {
 		&*self.0 == &*other.0
-	}
-}
-impl Trace for SourcePath {
-	fn trace(&self, tracer: &mut Tracer) {
-		(*self.0).trace(tracer)
-	}
-
-	fn is_type_tracked() -> bool
-	where
-		Self: Sized,
-	{
-		true
 	}
 }
 impl Display for SourcePath {
@@ -157,7 +146,7 @@ impl Codegen for SourcePath {
 	}
 }
 
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Trace, Finalize, Hash, PartialEq, Eq, Debug)]
 struct SourceDefault;
 impl Display for SourceDefault {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -179,7 +168,7 @@ impl SourcePathT for SourceDefault {
 ///
 /// When `file` is being resolved from `SourceFile(a/b/c)`, it should be resolved to `SourceFile(a/b/file)`,
 /// however if it is being resolved from `SourceDirectory(a/b/c)`, then it should be resolved to `SourceDirectory(a/b/c/file)`
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Trace, Finalize, Hash, PartialEq, Eq, Debug)]
 pub struct SourceFile(PathBuf);
 impl SourceFile {
 	pub fn new(path: PathBuf) -> Self {
@@ -207,7 +196,7 @@ impl SourcePathT for SourceFile {
 /// Represents path to the directory on the disk
 ///
 /// See also [`SourceFile`]
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Trace, Finalize, Hash, PartialEq, Eq, Debug)]
 pub struct SourceDirectory(PathBuf);
 impl SourceDirectory {
 	pub fn new(path: PathBuf) -> Self {
@@ -237,7 +226,7 @@ impl SourcePathT for SourceDirectory {
 /// It is used for --ext-code=.../--tla-code=.../standard library source code by default,
 /// and user can construct arbitrary values by hand, without asking import resolver
 #[cfg_attr(feature = "structdump", derive(Codegen))]
-#[derive(Trace, Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Trace, Finalize, Hash, PartialEq, Eq, Debug, Clone)]
 pub struct SourceVirtual(pub IStr);
 impl Display for SourceVirtual {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -258,16 +247,10 @@ impl SourcePathT for SourceVirtual {
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
-
-impl Trace for Source {
-	fn trace(&self, _tracer: &mut Tracer) {}
-
-	fn is_type_tracked() -> bool {
-		false
-	}
-}
 
 impl Source {
 	pub fn new(path: SourcePath, code: IStr) -> Self {

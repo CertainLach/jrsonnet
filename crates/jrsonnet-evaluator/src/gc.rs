@@ -6,76 +6,11 @@ use std::{
 	ops::{Deref, DerefMut},
 };
 
+use boa_gc::{Finalize, Trace, Tracer};
 use hashbrown::HashMap;
-use jrsonnet_gcmodule::{Trace, Tracer};
 use rustc_hash::{FxHashSet, FxHasher};
 
-/// Replacement for box, which assumes that the underlying type is [`Trace`]
-/// Used in places, where `Cc<dyn Trait>` should be used instead, but it can't, because `CoerceUnsiced` is not stable
-#[derive(Debug, Clone)]
-pub struct TraceBox<T: ?Sized>(pub Box<T>);
-#[macro_export]
-macro_rules! tb {
-	($v:expr) => {
-		$crate::gc::TraceBox(Box::new($v))
-	};
-}
-
-impl<T: ?Sized + Trace> Trace for TraceBox<T> {
-	fn trace(&self, tracer: &mut Tracer<'_>) {
-		self.0.trace(tracer);
-	}
-
-	fn is_type_tracked() -> bool {
-		true
-	}
-}
-
-// TODO: Replace with CoerceUnsized
-impl<T: ?Sized> From<Box<T>> for TraceBox<T> {
-	fn from(inner: Box<T>) -> Self {
-		Self(inner)
-	}
-}
-
-impl<T: ?Sized> Deref for TraceBox<T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-impl<T: Trace + ?Sized> DerefMut for TraceBox<T> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-impl<T: ?Sized> Borrow<T> for TraceBox<T> {
-	fn borrow(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: ?Sized> BorrowMut<T> for TraceBox<T> {
-	fn borrow_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-impl<T: ?Sized> AsRef<T> for TraceBox<T> {
-	fn as_ref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: ?Sized> AsMut<T> for TraceBox<T> {
-	fn as_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-#[derive(Clone)]
+#[derive(Clone, Trace, Finalize)]
 pub struct GcHashSet<V>(pub FxHashSet<V>);
 impl<V> GcHashSet<V> {
 	pub fn new() -> Self {
@@ -86,16 +21,6 @@ impl<V> GcHashSet<V> {
 			capacity,
 			BuildHasherDefault::default(),
 		))
-	}
-}
-impl<V> Trace for GcHashSet<V>
-where
-	V: Trace,
-{
-	fn trace(&self, tracer: &mut Tracer<'_>) {
-		for v in &self.0 {
-			v.trace(tracer);
-		}
 	}
 }
 impl<V> Deref for GcHashSet<V> {
@@ -116,7 +41,7 @@ impl<V> Default for GcHashSet<V> {
 	}
 }
 
-#[derive(Debug)]
+#[derive(Debug, Trace, Finalize)]
 pub struct GcHashMap<K, V>(pub HashMap<K, V, BuildHasherDefault<FxHasher>>);
 impl<K, V> GcHashMap<K, V> {
 	pub fn new() -> Self {
@@ -127,18 +52,6 @@ impl<K, V> GcHashMap<K, V> {
 			capacity,
 			BuildHasherDefault::default(),
 		))
-	}
-}
-impl<K, V> Trace for GcHashMap<K, V>
-where
-	K: Trace,
-	V: Trace,
-{
-	fn trace(&self, tracer: &mut Tracer<'_>) {
-		for (k, v) in &self.0 {
-			k.trace(tracer);
-			v.trace(tracer);
-		}
 	}
 }
 impl<K, V> Deref for GcHashMap<K, V> {

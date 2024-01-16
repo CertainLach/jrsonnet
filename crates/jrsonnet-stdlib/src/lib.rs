@@ -4,14 +4,14 @@ use std::{
 	rc::Rc,
 };
 
+use boa_gc::{Finalize, Gc, GcRefCell, Trace, GcRef, GcRefMut};
 use jrsonnet_evaluator::{
+	dyn_gc_box,
 	error::{ErrorKind::*, Result},
 	function::{CallLocation, FuncVal, TlaArg},
-	tb,
 	trace::PathResolver,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
-use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
 
 mod expr;
@@ -48,7 +48,7 @@ mod regex;
 #[cfg(feature = "exp-regex")]
 pub use crate::regex::*;
 
-pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
+pub fn stdlib_uncached(settings: Gc<GcRefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
 
 	let expr = expr::stdlib_expr();
@@ -279,12 +279,14 @@ impl TracePrinter for StdTracePrinter {
 	}
 }
 
+#[derive(Trace, Finalize)]
 pub struct Settings {
 	/// Used for `std.extVar`
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
 	pub ext_natives: HashMap<IStr, FuncVal>,
 	/// Used for `std.trace`
+	#[unsafe_ignore_trace]
 	pub trace_printer: Box<dyn TracePrinter>,
 	/// Used for `std.thisFile`
 	pub path_resolver: PathResolver,
@@ -295,7 +297,7 @@ fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 	Source::new_virtual(source_name.into(), code.into())
 }
 
-#[derive(Trace, Clone)]
+#[derive(Trace, Finalize, Clone)]
 pub struct ContextInitializer {
 	/// When we don't need to support legacy-this-file, we can reuse same context for all files
 	#[cfg(not(feature = "legacy-this-file"))]
@@ -306,7 +308,7 @@ pub struct ContextInitializer {
 	/// Otherwise, we can only keep first stdlib layer, and then stack thisFile on top of it
 	#[cfg(feature = "legacy-this-file")]
 	stdlib_obj: ObjValue,
-	settings: Rc<RefCell<Settings>>,
+	settings: Gc<GcRefCell<Settings>>,
 }
 impl ContextInitializer {
 	pub fn new(_s: State, resolver: PathResolver) -> Self {
@@ -316,7 +318,7 @@ impl ContextInitializer {
 			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
 		};
-		let settings = Rc::new(RefCell::new(settings));
+		let settings = Gc::new(GcRefCell::new(settings));
 		let stdlib_obj = stdlib_uncached(settings.clone());
 		#[cfg(not(feature = "legacy-this-file"))]
 		let stdlib_thunk = Thunk::evaluated(Val::Obj(stdlib_obj));
@@ -334,10 +336,10 @@ impl ContextInitializer {
 			settings,
 		}
 	}
-	pub fn settings(&self) -> Ref<Settings> {
+	pub fn settings(&self) -> GcRef<Settings> {
 		self.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<Settings> {
+	pub fn settings_mut(&self) -> GcRefMut<Settings> {
 		self.settings.borrow_mut()
 	}
 	pub fn add_ext_var(&self, name: IStr, value: Val) {
@@ -416,6 +418,6 @@ pub trait StateExt {
 impl StateExt for State {
 	fn with_stdlib(&self) {
 		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
-		self.settings_mut().context_initializer = tb!(initializer)
+		self.settings_mut().context_initializer = dyn_gc_box!(initializer)
 	}
 }

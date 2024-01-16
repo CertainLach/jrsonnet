@@ -1,5 +1,5 @@
 use hashbrown::HashMap;
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
@@ -8,7 +8,8 @@ use crate::{evaluate, gc::GcHashMap, typed::Typed, val::ThunkValue, Context, Res
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
 struct EvaluateThunk {
 	ctx: Context,
 	expr: LocExpr,
@@ -51,7 +52,7 @@ where
 }
 impl<T> OptionalContext for T where T: Typed + Clone {}
 
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Finalize)]
 pub enum TlaArg {
 	String(IStr),
 	Code(LocExpr),

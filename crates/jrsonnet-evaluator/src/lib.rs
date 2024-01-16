@@ -54,7 +54,7 @@ mod arr;
 #[cfg(feature = "async-import")]
 pub mod async_import;
 mod ctx;
-mod dynamic;
+pub mod dynamic;
 pub mod error;
 mod evaluate;
 pub mod function;
@@ -78,15 +78,15 @@ use std::{
 	path::Path,
 };
 
+use boa_gc::{Finalize, Gc, GcBox, GcRef, GcRefCell, GcRefMut, Trace};
 pub use ctx::*;
 pub use dynamic::*;
 pub use error::{Error, ErrorKind::*, Result, ResultExt};
 pub use evaluate::*;
 use function::CallLocation;
-use gc::{GcHashMap, TraceBox};
+use gc::GcHashMap;
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
-use jrsonnet_gcmodule::{Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
@@ -99,7 +99,7 @@ pub use val::{Thunk, Val};
 
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read
-pub trait Unbound: Trace {
+pub trait Unbound: Trace + 'static {
 	/// Type of value after object context is bound
 	type Bound;
 	/// Create value bound to specified object context
@@ -108,10 +108,10 @@ pub trait Unbound: Trace {
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
 /// Standard jsonnet fields are always unbound
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Finalize)]
 pub enum MaybeUnbound {
 	/// Value needs to be bound to `this`/`super`
-	Unbound(Cc<TraceBox<dyn Unbound<Bound = Val>>>),
+	Unbound(DynGcBox<dyn Unbound<Bound = Val>>),
 	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
@@ -133,7 +133,7 @@ impl MaybeUnbound {
 
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
-pub trait ContextInitializer: Trace {
+pub trait ContextInitializer: Trace + 'static {
 	/// For which size the builder should be preallocated
 	fn reserve_vars(&self) -> usize {
 		0
@@ -152,6 +152,16 @@ pub trait ContextInitializer: Trace {
 	/// Allows upcasting from abstract to concrete context initializer.
 	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
 	fn as_any(&self) -> &dyn Any;
+}
+
+impl<T: ContextInitializer> ContextInitializer for DynGcBox<T> {
+	fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
+		self.value().populate(for_file, builder)
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self.value().as_any()
+	}
 }
 
 /// Context initializer which adds nothing.
@@ -194,24 +204,24 @@ impl_context_initializer! {
 }
 
 /// Dynamically reconfigurable evaluation settings
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct EvaluationSettings {
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
-	pub context_initializer: TraceBox<dyn ContextInitializer>,
+	pub context_initializer: DynGcBox<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
-	pub import_resolver: TraceBox<dyn ImportResolver>,
+	pub import_resolver: DynGcBox<dyn ImportResolver>,
 }
 impl Default for EvaluationSettings {
 	fn default() -> Self {
 		Self {
-			context_initializer: tb!(()),
-			import_resolver: tb!(DummyImportResolver),
+			context_initializer: dyn_gc_box!(()),
+			import_resolver: dyn_gc_box!(DummyImportResolver),
 		}
 	}
 }
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
@@ -253,17 +263,17 @@ impl FileData {
 	}
 }
 
-#[derive(Default, Trace)]
+#[derive(Default, Trace, Finalize)]
 pub struct EvaluationStateInternals {
 	/// Internal state
-	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
+	file_cache: GcRefCell<GcHashMap<SourcePath, FileData>>,
 	/// Settings, safe to change at runtime
-	settings: RefCell<EvaluationSettings>,
+	settings: GcRefCell<EvaluationSettings>,
 }
 
 /// Maintains stack trace and import resolution
-#[derive(Default, Clone, Trace)]
-pub struct State(Cc<EvaluationStateInternals>);
+#[derive(Default, Clone, Trace, Finalize)]
+pub struct State(Gc<EvaluationStateInternals>);
 
 impl State {
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
@@ -452,20 +462,20 @@ impl State {
 
 /// Internals
 impl State {
-	fn file_cache(&self) -> RefMut<'_, GcHashMap<SourcePath, FileData>> {
+	fn file_cache(&self) -> GcRefMut<'_, GcHashMap<SourcePath, FileData>> {
 		self.0.file_cache.borrow_mut()
 	}
-	pub fn settings(&self) -> Ref<'_, EvaluationSettings> {
+	pub fn settings(&self) -> GcRef<'_, EvaluationSettings> {
 		self.0.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<'_, EvaluationSettings> {
+	pub fn settings_mut(&self) -> GcRefMut<'_, EvaluationSettings> {
 		self.0.settings.borrow_mut()
 	}
 	pub fn add_global(&self, name: IStr, value: Thunk<Val>) {
-		#[derive(Trace)]
+		#[derive(Trace, Finalize)]
 		struct GlobalsCtx {
-			globals: RefCell<GcHashMap<IStr, Thunk<Val>>>,
-			inner: TraceBox<dyn ContextInitializer>,
+			globals: GcRefCell<GcHashMap<IStr, Thunk<Val>>>,
+			inner: DynGcBox<dyn ContextInitializer>,
 		}
 		impl ContextInitializer for GlobalsCtx {
 			fn reserve_vars(&self) -> usize {
@@ -487,20 +497,20 @@ impl State {
 		if let Some(global) = initializer.as_any().downcast_ref::<GlobalsCtx>() {
 			global.globals.borrow_mut().insert(name, value);
 		} else {
-			let inner = std::mem::replace(&mut settings.context_initializer, tb!(()));
-			settings.context_initializer = tb!(GlobalsCtx {
+			let inner = std::mem::replace(&mut settings.context_initializer, dyn_gc_box!(()));
+			settings.context_initializer = dyn_gc_box!(GlobalsCtx {
 				globals: {
 					let mut out = GcHashMap::with_capacity(1);
 					out.insert(name, value);
-					RefCell::new(out)
+					GcRefCell::new(out)
 				},
-				inner
+				inner,
 			});
 		}
 	}
 }
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct InitialUnderscore(pub Thunk<Val>);
 impl ContextInitializer for InitialUnderscore {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
@@ -569,16 +579,16 @@ impl State {
 	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())
 	}
-	pub fn import_resolver(&self) -> Ref<'_, dyn ImportResolver> {
-		Ref::map(self.settings(), |s| &*s.import_resolver)
+	pub fn import_resolver(&self) -> GcRef<'_, dyn ImportResolver> {
+		GcRef::map(self.settings(), |s| &***s.import_resolver)
 	}
 	pub fn set_import_resolver(&self, resolver: impl ImportResolver) {
-		self.settings_mut().import_resolver = tb!(resolver);
+		self.settings_mut().import_resolver = dyn_gc_box!(resolver);
 	}
-	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
-		Ref::map(self.settings(), |s| &*s.context_initializer)
+	pub fn context_initializer(&self) -> GcRef<'_, dyn ContextInitializer> {
+		GcRef::map(self.settings(), |s| &***s.context_initializer)
 	}
 	pub fn set_context_initializer(&self, initializer: impl ContextInitializer) {
-		self.settings_mut().context_initializer = tb!(initializer);
+		self.settings_mut().context_initializer = dyn_gc_box!(initializer);
 	}
 }

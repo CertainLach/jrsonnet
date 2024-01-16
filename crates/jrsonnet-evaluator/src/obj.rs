@@ -6,21 +6,20 @@ use std::{
 	ptr::addr_of,
 };
 
-use jrsonnet_gcmodule::{Cc, Trace, Weak};
+use boa_gc::{Finalize, Gc, GcBox, GcRefCell, Trace, WeakGc};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ExprLocation, Visibility};
 use rustc_hash::FxHashMap;
 
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
-	bail,
+	bail, dyn_gc_box,
 	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::{CallLocation, FuncVal},
-	gc::{GcHashMap, GcHashSet, TraceBox},
+	gc::{GcHashMap, GcHashSet},
 	operator::evaluate_add_op,
-	tb,
 	val::{ArrValue, ThunkValue},
-	MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	DynGcBox, MaybeUnbound, Result, State, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -30,9 +29,10 @@ mod ordering {
 		clippy::unused_self,
 	)]
 
-	use jrsonnet_gcmodule::Trace;
+	use boa_gc::{Finalize, Trace};
 
-	#[derive(Clone, Copy, Default, Debug, Trace)]
+	#[derive(Clone, Copy, Default, Debug, Trace, Finalize)]
+	#[boa_gc(unsafe_no_drop)]
 	pub struct FieldIndex(());
 	impl FieldIndex {
 		pub const fn next(self) -> Self {
@@ -40,7 +40,8 @@ mod ordering {
 		}
 	}
 
-	#[derive(Clone, Copy, Default, Debug, Trace)]
+	#[derive(Clone, Default, Debug, Trace, Finalize, Copy)]
+	#[boa_gc(unsafe_no_drop)]
 	pub struct SuperDepth(());
 	impl SuperDepth {
 		pub const fn deeper(self) -> Self {
@@ -63,7 +64,8 @@ mod ordering {
 
 	use jrsonnet_gcmodule::Trace;
 
-	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
+	#[derive(Clone, Copy, Default, Debug, Trace, Finalize, PartialEq, Eq, PartialOrd, Ord)]
+	#[boa_gc(unsafe_no_drop)]
 	pub struct FieldIndex(u32);
 	impl FieldIndex {
 		pub fn next(self) -> Self {
@@ -72,6 +74,7 @@ mod ordering {
 	}
 
 	#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
+	#[boa_gc(unsafe_no_drop)]
 	pub struct SuperDepth(u32);
 	impl SuperDepth {
 		pub fn deeper(self) -> Self {
@@ -129,9 +132,10 @@ impl Debug for ObjFieldFlags {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
 pub struct ObjMember {
-	#[trace(skip)]
+	#[unsafe_ignore_trace]
 	flags: ObjFieldFlags,
 	original_index: FieldIndex,
 	pub invoke: MaybeUnbound,
@@ -144,7 +148,7 @@ pub trait ObjectAssertion: Trace {
 
 // Field => This
 
-#[derive(Trace)]
+#[derive(Trace, Finalize, Debug)]
 enum CacheValue {
 	Cached(Val),
 	NotFound,
@@ -153,15 +157,14 @@ enum CacheValue {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Trace)]
-#[trace(tracking(force))]
+#[derive(Trace, Finalize)]
 pub struct OopObject {
 	sup: Option<ObjValue>,
 	// this: Option<ObjValue>,
-	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
-	assertions_ran: RefCell<GcHashSet<ObjValue>>,
-	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
+	assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
+	assertions_ran: GcRefCell<GcHashSet<ObjValue>>,
+	this_entries: Gc<GcHashMap<IStr, ObjMember>>,
+	value_cache: GcRefCell<GcHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
 }
 impl Debug for OopObject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -201,29 +204,34 @@ pub trait ObjectLike: Trace + Any + Debug {
 	fn run_assertions_raw(&self, this: ObjValue) -> Result<()>;
 }
 
-#[derive(Clone, Trace)]
-pub struct WeakObjValue(#[trace(skip)] pub(crate) Weak<TraceBox<dyn ObjectLike>>);
+#[derive(Clone, Trace, Finalize)]
+pub struct WeakObjValue(u32, pub(crate) WeakGc<Box<dyn ObjectLike>>);
+
+impl Debug for WeakObjValue {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		f.debug_tuple("WeakObjValue").field(&self.1).finish()
+	}
+}
 
 impl PartialEq for WeakObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		Weak::ptr_eq(&self.0, &other.0)
+		// PartialEq is implemented as ptr equality for WeakGc.
+		self.1 == other.1
 	}
 }
 
 impl Eq for WeakObjValue {}
 impl Hash for WeakObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		// Safety: usize is POD
-		let addr = unsafe { *std::ptr::addr_of!(self.0).cast() };
-		hasher.write_usize(addr);
+		hasher.write_u32(self.0)
 	}
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Trace, Debug)]
-pub struct ObjValue(pub(crate) Cc<TraceBox<dyn ObjectLike>>);
+#[derive(Clone, Trace, Finalize, Debug)]
+pub struct ObjValue(pub(crate) DynGcBox<dyn ObjectLike>);
 
-#[derive(Debug, Trace)]
+#[derive(Debug, Trace, Finalize)]
 struct EmptyObject;
 impl ObjectLike for EmptyObject {
 	fn extend_from(&self, sup: ObjValue) -> ObjValue {
@@ -271,7 +279,7 @@ impl ObjectLike for EmptyObject {
 	}
 }
 
-#[derive(Trace, Debug)]
+#[derive(Trace, Finalize, Debug)]
 struct ThisOverride {
 	inner: ObjValue,
 	this: ObjValue,
@@ -331,7 +339,7 @@ impl ObjectLike for ThisOverride {
 
 impl ObjValue {
 	pub fn new(v: impl ObjectLike) -> Self {
-		Self(Cc::new(tb!(v)))
+		Self(dyn_gc_box!(v))
 	}
 	pub fn new_empty() -> Self {
 		Self::new(EmptyObject)
@@ -443,7 +451,8 @@ impl ObjValue {
 		})
 	}
 	pub fn get_lazy(&self, key: IStr) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
+		#[derive(Trace, Finalize)]
+		#[boa_gc(unsafe_no_drop)]
 		struct ThunkGet {
 			obj: ObjValue,
 			key: IStr,
@@ -465,7 +474,8 @@ impl ObjValue {
 		}))
 	}
 	pub fn get_lazy_or_bail(&self, key: IStr) -> Thunk<Val> {
-		#[derive(Trace)]
+		#[derive(Trace, Finalize)]
+		#[boa_gc(unsafe_no_drop)]
 		struct ThunkGet {
 			obj: ObjValue,
 			key: IStr,
@@ -484,10 +494,10 @@ impl ObjValue {
 		})
 	}
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		Cc::ptr_eq(&a.0, &b.0)
+		Gc::ptr_eq(&a.0, &b.0)
 	}
 	pub fn downgrade(self) -> WeakObjValue {
-		WeakObjValue(self.0.downgrade())
+		WeakObjValue(addr_of!(**Gc::as_ref(&self.0)).cast::<()>() as usize as u32, WeakGc::new(&self.0))
 	}
 	fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
 		let mut out = FxHashMap::default();
@@ -610,16 +620,16 @@ impl ObjValue {
 impl OopObject {
 	pub fn new(
 		sup: Option<ObjValue>,
-		this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
+		this_entries: Gc<GcHashMap<IStr, ObjMember>>,
+		assertions: Gc<Vec<Box<dyn ObjectAssertion>>>,
 	) -> Self {
 		Self {
 			sup,
 			// this: None,
 			assertions,
-			assertions_ran: RefCell::new(GcHashSet::new()),
+			assertions_ran: GcRefCell::new(GcHashSet::new()),
 			this_entries,
-			value_cache: RefCell::new(GcHashMap::new()),
+			value_cache: GcRefCell::new(GcHashMap::new()),
 		}
 	}
 
@@ -805,14 +815,15 @@ impl ObjectLike for OopObject {
 
 impl PartialEq for ObjValue {
 	fn eq(&self, other: &Self) -> bool {
-		Cc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }
 
 impl Eq for ObjValue {}
 impl Hash for ObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(addr_of!(*self.0) as usize);
+		let hash = addr_of!(**Gc::as_ref(&self.0)).cast::<()>() as usize as u32;
+		hasher.write_u32(hash);
 	}
 }
 
@@ -820,7 +831,7 @@ impl Hash for ObjValue {
 pub struct ObjValueBuilder {
 	sup: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
-	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
+	assertions: Vec<Box<dyn ObjectAssertion>>,
 	next_field_index: FieldIndex,
 }
 impl ObjValueBuilder {
@@ -845,7 +856,7 @@ impl ObjValueBuilder {
 	}
 
 	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		self.assertions.push(tb!(assertion));
+		self.assertions.push(Box::new(assertion));
 		self
 	}
 	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
@@ -876,8 +887,8 @@ impl ObjValueBuilder {
 		}
 		ObjValue::new(OopObject::new(
 			self.sup,
-			Cc::new(self.map),
-			Cc::new(self.assertions),
+			Gc::new(self.map),
+			Gc::new(self.assertions),
 		))
 	}
 }
@@ -961,7 +972,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 		self.binding(MaybeUnbound::Bound(value.into()))
 	}
 	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {
-		self.binding(MaybeUnbound::Unbound(Cc::new(tb!(bindable))))
+		self.binding(MaybeUnbound::Unbound(dyn_gc_box!(bindable)))
 	}
 	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
@@ -983,8 +994,8 @@ impl ObjMemberBuilder<ExtendBuilder<'_>> {
 	pub fn value(self, value: impl Into<Val>) {
 		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) {
-		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));
+	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) {
+		self.binding(MaybeUnbound::Unbound(dyn_gc_box!(bindable)));
 	}
 	pub fn binding(self, binding: MaybeUnbound) {
 		let (receiver, name, member) = self.build_member(binding);

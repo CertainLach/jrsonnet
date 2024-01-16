@@ -338,7 +338,9 @@ fn builtin_inner(
 		quote! {}
 	};
 	let static_derive_copy = if attr.fields.is_empty() {
-		quote! {, Copy}
+		// FIXME: Make possible to implement Copy on type with no destructor
+		// in boa_gc
+		quote! {}
 	} else {
 		quote! {}
 	};
@@ -348,7 +350,7 @@ fn builtin_inner(
 
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
-		#[derive(Clone, jrsonnet_gcmodule::Trace #static_derive_copy)]
+		#[derive(Clone, boa_gc::Trace, boa_gc::Finalize #static_derive_copy)]
 		#vis struct #name {
 			#(#fields)*
 		}

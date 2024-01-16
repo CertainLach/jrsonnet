@@ -8,7 +8,7 @@ license = "MIT"
 edition = "2021"
 
 [dependencies]
-jrsonnet-gcmodule.workspace = true
+boa_gc = { git = "https://github.com/boa-dev/boa", version = "0.17.0" }
 
 peg.workspace = true
 

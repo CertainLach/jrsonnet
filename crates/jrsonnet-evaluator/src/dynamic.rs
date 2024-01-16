@@ -1,38 +1,35 @@
-use std::cell::OnceCell;
+use std::{cell::OnceCell, ops::Deref};
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Finalize, Gc, GcRefCell, Trace};
+use derivative::Derivative;
 
 use crate::{bail, error::ErrorKind::InfiniteRecursionDetected, val::ThunkValue, Result};
 
-// TODO: Replace with OnceCell once in std
-#[derive(Clone, Trace)]
-pub struct Pending<V: Trace + 'static>(pub Cc<OnceCell<V>>);
+// TODO: Replace with OnceCell
+#[derive(Clone, Trace, Finalize)]
+pub struct Pending<V: Trace + 'static>(pub Gc<GcRefCell<Option<V>>>);
 impl<T: Trace + 'static> Pending<T> {
 	pub fn new() -> Self {
-		Self(Cc::new(OnceCell::new()))
+		Self(Gc::new(GcRefCell::new(None)))
 	}
 	pub fn new_filled(v: T) -> Self {
-		let cell = OnceCell::new();
-		let _ = cell.set(v);
-		Self(Cc::new(cell))
+		Self(Gc::new(GcRefCell::new(Some(v))))
 	}
 	/// # Panics
 	/// If wrapper is filled already
 	pub fn fill(self, value: T) {
-		self.0
-			.set(value)
-			.map_err(|_| ())
-			.expect("wrapper is filled already");
+		// TODO: Panic if set
+		*self.0.borrow_mut() = Some(value);
 	}
 }
 impl<T: Clone + Trace + 'static> Pending<T> {
 	/// # Panics
 	/// If wrapper is not yet filled
 	pub fn unwrap(&self) -> T {
-		self.0.get().cloned().expect("pending was not filled")
+		self.0.borrow().clone().expect("pending was not filled")
 	}
 	pub fn try_get(&self) -> Option<T> {
-		self.0.get().cloned()
+		self.0.borrow().clone()
 	}
 }
 
@@ -40,7 +37,8 @@ impl<T: Trace + Clone> ThunkValue for Pending<T> {
 	type Output = T;
 
 	fn get(self: Box<Self>) -> Result<Self::Output> {
-		let Some(value) = self.0.get() else {
+		let v = self.0.borrow();
+		let Some(value) = &*v else {
 			bail!(InfiniteRecursionDetected);
 		};
 		Ok(value.clone())
@@ -50,5 +48,36 @@ impl<T: Trace + Clone> ThunkValue for Pending<T> {
 impl<T: Trace + 'static> Default for Pending<T> {
 	fn default() -> Self {
 		Self::new()
+	}
+}
+
+#[derive(Trace, Finalize, Derivative)]
+#[derivative(Debug)]
+pub struct DynGcBox<T: ?Sized + Trace + Finalize + 'static>(Gc<Box<T>>);
+impl<T: ?Sized + Trace + Finalize + 'static> DynGcBox<T> {
+	#[doc(hidden)]
+	pub fn wrap(v: Gc<Box<T>>) -> Self {
+		Self(v)
+	}
+	pub fn value(&self) -> &T {
+		&self.0
+	}
+}
+impl<T: ?Sized + Trace + Finalize + 'static> Clone for DynGcBox<T> {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+#[macro_export]
+macro_rules! dyn_gc_box {
+	($t:expr) => {
+		$crate::dynamic::DynGcBox::wrap(boa_gc::Gc::new(Box::new($t)))
+	};
+}
+
+impl<T: ?Sized + Trace + Finalize + 'static> Deref for DynGcBox<T> {
+	type Target = Gc<Box<T>>;
+	fn deref(&self) -> &Self::Target {
+		&self.0
 	}
 }

@@ -1,7 +1,7 @@
 //! faster std.format impl
 #![allow(clippy::too_many_arguments)]
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 use thiserror::Error;
@@ -13,7 +13,7 @@ use crate::{
 	Error, ObjValue, Result, Val,
 };
 
-#[derive(Debug, Clone, Error, Trace)]
+#[derive(Debug, Clone, Error, Trace, Finalize)]
 pub enum FormatError {
 	#[error("truncated format code")]
 	TruncatedFormatCode,

@@ -25,7 +25,7 @@
         lib = pkgs.lib;
         rust =
           (pkgs.rustChannelOf {
-            date = "2023-10-28";
+            date = "2024-01-12";
             channel = "nightly";
           })
           .default

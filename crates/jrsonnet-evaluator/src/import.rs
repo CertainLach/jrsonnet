@@ -7,17 +7,18 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+use boa_gc::{Finalize, Trace};
 use fs::File;
-use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
+	DynGcBox,
 };
 
 /// Implements file resolution logic for `import` and `importStr`
-pub trait ImportResolver: Trace {
+pub trait ImportResolver: Trace + 'static {
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
 	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
 	/// where `${vendor}` is a library path.
@@ -43,9 +44,18 @@ pub trait ImportResolver: Trace {
 	/// For downcasts
 	fn as_any(&self) -> &dyn Any;
 }
+impl<T: ImportResolver> ImportResolver for DynGcBox<T> {
+	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
+		self.value().load_file_contents(resolved)
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self.value().as_any()
+	}
+}
 
 /// Dummy resolver, can't resolve/load any file
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
 	fn load_file_contents(&self, _resolved: &SourcePath) -> Result<Vec<u8>> {
@@ -64,10 +74,11 @@ impl Default for Box<dyn ImportResolver> {
 }
 
 /// File resolver, can load file from both FS and library paths
-#[derive(Default, Trace)]
+#[derive(Default, Trace, Finalize)]
 pub struct FileImportResolver {
 	/// Library directories to search for file.
 	/// Referred to as `jpath` in original jsonnet implementation.
+	#[unsafe_ignore_trace]
 	library_paths: RefCell<Vec<PathBuf>>,
 }
 impl FileImportResolver {

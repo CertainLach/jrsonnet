@@ -250,7 +250,7 @@ pub trait AsyncImportResolver {
 	) -> impl Future<Output = Result<Vec<u8>, Self::Error>>;
 }
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 struct ResolvedImportResolver {
 	resolved: RefCell<GcHashMap<(SourcePath, IStr), (SourcePath, bool)>>,
 }

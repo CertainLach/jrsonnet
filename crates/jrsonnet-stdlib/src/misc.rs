@@ -1,5 +1,6 @@
 use std::{cell::RefCell, rc::Rc};
 
+use boa_gc::{Gc, GcRefCell};
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
@@ -24,7 +25,7 @@ pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> usize {
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Gc<GcRefCell<Settings>>,
 ))]
 pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Val> {
 	let ctx = ctx.state().create_default_context(extvar_source(&x, ""));
@@ -39,7 +40,7 @@ pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Gc<GcRefCell<Settings>>,
 ))]
 pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 	this.settings
@@ -51,7 +52,7 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Gc<GcRefCell<Settings>>,
 ))]
 pub fn builtin_trace(
 	this: &builtin_trace,

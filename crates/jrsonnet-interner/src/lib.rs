@@ -15,7 +15,7 @@ use std::{
 };
 
 use hashbrown::HashMap;
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use rustc_hash::FxHasher;
 
 mod inner;
@@ -24,13 +24,9 @@ use inner::Inner;
 /// Interned string
 ///
 /// Provides O(1) comparsions and hashing, cheap copy, and cheap conversion to [`IBytes`]
-#[derive(Clone, PartialOrd, Ord, Eq)]
+#[derive(Clone, PartialOrd, Ord, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct IStr(Inner);
-impl Trace for IStr {
-	fn is_type_tracked() -> bool {
-		false
-	}
-}
 
 impl IStr {
 	#[must_use]
@@ -107,13 +103,9 @@ impl Display for IStr {
 }
 
 /// Interned byte array
-#[derive(Clone, PartialOrd, Ord, Eq)]
+#[derive(Clone, PartialOrd, Ord, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct IBytes(Inner);
-impl Trace for IBytes {
-	fn is_type_tracked() -> bool {
-		false
-	}
-}
 
 impl IBytes {
 	#[must_use]

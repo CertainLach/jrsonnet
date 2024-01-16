@@ -5,7 +5,7 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Finalize, Gc, GcBox, GcRefCell, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
 
@@ -14,40 +14,40 @@ use crate::{
 	bail,
 	error::{Error, ErrorKind::*},
 	function::FuncVal,
-	gc::{GcHashMap, TraceBox},
+	gc::GcHashMap,
 	manifest::{ManifestFormat, ToStringFormat},
-	tb,
 	typed::BoundedUsize,
 	ObjValue, Result, Unbound, WeakObjValue,
 };
 
-pub trait ThunkValue: Trace {
+pub trait ThunkValue: Trace + 'static {
 	type Output;
 	fn get(self: Box<Self>) -> Result<Self::Output>;
 }
 
-#[derive(Trace)]
-enum ThunkInner<T: Trace> {
+#[derive(Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+enum ThunkInner<T: Trace + 'static> {
 	Computed(T),
 	Errored(Error),
-	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
+	Waiting(Box<dyn ThunkValue<Output = T>>),
 	Pending,
 }
 
 /// Lazily evaluated value
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Trace)]
-pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<T>>>);
+#[derive(Clone, Trace, Finalize)]
+pub struct Thunk<T: Trace + 'static>(Gc<GcRefCell<ThunkInner<T>>>);
 
 impl<T: Trace> Thunk<T> {
 	pub fn evaluated(val: T) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
+		Self(Gc::new(GcRefCell::new(ThunkInner::Computed(val))))
 	}
 	pub fn new(f: impl ThunkValue<Output = T> + 'static) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Waiting(tb!(f)))))
+		Self(Gc::new(GcRefCell::new(ThunkInner::Waiting(Box::new(f)))))
 	}
 	pub fn errored(e: Error) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Errored(e))))
+		Self(Gc::new(GcRefCell::new(ThunkInner::Errored(e))))
 	}
 	pub fn result(res: Result<T, Error>) -> Self {
 		match res {
@@ -83,7 +83,7 @@ where
 		else {
 			unreachable!();
 		};
-		let new_value = match value.0.get() {
+		let new_value = match value.get() {
 			Ok(v) => v,
 			Err(e) => {
 				*self.0.borrow_mut() = ThunkInner::Errored(e.clone());
@@ -95,7 +95,7 @@ where
 	}
 }
 
-pub trait ThunkMapper<Input>: Trace {
+pub trait ThunkMapper<Input>: Trace + 'static {
 	type Output;
 	fn map(self, from: Input) -> Result<Self::Output>;
 }
@@ -108,15 +108,16 @@ where
 		M: ThunkMapper<Input>,
 		M::Output: Trace,
 	{
-		#[derive(Trace)]
-		struct Mapped<Input: Trace, Mapper: Trace> {
+		#[derive(Trace, Finalize)]
+		#[boa_gc(unsafe_no_drop)]
+		struct Mapped<Input: Trace + 'static, Mapper: Trace + 'static> {
 			inner: Thunk<Input>,
 			mapper: Mapper,
 		}
 		impl<Input, Mapper> ThunkValue for Mapped<Input, Mapper>
 		where
-			Input: Trace + Clone,
-			Mapper: ThunkMapper<Input>,
+			Input: Trace + Clone + 'static,
+			Mapper: ThunkMapper<Input> + 'static,
 		{
 			type Output = Mapper::Output;
 
@@ -159,19 +160,19 @@ impl<T: Trace + Default> Default for Thunk<T> {
 
 type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
 
-#[derive(Trace, Clone)]
+#[derive(Trace, Clone, Finalize)]
 pub struct CachedUnbound<I, T>
 where
 	I: Unbound<Bound = T>,
-	T: Trace,
+	T: Trace + 'static,
 {
-	cache: Cc<RefCell<GcHashMap<CacheKey, T>>>,
+	cache: Gc<GcRefCell<GcHashMap<CacheKey, T>>>,
 	value: I,
 }
 impl<I: Unbound<Bound = T>, T: Trace> CachedUnbound<I, T> {
 	pub fn new(value: I) -> Self {
 		Self {
-			cache: Cc::new(RefCell::new(GcHashMap::new())),
+			cache: Gc::new(GcRefCell::new(GcHashMap::new())),
 			value,
 		}
 	}
@@ -206,7 +207,7 @@ impl<T: Debug + Trace> Debug for Thunk<T> {
 }
 impl<T: Trace> PartialEq for Thunk<T> {
 	fn eq(&self, other: &Self) -> bool {
-		Cc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }
 
@@ -276,7 +277,8 @@ impl IndexableVal {
 	}
 }
 
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Finalize)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum StrValue {
 	Flat(IStr),
 	Tree(Rc<(StrValue, StrValue, usize)>),
@@ -372,7 +374,8 @@ impl Ord for StrValue {
 }
 
 /// Represents any valid Jsonnet value.
-#[derive(Debug, Clone, Trace, Default)]
+#[derive(Debug, Clone, Trace, Finalize, Default)]
+#[boa_gc(unsafe_no_drop)]
 pub enum Val {
 	/// Represents a Jsonnet boolean.
 	Bool(bool),

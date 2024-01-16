@@ -1,4 +1,4 @@
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Finalize, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct, LocExpr, ParamsDesc};
 
@@ -34,7 +34,7 @@ pub fn destruct(
 
 			use crate::arr::ArrValue;
 
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
 			struct DataThunk {
 				parent: Thunk<Val>,
 				min_len: usize,
@@ -70,7 +70,7 @@ pub fn destruct(
 			});
 
 			{
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
 				struct BaseThunk {
 					full: Thunk<ArrValue>,
 					index: usize,
@@ -98,7 +98,7 @@ pub fn destruct(
 
 			match rest {
 				Some(DestructRest::Keep(v)) => {
-					#[derive(Trace)]
+					#[derive(Trace, Finalize)]
 					struct RestThunk {
 						full: Thunk<ArrValue>,
 						start: usize,
@@ -132,7 +132,7 @@ pub fn destruct(
 			}
 
 			{
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
 				struct EndThunk {
 					full: Thunk<ArrValue>,
 					index: usize,
@@ -166,7 +166,7 @@ pub fn destruct(
 		Destruct::Object { fields, rest } => {
 			use crate::obj::ObjValue;
 
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
 			struct DataThunk {
 				parent: Thunk<Val>,
 				field_names: Vec<IStr>,
@@ -206,7 +206,7 @@ pub fn destruct(
 			});
 
 			for (field, d, default) in fields {
-				#[derive(Trace)]
+				#[derive(Trace, Finalize)]
 				struct FieldThunk {
 					full: Thunk<ObjValue>,
 					field: IStr,
@@ -253,7 +253,8 @@ pub fn evaluate_dest(
 ) -> Result<()> {
 	match d {
 		BindSpec::Field { into, value } => {
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
+			#[boa_gc(unsafe_no_drop)]
 			struct EvaluateThunkValue {
 				name: Option<IStr>,
 				fctx: Pending<Context>,
@@ -280,7 +281,8 @@ pub fn evaluate_dest(
 			params,
 			value,
 		} => {
-			#[derive(Trace)]
+			#[derive(Trace, Finalize)]
+			#[boa_gc(unsafe_no_drop)]
 			struct MethodThunk {
 				fctx: Pending<Context>,
 				name: IStr,

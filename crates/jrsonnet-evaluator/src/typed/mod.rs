@@ -2,7 +2,7 @@ use std::{fmt::Display, rc::Rc};
 
 mod conversions;
 pub use conversions::*;
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 pub use jrsonnet_types::{ComplexValType, ValType};
 use thiserror::Error;
 
@@ -11,12 +11,12 @@ use crate::{
 	State, Val,
 };
 
-#[derive(Debug, Error, Clone, Trace)]
+#[derive(Debug, Error, Clone, Trace, Finalize)]
 pub enum TypeError {
 	#[error("expected {0}, got {1}")]
 	ExpectedGot(ComplexValType, ValType),
 	#[error("missing property {0} from {1}")]
-	MissingProperty(#[trace(skip)] Rc<str>, ComplexValType),
+	MissingProperty(#[boa_gc(unsafe_ignore_trace)] Rc<str>, ComplexValType),
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
@@ -32,7 +32,7 @@ impl From<TypeError> for Error {
 	}
 }
 
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub struct TypeLocError(Box<TypeError>, ValuePathStack);
 impl From<TypeError> for TypeLocError {
 	fn from(e: TypeError) -> Self {
@@ -54,7 +54,7 @@ impl Display for TypeLocError {
 	}
 }
 
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub struct TypeLocErrorList(Vec<TypeLocError>);
 impl Display for TypeLocErrorList {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -116,9 +116,9 @@ impl CheckType for ValType {
 	}
 }
 
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Finalize)]
 enum ValuePathItem {
-	Field(#[trace(skip)] Rc<str>),
+	Field(#[boa_gc(unsafe_ignore_trace)] Rc<str>),
 	Index(u64),
 }
 impl Display for ValuePathItem {
@@ -131,7 +131,7 @@ impl Display for ValuePathItem {
 	}
 }
 
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Finalize)]
 struct ValuePathStack(Vec<ValuePathItem>);
 impl Display for ValuePathStack {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {

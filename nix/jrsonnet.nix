@@ -41,5 +41,9 @@ rustPlatform.buildRustPackage rec {
 
   cargoLock = {
     lockFile = ../Cargo.lock;
+    outputHashes = {
+      "ass-stroke-0.1.0" = "sha256-muCxjyvgtbK6QDePRQlq29Ey7A22vvCaCMoZH+OUr6U=";
+      "boa_gc-0.17.0" = "sha256-4h5nLLdSYgDZNo9g3jx5XUpDBqWhmJ74OgyE4tXdKg8=";
+    };
   };
 }

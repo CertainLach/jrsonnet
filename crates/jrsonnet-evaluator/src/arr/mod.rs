@@ -1,20 +1,20 @@
 use std::any::Any;
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Gc, Trace, Finalize, GcBox};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
 
-use crate::{function::FuncVal, gc::TraceBox, tb, Context, Result, Thunk, Val};
+use crate::{DynGcBox, dyn_gc_box};
+use crate::{function::FuncVal, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::ArrayLike;
 pub(crate) use spec::*;
 
 /// Represents a Jsonnet array value.
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Finalize)]
 // may contrain other ArrValue
-#[trace(tracking(force))]
-pub struct ArrValue(Cc<TraceBox<dyn ArrayLike>>);
+pub struct ArrValue(DynGcBox<dyn ArrayLike>);
 
 pub trait ArrayLikeIter<T>: Iterator<Item = T> + DoubleEndedIterator + ExactSizeIterator {}
 impl<I, T> ArrayLikeIter<T> for I where
@@ -24,7 +24,7 @@ impl<I, T> ArrayLikeIter<T> for I where
 
 impl ArrValue {
 	pub fn new(v: impl ArrayLike) -> Self {
-		Self(Cc::new(tb!(v)))
+		Self(dyn_gc_box!(v))
 	}
 	pub fn empty() -> Self {
 		Self::new(RangeArray::empty())
@@ -177,7 +177,7 @@ impl ArrValue {
 	}
 
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
-		Cc::ptr_eq(&a.0, &b.0)
+		Gc::ptr_eq(&a.0, &b.0)
 	}
 
 	/// Is this vec supports `.get_cheap()?`

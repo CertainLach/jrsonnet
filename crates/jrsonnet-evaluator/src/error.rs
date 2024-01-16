@@ -4,7 +4,7 @@ use std::{
 	path::PathBuf,
 };
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BinaryOpType, ExprLocation, LocExpr, Source, SourcePath, UnaryOpType};
 use jrsonnet_types::ValType;
@@ -92,8 +92,9 @@ type FunctionSignature = Vec<(Option<IStr>, bool)>;
 
 /// Possible errors
 #[allow(missing_docs)]
-#[derive(Error, Debug, Clone, Trace)]
+#[derive(Error, Debug, Clone, Trace, Finalize)]
 #[non_exhaustive]
+#[boa_gc(unsafe_empty_trace)]
 pub enum ErrorKind {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -194,7 +195,6 @@ pub enum ErrorKind {
 	)]
 	ImportSyntaxError {
 		path: Source,
-		#[trace(skip)]
 		error: Box<jrsonnet_parser::ParseError>,
 	},
 
@@ -250,7 +250,7 @@ impl From<ErrorKind> for Error {
 }
 
 /// Single stack trace frame
-#[derive(Clone, Debug, Trace)]
+#[derive(Clone, Debug, Trace, Finalize)]
 pub struct StackTraceElement {
 	/// Source of this frame
 	/// Some frames only act as description, without attached source
@@ -258,10 +258,10 @@ pub struct StackTraceElement {
 	/// Frame description
 	pub desc: String,
 }
-#[derive(Debug, Clone, Trace)]
+#[derive(Debug, Clone, Trace, Finalize)]
 pub struct StackTrace(pub Vec<StackTraceElement>);
 
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Finalize)]
 pub struct Error(Box<(ErrorKind, StackTrace)>);
 impl Error {
 	pub fn new(e: ErrorKind) -> Self {

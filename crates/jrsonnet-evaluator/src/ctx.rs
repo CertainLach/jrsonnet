@@ -1,6 +1,6 @@
 use std::fmt::Debug;
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Gc, Trace, Finalize};
 use jrsonnet_interner::IStr;
 
 use crate::{
@@ -8,7 +8,7 @@ use crate::{
 	Thunk, Val,
 };
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
 struct ContextInternals {
 	state: Option<State>,
 	dollar: Option<ObjValue>,
@@ -25,8 +25,8 @@ impl Debug for ContextInternals {
 /// Context keeps information about current lexical code location
 ///
 /// This information includes local variables, top-level object (`$`), current object (`this`), and super object (`super`)
-#[derive(Debug, Clone, Trace)]
-pub struct Context(Cc<ContextInternals>);
+#[derive(Debug, Clone, Trace, Finalize)]
+pub struct Context(Gc<ContextInternals>);
 impl Context {
 	pub fn new_future() -> Pending<Self> {
 		Pending::new()
@@ -110,7 +110,7 @@ impl Context {
 		} else {
 			ctx.bindings.clone().extend(new_bindings)
 		};
-		Self(Cc::new(ContextInternals {
+		Self(Gc::new(ContextInternals {
 			state: ctx.state.clone(),
 			dollar,
 			sup,
@@ -122,7 +122,7 @@ impl Context {
 
 impl PartialEq for Context {
 	fn eq(&self, other: &Self) -> bool {
-		Cc::ptr_eq(&self.0, &other.0)
+		Gc::ptr_eq(&self.0, &other.0)
 	}
 }
 
@@ -171,7 +171,7 @@ impl ContextBuilder {
 			// TODO: replace self.extend with Result<Context, State>, and remove `state` field
 			parent.extend(self.bindings, None, None, None)
 		} else {
-			Context(Cc::new(ContextInternals {
+			Context(Gc::new(ContextInternals {
 				state: self.state,
 				bindings: LayeredHashMap::new(self.bindings),
 				dollar: None,

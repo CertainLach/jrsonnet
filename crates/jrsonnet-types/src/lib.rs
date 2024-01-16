@@ -2,7 +2,7 @@
 
 use std::fmt::Display;
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 
 #[macro_export]
 macro_rules! ty {
@@ -82,7 +82,8 @@ fn test() {
 	);
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
 pub enum ValType {
 	Bool,
 	Null,
@@ -118,8 +119,8 @@ impl Display for ValType {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Trace)]
-#[trace(skip)]
+#[derive(Debug, Clone, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum ComplexValType {
 	Any,
 	Char,

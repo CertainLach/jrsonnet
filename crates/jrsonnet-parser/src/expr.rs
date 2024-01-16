@@ -4,7 +4,7 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Trace, Finalize};
 use jrsonnet_interner::IStr;
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
@@ -15,7 +15,7 @@ use crate::source::Source;
 
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "structdump", derive(Codegen))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
@@ -25,7 +25,9 @@ pub enum FieldName {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 #[repr(u8)]
 pub enum Visibility {
 	/// :
@@ -44,12 +46,16 @@ impl Visibility {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, Debug, PartialEq, Trace)]
+#[derive(Clone, Debug, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
@@ -60,7 +66,9 @@ pub struct FieldMember {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
@@ -69,7 +77,9 @@ pub enum Member {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum UnaryOpType {
 	Plus,
 	Minus,
@@ -95,7 +105,9 @@ impl Display for UnaryOpType {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum BinaryOpType {
 	Mul,
 	Div,
@@ -166,13 +178,15 @@ impl Display for BinaryOpType {
 /// name, default value
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct Param(pub Destruct, pub Option<LocExpr>);
 
 /// Defined function parameters
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct ParamsDesc(pub Rc<Vec<Param>>);
 
 impl Deref for ParamsDesc {
@@ -184,7 +198,9 @@ impl Deref for ParamsDesc {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct ArgsDesc {
 	pub unnamed: Vec<LocExpr>,
 	pub named: Vec<(IStr, LocExpr)>,
@@ -197,7 +213,9 @@ impl ArgsDesc {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum DestructRest {
 	/// ...rest
 	Keep(IStr),
@@ -207,7 +225,9 @@ pub enum DestructRest {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum Destruct {
 	Full(IStr),
 	#[cfg(feature = "exp-destruct")]
@@ -270,7 +290,7 @@ impl Destruct {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Trace, Finalize)]
 pub enum BindSpec {
 	Field {
 		into: Destruct,
@@ -293,17 +313,17 @@ impl BindSpec {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct IfSpecData(pub LocExpr);
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct ForSpecData(pub Destruct, pub LocExpr);
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
@@ -311,7 +331,7 @@ pub enum CompSpec {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
 	pub field: FieldMember,
@@ -321,7 +341,7 @@ pub struct ObjComp {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp(ObjComp),
@@ -329,7 +349,9 @@ pub enum ObjBody {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Trace)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub enum LiteralType {
 	This,
 	Super,
@@ -341,7 +363,7 @@ pub enum LiteralType {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
 	pub end: Option<LocExpr>,
@@ -351,7 +373,7 @@ pub struct SliceDesc {
 /// Syntax base
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub enum Expr {
 	Literal(LiteralType),
 
@@ -422,7 +444,7 @@ pub enum Expr {
 
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Trace, Finalize)]
 pub struct IndexPart {
 	pub value: LocExpr,
 	#[cfg(feature = "exp-null-coaelse")]
@@ -432,8 +454,9 @@ pub struct IndexPart {
 /// file, begin offset, end offset
 #[cfg_attr(feature = "structdump", derive(Codegen))]
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
-#[derive(Clone, PartialEq, Eq, Trace)]
-#[trace(skip)]
+#[derive(Clone, PartialEq, Eq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 #[repr(C)]
 pub struct ExprLocation(pub Source, pub u32, pub u32);
 impl ExprLocation {
@@ -454,7 +477,9 @@ impl Debug for ExprLocation {
 /// Holds AST expression and its location in source file
 #[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[cfg_attr(feature = "structdump", derive(Codegen))]
-#[derive(Clone, PartialEq, Trace)]
+#[derive(Clone, PartialEq, Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
+#[boa_gc(unsafe_empty_trace)]
 pub struct LocExpr(pub Rc<Expr>, pub ExprLocation);
 
 #[cfg(target_pointer_width = "64")]

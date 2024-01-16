@@ -17,10 +17,10 @@ structdump = ["dep:structdump"]
 serde = ["dep:serde"]
 
 [dependencies]
-jrsonnet-gcmodule.workspace = true
 
 serde = { workspace = true, optional = true }
 structdump = { workspace = true, optional = true }
 
 rustc-hash.workspace = true
 hashbrown = { workspace = true, features = ["inline-more"] }
+boa_gc = { git = "https://github.com/boa-dev/boa", version = "0.17.0" }

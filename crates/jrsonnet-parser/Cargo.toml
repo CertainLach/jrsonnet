@@ -29,7 +29,6 @@ serde = ["dep:serde"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
-jrsonnet-gcmodule.workspace = true
 
 static_assertions.workspace = true
 
@@ -37,3 +36,4 @@ peg.workspace = true
 
 serde = { workspace = true, features = ["derive", "rc"], optional = true }
 structdump = { workspace = true, features = ["derive"], optional = true }
+boa_gc = { git = "https://github.com/boa-dev/boa", version = "0.17.0" }

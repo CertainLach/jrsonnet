@@ -17,7 +17,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	FileImportResolver, ImportResolver,
 };
-use jrsonnet_gcmodule::Trace;
+use boa_gc::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::VM;

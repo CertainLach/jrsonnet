@@ -27,7 +27,7 @@ exp-regex = ["regex", "lru", "rustc-hash"]
 jrsonnet-evaluator.workspace = true
 jrsonnet-macros.workspace = true
 jrsonnet-parser.workspace = true
-jrsonnet-gcmodule.workspace = true
+boa_gc = { git = "https://github.com/boa-dev/boa", version = "0.17.0" }
 
 # Used for stdlib AST serialization
 bincode = { workspace = true, optional = true }

@@ -35,7 +35,6 @@ jrsonnet-interner.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-types.workspace = true
 jrsonnet-macros.workspace = true
-jrsonnet-gcmodule.workspace = true
 
 pathdiff.workspace = true
 hashbrown.workspace = true
@@ -57,3 +56,4 @@ annotate-snippets = { workspace = true, features = ["color"], optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 derivative.workspace = true
+boa_gc = { git = "https://github.com/boa-dev/boa", version = "0.17.0" }

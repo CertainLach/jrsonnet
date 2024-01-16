@@ -1,6 +1,6 @@
 use std::mem::replace;
 
-use jrsonnet_gcmodule::Trace;
+use boa_gc::{Finalize, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{LocExpr, ParamsDesc};
 
@@ -15,7 +15,8 @@ use crate::{
 	Context, Pending, Thunk, Val,
 };
 
-#[derive(Trace)]
+#[derive(Trace, Finalize)]
+#[boa_gc(unsafe_no_drop)]
 struct EvaluateNamedThunk {
 	ctx: Pending<Context>,
 	name: IStr,
@@ -225,7 +226,7 @@ pub fn parse_builtin_call(
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
-	#[derive(Trace)]
+	#[derive(Trace, Finalize)]
 	struct DependsOnUnbound(IStr, ParamsDesc);
 	impl ThunkValue for DependsOnUnbound {
 		type Output = Val;

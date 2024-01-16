@@ -1,6 +1,6 @@
 use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use boa_gc::{Gc, Trace, Finalize};
 use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
@@ -14,11 +14,11 @@ use crate::{
 	ObjValue, ObjValueBuilder, Result, Thunk, Val,
 };
 
-#[derive(Trace)]
-struct FromUntyped<K: Trace>(PhantomData<fn() -> K>);
+#[derive(Trace, Finalize)]
+struct FromUntyped<K: Trace + 'static>(PhantomData<fn() -> K>);
 impl<K> ThunkMapper<Val> for FromUntyped<K>
 where
-	K: Typed + Trace,
+	K: Typed + Trace + 'static,
 {
 	type Output = K;
 
@@ -91,11 +91,11 @@ where
 	}
 
 	fn into_lazy_untyped(inner: Self) -> Thunk<Val> {
-		#[derive(Trace)]
-		struct IntoUntyped<K: Trace>(PhantomData<fn() -> K>);
+		#[derive(Trace, Finalize)]
+		struct IntoUntyped<K: Trace + 'static>(PhantomData<fn() -> K>);
 		impl<K> ThunkMapper<K> for IntoUntyped<K>
 		where
-			K: Typed + Trace,
+			K: Typed + Trace + 'static,
 		{
 			type Output = Val;
 
@@ -571,7 +571,7 @@ impl Typed for FuncVal {
 	}
 }
 
-impl Typed for Cc<FuncDesc> {
+impl Typed for Gc<FuncDesc> {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
 
 	fn into_untyped(value: Self) -> Result<Val> {
