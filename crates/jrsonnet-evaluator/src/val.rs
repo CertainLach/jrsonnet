@@ -351,6 +351,8 @@ impl Display for StrValue {
 	}
 }
 impl PartialEq for StrValue {
+	// False positive, into_flat returns not StrValue, but IStr, thus no infinite recursion here.
+	#[allow(clippy::unconditional_recursion)]
 	fn eq(&self, other: &Self) -> bool {
 		let a = self.clone().into_flat();
 		let b = other.clone().into_flat();

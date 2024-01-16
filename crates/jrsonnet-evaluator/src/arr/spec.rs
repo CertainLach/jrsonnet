@@ -372,7 +372,7 @@ impl RangeArray {
 	pub fn new_inclusive(start: i32, end: i32) -> Self {
 		Self { start, end }
 	}
-	fn range(&self) -> impl Iterator<Item = i32> + ExactSizeIterator + DoubleEndedIterator {
+	fn range(&self) -> impl ExactSizeIterator<Item = i32> + DoubleEndedIterator {
 		WithExactSize(
 			self.start..=self.end,
 			(self.end as usize)
@@ -461,7 +461,7 @@ impl ArrayLike for MappedArray {
 			ArrayThunk::Waiting(..) => {}
 		};
 
-		let ArrayThunk::Waiting(_) =
+		let ArrayThunk::Waiting(()) =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
@@ -508,7 +508,7 @@ impl ArrayLike for MappedArray {
 		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
+			ArrayThunk::Waiting(()) | ArrayThunk::Pending => {}
 		};
 
 		Some(Thunk::new(ArrayElement {
@@ -597,9 +597,7 @@ impl ArrayLike for PickObjectValues {
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		let Some(key) = self.keys.get(index) else {
-			return None;
-		};
+		let key = self.keys.get(index)?;
 		Some(self.obj.get_lazy_or_bail(key.clone()))
 	}
 
@@ -649,9 +647,7 @@ impl ArrayLike for PickObjectKeyValues {
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		let Some(key) = self.keys.get(index) else {
-			return None;
-		};
+		let key = self.keys.get(index)?;
 		// Nothing can fail in the key part, yet value is still
 		// lazy-evaluated
 		Some(Thunk::evaluated(

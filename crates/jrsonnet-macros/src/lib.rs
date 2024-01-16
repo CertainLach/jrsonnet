@@ -374,6 +374,7 @@ fn builtin_inner(
 				fn params(&self) -> &[BuiltinParam] {
 					PARAMS
 				}
+				#[allow(unused_variable)]
 				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
 

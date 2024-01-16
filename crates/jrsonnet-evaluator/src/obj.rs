@@ -171,7 +171,7 @@ impl Debug for OopObject {
 			// .field("assertions_ran", &self.assertions_ran)
 			.field("this_entries", &self.this_entries)
 			// .field("value_cache", &self.value_cache)
-			.finish()
+			.finish_non_exhaustive()
 	}
 }
 
@@ -347,7 +347,7 @@ impl ObjValue {
 		out.with_super(self);
 		let mut member = out.field(key);
 		if value.flags.add() {
-			member = member.add()
+			member = member.add();
 		}
 		if let Some(loc) = value.location {
 			member = member.with_location(loc);
@@ -395,7 +395,7 @@ impl ObjValue {
 
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
 		self.run_assertions()?;
-		self.get_for(key, self.0.this().unwrap_or(self.clone()))
+		self.get_for(key, self.0.this().unwrap_or_else(|| self.clone()))
 	}
 
 	pub fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
@@ -474,7 +474,7 @@ impl ObjValue {
 			type Output = Val;
 
 			fn get(self: Box<Self>) -> Result<Self::Output> {
-				Ok(self.obj.get_or_bail(self.key)?)
+				self.obj.get_or_bail(self.key)
 			}
 		}
 
@@ -495,7 +495,7 @@ impl ObjValue {
 			SuperDepth::default(),
 			&mut |depth, index, name, visibility| {
 				let new_sort_key = FieldSortKey::new(depth, index);
-				let entry = out.entry(name.clone());
+				let entry = out.entry(name);
 				let (visible, _) = entry.or_insert((true, new_sort_key));
 				match visibility {
 					Visibility::Normal => {}
@@ -634,7 +634,7 @@ impl OopObject {
 			SuperDepth::default(),
 			&mut |depth, index, name, visibility| {
 				let new_sort_key = FieldSortKey::new(depth, index);
-				let entry = out.entry(name.clone());
+				let entry = out.entry(name);
 				let (visible, _) = entry.or_insert((true, new_sort_key));
 				match visibility {
 					Visibility::Normal => {}

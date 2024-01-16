@@ -89,7 +89,7 @@ pub fn evaluate_comp(
 	specs: &[CompSpec],
 	callback: &mut impl FnMut(Context) -> Result<()>,
 ) -> Result<()> {
-	match specs.get(0) {
+	match specs.first() {
 		None => callback(ctx)?,
 		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
 			if bool::from_untyped(evaluate(ctx.clone(), cond)?)? {
