@@ -6,7 +6,7 @@ use jrsonnet_evaluator::manifest::{
 };
 use jrsonnet_stdlib::{TomlFormat, YamlFormat};
 
-#[derive(Clone, ValueEnum)]
+#[derive(Clone, Copy, ValueEnum)]
 pub enum ManifestFormatName {
 	/// Expect string as output, and write them directly
 	String,
@@ -18,9 +18,11 @@ pub enum ManifestFormatName {
 #[derive(Parser)]
 #[clap(next_help_heading = "MANIFESTIFICATION OUTPUT")]
 pub struct ManifestOpts {
-	/// Output format, wraps resulting value to corresponding std.manifest call.
-	#[clap(long, short = 'f', default_value = "json")]
-	format: ManifestFormatName,
+	/// Output format, wraps resulting value to corresponding std.manifest call
+	///
+	/// [default: json, yaml when -y is used]
+	#[clap(long, short = 'f')]
+	format: Option<ManifestFormatName>,
 	/// Expect plain string as output.
 	/// Mutually exclusive with `--format`
 	#[clap(long, short = 'S', conflicts_with = "format")]
@@ -29,7 +31,9 @@ pub struct ManifestOpts {
 	#[clap(long, short = 'y', conflicts_with = "string")]
 	yaml_stream: bool,
 	/// Number of spaces to pad output manifest with.
-	/// `0` for hard tabs, `-1` for single line output [default: 3 for json, 2 for yaml/toml]
+	/// `0` for hard tabs, `-1` for single line output
+	///
+	/// [default: 3 for json, 2 for yaml/toml]
 	#[clap(long)]
 	line_padding: Option<usize>,
 	/// Preserve order in object manifestification
@@ -44,7 +48,12 @@ impl ManifestOpts {
 		} else {
 			#[cfg(feature = "exp-preserve-order")]
 			let preserve_order = self.preserve_order;
-			match self.format {
+			let format = match self.format {
+				Some(v) => v,
+				None if self.yaml_stream => ManifestFormatName::Yaml,
+				None => ManifestFormatName::Json,
+			};
+			match format {
 				ManifestFormatName::String => Box::new(ToStringFormat),
 				ManifestFormatName::Json => Box::new(JsonFormat::cli(
 					self.line_padding.unwrap_or(3),
