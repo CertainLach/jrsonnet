@@ -372,8 +372,8 @@ impl Printable for ObjBody {
 					return p!(new: str("{ }"));
 				}
 				let mut pi = p!(new: str("{") >i nl);
-				for mem in children.into_iter() {
-					if mem.should_start_with_newline {
+				for (i, mem) in children.into_iter().enumerate() {
+					if mem.should_start_with_newline && i != 0 {
 						p!(pi: nl);
 					}
 					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
