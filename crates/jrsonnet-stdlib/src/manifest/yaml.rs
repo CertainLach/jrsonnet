@@ -134,6 +134,14 @@ fn manifest_yaml_ex_buf(
 					buf.push_str(&options.padding);
 					buf.push_str(line);
 				}
+			} else if s.contains('\n') {
+				buf.push_str("|-");
+				for line in s.split('\n') {
+					buf.push('\n');
+					buf.push_str(cur_padding);
+					buf.push_str(&options.padding);
+					buf.push_str(line);
+				}
 			} else if !options.quote_keys && !yaml_needs_quotes(&s) {
 				buf.push_str(&s);
 			} else {
