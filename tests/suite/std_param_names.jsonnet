@@ -103,6 +103,7 @@ local names = {
     asin: ['x'],
     acos: ['x'],
     atan: ['x'],
+    atan2: ['y', 'x'],
     type: ['x'],
     filter: ['func', 'arr'],
     objectHasEx: ['obj', 'fname', 'hidden'],
