@@ -41,10 +41,12 @@
 	clippy::missing_const_for_fn,
 	// too many false-positives with .expect() calls
 	clippy::missing_panics_doc,
-    // false positive for IStr type. There is an configuration option for
-    // such cases, but it doesn't work:
-    // https://github.com/rust-lang/rust-clippy/issues/9801
-    clippy::mutable_key_type,
+	// false positive for IStr type. There is an configuration option for
+	// such cases, but it doesn't work:
+	// https://github.com/rust-lang/rust-clippy/issues/9801
+	clippy::mutable_key_type,
+	// false positives
+	clippy::redundant_pub_crate,
 )]
 
 // For jrsonnet-macros

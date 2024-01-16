@@ -159,11 +159,11 @@ impl Serialize for Val {
 			Val::Null => serializer.serialize_none(),
 			Val::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
 			Val::Num(n) => {
-				if n.fract() != 0.0 {
-					serializer.serialize_f64(*n)
-				} else {
+				if n.fract() == 0.0 {
 					let n = *n as i64;
 					serializer.serialize_i64(n)
+				} else {
+					serializer.serialize_f64(*n)
 				}
 			}
 			#[cfg(feature = "exp-bigint")]

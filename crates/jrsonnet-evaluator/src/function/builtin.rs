@@ -6,8 +6,8 @@ use jrsonnet_interner::IStr;
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
 use crate::{gc::TraceBox, tb, Context, Result, Val};
 
-/// Can't have str | IStr, because constant BuiltinParam causes
-/// E0492: constant functions cannot refer to interior mutable data
+/// Can't have `str` | `IStr`, because constant `BuiltinParam` causes
+/// `E0492: constant functions cannot refer to interior mutable data`
 #[derive(Clone, Trace)]
 pub struct ParamName(Option<Cow<'static, str>>);
 impl ParamName {
@@ -27,10 +27,9 @@ impl ParamName {
 }
 impl PartialEq<IStr> for ParamName {
 	fn eq(&self, other: &IStr) -> bool {
-		match &self.0 {
-			Some(s) => s.as_bytes() == other.as_bytes(),
-			None => false,
-		}
+		self.0
+			.as_ref()
+			.map_or(false, |s| s.as_bytes() == other.as_bytes())
 	}
 }
 
@@ -87,7 +86,7 @@ impl NativeCallback {
 			params: params
 				.into_iter()
 				.map(|n| BuiltinParam {
-					name: ParamName::new_dynamic(n.to_string()),
+					name: ParamName::new_dynamic(n),
 					has_default: false,
 				})
 				.collect(),

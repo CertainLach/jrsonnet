@@ -248,7 +248,7 @@ pub fn parse_code(str: &str) -> ParseResult<'_, Code<'_>> {
 	let (cflags, str) = try_parse_cflags(str)?;
 	let (width, str) = try_parse_field_width(str)?;
 	let (precision, str) = try_parse_precision(str)?;
-	let (_, str) = try_parse_length_modifier(str)?;
+	let ((), str) = try_parse_length_modifier(str)?;
 	let (convtype, str) = parse_conversion_type(str)?;
 
 	Ok((

@@ -90,7 +90,7 @@ fn push_type_description(
 	item: impl Fn() -> Result<()>,
 ) -> Result<()> {
 	State::push_description(error_reason, || match item() {
-		Ok(_) => Ok(()),
+		Ok(()) => Ok(()),
 		Err(mut e) => {
 			if let ErrorKind::TypeError(e) = &mut e.error_mut() {
 				(e.1).0.push(path());

@@ -25,14 +25,14 @@
         lib = pkgs.lib;
         rust =
           (pkgs.rustChannelOf {
-            date = "2023-10-28";
+            date = "2024-01-10";
             channel = "nightly";
           })
           .default
           .override {
             extensions = ["rust-src" "miri" "rust-analyzer" "clippy"];
           };
-      in rec {
+      in {
         packages = rec {
           go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
           sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};

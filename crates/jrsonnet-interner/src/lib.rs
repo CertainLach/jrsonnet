@@ -6,7 +6,7 @@
 #![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_const_for_fn)]
 use std::{
-	borrow::{Borrow, Cow},
+	borrow::Cow,
 	cell::RefCell,
 	fmt::{self, Display},
 	hash::{BuildHasherDefault, Hash, Hasher},
@@ -14,7 +14,7 @@ use std::{
 	str,
 };
 
-use hashbrown::HashMap;
+use hashbrown::{hash_map::RawEntryMut, HashMap};
 use jrsonnet_gcmodule::Trace;
 use rustc_hash::FxHasher;
 
@@ -54,17 +54,6 @@ impl Deref for IStr {
 	fn deref(&self) -> &Self::Target {
 		// SAFETY: Inner::check_utf8 is called on IStr construction, data is utf-8
 		unsafe { self.0.as_str_unchecked() }
-	}
-}
-
-impl Borrow<str> for IStr {
-	fn borrow(&self) -> &str {
-		self.as_str()
-	}
-}
-impl Borrow<[u8]> for IStr {
-	fn borrow(&self) -> &[u8] {
-		self.as_bytes()
 	}
 }
 
@@ -142,12 +131,6 @@ impl Deref for IBytes {
 	type Target = [u8];
 
 	fn deref(&self) -> &Self::Target {
-		self.0.as_slice()
-	}
-}
-
-impl Borrow<[u8]> for IBytes {
-	fn borrow(&self) -> &[u8] {
 		self.0.as_slice()
 	}
 }
@@ -285,9 +268,9 @@ pub fn intern_bytes(bytes: &[u8]) -> IBytes {
 		let mut pool = pool.borrow_mut();
 		let entry = pool.raw_entry_mut().from_key(bytes);
 		match entry {
-			hashbrown::hash_map::RawEntryMut::Occupied(i) => IBytes(i.get_key_value().0.clone()),
-			hashbrown::hash_map::RawEntryMut::Vacant(e) => {
-				let (k, _) = e.insert(Inner::new_bytes(bytes), ());
+			RawEntryMut::Occupied(i) => IBytes(i.get_key_value().0.clone()),
+			RawEntryMut::Vacant(e) => {
+				let (k, ()) = e.insert(Inner::new_bytes(bytes), ());
 				IBytes(k.clone())
 			}
 		}

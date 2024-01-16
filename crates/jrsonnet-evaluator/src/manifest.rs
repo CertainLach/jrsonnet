@@ -175,6 +175,8 @@ pub fn manifest_json_ex(val: &Val, options: &JsonFormat<'_>) -> Result<String> {
 	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
 	Ok(out)
 }
+
+#[allow(clippy::too_many_lines)]
 fn manifest_json_ex_buf(
 	val: &Val,
 	buf: &mut String,

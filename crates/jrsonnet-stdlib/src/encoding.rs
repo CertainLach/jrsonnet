@@ -39,5 +39,5 @@ pub fn builtin_base64_decode(str: IStr) -> Result<String> {
 	let bytes = STANDARD
 		.decode(str.as_bytes())
 		.map_err(|e| runtime_error!("invalid base64: {e}"))?;
-	Ok(String::from_utf8(bytes).map_err(|_| runtime_error!("bad utf8"))?)
+	String::from_utf8(bytes).map_err(|_| runtime_error!("bad utf8"))
 }
