@@ -53,7 +53,7 @@ anyhow = { workspace = true, optional = true }
 # Serialized stdlib
 bincode = { workspace = true, optional = true }
 # Explaining traces
-annotate-snippets = { workspace = true, features = ["color"], optional = true }
+annotate-snippets = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 derivative.workspace = true

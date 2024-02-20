@@ -314,8 +314,12 @@ impl ExplainingFormat {
 		desc: &str,
 	) -> Result<(), std::fmt::Error> {
 		use annotate_snippets::{
-			display_list::{DisplayList, FormatOptions},
-			snippet::{AnnotationType, Slice, Snippet, SourceAnnotation},
+			// DisplayList, FormatOptions,
+			AnnotationType,
+			Renderer,
+			Slice,
+			Snippet,
+			SourceAnnotation,
 		};
 
 		let source_fragment: String = source
@@ -329,10 +333,10 @@ impl ExplainingFormat {
 			|r| self.resolver.resolve(r),
 		);
 		let snippet = Snippet {
-			opt: FormatOptions {
-				color: true,
-				..FormatOptions::default()
-			},
+			// opt: FormatOptions {
+			// 	color: true,
+			// 	..FormatOptions::default()
+			// },
 			title: None,
 			footer: vec![],
 			slices: vec![Slice {
@@ -352,7 +356,8 @@ impl ExplainingFormat {
 			}],
 		};
 
-		let dl = DisplayList::from(snippet);
+		let renderer = Renderer::styled();
+		let dl = renderer.render(snippet);
 		write!(out, "{dl}")?;
 
 		Ok(())

@@ -60,41 +60,6 @@ pub fn trivia_after(node: SyntaxNode, start: Option<&SyntaxElement>) -> ChildTri
 	out
 }
 
-pub fn trivia_between(
-	node: SyntaxNode,
-	start: Option<&SyntaxElement>,
-	end: Option<&SyntaxElement>,
-) -> EndingComments {
-	let mut iter = node.children_with_tokens().peekable();
-	while iter.peek() != start {
-		iter.next();
-	}
-	iter.next();
-
-	let loose = start.is_none() || end.is_none();
-
-	let mut out = Vec::new();
-	for item in iter.take_while(|i| Some(i) != end) {
-		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
-			out.push(Ok(trivia));
-		} else if CustomError::can_cast(item.kind()) {
-			out.push(Err(item.to_string()))
-		} else if loose {
-			break;
-		} else {
-			assert!(
-				TS![, ;].contains(item.kind()),
-				"silently eaten token: {:?}",
-				item.kind()
-			)
-		}
-	}
-	EndingComments {
-		should_start_with_newline: should_start_with_newline(None, &out),
-		trivia: out,
-	}
-}
-
 pub fn children_between<T: AstNode + Debug>(
 	node: SyntaxNode,
 	start: Option<&SyntaxElement>,

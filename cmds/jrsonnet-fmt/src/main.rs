@@ -20,7 +20,7 @@ use jrsonnet_rowan_parser::{
 };
 
 use crate::{
-	children::{trivia_after, trivia_between},
+	children::trivia_after,
 	comments::{format_comments, CommentLocation},
 };
 
