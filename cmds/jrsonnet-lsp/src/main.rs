@@ -13,7 +13,7 @@ fn main() {
 	let mut log = File::create("test").unwrap();
 	writeln!(log, "start").unwrap();
 	let (connection, io_threads) = Connection::stdio();
-	let capabilities = serde_json::to_value(&ServerCapabilities {
+	let capabilities = serde_json::to_value(ServerCapabilities {
 		completion_provider: Some(CompletionOptions::default()),
 		definition_provider: Some(lsp_types::OneOf::Left(true)),
 		document_link_provider: Some(DocumentLinkOptions {

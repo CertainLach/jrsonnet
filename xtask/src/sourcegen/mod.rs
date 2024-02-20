@@ -183,6 +183,7 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 
 		#[macro_export]
 		macro_rules! T {#(#t_macros);*}
+		#[allow(unused_imports)]
 		pub use T;
 	};
 
