@@ -1,10 +1,11 @@
 use std::{
 	any::Any,
+	cell::RefCell,
 	path::{Path, PathBuf},
 };
 
 use jrsonnet_gcmodule::Trace;
-use jrsonnet_parser::{CodeLocation, Source};
+use jrsonnet_parser::{CodeLocation, ExprLocation, Source};
 
 use crate::{error::ErrorKind, Error};
 
@@ -303,6 +304,7 @@ impl TraceFormat for ExplainingFormat {
 	}
 }
 
+#[cfg(feature = "explaining-traces")]
 impl ExplainingFormat {
 	fn print_snippet(
 		&self,
@@ -361,5 +363,115 @@ impl ExplainingFormat {
 		write!(out, "{dl}")?;
 
 		Ok(())
+	}
+}
+
+#[cfg(feature = "explaining-traces")]
+#[derive(Trace)]
+pub struct AssStrokeFormat {
+	pub resolver: PathResolver,
+	pub max_trace: usize,
+}
+#[cfg(feature = "explaining-traces")]
+impl TraceFormat for AssStrokeFormat {
+	fn write_trace(
+		&self,
+		out: &mut dyn std::fmt::Write,
+		error: &Error,
+	) -> Result<(), std::fmt::Error> {
+		struct ResetData {
+			loc: ExprLocation,
+		}
+		use hi_doc::{source_to_ansi, Formatting, SnippetBuilder, Text};
+
+		write!(out, "{}", error.error())?;
+		if let ErrorKind::ImportSyntaxError { path, error } = error.error() {
+			writeln!(out)?;
+			let offset = error.location.offset;
+			let mut builder = SnippetBuilder::new(path.code());
+			builder
+				.error(Text::single("syntax error".chars(), Formatting::default()))
+				.range(offset..=offset)
+				.build();
+			let source = builder.build();
+			let ansi = source_to_ansi(&source);
+			write!(out, "{ansi}")?;
+		}
+		let trace = &error.trace();
+		let snippet_builder: RefCell<Option<SnippetBuilder>> = RefCell::new(None);
+		let mut last_location: Option<ExprLocation> = None;
+		let mut flush_builder = |data: Option<ResetData>| {
+			use std::fmt::Write;
+			let mut out = String::new();
+			let location_changed = if let Some(ResetData { loc }) = &data {
+				if last_location.as_ref().map(|l| l.0.code()) != Some(loc.0.code()) {
+					true
+				} else if let (Some(last), new) = (&last_location, loc) {
+					// Reverse condition if traceback
+					last.1 > new.1 || last.2 > new.2
+				} else {
+					false
+				}
+			} else {
+				true
+			};
+			if location_changed {
+				if let Some(builder) = snippet_builder.borrow_mut().take() {
+					let rendered = builder.build();
+					let ansi = source_to_ansi(&rendered);
+					if let Some(loc) = &last_location {
+						let _ = writeln!(out, "...because of {}", loc.0.source_path());
+					}
+					let _ = write!(out, "{}", ansi.trim_end());
+				}
+				last_location = None;
+
+				if let Some(ResetData { loc }) = data {
+					*snippet_builder.borrow_mut() = Some(SnippetBuilder::new(loc.0.code()));
+					last_location = Some(loc);
+				}
+			}
+			if out.is_empty() {
+				return None;
+			}
+			Some(out)
+		};
+		for item in &trace.0 {
+			let desc = &item.desc;
+			if let Some(source) = &item.location {
+				if let Some(flushed) = flush_builder(Some(ResetData {
+					loc: source.clone(),
+				})) {
+					writeln!(out)?;
+					write!(out, "{flushed}")?;
+				}
+				let mut builder = snippet_builder.borrow_mut();
+				let builder = builder.as_mut().unwrap();
+				builder
+					.note(Text::single(desc.chars(), Formatting::default()))
+					.range(source.1 as usize..=(source.2 as usize - 1).max(source.1 as usize))
+					.build();
+			} else {
+				if let Some(flushed) = flush_builder(None) {
+					writeln!(out)?;
+					write!(out, "{flushed}")?;
+				}
+				write!(out, "{desc}")?;
+			}
+		}
+
+		if let Some(flushed) = flush_builder(None) {
+			writeln!(out)?;
+			write!(out, "{flushed}")?;
+		}
+		Ok(())
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
 	}
 }

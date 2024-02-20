@@ -8,7 +8,7 @@ dprint-core.workspace = true
 jrsonnet-rowan-parser.workspace = true
 insta.workspace = true
 indoc.workspace = true
-ass-stroke.workspace = true
+hi-doc.workspace = true
 clap = { workspace = true, features = ["derive"] }
 tempfile.workspace = true
 thiserror.workspace = true

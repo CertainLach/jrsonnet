@@ -10,7 +10,7 @@ edition = "2021"
 [features]
 default = ["explaining-traces"]
 # Rustc-like trace visualization
-explaining-traces = ["annotate-snippets"]
+explaining-traces = ["annotate-snippets", "hi-doc"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
 # Adds ability to build import closure in async
@@ -54,6 +54,8 @@ anyhow = { workspace = true, optional = true }
 bincode = { workspace = true, optional = true }
 # Explaining traces
 annotate-snippets = { workspace = true, optional = true }
+# Better explaining traces
+hi-doc = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 derivative.workspace = true

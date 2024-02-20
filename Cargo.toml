@@ -16,7 +16,7 @@ jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre95" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre95" }
 
 jrsonnet-gcmodule = "0.3.6"
-ass-stroke = { git = "https://github.com/CertainLach/ass-stroke", version = "0.1.0" }
+hi-doc = "0.1.0"
 
 serde = "1.0.197"
 serde_json = "1.0.114"
