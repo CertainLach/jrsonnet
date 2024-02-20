@@ -533,7 +533,7 @@ checksum = "b1a46d1a171d865aa5f83f92695765caa047a9b4cbae2cbf37dbd613a793fd4c"
 
 [[package]]
 name = "jrsonnet"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "clap",
  "clap_complete",
@@ -550,7 +550,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-cli"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "clap",
  "jrsonnet-evaluator",
@@ -561,7 +561,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-evaluator"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "annotate-snippets",
  "anyhow",
@@ -585,7 +585,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-fmt"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "clap",
  "dprint-core",
@@ -620,7 +620,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-interner"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "hashbrown 0.14.3",
  "jrsonnet-gcmodule",
@@ -631,7 +631,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-lsp"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "anyhow",
  "jrsonnet-evaluator",
@@ -644,7 +644,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-macros"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -653,7 +653,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-parser"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
@@ -665,7 +665,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-rowan-parser"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "anyhow",
  "drop_bomb",
@@ -680,7 +680,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-stdlib"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "base64",
  "bincode",
@@ -704,7 +704,7 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-types"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "jrsonnet-gcmodule",
  "peg",
@@ -733,7 +733,7 @@ checksum = "9c198f91728a82281a64e1f4f9eeb25d82cb32a5de251c6bd1b5154d63a8e7bd"
 
 [[package]]
 name = "libjsonnet"
-version = "0.5.0-pre95"
+version = "0.5.0-pre96"
 dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
