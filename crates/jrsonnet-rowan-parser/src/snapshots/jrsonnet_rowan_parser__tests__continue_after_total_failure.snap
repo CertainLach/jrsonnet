@@ -65,10 +65,10 @@ LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([L_BRAC
 LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 29..67 }
 ===
   x syntax error
-   ,-[1:1]
+   ,-[1:15]
  1 | ,-> local intr = $intrinsic(test);
-   : ||              ^^^^|^^^^
-   : ||                  `-- expected L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK, found IDENT
+   : |                 ^^^^|^^^^
+   : |                     `-- expected L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK, found IDENT
  2 | |
  3 | |   local a = 1, b = 2, c = a + b;
  4 | |

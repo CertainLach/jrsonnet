@@ -39,7 +39,7 @@ LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }
 LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }, range: 14..15 }
 ===
   x syntax error
-   ,-[1:1]
+   ,-[2:6]
  1 | {
  2 |     a: 1;
    :         |

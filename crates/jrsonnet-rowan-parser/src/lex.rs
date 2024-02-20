@@ -30,7 +30,7 @@ impl<'a> Iterator for Lexer<'a> {
 		let mut kind = self.inner.next()?;
 		let text = self.inner.slice();
 
-		if kind == STRING_BLOCK {
+		if kind == Ok(STRING_BLOCK) {
 			// We use custom lexer, which skips enough bytes, but not returns error
 			// Instead we should call lexer again to verify if there is something wrong with string block
 			let mut lexer = logos::Lexer::<SyntaxKind>::new(text);
@@ -41,20 +41,20 @@ impl<'a> Iterator for Lexer<'a> {
 			match res {
 				Ok(_) => {}
 				Err(e) => {
-					kind = match e {
+					kind = Ok(match e {
 						StringBlockError::UnexpectedEnd => ERROR_STRING_BLOCK_UNEXPECTED_END,
 						StringBlockError::MissingNewLine => ERROR_STRING_BLOCK_MISSING_NEW_LINE,
 						StringBlockError::MissingTermination => {
 							ERROR_STRING_BLOCK_MISSING_TERMINATION
 						}
 						StringBlockError::MissingIndent => ERROR_STRING_BLOCK_MISSING_INDENT,
-					}
+					})
 				}
 			}
 		}
 
 		Some(Self::Item {
-			kind,
+			kind: kind.unwrap_or(SyntaxKind::LEXING_ERROR),
 			text,
 			range: {
 				let Range { start, end } = self.inner.span();

@@ -26,7 +26,7 @@ SOURCE_FILE@0..15
 LocatedSyntaxError { error: Unexpected { expected: Named("destruction specifier"), found: MUL }, range: 6..7 }
 ===
   x syntax error
-   ,-[1:1]
+   ,-[1:7]
  1 | local * = 1;
    :       |
    :       `-- expected destruction specifier, found MUL

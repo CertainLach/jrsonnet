@@ -135,7 +135,7 @@ pub enum SyntaxKind {
 	MULTI_LINE_COMMENT,
 	#[regex("/\\*/")]
 	ERROR_COMMENT_TOO_SHORT,
-	#[regex("/\\*([^*]|\\*[^/])+")]
+	#[regex("/\\*([^*/]|\\*[^/])+")]
 	ERROR_COMMENT_UNTERMINATED,
 	#[token("tailstrict")]
 	TAILSTRICT_KW,
@@ -178,9 +178,8 @@ pub enum SyntaxKind {
 	ERROR_MISSING_TOKEN,
 	ERROR_UNEXPECTED_TOKEN,
 	ERROR_CUSTOM,
-	#[doc = r" Also acts as __LAST_TOKEN"]
-	#[error]
 	LEXING_ERROR,
+	__LAST_TOKEN,
 	SOURCE_FILE,
 	EXPR,
 	SUFFIX_INDEX,

@@ -273,7 +273,7 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		lit("SINGLE_LINE_HASH_COMMENT") => r"#[^\r\n]*(\r\n|\n)?";
 		lit("MULTI_LINE_COMMENT") => r"/\*([^*]|\*[^/])*\*/";
 		error("COMMENT_TOO_SHORT") => r"/\*/";
-		error("COMMENT_UNTERMINATED") =>  r"/\*([^*]|\*[^/])+";
+		error("COMMENT_UNTERMINATED") =>  r"/\*([^*/]|\*[^/])+";
 	];
 	kinds
 }

@@ -647,10 +647,10 @@ struct FormatOptions {
 fn format(input: &str, opts: &FormatOptions) -> Option<String> {
 	let (parsed, errors) = jrsonnet_rowan_parser::parse(input);
 	if !errors.is_empty() {
-		let mut builder = ass_stroke::SnippetBuilder::new(input);
+		let mut builder = hi_doc::SnippetBuilder::new(input);
 		for error in errors {
 			builder
-				.error(ass_stroke::Text::single(
+				.error(hi_doc::Text::single(
 					format!("{:?}", error.error).chars(),
 					Default::default(),
 				))
@@ -661,7 +661,7 @@ fn format(input: &str, opts: &FormatOptions) -> Option<String> {
 				.build();
 		}
 		let snippet = builder.build();
-		let ansi = ass_stroke::source_to_ansi(&snippet);
+		let ansi = hi_doc::source_to_ansi(&snippet);
 		eprintln!("{ansi}");
 		// It is possible to recover from this failure, but the output may be broken, as formatter is free to skip
 		// ERROR rowan nodes.

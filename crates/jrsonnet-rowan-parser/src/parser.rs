@@ -57,7 +57,7 @@ impl From<LocatedSyntaxError> for LabeledSpan {
 	fn from(val: LocatedSyntaxError) -> Self {
 		let span = SourceSpan::new(
 			SourceOffset::from(usize::from(val.range.start())),
-			SourceOffset::from(usize::from(val.range.end() - val.range.start())),
+			usize::from(val.range.end() - val.range.start()),
 		);
 		dbg!(&val);
 		match val.error {

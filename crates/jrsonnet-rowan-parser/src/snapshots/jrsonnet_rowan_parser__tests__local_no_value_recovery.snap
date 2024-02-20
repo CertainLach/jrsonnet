@@ -40,7 +40,7 @@ LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([L_BRACK, 
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 25..25 }
 ===
   x syntax error
-   ,-[2:1]
+   ,-[3:3]
  2 | local b = 3;
  3 | 1
    :   ^^
