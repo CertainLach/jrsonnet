@@ -211,9 +211,9 @@ fn manifest_json_ex_buf(
 		#[cfg(feature = "exp-bigint")]
 		Val::BigInt(n) => {
 			if options.preserve_bigints {
-				write!(buf, "{n}").unwrap()
+				write!(buf, "{n}").unwrap();
 			} else {
-				write!(buf, "{:?}", n.to_string()).unwrap()
+				write!(buf, "{:?}", n.to_string()).unwrap();
 			}
 		}
 		Val::Arr(items) => {

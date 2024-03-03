@@ -47,6 +47,8 @@
 	clippy::mutable_key_type,
 	// false positives
 	clippy::redundant_pub_crate,
+	// Sometimes code is fancier without that
+	clippy::manual_let_else,
 )]
 
 // For jrsonnet-macros

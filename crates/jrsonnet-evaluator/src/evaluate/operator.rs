@@ -42,7 +42,7 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 
 		(Num(v1), Num(v2)) => Val::new_checked_num(v1 + v2)?,
 		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), BigInt(b)) => BigInt(Box::new((&**a).clone() + (&**b).clone())),
+		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a + &**b)),
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
 			a.value_type(),
@@ -180,9 +180,9 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		// Bigint X Bigint
 		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Mul, BigInt(b)) => BigInt(Box::new((&**a).clone() * (&**b).clone())),
+		(BigInt(a), Mul, BigInt(b)) => BigInt(Box::new(&**a * &**b)),
 		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Sub, BigInt(b)) => BigInt(Box::new((&**a).clone() - (&**b).clone())),
+		(BigInt(a), Sub, BigInt(b)) => BigInt(Box::new(&**a - &**b)),
 
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			op,
