@@ -23,7 +23,7 @@ pub enum Event {
 	/// Eat token
 	Token { kind: SyntaxKind },
 	/// Push token, but do not eat anything,
-	VirtualToken { kind: SyntaxKind },
+	// VirtualToken { kind: SyntaxKind },
 	/// Position of finished node
 	Finish {
 		/// Same as forward_parent of Start, but for wrapping
@@ -120,13 +120,13 @@ impl<'i> Sink<'i> {
 					self.token(kind);
 					eat_start_whitespace = true;
 				}
-				Event::VirtualToken { kind } => {
-					if eat_start_whitespace {
-						self.skip_whitespace();
-					}
-					self.virtual_token(kind);
-					eat_start_whitespace = false;
-				}
+				// Event::VirtualToken { kind } => {
+				// 	if eat_start_whitespace {
+				// 		self.skip_whitespace();
+				// 	}
+				// 	self.virtual_token(kind);
+				// 	eat_start_whitespace = false;
+				// }
 				Event::Finish { wrapper, error } => {
 					if depth == 1 {
 						self.skip_whitespace();
@@ -183,9 +183,9 @@ impl<'i> Sink<'i> {
 			errors: self.errors,
 		}
 	}
-	fn virtual_token(&mut self, kind: SyntaxKind) {
-		self.builder.token(JsonnetLanguage::kind_to_raw(kind), "")
-	}
+	// fn virtual_token(&mut self, kind: SyntaxKind) {
+	// 	self.builder.token(JsonnetLanguage::kind_to_raw(kind), "")
+	// }
 	fn token(&mut self, kind: SyntaxKind) {
 		let lexeme = self.lexemes[self.offset];
 		self.builder

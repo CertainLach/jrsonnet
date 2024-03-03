@@ -8,17 +8,17 @@ use crate::{
 	SyntaxKind,
 };
 
-pub struct Ranger {
-	pub pos: usize,
-}
-impl Ranger {
-	pub fn finish(self, p: &Parser) -> FinishedRanger {
-		FinishedRanger {
-			start_token: self.pos,
-			end_token: self.pos.max(p.offset.saturating_sub(1)),
-		}
-	}
-}
+// pub struct Ranger {
+// 	pub pos: usize,
+// }
+// impl Ranger {
+// 	pub fn finish(self, p: &Parser) -> FinishedRanger {
+// 		FinishedRanger {
+// 			start_token: self.pos,
+// 			end_token: self.pos.max(p.offset.saturating_sub(1)),
+// 		}
+// 	}
+// }
 
 pub struct FinishedRanger {
 	pub start_token: usize,
@@ -79,10 +79,10 @@ impl Marker {
 			finish_event_idx,
 		}
 	}
-	pub fn complete(mut self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+	pub fn complete(self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
 		self.complete_raw(p, kind, None)
 	}
-	pub fn complete_error(mut self, p: &mut Parser, msg: impl AsRef<str>) -> CompletedMarker {
+	pub fn complete_error(self, p: &mut Parser, msg: impl AsRef<str>) -> CompletedMarker {
 		self.complete_raw(
 			p,
 			SyntaxKind::ERROR_CUSTOM,
@@ -91,7 +91,7 @@ impl Marker {
 			}),
 		)
 	}
-	pub fn complete_missing(mut self, p: &mut Parser, expected: ExpectedSyntax) -> CompletedMarker {
+	pub fn complete_missing(self, p: &mut Parser, expected: ExpectedSyntax) -> CompletedMarker {
 		self.complete_raw(
 			p,
 			SyntaxKind::ERROR_MISSING_TOKEN,
@@ -99,7 +99,7 @@ impl Marker {
 		)
 	}
 	pub fn complete_unexpected(
-		mut self,
+		self,
 		p: &mut Parser,
 		expected: ExpectedSyntax,
 		found: SyntaxKind,

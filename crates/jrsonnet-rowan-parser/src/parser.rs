@@ -5,7 +5,7 @@ use rowan::{GreenNode, TextRange};
 
 use crate::{
 	event::Event,
-	marker::{CompletedMarker, Marker, Ranger},
+	marker::{CompletedMarker, Marker},
 	nodes::{BinaryOperatorKind, Literal, Number, Text, UnaryOperatorKind},
 	token_set::SyntaxKindSet,
 	AstToken, SyntaxKind,
@@ -107,10 +107,10 @@ impl Parser {
 		self.entered += 1;
 		Marker::new(start_event_idx)
 	}
-	pub fn start_ranger(&mut self) -> Ranger {
-		let pos = self.offset;
-		Ranger { pos }
-	}
+	// pub fn start_ranger(&mut self) -> Ranger {
+	// 	let pos = self.offset;
+	// 	Ranger { pos }
+	// }
 	pub fn parse(mut self) -> Vec<Event> {
 		let m = self.start();
 		expr(&mut self);
@@ -144,13 +144,13 @@ impl Parser {
 		}
 	}
 
-	pub(crate) fn expect_with_no_skip(&mut self, kind: SyntaxKind) {
-		if self.at(kind) {
-			self.bump();
-		} else {
-			self.error_with_no_skip();
-		}
-	}
+	// pub(crate) fn expect_with_no_skip(&mut self, kind: SyntaxKind) {
+	// 	if self.at(kind) {
+	// 		self.bump();
+	// 	} else {
+	// 		self.error_with_no_skip();
+	// 	}
+	// }
 	pub fn error_with_no_skip(&mut self) -> CompletedMarker {
 		self.error_with_recovery_set(SyntaxKindSet::ALL)
 	}
@@ -773,18 +773,18 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 		m.complete(p, DESTRUCT_SKIP)
 	} else if p.at(T!['[']) {
 		p.bump();
-		let mut had_rest = false;
+		// let mut had_rest = false;
 		loop {
 			if p.at(T![']']) {
 				p.bump();
 				break;
 			} else if p.at(T![...]) {
-				let m_err = p.start_ranger();
+				// let m_err = p.start_ranger();
 				destruct_rest(p);
 				// if had_rest {
 				// 	p.custom_error(m_err.finish(p), "only one rest can be present in array");
 				// }
-				had_rest = true;
+				// had_rest = true;
 			} else {
 				destruct(p);
 			}
@@ -804,7 +804,7 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 				p.bump();
 				break;
 			} else if p.at(T![...]) {
-				let m_err = p.start_ranger();
+				// let m_err = p.start_ranger();
 				destruct_rest(p);
 				// if had_rest {
 				// 	p.custom_error(m_err.finish(p), "only one rest can be present in object");
