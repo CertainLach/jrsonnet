@@ -16,7 +16,7 @@ use jrsonnet_rowan_parser::{
 		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
 		UnaryOperator, Visibility,
 	},
-	AstNode, AstToken, SyntaxToken,
+	AstNode, AstToken as _, SyntaxToken,
 };
 
 use crate::{
@@ -30,7 +30,7 @@ mod comments;
 mod tests;
 
 pub trait Printable {
-	fn print(&self) -> PrintItems;
+	fn print(&self, out: &mut PrintItems);
 }
 
 macro_rules! pi {
@@ -65,7 +65,7 @@ macro_rules! pi {
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: {$expr:expr} $($t:tt)*) => {{
-		$o.extend($expr.print());
+		$expr.print($o);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: items($expr:expr) $($t:tt)*) => {{
@@ -89,10 +89,7 @@ macro_rules! pi {
 	(@s; $i:ident:) => {}
 }
 macro_rules! p {
-	(new: $($t:tt)*) => {
-		pi!(@i; $($t)*)
-	};
-	($o:ident: $($t:tt)*) => {
+	($o:ident, $($t:tt)*) => {
 		pi!(@s; $o: $($t)*)
 	};
 }
@@ -103,205 +100,199 @@ impl<P> Printable for Option<P>
 where
 	P: Printable,
 {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		if let Some(v) = self {
-			v.print()
+			v.print(out)
 		} else {
-			p!(new: string(
-				format!(
+			p!(
+				out,
+				string(format!(
 					"/*missing {}*/",
 					type_name::<P>().replace("jrsonnet_rowan_parser::generated::nodes::", "")
-				),
-			))
+				),)
+			)
 		}
 	}
 }
 
 impl Printable for SyntaxToken {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.to_string()))
 	}
 }
 
 impl Printable for Text {
-	fn print(&self) -> PrintItems {
-		p!(new: string(format!("{}", self)))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(format!("{}", self)))
 	}
 }
 impl Printable for Number {
-	fn print(&self) -> PrintItems {
-		p!(new: string(format!("{}", self)))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(format!("{}", self)))
 	}
 }
 
 impl Printable for Name {
-	fn print(&self) -> PrintItems {
-		p!(new: {self.ident_lit()})
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, { self.ident_lit() })
 	}
 }
 
 impl Printable for DestructRest {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new: str("..."));
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("..."));
 		if let Some(name) = self.into() {
-			p!(pi: {name});
+			p!(out, { name });
 		}
-		pi
 	}
 }
 
 impl Printable for Destruct {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new:);
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Destruct::DestructFull(f) => {
-				p!(pi: {f.name()})
+				p!(out, { f.name() })
 			}
-			Destruct::DestructSkip(_) => p!(pi: str("?")),
+			Destruct::DestructSkip(_) => p!(out, str("?")),
 			Destruct::DestructArray(a) => {
-				p!(pi: str("[") >i nl);
+				p!(out, str("[") >i nl);
 				for el in a.destruct_array_parts() {
 					match el {
 						DestructArrayPart::DestructArrayElement(e) => {
-							p!(pi: {e.destruct()} str(",") nl)
+							p!(out, {e.destruct()} str(",") nl)
 						}
 						DestructArrayPart::DestructRest(d) => {
-							p!(pi: {d} str(",") nl)
+							p!(out, {d} str(",") nl)
 						}
 					}
 				}
-				p!(pi: <i str("]"));
+				p!(out, <i str("]"));
 			}
 			Destruct::DestructObject(o) => {
-				p!(pi: str("{") >i nl);
+				p!(out, str("{") >i nl);
 				for item in o.destruct_object_fields() {
-					p!(pi: {item.field()});
+					p!(out, { item.field() });
 					if let Some(des) = item.destruct() {
-						p!(pi: str(": ") {des})
+						p!(out, str(": ") {des})
 					}
 					if let Some(def) = item.expr() {
-						p!(pi: str(" = ") {def});
+						p!(out, str(" = ") {def});
 					}
-					p!(pi: str(",") nl);
+					p!(out, str(",") nl);
 				}
 				if let Some(rest) = o.destruct_rest() {
-					p!(pi: {rest} nl)
+					p!(out, {rest} nl)
 				}
-				p!(pi: <i str("}"));
+				p!(out, <i str("}"));
 			}
 		}
-		pi
 	}
 }
 
 impl Printable for FieldName {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			FieldName::FieldNameFixed(f) => {
 				if let Some(id) = f.id() {
-					p!(new: {id})
+					p!(out, { id })
 				} else if let Some(str) = f.text() {
-					p!(new: {str})
+					p!(out, { str })
 				} else {
-					p!(new: str("/*missing FieldName*/"))
+					p!(out, str("/*missing FieldName*/"))
 				}
 			}
 			FieldName::FieldNameDynamic(d) => {
-				p!(new: str("[") {d.expr()} str("]"))
+				p!(out, str("[") {d.expr()} str("]"))
 			}
 		}
 	}
 }
 
 impl Printable for Visibility {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.to_string()))
 	}
 }
 
 impl Printable for ObjLocal {
-	fn print(&self) -> PrintItems {
-		p!(new: str("local ") {self.bind()})
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("local ") {self.bind()})
 	}
 }
 
 impl Printable for Assertion {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new: str("assert ") {self.condition()});
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("assert ") {self.condition()});
 		if self.colon_token().is_some() || self.message().is_some() {
-			p!(pi: str(": ") {self.message()})
+			p!(out, str(": ") {self.message()})
 		}
-		pi
 	}
 }
 
 impl Printable for ParamsDesc {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new: str("(") >i nl);
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("(") >i nl);
 		for param in self.params() {
-			p!(pi: {param.destruct()});
+			p!(out, { param.destruct() });
 			if param.assign_token().is_some() || param.expr().is_some() {
-				p!(pi: str(" = ") {param.expr()})
+				p!(out, str(" = ") {param.expr()})
 			}
-			p!(pi: str(",") nl)
+			p!(out, str(",") nl)
 		}
-		p!(pi: <i str(")"));
-		pi
+		p!(out, <i str(")"));
 	}
 }
 impl Printable for ArgsDesc {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new: str("(") >i nl);
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("(") >i nl);
 		for arg in self.args() {
 			if arg.name().is_some() || arg.assign_token().is_some() {
-				p!(pi: {arg.name()} str(" = "));
+				p!(out, {arg.name()} str(" = "));
 			}
-			p!(pi: {arg.expr()} str(",") nl)
+			p!(out, {arg.expr()} str(",") nl)
 		}
-		p!(pi: <i str(")"));
-		pi
+		p!(out, <i str(")"));
 	}
 }
 impl Printable for SliceDesc {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new: str("["));
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("["));
 		if self.from().is_some() {
-			p!(pi: {self.from()});
+			p!(out, { self.from() });
 		}
-		p!(pi: str(":"));
+		p!(out, str(":"));
 		if self.end().is_some() {
-			p!(pi: {self.end().map(|e|e.expr())})
+			p!(out, { self.end().map(|e| e.expr()) })
 		}
 		// Keep only one : in case if we don't need step
 		if self.step().is_some() {
-			p!(pi: str(":") {self.step().map(|e|e.expr())});
+			p!(out, str(":") {self.step().map(|e|e.expr())});
 		}
-		p!(pi: str("]"));
-		pi
+		p!(out, str("]"));
 	}
 }
 
 impl Printable for Member {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Member::MemberBindStmt(b) => {
-				p!(new: {b.obj_local()})
+				p!(out, { b.obj_local() })
 			}
 			Member::MemberAssertStmt(ass) => {
-				p!(new: {ass.assertion()})
+				p!(out, { ass.assertion() })
 			}
 			Member::MemberFieldNormal(n) => {
-				p!(new: {n.field_name()} if(n.plus_token().is_some())({n.plus_token()}) {n.visibility()} str(" ") {n.expr()})
+				p!(out, {n.field_name()} if(n.plus_token().is_some())({n.plus_token()}) {n.visibility()} str(" ") {n.expr()})
 			}
 			Member::MemberFieldMethod(m) => {
-				p!(new: {m.field_name()} {m.params_desc()} {m.visibility()} str(" ") {m.expr()})
+				p!(out, {m.field_name()} {m.params_desc()} {m.visibility()} str(" ") {m.expr()})
 			}
 		}
 	}
 }
 
 impl Printable for ObjBody {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			ObjBody::ObjBodyComp(l) => {
 				let (children, mut end_comments) = children_between::<Member>(
@@ -318,21 +309,21 @@ impl Printable for ObjBody {
 					None,
 				);
 				let trailing_for_comp = end_comments.extract_trailing();
-				let mut pi = p!(new: str("{") >i nl);
+				p!(out, str("{") >i nl);
 				for mem in children.into_iter() {
 					if mem.should_start_with_newline {
-						p!(pi: nl);
+						p!(out, nl);
 					}
-					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
-					p!(pi: {mem.value} str(","));
-					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
-					p!(pi: nl)
+					format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
+					p!(out, {mem.value} str(","));
+					format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
+					p!(out, nl)
 				}
 
 				if end_comments.should_start_with_newline {
-					p!(pi: nl);
+					p!(out, nl);
 				}
-				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
+				format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
 
 				let (compspecs, end_comments) = children_between::<CompSpec>(
 					l.syntax().clone(),
@@ -347,19 +338,18 @@ impl Printable for ObjBody {
 				);
 				for mem in compspecs.into_iter() {
 					if mem.should_start_with_newline {
-						p!(pi: nl);
+						p!(out, nl);
 					}
-					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
-					p!(pi: {mem.value});
-					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
+					format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
+					p!(out, { mem.value });
+					format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
 				}
 				if end_comments.should_start_with_newline {
-					p!(pi: nl);
+					p!(out, nl);
 				}
-				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
+				format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
 
-				p!(pi: nl <i str("}"));
-				pi
+				p!(out, nl <i str("}"));
 			}
 			ObjBody::ObjBodyMemberList(l) => {
 				let (children, end_comments) = children_between::<Member>(
@@ -369,83 +359,82 @@ impl Printable for ObjBody {
 					None,
 				);
 				if children.is_empty() && end_comments.is_empty() {
-					return p!(new: str("{ }"));
+					p!(out, str("{ }"));
+					return;
 				}
-				let mut pi = p!(new: str("{") >i nl);
+				p!(out, str("{") >i nl);
 				for (i, mem) in children.into_iter().enumerate() {
 					if mem.should_start_with_newline && i != 0 {
-						p!(pi: nl);
+						p!(out, nl);
 					}
-					p!(pi: items(format_comments(&mem.before_trivia, CommentLocation::AboveItem)));
-					p!(pi: {mem.value} str(","));
-					p!(pi: items(format_comments(&mem.inline_trivia, CommentLocation::ItemInline)));
-					p!(pi: nl)
+					format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
+					p!(out, {mem.value} str(","));
+					format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
+					p!(out, nl)
 				}
 
 				if end_comments.should_start_with_newline {
-					p!(pi: nl);
+					p!(out, nl);
 				}
-				p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
-				p!(pi: <i str("}"));
-				pi
+				format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
+				p!(out, <i str("}"));
 			}
 		}
 	}
 }
 impl Printable for UnaryOperator {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.text().to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.text().to_string()))
 	}
 }
 impl Printable for BinaryOperator {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.text().to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.text().to_string()))
 	}
 }
 impl Printable for Bind {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Bind::BindDestruct(d) => {
-				p!(new: {d.into()} str(" = ") {d.value()})
+				p!(out, {d.into()} str(" = ") {d.value()})
 			}
 			Bind::BindFunction(f) => {
-				p!(new: {f.name()} {f.params()} str(" = ") {f.value()})
+				p!(out, {f.name()} {f.params()} str(" = ") {f.value()})
 			}
 		}
 	}
 }
 impl Printable for Literal {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.syntax().to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.syntax().to_string()))
 	}
 }
 impl Printable for ImportKind {
-	fn print(&self) -> PrintItems {
-		p!(new: string(self.syntax().to_string()))
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, string(self.syntax().to_string()))
 	}
 }
 impl Printable for ForSpec {
-	fn print(&self) -> PrintItems {
-		p!(new: str("for ") {self.bind()} str(" in ") {self.expr()})
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("for ") {self.bind()} str(" in ") {self.expr()})
 	}
 }
 impl Printable for IfSpec {
-	fn print(&self) -> PrintItems {
-		p!(new: str("if ") {self.expr()})
+	fn print(&self, out: &mut PrintItems) {
+		p!(out, str("if ") {self.expr()})
 	}
 }
 impl Printable for CompSpec {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
-			CompSpec::ForSpec(f) => f.print(),
-			CompSpec::IfSpec(i) => i.print(),
+			CompSpec::ForSpec(f) => f.print(out),
+			CompSpec::IfSpec(i) => i.print(out),
 		}
 	}
 }
 impl Printable for Expr {
-	fn print(&self) -> PrintItems {
-		let mut o = p!(new:);
-		let (stmts, ending) = children_between::<Stmt>(
+	fn print(&self, out: &mut PrintItems) {
+		let (stmts, _ending) = children_between::<Stmt>(
 			self.syntax().clone(),
 			None,
 			self.expr_base()
@@ -457,10 +446,10 @@ impl Printable for Expr {
 			None,
 		);
 		for stmt in stmts {
-			p!(o: {stmt.value});
+			p!(out, { stmt.value });
 		}
-		p!(o: {self.expr_base()});
-		let (suffixes, ending) = children_between::<Suffix>(
+		p!(out, { self.expr_base() });
+		let (suffixes, _ending) = children_between::<Suffix>(
 			self.syntax().clone(),
 			self.expr_base()
 				.as_ref()
@@ -472,42 +461,38 @@ impl Printable for Expr {
 			None,
 		);
 		for suffix in suffixes {
-			p!(o: {suffix.value});
+			p!(out, { suffix.value });
 		}
-		o
 	}
 }
 impl Printable for Suffix {
-	fn print(&self) -> PrintItems {
-		let mut o = p!(new:);
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Suffix::SuffixIndex(i) => {
 				if i.question_mark_token().is_some() {
-					p!(o: str("?"));
+					p!(out, str("?"));
 				}
-				p!(o: str(".") {i.index()});
+				p!(out, str(".") {i.index()});
 			}
 			Suffix::SuffixIndexExpr(e) => {
 				if e.question_mark_token().is_some() {
-					p!(o: str(".?"));
+					p!(out, str(".?"));
 				}
-				p!(o: str("[") {e.index()} str("]"))
+				p!(out, str("[") {e.index()} str("]"))
 			}
 			Suffix::SuffixSlice(d) => {
-				p!(o: {d.slice_desc()})
+				p!(out, { d.slice_desc() })
 			}
 			Suffix::SuffixApply(a) => {
-				p!(o: {a.args_desc()})
+				p!(out, { a.args_desc() })
 			}
 		}
-		o
 	}
 }
 impl Printable for Stmt {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Stmt::StmtLocal(l) => {
-				let mut pi = p!(new:);
 				let (binds, end_comments) = children_between::<Bind>(
 					l.syntax().clone(),
 					l.local_kw_token().map(Into::into).as_ref(),
@@ -516,41 +501,40 @@ impl Printable for Stmt {
 				);
 				if binds.len() == 1 {
 					let bind = &binds[0];
-					p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
-					p!(pi: str("local ") {bind.value});
+					format_comments(&bind.before_trivia, CommentLocation::AboveItem, out);
+					p!(out, str("local ") {bind.value});
 				// TODO: keep end_comments, child.inline_trivia somehow, force multiple locals formatting in case of presence?
 				} else {
-					p!(pi: str("local") >i nl);
+					p!(out,str("local") >i nl);
 					for bind in binds {
 						if bind.should_start_with_newline {
-							p!(pi: nl);
+							p!(out, nl);
 						}
-						p!(pi: items(format_comments(&bind.before_trivia, CommentLocation::AboveItem)));
-						p!(pi: {bind.value} str(","));
-						p!(pi: items(format_comments(&bind.inline_trivia, CommentLocation::ItemInline)) nl);
+						format_comments(&bind.before_trivia, CommentLocation::AboveItem, out);
+						p!(out, {bind.value} str(","));
+						format_comments(&bind.inline_trivia, CommentLocation::ItemInline, out);
 					}
 					if end_comments.should_start_with_newline {
-						p!(pi: nl)
+						p!(out, nl)
 					}
-					p!(pi: items(format_comments(&end_comments.trivia, CommentLocation::EndOfItems)));
-					p!(pi: <i);
+					format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
+					p!(out,<i);
 				}
-				p!(pi: str(";") nl);
-				pi
+				p!(out,str(";") nl);
 			}
 			Stmt::StmtAssert(a) => {
-				p!(new: {a.assertion()} str(";") nl)
+				p!(out, {a.assertion()} str(";") nl)
 			}
 		}
 	}
 }
 impl Printable for ExprBase {
-	fn print(&self) -> PrintItems {
+	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Self::ExprBinary(b) => {
-				p!(new: {b.lhs_work()} str(" ") {b.binary_operator()} str(" ") {b.rhs_work()})
+				p!(out, {b.lhs_work()} str(" ") {b.binary_operator()} str(" ") {b.rhs_work()})
 			}
-			Self::ExprUnary(u) => p!(new: {u.unary_operator()} {u.rhs()}),
+			Self::ExprUnary(u) => p!(out, {u.unary_operator()} {u.rhs()}),
 			// Self::ExprSlice(s) => {
 			// 	p!(new: {s.expr()} {s.slice_desc()})
 			// }
@@ -561,64 +545,59 @@ impl Printable for ExprBase {
 			// Self::ExprApply(a) => {
 			// 	let mut pi = p!(new: {a.expr()} {a.args_desc()});
 			// 	if a.tailstrict_kw_token().is_some() {
-			// 		p!(pi: str(" tailstrict"));
+			// 		p!(out,str(" tailstrict"));
 			// 	}
 			// 	pi
 			// }
 			Self::ExprObjExtend(ex) => {
-				p!(new: {ex.lhs_work()} str(" ") {ex.rhs_work()})
+				p!(out, {ex.lhs_work()} str(" ") {ex.rhs_work()})
 			}
 			Self::ExprParened(p) => {
-				p!(new: str("(") {p.expr()} str(")"))
+				p!(out, str("(") {p.expr()} str(")"))
 			}
-			Self::ExprString(s) => p!(new: {s.text()}),
-			Self::ExprNumber(n) => p!(new: {n.number()}),
+			Self::ExprString(s) => p!(out, { s.text() }),
+			Self::ExprNumber(n) => p!(out, { n.number() }),
 			Self::ExprArray(a) => {
-				let mut pi = p!(new: str("[") >i nl);
+				p!(out, str("[") >i nl);
 				for el in a.exprs() {
-					p!(pi: {el} str(",") nl);
+					p!(out, {el} str(",") nl);
 				}
-				p!(pi: <i str("]"));
-				pi
+				p!(out, <i str("]"));
 			}
 			Self::ExprObject(obj) => {
-				p!(new: {obj.obj_body()})
+				p!(out, { obj.obj_body() })
 			}
 			Self::ExprArrayComp(arr) => {
-				let mut pi = p!(new: str("[") {arr.expr()});
+				p!(out, str("[") {arr.expr()});
 				for spec in arr.comp_specs() {
-					p!(pi: str(" ") {spec});
+					p!(out, str(" ") {spec});
 				}
-				p!(pi: str("]"));
-				pi
+				p!(out, str("]"));
 			}
 			Self::ExprImport(v) => {
-				p!(new: {v.import_kind()} str(" ") {v.text()})
+				p!(out, {v.import_kind()} str(" ") {v.text()})
 			}
-			Self::ExprVar(n) => p!(new: {n.name()}),
+			Self::ExprVar(n) => p!(out, { n.name() }),
 			// Self::ExprLocal(l) => {
 			// }
 			Self::ExprIfThenElse(ite) => {
-				let mut pi =
-					p!(new: str("if ") {ite.cond()} str(" then ") {ite.then().map(|t| t.expr())});
+				p!(out, str("if ") {ite.cond()} str(" then ") {ite.then().map(|t| t.expr())});
 				if ite.else_kw_token().is_some() || ite.else_().is_some() {
-					p!(pi: str(" else ") {ite.else_().map(|t| t.expr())})
+					p!(out, str(" else ") {ite.else_().map(|t| t.expr())})
 				}
-				pi
 			}
-			Self::ExprFunction(f) => p!(new: str("function") {f.params_desc()} nl {f.expr()}),
+			Self::ExprFunction(f) => p!(out, str("function") {f.params_desc()} nl {f.expr()}),
 			// Self::ExprAssert(a) => p!(new: {a.assertion()} str("; ") {a.expr()}),
-			Self::ExprError(e) => p!(new: str("error ") {e.expr()}),
+			Self::ExprError(e) => p!(out, str("error ") {e.expr()}),
 			Self::ExprLiteral(l) => {
-				p!(new: {l.literal()})
+				p!(out, { l.literal() })
 			}
 		}
 	}
 }
 
 impl Printable for SourceFile {
-	fn print(&self) -> PrintItems {
-		let mut pi = p!(new:);
+	fn print(&self, out: &mut PrintItems) {
 		let before = trivia_before(
 			self.syntax().clone(),
 			self.expr()
@@ -633,10 +612,9 @@ impl Printable for SourceFile {
 				.map(Into::into)
 				.as_ref(),
 		);
-		p!(pi: items(format_comments(&before, CommentLocation::AboveItem)));
-		p!(pi: {self.expr()} nl);
-		p!(pi: items(format_comments(&after, CommentLocation::EndOfItems)));
-		pi
+		format_comments(&before, CommentLocation::AboveItem, out);
+		p!(out, {self.expr()} nl);
+		format_comments(&after, CommentLocation::EndOfItems, out)
 	}
 }
 
@@ -671,7 +649,11 @@ fn format(input: &str, opts: &FormatOptions) -> Option<String> {
 		return None;
 	}
 	Some(dprint_core::formatting::format(
-		|| parsed.print(),
+		|| {
+			let mut out = PrintItems::new();
+			parsed.print(&mut out);
+			out
+		},
 		PrintOptions {
 			indent_width: if opts.indent == 0 {
 				// Reasonable max length for both 2 and 4 space sized tabs.
@@ -726,7 +708,7 @@ enum Error {
 	#[error("persist: {0}")]
 	Persist(#[from] tempfile::PersistError),
 	#[error("parsing failed, refusing to reformat corrupted input")]
-	ParseError,
+	Parse,
 }
 
 fn main_result() -> Result<(), Error> {
@@ -763,7 +745,7 @@ fn main_result() -> Result<(), Error> {
 				},
 			},
 		) else {
-			return Err(Error::ParseError);
+			return Err(Error::Parse);
 		};
 		tmp = reformatted.trim().to_owned();
 		if formatted == tmp {

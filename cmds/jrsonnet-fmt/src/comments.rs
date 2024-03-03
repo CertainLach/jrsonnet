@@ -12,22 +12,19 @@ pub enum CommentLocation {
 	EndOfItems,
 }
 
-#[must_use]
-pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintItems {
-	let mut pi = p!(new:);
-
+pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut PrintItems) {
 	for c in comments {
 		let Ok(c) = c else {
 			let mut text = c.as_ref().unwrap_err() as &str;
 			while !text.is_empty() {
 				let pos = text.find(|c| c == '\n' || c == '\t').unwrap_or(text.len());
 				let sliced = &text[..pos];
-				p!(pi: string(sliced.to_string()));
+				p!(out, string(sliced.to_string()));
 				text = &text[pos..];
 				if !text.is_empty() {
 					match text.as_bytes()[0] {
-						b'\n' => p!(pi: nl),
-						b'\t' => p!(pi: tab),
+						b'\n' => p!(out, nl),
+						b'\t' => p!(out, tab),
 						_ => unreachable!(),
 					}
 					text = &text[1..];
@@ -70,9 +67,9 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintIte
 				}
 				if lines.len() == 1 && !doc {
 					if matches!(loc, CommentLocation::ItemInline) {
-						p!(pi: str(" "));
+						p!(out, str(" "));
 					}
-					p!(pi: str("/* ") string(lines[0].trim().to_string()) str(" */") nl)
+					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */") nl)
 				} else if !lines.is_empty() {
 					fn common_ws_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 						let offset = a
@@ -107,36 +104,36 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintIte
 							.to_string();
 					}
 
-					p!(pi: str("/*"));
+					p!(out, str("/*"));
 					if doc {
-						p!(pi: str("*"));
+						p!(out, str("*"));
 					}
-					p!(pi: nl);
+					p!(out, nl);
 					for mut line in lines {
 						if doc {
-							p!(pi: str(" *"));
+							p!(out, str(" *"));
 						}
 						if line.is_empty() {
-							p!(pi: nl);
+							p!(out, nl);
 						} else {
 							if doc {
-								p!(pi: str(" "));
+								p!(out, str(" "));
 							}
 							while let Some(new_line) = line.strip_prefix('\t') {
 								if doc {
-									p!(pi: str("    "));
+									p!(out, str("    "));
 								} else {
-									p!(pi: tab);
+									p!(out, tab);
 								}
 								line = new_line.to_string();
 							}
-							p!(pi: string(line.to_string()) nl)
+							p!(out, string(line.to_string()) nl)
 						}
 					}
 					if doc {
-						p!(pi: str(" "));
+						p!(out, str(" "));
 					}
-					p!(pi: str("*/") nl)
+					p!(out, str("*/") nl)
 				}
 			}
 			// TODO: Keep common padding for multiple continous lines of single-line comments
@@ -157,27 +154,25 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation) -> PrintIte
 			// ```
 			TriviaKind::SingleLineHashComment => {
 				if matches!(loc, CommentLocation::ItemInline) {
-					p!(pi: str(" "))
+					p!(out, str(" "))
 				}
-				p!(pi: str("# ") string(c.text().strip_prefix('#').expect("hash comment starts with #").trim().to_string()));
+				p!(out, str("# ") string(c.text().strip_prefix('#').expect("hash comment starts with #").trim().to_string()));
 				if !matches!(loc, CommentLocation::ItemInline) {
-					p!(pi: nl)
+					p!(out, nl)
 				}
 			}
 			TriviaKind::SingleLineSlashComment => {
 				if matches!(loc, CommentLocation::ItemInline) {
-					p!(pi: str(" "))
+					p!(out, str(" "))
 				}
-				p!(pi: str("// ") string(c.text().strip_prefix("//").expect("comment starts with //").trim().to_string()));
+				p!(out, str("// ") string(c.text().strip_prefix("//").expect("comment starts with //").trim().to_string()));
 				if !matches!(loc, CommentLocation::ItemInline) {
-					p!(pi: nl)
+					p!(out, nl)
 				}
 			}
 			// Garbage in - garbage out
-			TriviaKind::ErrorCommentTooShort => p!(pi: str("/*/")),
-			TriviaKind::ErrorCommentUnterminated => p!(pi: string(c.text().to_string())),
+			TriviaKind::ErrorCommentTooShort => p!(out, str("/*/")),
+			TriviaKind::ErrorCommentUnterminated => p!(out, string(c.text().to_string())),
 		}
 	}
-
-	pi
 }
