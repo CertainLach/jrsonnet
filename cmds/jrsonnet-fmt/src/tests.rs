@@ -1,4 +1,4 @@
-use dprint_core::formatting::PrintOptions;
+use dprint_core::formatting::{PrintOptions, PrintItems};
 use indoc::indoc;
 
 use crate::Printable;
@@ -7,11 +7,15 @@ fn reformat(input: &str) -> String {
 	let (source, _) = jrsonnet_rowan_parser::parse(input);
 
 	dprint_core::formatting::format(
-		|| source.print(),
+		|| {
+			let mut out = PrintItems::new();
+			source.print(&mut out);
+			out
+		},
 		PrintOptions {
 			indent_width: 2,
 			max_width: 100,
-			use_tabs: false,
+			use_tabs: true,
 			new_line_text: "\n",
 		},
 	)

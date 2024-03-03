@@ -87,6 +87,7 @@ struct Opts {
 	debug: DebugOpts,
 }
 
+// TODO: Add unix_sigpipe = "sig_dfl"
 fn main() {
 	let opts: Opts = Opts::parse();
 

@@ -88,13 +88,13 @@ pub mod tests_key {
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic = "TruncatedFormatCode"]
 	fn parse_key_missing_start() {
 		try_parse_mapping_key("").unwrap();
 	}
 
 	#[test]
-	#[should_panic]
+	#[should_panic = "TruncatedFormatCode"]
 	fn parse_key_missing_end() {
 		try_parse_mapping_key("(   ").unwrap();
 	}
