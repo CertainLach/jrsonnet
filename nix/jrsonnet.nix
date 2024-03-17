@@ -34,7 +34,7 @@ in
     nativeBuildInputs = [makeWrapper];
 
     # To clean-up hyperfine output
-    postInstall = mkIf forBenchmarks ''
+    postInstall = optionalString forBenchmarks ''
       wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000 --os-stack=200000"
     '';
 

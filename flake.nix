@@ -15,7 +15,7 @@
     rust-overlay,
     ...
   }:
-    flake-utils.lib.eachSystem (with flake-utils.lib.system; [x86_64-linux x86_64-windows]) (
+    flake-utils.lib.eachDefaultSystem (
       system: let
         pkgs = import nixpkgs {
           inherit system;
@@ -34,6 +34,7 @@
           };
       in {
         packages = rec {
+          default = jrsonnet;
           go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
           sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
           jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
