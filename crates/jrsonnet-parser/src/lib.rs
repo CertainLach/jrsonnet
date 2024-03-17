@@ -11,7 +11,9 @@ mod location;
 mod source;
 mod unescape;
 pub use location::CodeLocation;
-pub use source::{Source, SourceDirectory, SourceFile, SourcePath, SourcePathT, SourceVirtual};
+pub use source::{
+	Source, SourceDirectory, SourceFifo, SourceFile, SourcePath, SourcePathT, SourceVirtual,
+};
 
 pub struct ParserSettings {
 	pub source: Source,

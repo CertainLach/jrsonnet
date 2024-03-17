@@ -9,7 +9,8 @@ use std::{
 
 use fs::File;
 use jrsonnet_gcmodule::Trace;
-use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
+use jrsonnet_interner::IBytes;
+use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath, SourceFifo};
 
 use crate::{
 	bail,
@@ -82,6 +83,37 @@ impl FileImportResolver {
 	}
 }
 
+/// Create `SourcePath` from path, handling directories/Fifo files (on unix)/etc
+fn check_path(path: &Path) -> Result<Option<SourcePath>> {
+	let meta = match fs::metadata(path) {
+		Ok(v) => v,
+		Err(e) if e.kind() == ErrorKind::NotFound => {
+			return Ok(None);
+		}
+		Err(e) => bail!(ImportIo(e.to_string())),
+	};
+	let ty = meta.file_type();
+	if ty.is_file() {
+		return Ok(Some(SourcePath::new(SourceFile::new(
+			path.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
+		))));
+	}
+	let ty = meta.file_type();
+	#[cfg(unix)]
+	{
+		use std::os::unix::fs::FileTypeExt;
+		if ty.is_fifo() {
+			let file = fs::read(path).map_err(|e| ImportIo(format!("FIFO read failed: {e}")))?;
+			return Ok(Some(SourcePath::new(SourceFifo(
+				format!("{}", path.display()),
+				IBytes::from(file.as_slice()),
+			))));
+		}
+	}
+	// Block device/some other magic thing.
+	Err(RuntimeError("special file can't be imported".into()).into())
+}
+
 impl ImportResolver for FileImportResolver {
 	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
 		let mut direct = if let Some(f) = from.downcast_ref::<SourceFile>() {
@@ -95,50 +127,34 @@ impl ImportResolver for FileImportResolver {
 		} else {
 			unreachable!("resolver can't return this path")
 		};
+
 		direct.push(path);
-		if direct.is_file() {
-			Ok(SourcePath::new(SourceFile::new(
-				direct.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
-			)))
-		} else {
-			for library_path in self.library_paths.borrow().iter() {
-				let mut cloned = library_path.clone();
-				cloned.push(path);
-				if cloned.exists() {
-					return Ok(SourcePath::new(SourceFile::new(
-						cloned.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
-					)));
-				}
-			}
-			bail!(ImportFileNotFound(from.clone(), path.to_owned()))
+		if let Some(direct) = check_path(&direct)? {
+			return Ok(direct);
 		}
+		for library_path in self.library_paths.borrow().iter() {
+			let mut cloned = library_path.clone();
+			cloned.push(path);
+			if let Some(cloned) = check_path(&cloned)? {
+				return Ok(cloned);
+			}
+		}
+		bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 	}
 	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		let meta = match fs::metadata(path) {
-			Ok(v) => v,
-			Err(e) if e.kind() == ErrorKind::NotFound => {
-				bail!(AbsoluteImportFileNotFound(path.to_owned()))
-			}
-			Err(e) => bail!(ImportIo(e.to_string())),
+		let Some(source) = check_path(path)? else {
+			bail!(AbsoluteImportFileNotFound(path.to_owned()))
 		};
-		if meta.is_file() {
-			Ok(SourcePath::new(SourceFile::new(
-				path.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
-			)))
-		} else if meta.is_dir() {
-			Ok(SourcePath::new(SourceDirectory::new(
-				path.canonicalize().map_err(|e| ImportIo(e.to_string()))?,
-			)))
-		} else {
-			unreachable!("this can't be a symlink")
-		}
+		Ok(source)
 	}
 
 	fn load_file_contents(&self, id: &SourcePath) -> Result<Vec<u8>> {
 		let path = if let Some(f) = id.downcast_ref::<SourceFile>() {
 			f.path()
-		} else if id.downcast_ref::<SourceDirectory>().is_some() || id.is_default() {
+		} else if id.downcast_ref::<SourceDirectory>().is_some() {
 			bail!(ImportIsADirectory(id.clone()))
+		} else if let Some(f) = id.downcast_ref::<SourceFifo>() {
+			return Ok(f.1.to_vec());
 		} else {
 			unreachable!("other types are not supported in resolve");
 		};

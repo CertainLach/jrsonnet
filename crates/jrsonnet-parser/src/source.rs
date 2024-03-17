@@ -7,7 +7,7 @@ use std::{
 };
 
 use jrsonnet_gcmodule::{Trace, Tracer};
-use jrsonnet_interner::IStr;
+use jrsonnet_interner::{IBytes, IStr};
 #[cfg(feature = "serde")]
 use serde::{Deserialize, Serialize};
 #[cfg(feature = "structdump")]
@@ -75,6 +75,7 @@ any_ext!(SourcePathT);
 /// - [`SourceFile`] - for any file
 /// - [`SourceDirectory`] - for resolution from CWD
 /// - [`SourceVirtual`] - for stdlib/ext-str
+/// - [`SourceFifo`] - for /dev/fd/X (This path may appear with `jrsonnet <(command_that_produces_jsonnet)`)
 ///
 /// From all of those, only [`SourceVirtual`] may be constructed manually, any other path kind should be only obtained
 /// from assigned `ImportResolver`
@@ -251,6 +252,37 @@ impl SourcePathT for SourceVirtual {
 	fn path(&self) -> Option<&Path> {
 		None
 	}
+	any_ext_impl!(SourcePathT);
+}
+
+/// Represents resolved FIFO file, those files may only be read once, and this type is only used for
+/// unix, where user might want to do `jrsonnet <(command_that_produces_jsonnet_source)`
+/// In most cases, user most probably want to use `jrsonnet -` instead of `jrsonnet /dev/stdin`
+/// for better cross-platform support.
+// PartialEq is limited to ptr equality
+#[allow(clippy::derived_hash_with_manual_eq)]
+#[derive(Trace, Debug, Hash)]
+pub struct SourceFifo(pub String, pub IBytes);
+impl PartialEq for SourceFifo {
+	fn eq(&self, other: &Self) -> bool {
+		std::ptr::eq(self, other)
+	}
+}
+impl fmt::Display for SourceFifo {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "fifo({:?})", self.0)
+	}
+}
+impl SourcePathT for SourceFifo {
+	fn is_default(&self) -> bool {
+		// In case of FD input, user won't expect relative paths to be resolved from /dev/fd/
+		true
+	}
+
+	fn path(&self) -> Option<&Path> {
+		None
+	}
+
 	any_ext_impl!(SourcePathT);
 }
 
