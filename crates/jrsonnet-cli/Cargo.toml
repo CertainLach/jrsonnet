@@ -1,11 +1,14 @@
 [package]
 name = "jrsonnet-cli"
 description = "Utilities for building jrsonnet CLIs"
-version.workspace = true
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
 repository.workspace = true
-authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
-license = "MIT"
-edition = "2021"
+version.workspace = true
+
+[lints]
+workspace = true
 
 [features]
 exp-preserve-order = [

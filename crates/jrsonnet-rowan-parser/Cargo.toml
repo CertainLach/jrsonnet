@@ -1,16 +1,20 @@
 [package]
 name = "jrsonnet-rowan-parser"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 version.workspace = true
-edition = "2021"
+
+[lints]
+workspace = true
 
 [dependencies]
 anyhow.workspace = true
 drop_bomb.workspace = true
 indoc.workspace = true
 logos.workspace = true
-miette = { workspace = true, features = ["fancy"] }
 rowan.workspace = true
-text-size.workspace = true
 thiserror.workspace = true
 
 [dev-dependencies]

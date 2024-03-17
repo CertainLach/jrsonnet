@@ -1,11 +1,15 @@
 [package]
 name = "libjsonnet"
 description = "Rust implementation of libjsonnet.so"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 version.workspace = true
-authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
-license = "MIT"
-edition = "2021"
 publish = false
+
+[lints]
+workspace = true
 
 [dependencies]
 jrsonnet-evaluator.workspace = true

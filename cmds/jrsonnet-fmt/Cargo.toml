@@ -1,7 +1,13 @@
 [package]
 name = "jrsonnet-fmt"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
 version.workspace = true
-edition = "2021"
+
+[lints]
+workspace = true
 
 [dependencies]
 dprint-core.workspace = true

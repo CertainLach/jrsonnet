@@ -1,9 +1,14 @@
 [workspace]
-package.version = "0.5.0-pre96"
-package.repository = "https://github.com/CertainLach/jrsonnet"
 members = ["crates/*", "bindings/jsonnet", "cmds/*", "tests", "xtask"]
 default-members = ["cmds/jrsonnet"]
 resolver = "2"
+
+[workspace.package]
+authors = ["Yaroslav Bolyukin <iam@lach.pw>"]
+edition = "2021"
+license = "MIT"
+repository = "https://github.com/CertainLach/jrsonnet"
+version = "0.5.0-pre96"
 
 [workspace.dependencies]
 jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0-pre96" }
@@ -16,25 +21,61 @@ jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre96" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre96" }
 
 jrsonnet-gcmodule = "0.3.6"
-hi-doc = "0.1.0"
 
+# Diagnostics.
+# hi-doc is my library, which handles text formatting very well, but isn't polished enough yet
+# Previous implementation was based on annotate-snippets, which I don't like for many reasons.
+#
+# I'm against using miette, because I want to reuse data between interpreter and annotations, yet miette
+#   and other libraries want to handle spans etc by itself, which is okay for compiler diagnostics, but is
+#   bad for interpreter, where interpreter and parser are paired much closer.
+hi-doc = "0.1.0"
+annotate-snippets = "0.10.1"
+
+# CLI
+clap = "4.5"
+clap_complete = "4.5"
+
+# Parsing, manifestification is implemented manually everywhere
+# Note on serde_yaml_with_quirks: This is a fork of serde-yaml with legacy yaml 1.1 support:
+# https://github.com/dtolnay/serde-yaml/pull/225
 serde = "1.0.197"
 serde_json = "1.0.114"
 serde_yaml_with_quirks = "0.8.24"
 
+# Error handling
 anyhow = "1.0.80"
 thiserror = "1.0"
+
+# Code formatting
+dprint-core = "0.65.0"
+
+# Stdlib hashing functions
+md5 = "0.7.0"
+sha1 = "0.10.6"
+sha2 = "0.10.8"
+sha3 = "0.10.8"
+
+# Pre-parsed stdlib serialization.
+# TODO: Drop in favor of replacing std.jsonnet with full native implementation, version 2.0 of bincode is bad.
+bincode = "1.3"
+
+# Source code parsing.
+# Jrsonnet has two parsers for jsonnet - one is for execution, and another is for better parsing diagnostics/lints/LSP.
+# First (and fast one) is based on peg, second is based on rowan.
+peg = "0.8.2"
+logos = "0.14.0"
+ungrammar = "1.16.1"
+rowan = "0.15"
+
 mimallocator = "0.1.3"
 indoc = "2.0"
-dprint-core = "0.65.0"
 insta = "1.35"
 tempfile = "3.10"
 pathdiff = "0.2.1"
 hashbrown = "0.14.3"
 static_assertions = "1.1"
 rustc-hash = "1.1"
-bincode = "1.3"
-annotate-snippets = "0.10.1"
 num-bigint = "0.4.4"
 derivative = "2.2.0"
 strsim = "0.11.0"
@@ -42,30 +83,73 @@ structdump = "0.2.0"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
-peg = "0.8.2"
 drop_bomb = "0.1.5"
-logos = "0.14.0"
-miette = "7.1.0"
-rowan = "0.15"
-text-size = "1.1"
-md5 = "0.7.0"
-sha1 = "0.10.6"
-sha2 = "0.10.8"
-sha3 = "0.10.8"
 base64 = "0.21.7"
 indexmap = "2.2.3"
 itertools = "0.12.1"
-ungrammar = "1.16.1"
 xshell = "0.2.5"
-
-clap = "4.5"
-clap_complete = "4.5"
 
 lsp-server = "0.7.6"
 lsp-types = "0.95.0"
 
 regex = "1.10.3"
 lru = "0.12.2"
+
+[workspace.lints.rust]
+unsafe_op_in_unsafe_fn = "deny"
+
+# TODO: add docs everywhere
+# missing_doc = "warn"
+
+elided_lifetimes_in_paths = "allow"
+explicit_outlives_requirements = "allow"
+noop_method_call = "allow"
+single_use_lifetimes = "allow"
+variant_size_differences = "allow"
+macro_expanded_macro_exports_accessed_by_absolute_paths = "allow"
+
+[workspace.lints.rustdoc]
+all = "warn"
+
+[workspace.lints.clippy]
+all = "warn"
+nursery = "warn"
+pedantic = "warn"
+
+ptr_arg = "allow"
+# Too verbose
+must_use_candidate = "allow"
+# A lot of functions pass around errors thrown by code
+missing_errors_doc = "allow"
+# A lot of pointers have interior Rc
+needless_pass_by_value = "allow"
+# Its fine
+wildcard_imports = "allow"
+enum_glob_use = "allow"
+module_name_repetitions = "allow"
+# TODO: fix individual issues, however this works as intended almost everywhere
+cast_precision_loss = "allow"
+cast_possible_wrap = "allow"
+cast_possible_truncation = "allow"
+cast_sign_loss = "allow"
+# False positives
+# https://github.com/rust-lang/rust-clippy/issues/6902
+use_self = "allow"
+# https://github.com/rust-lang/rust-clippy/issues/8539
+iter_with_drain = "allow"
+type_repetition_in_bounds = "allow"
+# ci is being run with nightly, but library should work on stable
+missing_const_for_fn = "allow"
+# too many false-positives with .expect() calls
+missing_panics_doc = "allow"
+# false positive for IStr type. There is an configuration option for
+# such cases, but it doesn't work:
+# https://github.com/rust-lang/rust-clippy/issues/9801
+mutable_key_type = "allow"
+# false positives
+redundant_pub_crate = "allow"
+# Sometimes code is fancier without that
+manual_let_else = "allow"
 
 #[profile.test]
 #opt-level = 1
