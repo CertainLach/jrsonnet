@@ -47,7 +47,7 @@ pub unsafe extern "C" fn jsonnet_json_object_append(
 ) {
 	match obj {
 		Val::Obj(old) => old
-			.extend_field(CStr::from_ptr(name).to_str().unwrap().into())
+			.extend_field(unsafe { CStr::from_ptr(name).to_str().unwrap().into() })
 			.value(val.clone()),
 		_ => panic!("should receive object"),
 	}

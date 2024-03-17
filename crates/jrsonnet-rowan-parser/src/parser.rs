@@ -1,6 +1,5 @@
 use std::{cell::Cell, fmt, rc::Rc};
 
-use miette::{LabeledSpan, SourceOffset, SourceSpan};
 use rowan::{GreenNode, TextRange};
 
 use crate::{
@@ -51,28 +50,6 @@ pub enum SyntaxError {
 pub struct LocatedSyntaxError {
 	pub error: SyntaxError,
 	pub range: TextRange,
-}
-
-impl From<LocatedSyntaxError> for LabeledSpan {
-	fn from(val: LocatedSyntaxError) -> Self {
-		let span = SourceSpan::new(
-			SourceOffset::from(usize::from(val.range.start())),
-			usize::from(val.range.end() - val.range.start()),
-		);
-		dbg!(&val);
-		match val.error {
-			SyntaxError::Unexpected { expected, found } => LabeledSpan::new_with_span(
-				Some(format!("expected {expected}, found {found:?}")),
-				span,
-			),
-			SyntaxError::Missing { expected } => {
-				LabeledSpan::new_with_span(Some(format!("missing {expected}")), span)
-			}
-			SyntaxError::Custom { error } | SyntaxError::Hint { error } => {
-				LabeledSpan::new_with_span(Some(error), span)
-			}
-		}
-	}
 }
 
 impl Parser {

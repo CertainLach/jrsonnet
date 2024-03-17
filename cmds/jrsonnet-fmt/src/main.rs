@@ -328,6 +328,10 @@ impl Printable for ArgsDesc {
 			format_comments(&ele.inline_trivia, CommentLocation::ItemInline, out);
 			p!(out, if("between args", multi_line, nl));
 		}
+		if end_comments.should_start_with_newline {
+			p!(out, nl);
+		}
+		format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
 		p!(out, if("end args", multi_line, <i info(end)) str(")"));
 	}
 }

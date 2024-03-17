@@ -129,7 +129,7 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 /// `path` should be a NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &VM, path: *const c_char) {
-	let cstr = CStr::from_ptr(path);
+	let cstr = unsafe { CStr::from_ptr(path) };
 	let path = PathBuf::from(cstr.to_str().unwrap());
 	let any_resolver = vm.state.import_resolver();
 	let resolver = any_resolver

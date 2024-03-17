@@ -16,8 +16,8 @@ use crate::VM;
 /// `name`, `code` should be a NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *const c_char) {
-	let name = CStr::from_ptr(name);
-	let value = CStr::from_ptr(value);
+	let name = unsafe { CStr::from_ptr(name) };
+	let value = unsafe { CStr::from_ptr(value) };
 
 	let any_initializer = vm.state.context_initializer();
 	any_initializer
@@ -39,8 +39,8 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *c
 /// `name`, `code` should be a NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *const c_char) {
-	let name = CStr::from_ptr(name);
-	let code = CStr::from_ptr(code);
+	let name = unsafe { CStr::from_ptr(name) };
+	let code = unsafe { CStr::from_ptr(code) };
 
 	let any_initializer = vm.state.context_initializer();
 	any_initializer
@@ -63,8 +63,8 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *c
 /// `name`, `value` should be a NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value: *const c_char) {
-	let name = CStr::from_ptr(name);
-	let value = CStr::from_ptr(value);
+	let name = unsafe { CStr::from_ptr(name) };
+	let value = unsafe { CStr::from_ptr(value) };
 	vm.tla_args.insert(
 		name.to_str().expect("name is not utf-8").into(),
 		TlaArg::String(value.to_str().expect("value is not utf-8").into()),
@@ -80,8 +80,8 @@ pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value
 /// `name`, `code` should be a NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_tla_code(vm: &mut VM, name: *const c_char, code: *const c_char) {
-	let name = CStr::from_ptr(name);
-	let code = CStr::from_ptr(code);
+	let name = unsafe { CStr::from_ptr(name) };
+	let code = unsafe { CStr::from_ptr(code) };
 
 	let name: IStr = name.to_str().expect("name is not utf-8").into();
 	let code: IStr = code.to_str().expect("code is not utf-8").into();

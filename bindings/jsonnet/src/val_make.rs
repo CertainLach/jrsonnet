@@ -16,7 +16,7 @@ use crate::VM;
 /// `v` should be a NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_make_string(_vm: &VM, val: *const c_char) -> *mut Val {
-	let val = CStr::from_ptr(val);
+	let val = unsafe { CStr::from_ptr(val) };
 	let val = val.to_str().expect("string is not utf-8");
 	Box::into_raw(Box::new(Val::string(val)))
 }

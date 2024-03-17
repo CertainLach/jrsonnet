@@ -17,7 +17,7 @@ use crate::VM;
 /// failure, which will appear in Jsonnet as an error. The `argv` pointer is an array whose size
 /// matches the array of parameters supplied when the native callback was originally registered.
 ///
-/// - `ctx` User pointer, given in jsonnet_native_callback.
+/// - `ctx` User pointer, given in `jsonnet_native_callback`.
 /// - `argv` Array of arguments from Jsonnet code.
 /// - `param` success Set this byref param to 1 to indicate success and 0 for failure.
 /// Returns the content of the imported file, or an error message.
@@ -69,17 +69,19 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	ctx: *const c_void,
 	mut raw_params: *const *const c_char,
 ) {
-	let name = CStr::from_ptr(name).to_str().expect("name is not utf-8");
+	let name = unsafe { CStr::from_ptr(name).to_str().expect("name is not utf-8") };
 	let mut params = Vec::new();
 	loop {
-		if (*raw_params).is_null() {
+		if (unsafe { *raw_params }).is_null() {
 			break;
 		}
-		let param = CStr::from_ptr(*raw_params)
-			.to_str()
-			.expect("param name is not utf-8");
+		let param = unsafe {
+			CStr::from_ptr(*raw_params)
+				.to_str()
+				.expect("param name is not utf-8")
+		};
 		params.push(param.into());
-		raw_params = raw_params.offset(1);
+		raw_params = unsafe { raw_params.offset(1) };
 	}
 
 	let any_resolver = vm.state.context_initializer();
@@ -91,5 +93,5 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 			name,
 			#[allow(deprecated)]
 			NativeCallback::new(params, JsonnetNativeCallbackHandler { ctx, cb }),
-		)
+		);
 }

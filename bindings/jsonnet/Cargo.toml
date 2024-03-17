@@ -1,3 +1,10 @@
+# NOTE: This library may panic, and it is only safe to panic in FFI contexts when library is built in panic="abort" mode,
+# which is set for release builds of this library.
+# FIXME: Move this warning somewhere else, or remove panics from this library (It is not always possible, in some cases
+# there is nothing to report the error, in those cases use `abort()`)
+# NOTE: This library assumes the allocator is libc malloc or alternative, which does track allocation size for user,
+# see TODO in `jsonnet_realloc`.
+
 [package]
 name = "libjsonnet"
 description = "Rust implementation of libjsonnet.so"

@@ -146,7 +146,9 @@ pub unsafe extern "C" fn jsonnet_realloc(_vm: &VM, buf: *mut u8, sz: usize) -> *
 		if sz == 0 {
 			return std::ptr::null_mut();
 		}
-		return std::alloc::alloc(Layout::from_size_align(sz, std::mem::align_of::<u8>()).unwrap());
+		return unsafe {
+			std::alloc::alloc(Layout::from_size_align(sz, std::mem::align_of::<u8>()).unwrap())
+		};
 	}
 	// TODO: Somehow store size of allocation, because its real size is probally not 16 :D
 	// OR (Alternative way of fixing this TODO)
@@ -154,10 +156,10 @@ pub unsafe extern "C" fn jsonnet_realloc(_vm: &VM, buf: *mut u8, sz: usize) -> *
 	// TODO: so it should work in normal cases. Maybe force allocator for this library?
 	let old_layout = Layout::from_size_align(16, std::mem::align_of::<u8>()).unwrap();
 	if sz == 0 {
-		std::alloc::dealloc(buf, old_layout);
+		unsafe { std::alloc::dealloc(buf, old_layout) };
 		return std::ptr::null_mut();
 	}
-	std::alloc::realloc(buf, old_layout, sz)
+	unsafe { std::alloc::realloc(buf, old_layout, sz) }
 }
 
 /// Clean up a JSON subtree.
@@ -192,7 +194,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 	filename: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = parse_path(CStr::from_ptr(filename));
+	let filename = unsafe { parse_path(CStr::from_ptr(filename)) };
 	match vm
 		.state
 		.import(filename)
@@ -226,8 +228,8 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	snippet: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = CStr::from_ptr(filename);
-	let snippet = CStr::from_ptr(snippet);
+	let filename = unsafe { CStr::from_ptr(filename) };
+	let snippet = unsafe { CStr::from_ptr(snippet) };
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
@@ -275,7 +277,7 @@ fn multi_to_raw(multi: Vec<(IStr, IStr)>) -> *const c_char {
 	out.push(0);
 	let v = out.as_ptr();
 	std::mem::forget(out);
-	v as *const c_char
+	v.cast::<c_char>()
 }
 
 /// # Safety
@@ -285,7 +287,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 	filename: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = parse_path(CStr::from_ptr(filename));
+	let filename = unsafe { parse_path(CStr::from_ptr(filename)) };
 	match vm
 		.state
 		.import(filename)
@@ -313,8 +315,8 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	snippet: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = CStr::from_ptr(filename);
-	let snippet = CStr::from_ptr(snippet);
+	let filename = unsafe { CStr::from_ptr(filename) };
+	let snippet = unsafe { CStr::from_ptr(snippet) };
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
@@ -367,7 +369,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 	filename: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = parse_path(CStr::from_ptr(filename));
+	let filename = unsafe { parse_path(CStr::from_ptr(filename)) };
 	match vm
 		.state
 		.import(filename)
@@ -395,8 +397,8 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 	snippet: *const c_char,
 	error: &mut c_int,
 ) -> *const c_char {
-	let filename = CStr::from_ptr(filename);
-	let snippet = CStr::from_ptr(snippet);
+	let filename = unsafe { CStr::from_ptr(filename) };
+	let snippet = unsafe { CStr::from_ptr(snippet) };
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
