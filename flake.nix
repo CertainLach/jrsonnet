@@ -63,7 +63,7 @@
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet;
+                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
                 name = "";
               }
             ];
@@ -73,7 +73,7 @@
             quick = true;
             jrsonnetVariants = [
               {
-                drv = jrsonnet;
+                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
                 name = "";
               }
             ];
@@ -82,15 +82,15 @@
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet;
+                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
                 name = "current";
               }
               {
-                drv = jrsonnet-nightly;
+                drv = jrsonnet-nightly.overrideAttrs {forBenchmarks = true;};
                 name = "current-nightly";
               }
               {
-                drv = jrsonnet-release;
+                drv = jrsonnet-release.overrideAttrs {forBenchmarks = true;};
                 name = "release";
               }
             ];
