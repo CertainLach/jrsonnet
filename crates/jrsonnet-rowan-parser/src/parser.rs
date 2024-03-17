@@ -450,7 +450,7 @@ fn object(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 			break;
 		}
-		if p.at_ts(COMPSPEC) {
+		if p.at_ts(TS![for]) {
 			if elems == 0 {
 				let m = p.start();
 				m.complete_missing(p, ExpectedSyntax::Named("field definition"));
@@ -612,7 +612,7 @@ fn array(p: &mut Parser) -> CompletedMarker {
 			p.bump();
 			break;
 		}
-		if elems != 0 && p.at_ts(COMPSPEC) {
+		if elems != 0 && p.at_ts(TS![for]) {
 			while p.at_ts(COMPSPEC) {
 				compspecs.push(compspec(p));
 			}

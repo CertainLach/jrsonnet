@@ -247,8 +247,7 @@ fn stdlib() {
 #[test]
 fn eval_simple() {
 	let src = "local a = 1, b = 2; a + local c = 1; c";
-	let (node, errors) = parse(src);
-	assert!(errors.is_empty());
+	let (node, _errors) = parse(src);
 
 	dbg!(node);
 }

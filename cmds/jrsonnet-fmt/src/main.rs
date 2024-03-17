@@ -4,14 +4,18 @@ use std::{
 	io::{self, Write},
 	path::PathBuf,
 	process,
+	rc::Rc,
 };
 
 use children::{children_between, trivia_before};
 use clap::Parser;
-use dprint_core::formatting::{PrintItems, PrintOptions};
+use dprint_core::formatting::{
+	condition_helpers::is_multiple_lines, condition_resolvers::true_resolver,
+	ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
+};
 use jrsonnet_rowan_parser::{
 	nodes::{
-		ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
+		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
 		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
 		UnaryOperator, Visibility,
@@ -62,6 +66,55 @@ macro_rules! pi {
 	}};
 	(@s; $o:ident: <i $($t:tt)*) => {{
 		$o.push_signal(dprint_core::formatting::Signal::FinishIndent);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: info($v:expr) $($t:tt)*) => {{
+		$o.push_info($v);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: if($s:literal, $cond:expr, $($i:tt)*) $($t:tt)*) => {{
+		$o.push_condition(dprint_core::formatting::conditions::if_true(
+			$s,
+			$cond.clone(),
+			{
+				let mut o = PrintItems::new();
+				p!(o, $($i)*);
+				o
+			},
+		));
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: if_else($s:literal, $cond:expr, $($i:tt)*)($($e:tt)+) $($t:tt)*) => {{
+		$o.push_condition(dprint_core::formatting::conditions::if_true_or(
+			$s,
+			$cond.clone(),
+			{
+				let mut o = PrintItems::new();
+				p!(o, $($i)*);
+				o
+			},
+			{
+				let mut o = PrintItems::new();
+				p!(o, $($e)*);
+				o
+			},
+		));
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: if_not($s:literal, $cond:expr, $($e:tt)*) $($t:tt)*) => {{
+		$o.push_condition(dprint_core::formatting::conditions::if_true_or(
+			$s,
+			$cond.clone(),
+			{
+				let o = PrintItems::new();
+				o
+			},
+			{
+				let mut o = PrintItems::new();
+				p!(o, $($e)*);
+				o
+			},
+		));
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: {$expr:expr} $($t:tt)*) => {{
@@ -244,14 +297,38 @@ impl Printable for ParamsDesc {
 }
 impl Printable for ArgsDesc {
 	fn print(&self, out: &mut PrintItems) {
-		p!(out, str("(") >i nl);
-		for arg in self.args() {
+		let start = LineNumber::new("start");
+		let end = LineNumber::new("end");
+		let multi_line = Rc::new(move |condition_context: &mut ConditionResolverContext| {
+			is_multiple_lines(condition_context, start, end).map(|v| !v)
+		});
+		p!(out, str("(") info(start) if("start args", multi_line, >i nl));
+		let (children, end_comments) = children_between::<Arg>(
+			self.syntax().clone(),
+			self.l_paren_token().map(Into::into).as_ref(),
+			self.r_paren_token().map(Into::into).as_ref(),
+			None,
+		);
+		let mut args = children.into_iter().peekable();
+		while let Some(ele) = args.next() {
+			if ele.should_start_with_newline {
+				p!(out, nl);
+			}
+			format_comments(&ele.before_trivia, CommentLocation::AboveItem, out);
+			let arg = ele.value;
 			if arg.name().is_some() || arg.assign_token().is_some() {
 				p!(out, {arg.name()} str(" = "));
 			}
-			p!(out, {arg.expr()} str(",") nl)
+			let comma_between = if args.peek().is_some() {
+				true_resolver()
+			} else {
+				multi_line.clone()
+			};
+			p!(out, {arg.expr()} if("arg comma", comma_between, str(",") if_not("between args", multi_line, str(" "))));
+			format_comments(&ele.inline_trivia, CommentLocation::ItemInline, out);
+			p!(out, if("between args", multi_line, nl));
 		}
-		p!(out, <i str(")"));
+		p!(out, if("end args", multi_line, <i info(end)) str(")"));
 	}
 }
 impl Printable for SliceDesc {
@@ -513,6 +590,7 @@ impl Printable for Stmt {
 						format_comments(&bind.before_trivia, CommentLocation::AboveItem, out);
 						p!(out, {bind.value} str(","));
 						format_comments(&bind.inline_trivia, CommentLocation::ItemInline, out);
+						p!(out, nl)
 					}
 					if end_comments.should_start_with_newline {
 						p!(out, nl)
