@@ -1,55 +1,5 @@
 //! jsonnet interpreter implementation
 #![cfg_attr(feature = "nightly", feature(thread_local, type_alias_impl_trait))]
-#![deny(unsafe_op_in_unsafe_fn)]
-#![warn(
-	clippy::all,
-	clippy::nursery,
-	clippy::pedantic,
-	// missing_docs,
-	elided_lifetimes_in_paths,
-	explicit_outlives_requirements,
-	noop_method_call,
-	single_use_lifetimes,
-	variant_size_differences,
-	rustdoc::all
-)]
-#![allow(
-	macro_expanded_macro_exports_accessed_by_absolute_paths,
-	clippy::ptr_arg,
-	// Too verbose
-	clippy::must_use_candidate,
-	// A lot of functions pass around errors thrown by code
-	clippy::missing_errors_doc,
-	// A lot of pointers have interior Rc
-	clippy::needless_pass_by_value,
-	// Its fine
-	clippy::wildcard_imports,
-	clippy::enum_glob_use,
-	clippy::module_name_repetitions,
-	// TODO: fix individual issues, however this works as intended almost everywhere
-	clippy::cast_precision_loss,
-	clippy::cast_possible_wrap,
-	clippy::cast_possible_truncation,
-	clippy::cast_sign_loss,
-	// False positives
-	// https://github.com/rust-lang/rust-clippy/issues/6902
-	clippy::use_self,
-	// https://github.com/rust-lang/rust-clippy/issues/8539
-	clippy::iter_with_drain,
-	clippy::type_repetition_in_bounds,
-	// ci is being run with nightly, but library should work on stable
-	clippy::missing_const_for_fn,
-	// too many false-positives with .expect() calls
-	clippy::missing_panics_doc,
-	// false positive for IStr type. There is an configuration option for
-	// such cases, but it doesn't work:
-	// https://github.com/rust-lang/rust-clippy/issues/9801
-	clippy::mutable_key_type,
-	// false positives
-	clippy::redundant_pub_crate,
-	// Sometimes code is fancier without that
-	clippy::manual_let_else,
-)]
 
 // For jrsonnet-macros
 extern crate self as jrsonnet_evaluator;
