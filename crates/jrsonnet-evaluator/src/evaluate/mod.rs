@@ -3,8 +3,8 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Expr, FieldMember, FieldName, ForSpecData,
-	IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, FieldName,
+	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
 
@@ -439,6 +439,21 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Parened(e) => evaluate(ctx, e)?,
 		Str(v) => Val::string(v.clone()),
 		Num(v) => Val::new_checked_num(*v)?,
+		// I have tried to remove special behavior from super by implementing standalone-super
+		// expresion, but looks like this case still needs special treatment.
+		//
+		// Note that other jsonnet implementations will fail on `if value in (super)` expression,
+		// because the standalone super literal is not supported, that is because in other
+		// implementations `in super` treated differently from in `smth_else`.
+		BinaryOp(field, BinaryOpType::In, e)
+			if matches!(&*e.0, Expr::Literal(LiteralType::Super)) =>
+		{
+			let Some(super_obj) = ctx.super_obj() else {
+				return Ok(Val::Bool(false));
+			};
+			let field = evaluate(ctx.clone(), field)?;
+			Val::Bool(super_obj.has_field_ex(field.to_string()?, true))
+		}
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => State::push(
