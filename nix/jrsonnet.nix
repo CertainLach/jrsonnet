@@ -7,7 +7,7 @@
   forBenchmarks ? false,
 }:
 with lib;
-  craneLib.buildPackage rec {
+  craneLib.buildPackage {
     src = lib.cleanSourceWith {
       src = ../.;
       filter = path: type:
@@ -17,10 +17,7 @@ with lib;
     pname = "jrsonnet";
     version = "current${optionalString withNightlyFeatures "-nightly"}${optionalString withExperimentalFeatures "-experimental"}";
 
-    cargoTestFlags = [
-      "--features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}"
-    ];
-    cargoBuildFlags = cargoTestFlags;
+    cargoExtraArgs = "--locked --features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}";
 
     nativeBuildInputs = [makeWrapper];
 
