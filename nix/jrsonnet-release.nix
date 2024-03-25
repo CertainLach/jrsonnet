@@ -1,6 +1,8 @@
-{ lib, fetchFromGitHub, rustPlatform, runCommand, makeWrapper }:
-
-
+{
+  fetchFromGitHub,
+  rustPlatform,
+  makeWrapper,
+}:
 rustPlatform.buildRustPackage rec {
   pname = "jrsonnet";
   version = "pre9";
@@ -13,11 +15,10 @@ rustPlatform.buildRustPackage rec {
   };
   cargoHash = "sha256-y2YiktT1h263vpFaC+kRL8yaAWQThhEkS+NSQ6B6Ylk=";
 
+  cargoTestFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
+  cargoBuildFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
 
-  cargoTestFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
-  cargoBuildFlags = [ "--package=jrsonnet --features=mimalloc,legacy-this-file" ];
-
-  buildInputs = [ makeWrapper ];
+  buildInputs = [makeWrapper];
 
   postInstall = ''
     wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000 --os-stack=200000"

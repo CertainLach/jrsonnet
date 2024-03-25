@@ -1,33 +1,24 @@
 {
   lib,
-  rustPlatform,
-  runCommand,
+  craneLib,
   makeWrapper,
   withNightlyFeatures ? false,
+  withExperimentalFeatures ? false,
   forBenchmarks ? false,
 }:
-with lib; let
-  filteredSrc = builtins.path {
-    name = "jrsonnet-src-filtered";
-    filter = path: type: !(builtins.baseNameOf path == "flake.nix" || builtins.baseNameOf path == "nix");
-    path = ../.;
-  };
-
-  # for some reason, filteredSrc hash still depends on nix directory contents
-  # Moving it into a CA store drops leftover references
-  src =
-    runCommand "jrsonnet-src"
-    {
-      __contentAddressed = true;
-    } "cp -r '${filteredSrc}' $out";
-in
-  rustPlatform.buildRustPackage rec {
-    inherit src;
+with lib;
+  craneLib.buildPackage rec {
+    src = lib.cleanSourceWith {
+      src = ../.;
+      filter = path: type:
+        (lib.hasSuffix "\.jsonnet" path)
+        || (craneLib.filterCargoSources path type);
+    };
     pname = "jrsonnet";
-    version = "current${optionalString withNightlyFeatures "-nightly"}";
+    version = "current${optionalString withNightlyFeatures "-nightly"}${optionalString withExperimentalFeatures "-experimental"}";
 
     cargoTestFlags = [
-      "--features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}"
+      "--features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}"
     ];
     cargoBuildFlags = cargoTestFlags;
 
@@ -37,8 +28,4 @@ in
     postInstall = optionalString forBenchmarks ''
       wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000 --os-stack=200000"
     '';
-
-    cargoLock = {
-      lockFile = ../Cargo.lock;
-    };
   }

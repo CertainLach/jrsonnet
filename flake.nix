@@ -5,14 +5,21 @@
     flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
+      inputs = {
+        nixpkgs.follows = "nixpkgs";
+        flake-utils.follows = "flake-utils";
+      };
+    };
+    crane = {
+      url = "github:ipetkov/crane";
       inputs.nixpkgs.follows = "nixpkgs";
-      inputs.flake-utils.follows = "flake-utils";
     };
   };
   outputs = {
     nixpkgs,
     flake-utils,
     rust-overlay,
+    crane,
     ...
   }:
     flake-utils.lib.eachDefaultSystem (
@@ -22,16 +29,8 @@
           overlays = [rust-overlay.overlays.default];
           config.allowUnsupportedSystem = true;
         };
-        lib = pkgs.lib;
-        rust =
-          (pkgs.rustChannelOf {
-            date = "2024-01-10";
-            channel = "nightly";
-          })
-          .default
-          .override {
-            extensions = ["rust-src" "miri" "rust-analyzer" "clippy"];
-          };
+        rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        craneLib = (crane.mkLib pkgs).overrideToolchain rust;
       in {
         packages = rec {
           default = jrsonnet;
@@ -40,19 +39,19 @@
           jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
           # I didn't managed to build it, and nixpkgs version is marked as broken
           # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
+
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
-            rustPlatform = pkgs.makeRustPlatform {
-              rustc = rust;
-              cargo = rust;
-            };
+            inherit craneLib;
           };
           jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
-            rustPlatform = pkgs.makeRustPlatform {
-              rustc = rust;
-              cargo = rust;
-            };
+            inherit craneLib;
             withNightlyFeatures = true;
           };
+          jrsonnet-experimental = pkgs.callPackage ./nix/jrsonnet.nix {
+            inherit craneLib;
+            withExperimentalFeatures = true;
+          };
+
           jrsonnet-release = pkgs.callPackage ./nix/jrsonnet-release.nix {
             rustPlatform = pkgs.makeRustPlatform {
               rustc = rust;
@@ -115,20 +114,9 @@
             ];
           };
         };
-        packagesCross = lib.genAttrs ["mingwW64"] (crossSystem: let
-          callPackage = pkgs.pkgsCross.${crossSystem}.callPackage;
-        in {
-          jrsonnet = callPackage ./nix/jrsonnet.nix {
-            # rustPlatform = pkgs.makeRustPlatform {
-            #   rustc = rust;
-            #   cargo = rust;
-            # };
-          };
-        });
-        devShells.default = pkgs.mkShell {
+        devShells.default = craneLib.devShell {
           nativeBuildInputs = with pkgs; [
             alejandra
-            rust
             cargo-edit
             cargo-asm
             cargo-outdated
