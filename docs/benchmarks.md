@@ -9,10 +9,10 @@ Unfortunately, I haven't managed to measure performance of Haskell implementatio
 <details>
 <summary>Tested versions</summary>
 
-Go: Jsonnet commandline interpreter (Go implementation) v0.19.1
+Go: Jsonnet commandline interpreter (Go implementation) v0.20.0
 
 ```
-Jsonnet commandline interpreter (Go implementation) v0.19.1
+Jsonnet commandline interpreter (Go implementation) v0.20.0
 
 jsonnet {<option>} <filename>
 
@@ -68,10 +68,10 @@ In all cases:
   advised to use -- if the argument is unknown, e.g. jsonnet -- "$FILENAME".
 ```
 
-C++: Jsonnet commandline interpreter v0.19.1
+C++: Jsonnet commandline interpreter v0.20.0
 
 ```
-Jsonnet commandline interpreter v0.19.1
+Jsonnet commandline interpreter v0.20.0
 
 jsonnet {<option>} <filename>
 
@@ -121,38 +121,50 @@ Scala:
 
 ```
 Missing argument: file <str>
-Expected Signature: Sjsonnet 0.4.3
+Expected Signature: Sjsonnet 0.4.9
 usage: sjsonnet [sjsonnet-options] script-file
-  -i --interactive         Run Mill in interactive mode, suitable for opening REPLs and taking user
-                           input
-  -J --jpath <str>         Specify an additional library search dir (right-most wins)
-  -o --output-file <str>   Write to the output file rather than stdout
-  -m --multi <str>         Write multiple files to the directory, list files on stdout
-  -c --create-output-dirs  Automatically creates all parent directories for files
-  -y --yaml-stream         Write output as a YAML stream of JSON documents
-  -S --string              Expect a string, manifest as plain text
-  -V --ext-str <str>       <var>[=<val>] Provide 'external' variable as string. 'If <val> is
-                           omitted, get from environment var <var>
-  --ext-str-file <str>     <var>=<file> Provide 'external' variable as string from the file
-  -V --ext-code <str>      <var>[=<code>] Provide 'external' variable as Jsonnet code. If <code> is
-                           omitted, get from environment var <var>
-  --ext-code-file <str>    <var>=<file> Provide 'external' variable as Jsonnet code from the file
-  -A --tla-str <str>       <var>[=<val>] Provide top-level arguments as string. 'If <val> is
-                           omitted, get from environment var <var>
-  --tla-str-file <str>     <var>=<file> Provide top-level arguments variable as string from the file
-  -V --tla-code <str>      <var>[=<val>] Provide top-level arguments as Jsonnet code. 'If <val> is
-                           omitted, get from environment var <var>
-  --tla-code-file <str>    <var>=<file> Provide top-level arguments variable as Jsonnet code from
-                           the file
-  -n --indent <int>        How much to indent your output JSON
-  -p --preserve-order      Preserves order of keys in the resulting JSON
-  --strict                 Enforce some additional syntax limitations
-  --yaml-out               Write output as a YAML document
-  file <str>               The jsonnet file you wish to evaluate
-  --yaml-debug             Generate source line comments in the output YAML doc to make it easier to
-                           figure out where values come from.
-  --no-static-errors       Turn static errors into warnings
-  --fatal-warnings         Fail if any warnings were emitted
+  -i --interactive                      Run Mill in interactive mode, suitable for opening REPLs and
+                                        taking user input
+  -J --jpath <str>                      Specify an additional library search dir (right-most wins)
+  -o --output-file <str>                Write to the output file rather than stdout
+  -m --multi <str>                      Write multiple files to the directory, list files on stdout
+  -c --create-output-dirs               Automatically creates all parent directories for files
+  -y --yaml-stream                      Write output as a YAML stream of JSON documents
+  -S --string                           Expect a string, manifest as plain text
+  -V --ext-str <str>                    <var>[=<val>] Provide 'external' variable as string. 'If
+                                        <val> is omitted, get from environment var <var>
+  --ext-str-file <str>                  <var>=<file> Provide 'external' variable as string from the
+                                        file
+  -V --ext-code <str>                   <var>[=<code>] Provide 'external' variable as Jsonnet code.
+                                        If <code> is omitted, get from environment var <var>
+  --ext-code-file <str>                 <var>=<file> Provide 'external' variable as Jsonnet code
+                                        from the file
+  -A --tla-str <str>                    <var>[=<val>] Provide top-level arguments as string. 'If
+                                        <val> is omitted, get from environment var <var>
+  --tla-str-file <str>                  <var>=<file> Provide top-level arguments variable as string
+                                        from the file
+  -V --tla-code <str>                   <var>[=<val>] Provide top-level arguments as Jsonnet code.
+                                        'If <val> is omitted, get from environment var <var>
+  --tla-code-file <str>                 <var>=<file> Provide top-level arguments variable as Jsonnet
+                                        code from the file
+  -n --indent <int>                     How much to indent your output JSON
+  -p --preserve-order                   Preserves order of keys in the resulting JSON
+  --strict                              Enforce some additional syntax limitations
+  --yaml-out                            Write output as a YAML document
+  file <str>                            The jsonnet file you wish to evaluate
+  --yaml-debug                          Generate source line comments in the output YAML doc to make
+                                        it easier to figure out where values come from.
+  --no-static-errors                    Turn static errors into warnings
+  --fatal-warnings                      Fail if any warnings were emitted
+  -e --exec                             Evaluate the given string as Jsonnet rather than treating it
+                                        as a file name
+  --no-duplicate-keys-in-comprehension  Raise an error if an object comprehension contains duplicate
+                                        keys
+  --strict-import-syntax                Raise an error if import expressions are used without proper
+                                        parentheses, e.g. import "foo".bar rather than (import
+                                        "foo").bar
+  --strict-inherited-assertions         Properly handle assertions defined in a Jsonnet dictionary
+                                        that is extended more than once
 
 
 ```
@@ -238,9 +250,9 @@ local verify_ci = (import 'ci-check.libsonnet').verify_ci;
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 122.0 ± 1.9 | 118.3 | 125.8 | 1.00 |
-| `Go` | 1402.0 ± 31.8 | 1359.7 | 1480.9 | 11.49 ± 0.32 |
-| `Scala` | 869.3 ± 9.6 | 852.0 | 889.4 | 7.12 ± 0.14 |
+| `Rust` | 119.0 ± 6.1 | 98.2 | 122.8 | 1.00 |
+| `Go` | 2033.3 ± 29.6 | 1973.3 | 2088.8 | 17.09 ± 0.91 |
+| `Scala` | 801.3 ± 17.5 | 769.1 | 830.1 | 6.73 ± 0.37 |
 
 ### Kube-prometheus manifests
 
@@ -291,10 +303,10 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 113.2 ± 2.9 | 109.7 | 120.1 | 1.00 |
-| `Go` | 2192.3 ± 25.1 | 2166.1 | 2262.2 | 19.36 ± 0.54 |
-| `Scala` | 1117.5 ± 21.9 | 1075.8 | 1152.1 | 9.87 ± 0.31 |
-| `C++` | 88573.2 ± 4833.2 | 84345.6 | 97409.2 | 782.15 ± 47.02 |
+| `Rust` | 150.1 ± 11.3 | 129.9 | 161.3 | 1.00 |
+| `Go` | 3221.2 ± 46.4 | 3137.2 | 3272.6 | 21.46 ± 1.64 |
+| `Scala` | 1056.3 ± 24.8 | 1006.7 | 1107.6 | 7.04 ± 0.55 |
+| `C++` | 90142.7 ± 371.0 | 89516.1 | 91006.4 | 600.66 ± 45.19 |
 
 ## Benchmarks from C++ jsonnet (/perf_tests)
 
@@ -313,10 +325,10 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 7.4 ± 0.2 | 6.9 | 8.9 | 1.00 |
-| `Go` | 117.4 ± 5.1 | 112.1 | 139.2 | 15.87 ± 0.85 |
-| `Scala` | 373.1 ± 4.5 | 367.8 | 383.0 | 50.45 ± 1.70 |
-| `C++` | 85.9 ± 2.1 | 82.1 | 90.1 | 11.62 ± 0.46 |
+| `Rust` | 9.8 ± 1.3 | 5.8 | 11.8 | 1.00 |
+| `Go` | 159.5 ± 10.2 | 139.4 | 175.0 | 16.24 ± 2.32 |
+| `Scala` | 388.0 ± 11.8 | 359.7 | 405.5 | 39.50 ± 5.19 |
+| `C++` | 96.7 ± 8.8 | 77.3 | 104.9 | 9.84 ± 1.54 |
 
 ### Large string template
 
@@ -324,9 +336,9 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 8.2 ± 0.3 | 7.3 | 9.4 | 1.00 |
-| `Scala` | 423.8 ± 5.5 | 416.2 | 437.5 | 51.62 ± 2.00 |
-| `C++` | 15292.1 ± 204.0 | 15070.1 | 15840.7 | 1862.69 ± 72.39 |
+| `Rust` | 11.8 ± 1.1 | 7.4 | 14.6 | 1.00 |
+| `Scala` | 468.1 ± 9.7 | 452.2 | 494.6 | 39.57 ± 3.82 |
+| `C++` | 14893.8 ± 102.4 | 14703.4 | 15074.0 | 1259.12 ± 119.13 |
 
 ### Realistic 1
 
@@ -585,10 +597,10 @@ local long_list = [
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 14.6 ± 0.6 | 13.5 | 17.9 | 1.00 |
-| `Go` | 7663.9 ± 114.5 | 7518.9 | 7912.3 | 524.74 ± 24.02 |
-| `Scala` | 414.1 ± 5.4 | 406.8 | 429.4 | 28.35 ± 1.28 |
-| `C++` | 26376.7 ± 354.2 | 25755.3 | 26908.5 | 1806.00 ± 81.81 |
+| `Rust` | 23.6 ± 2.3 | 13.6 | 29.5 | 1.00 |
+| `Go` | 11709.4 ± 73.0 | 11566.7 | 11825.3 | 496.43 ± 49.03 |
+| `Scala` | 446.3 ± 8.9 | 428.7 | 467.4 | 18.92 ± 1.90 |
+| `C++` | 24687.7 ± 144.7 | 24488.2 | 24951.9 | 1046.65 ± 103.36 |
 
 ### Realistic 2
 
@@ -707,10 +719,10 @@ function(
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 295.6 ± 8.9 | 285.1 | 319.9 | 1.00 |
-| `Go` | 7540.7 ± 107.5 | 7357.3 | 7792.5 | 25.51 ± 0.85 |
-| `Scala` | 781.0 ± 27.4 | 745.3 | 854.7 | 2.64 ± 0.12 |
-| `C++` | 30144.1 ± 574.5 | 28895.0 | 30967.3 | 101.99 ± 3.62 |
+| `Rust` | 283.0 ± 10.0 | 264.4 | 298.1 | 1.00 |
+| `Go` | 10224.6 ± 83.7 | 10015.8 | 10346.7 | 36.13 ± 1.32 |
+| `Scala` | 767.9 ± 22.3 | 736.1 | 805.2 | 2.71 ± 0.12 |
+| `C++` | 28183.8 ± 403.2 | 27302.6 | 28819.9 | 99.59 ± 3.81 |
 
 ## Benchmarks from C++ jsonnet (/benchmarks)
 
@@ -748,10 +760,10 @@ sum(300)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.2 ± 0.1 | 1.9 | 3.6 | 1.00 |
-| `Go` | 6.7 ± 0.6 | 6.0 | 17.0 | 3.10 ± 0.32 |
-| `Scala` | 306.5 ± 2.1 | 302.8 | 311.8 | 141.78 ± 7.81 |
-| `C++` | 34.7 ± 2.2 | 32.6 | 52.1 | 16.04 ± 1.35 |
+| `Rust` | 3.0 ± 0.4 | 1.8 | 4.0 | 1.00 |
+| `Go` | 8.1 ± 1.4 | 5.0 | 10.3 | 2.70 ± 0.59 |
+| `Scala` | 346.8 ± 11.1 | 320.1 | 360.6 | 114.96 ± 15.61 |
+| `C++` | 51.7 ± 10.2 | 32.3 | 61.0 | 17.12 ± 4.07 |
 
 ### Inheritance recursion
 
@@ -788,10 +800,10 @@ local Fib = {
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 452.8 ± 20.3 | 425.2 | 494.6 | 1.00 |
-| `Go` | 1076.4 ± 16.2 | 1049.9 | 1111.1 | 2.38 ± 0.11 |
-| `Scala` | 475.5 ± 8.7 | 462.2 | 494.4 | 1.05 ± 0.05 |
-| `C++` | 3029.7 ± 121.1 | 2787.2 | 3214.5 | 6.69 ± 0.40 |
+| `Rust` | 388.9 ± 11.9 | 367.2 | 408.5 | 1.00 |
+| `Go` | 1566.1 ± 20.3 | 1532.8 | 1605.8 | 4.03 ± 0.13 |
+| `Scala` | 515.8 ± 15.4 | 481.6 | 540.9 | 1.33 ± 0.06 |
+| `C++` | 2719.1 ± 22.9 | 2660.2 | 2754.3 | 6.99 ± 0.22 |
 
 ### Simple recursive call
 
@@ -828,10 +840,10 @@ fibonacci(25)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 109.2 ± 2.4 | 104.8 | 114.3 | 1.00 |
-| `Go` | 429.0 ± 8.2 | 419.4 | 454.3 | 3.93 ± 0.12 |
-| `Scala` | 338.7 ± 3.2 | 334.6 | 345.6 | 3.10 ± 0.07 |
-| `C++` | 210.0 ± 8.0 | 195.5 | 227.5 | 1.92 ± 0.08 |
+| `Rust` | 105.0 ± 8.6 | 83.9 | 119.9 | 1.00 |
+| `Go` | 666.5 ± 14.3 | 640.1 | 691.4 | 6.35 ± 0.54 |
+| `Scala` | 398.7 ± 11.8 | 361.5 | 419.8 | 3.80 ± 0.33 |
+| `C++` | 217.0 ± 7.4 | 198.5 | 223.3 | 2.07 ± 0.18 |
 
 ### Foldl string concat
 
@@ -846,10 +858,10 @@ std.foldl(function(e, res) e + res, std.makeArray(20000, function(i) 'aaaaa'), '
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 12.5 ± 0.6 | 11.4 | 17.3 | 1.00 |
-| `Go` | 64.8 ± 3.1 | 60.8 | 78.8 | 5.16 ± 0.36 |
-| `Scala` | 630.6 ± 15.6 | 606.3 | 659.8 | 50.25 ± 2.83 |
-| `C++` | 1073.3 ± 18.2 | 1041.0 | 1107.6 | 85.53 ± 4.56 |
+| `Rust` | 16.0 ± 2.8 | 9.2 | 24.2 | 1.00 |
+| `Go` | 84.7 ± 6.1 | 68.5 | 98.1 | 5.28 ± 0.98 |
+| `Scala` | 591.5 ± 16.2 | 567.5 | 622.1 | 36.86 ± 6.41 |
+| `C++` | 901.2 ± 14.6 | 868.4 | 929.5 | 56.16 ± 9.69 |
 
 ### Array sorts
 
@@ -876,9 +888,9 @@ true
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 4.2 ± 0.1 | 3.9 | 4.9 | 1.00 |
-| `Go` | 14.8 ± 0.5 | 13.7 | 17.8 | 3.51 ± 0.17 |
-| `C++` | 3964.0 ± 187.1 | 3700.2 | 4225.1 | 939.25 ± 55.45 |
+| `Rust` | 5.4 ± 0.7 | 3.1 | 7.5 | 1.00 |
+| `Go` | 20.7 ± 2.6 | 12.6 | 24.7 | 3.84 ± 0.66 |
+| `C++` | 3826.6 ± 47.9 | 3765.1 | 3946.1 | 707.87 ± 86.40 |
 
 ### Lazy array
 
@@ -898,10 +910,10 @@ slowId[15](42)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 58.8 ± 2.0 | 55.6 | 64.2 | 1.00 |
-| `Go` | 661.6 ± 26.6 | 629.6 | 730.1 | 11.25 ± 0.59 |
-| `Scala` | 348.8 ± 6.6 | 339.7 | 365.3 | 5.93 ± 0.23 |
-| `C++` | 206.4 ± 3.3 | 202.5 | 215.2 | 3.51 ± 0.13 |
+| `Rust` | 74.7 ± 6.4 | 53.8 | 84.2 | 1.00 |
+| `Go` | 665.7 ± 20.8 | 609.9 | 692.5 | 8.91 ± 0.81 |
+| `Scala` | 380.4 ± 9.8 | 356.6 | 397.8 | 5.09 ± 0.45 |
+| `C++` | 206.7 ± 6.0 | 184.6 | 214.9 | 2.77 ± 0.25 |
 
 ### Inheritance function recursion
 
@@ -926,10 +938,10 @@ fib(25)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.6 | 3.3 | 1.00 |
-| `Go` | 3.0 ± 0.2 | 2.7 | 5.1 | 1.58 ± 0.15 |
-| `Scala` | 310.0 ± 9.5 | 299.9 | 341.1 | 161.51 ± 9.88 |
-| `C++` | 1505.6 ± 74.0 | 1363.5 | 1640.8 | 784.26 ± 56.71 |
+| `Rust` | 2.7 ± 0.3 | 1.6 | 3.4 | 1.00 |
+| `Go` | 3.9 ± 0.7 | 2.4 | 5.1 | 1.48 ± 0.31 |
+| `Scala` | 354.0 ± 8.2 | 341.5 | 367.9 | 133.42 ± 15.65 |
+| `C++` | 1070.3 ± 8.8 | 1047.1 | 1087.9 | 403.37 ± 46.49 |
 
 ### String strips
 
@@ -951,10 +963,10 @@ true
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 9.4 ± 0.3 | 8.7 | 10.4 | 1.00 |
-| `Go` | 15.0 ± 0.5 | 13.9 | 17.6 | 1.60 ± 0.08 |
-| `Scala` | 340.6 ± 5.4 | 333.3 | 359.9 | 36.39 ± 1.36 |
-| `C++` | 37161.7 ± 525.9 | 36471.3 | 38275.4 | 3970.49 ± 145.97 |
+| `Rust` | 16.1 ± 1.8 | 9.5 | 19.2 | 1.00 |
+| `Go` | 18.9 ± 2.4 | 11.1 | 23.3 | 1.18 ± 0.20 |
+| `Scala` | 357.1 ± 11.4 | 327.2 | 378.3 | 22.24 ± 2.54 |
+| `C++` | 38984.2 ± 160.9 | 38481.9 | 39276.8 | 2428.07 ± 266.80 |
 
 ### Big object
 
@@ -987,10 +999,10 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.5 ± 0.1 | 2.3 | 3.3 | 1.00 |
-| `Go` | 5.2 ± 0.3 | 4.6 | 7.0 | 2.07 ± 0.15 |
-| `Scala` | 302.6 ± 6.4 | 290.3 | 312.9 | 120.34 ± 6.71 |
-| `C++` | 29.4 ± 1.4 | 27.7 | 38.5 | 11.71 ± 0.82 |
+| `Rust` | 3.5 ± 0.5 | 2.1 | 4.4 | 1.00 |
+| `Go` | 6.9 ± 1.2 | 4.0 | 8.8 | 2.00 ± 0.43 |
+| `Scala` | 342.5 ± 11.1 | 315.1 | 365.0 | 99.05 ± 13.39 |
+| `C++` | 42.1 ± 11.4 | 28.4 | 55.3 | 12.18 ± 3.67 |
 
 ## Benchmarks from Go jsonnet (builtins)
 
@@ -1010,10 +1022,10 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 3.4 ± 0.1 | 3.1 | 4.9 | 1.00 |
-| `Go` | 21.6 ± 0.8 | 19.7 | 27.1 | 6.32 ± 0.34 |
-| `Scala` | 355.0 ± 6.0 | 340.7 | 367.4 | 103.77 ± 4.62 |
-| `C++` | 16359.4 ± 663.5 | 15526.0 | 17805.8 | 4782.25 ± 276.36 |
+| `Rust` | 4.2 ± 0.6 | 2.6 | 5.9 | 1.00 |
+| `Go` | 27.1 ± 3.2 | 16.4 | 32.6 | 6.44 ± 1.17 |
+| `Scala` | 377.4 ± 9.2 | 360.2 | 394.0 | 89.59 ± 12.70 |
+| `C++` | 15045.5 ± 112.9 | 14763.1 | 15288.9 | 3571.12 ± 499.61 |
 
 ### std.base64Decode
 
@@ -1031,10 +1043,10 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 3.4 ± 0.2 | 3.1 | 5.3 | 1.00 |
-| `Go` | 21.0 ± 1.5 | 19.6 | 32.2 | 6.24 ± 0.52 |
-| `Scala` | 358.3 ± 7.1 | 349.0 | 379.9 | 106.23 ± 5.27 |
-| `C++` | 10921.3 ± 240.4 | 10653.9 | 11346.7 | 3237.97 ± 163.58 |
+| `Rust` | 4.1 ± 0.6 | 2.5 | 5.5 | 1.00 |
+| `Go` | 25.1 ± 2.9 | 16.1 | 29.4 | 6.18 ± 1.10 |
+| `Scala` | 377.5 ± 10.4 | 358.5 | 397.1 | 93.09 ± 13.03 |
+| `C++` | 10304.6 ± 62.8 | 10154.3 | 10389.1 | 2540.95 ± 349.00 |
 
 ### std.base64DecodeBytes
 
@@ -1052,10 +1064,10 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 45.7 ± 1.4 | 43.6 | 52.1 | 1.00 |
-| `Go` | 303.6 ± 8.4 | 292.1 | 324.7 | 6.64 ± 0.27 |
-| `Scala` | 406.3 ± 8.3 | 397.0 | 424.8 | 8.88 ± 0.32 |
-| `C++` | 10058.3 ± 337.9 | 9738.8 | 10641.5 | 219.86 ± 9.92 |
+| `Rust` | 54.8 ± 10.4 | 34.7 | 68.3 | 1.00 |
+| `Go` | 422.7 ± 17.7 | 387.7 | 447.7 | 7.72 ± 1.50 |
+| `Scala` | 425.6 ± 12.4 | 392.0 | 444.2 | 7.77 ± 1.49 |
+| `C++` | 10028.3 ± 42.1 | 9937.1 | 10106.0 | 183.13 ± 34.75 |
 
 ### std.base64 (byte array)
 
@@ -1073,10 +1085,10 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 37.0 ± 1.8 | 33.7 | 42.5 | 1.00 |
-| `Go` | 195.8 ± 11.5 | 180.9 | 219.5 | 5.28 ± 0.41 |
-| `Scala` | 419.2 ± 13.0 | 396.5 | 454.6 | 11.32 ± 0.66 |
-| `C++` | 15605.3 ± 310.2 | 15173.1 | 16065.6 | 421.22 ± 22.47 |
+| `Rust` | 49.8 ± 10.1 | 30.5 | 58.2 | 1.00 |
+| `Go` | 268.9 ± 5.2 | 250.5 | 274.8 | 5.40 ± 1.10 |
+| `Scala` | 427.9 ± 10.0 | 413.1 | 448.0 | 8.59 ± 1.75 |
+| `C++` | 13958.9 ± 151.1 | 13822.2 | 14478.0 | 280.37 ± 56.84 |
 
 ### std.foldl
 
@@ -1093,10 +1105,10 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 7.7 ± 0.7 | 6.8 | 18.5 | 1.00 |
-| `Go` | 32.6 ± 1.1 | 30.6 | 37.8 | 4.26 ± 0.41 |
-| `Scala` | 461.7 ± 8.5 | 445.0 | 484.5 | 60.35 ± 5.54 |
-| `C++` | 320.3 ± 6.0 | 308.6 | 335.0 | 41.87 ± 3.85 |
+| `Rust` | 9.1 ± 1.4 | 5.2 | 10.7 | 1.00 |
+| `Go` | 44.6 ± 4.0 | 36.0 | 51.2 | 4.92 ± 0.86 |
+| `Scala` | 463.9 ± 13.9 | 428.4 | 486.6 | 51.22 ± 7.86 |
+| `C++` | 274.5 ± 9.3 | 255.0 | 286.9 | 30.31 ± 4.68 |
 
 ### std.manifestJsonEx
 
@@ -1156,10 +1168,10 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.7 | 3.0 | 1.00 |
-| `Go` | 4.2 ± 0.3 | 3.6 | 8.0 | 2.14 ± 0.18 |
-| `Scala` | 338.9 ± 3.4 | 334.9 | 348.8 | 174.49 ± 8.63 |
-| `C++` | 106.6 ± 3.2 | 102.8 | 113.2 | 54.90 ± 3.12 |
+| `Rust` | 2.7 ± 0.3 | 1.6 | 3.4 | 1.00 |
+| `Go` | 5.2 ± 0.9 | 2.9 | 6.5 | 1.93 ± 0.40 |
+| `Scala` | 350.7 ± 12.8 | 315.6 | 370.8 | 130.60 ± 15.89 |
+| `C++` | 124.6 ± 8.5 | 105.9 | 133.3 | 46.40 ± 6.25 |
 
 ### std.manifestTomlEx
 
@@ -1222,9 +1234,9 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.8 | 2.7 | 1.00 |
-| `Go` | 4.2 ± 0.3 | 3.7 | 8.0 | 2.17 ± 0.19 |
-| `C++` | 1131.6 ± 28.1 | 1089.2 | 1198.7 | 584.01 ± 30.62 |
+| `Rust` | 2.8 ± 0.3 | 1.7 | 3.7 | 1.00 |
+| `Go` | 5.4 ± 0.8 | 2.9 | 6.9 | 1.94 ± 0.37 |
+| `C++` | 1118.3 ± 21.4 | 1094.0 | 1190.0 | 405.19 ± 44.55 |
 
 ### std.parseInt
 
@@ -1242,10 +1254,10 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.0 ± 0.1 | 1.7 | 3.2 | 1.00 |
-| `Go` | 3.7 ± 0.4 | 3.1 | 9.0 | 1.85 ± 0.21 |
-| `Scala` | 332.3 ± 7.2 | 326.1 | 359.7 | 168.32 ± 10.37 |
-| `C++` | 110.2 ± 1.9 | 106.9 | 115.1 | 55.82 ± 3.36 |
+| `Rust` | 2.8 ± 0.3 | 1.7 | 3.7 | 1.00 |
+| `Go` | 4.8 ± 0.7 | 2.7 | 6.2 | 1.72 ± 0.33 |
+| `Scala` | 357.2 ± 11.3 | 334.5 | 377.2 | 128.46 ± 14.87 |
+| `C++` | 126.7 ± 6.8 | 105.8 | 134.7 | 45.57 ± 5.63 |
 
 ### std.reverse
 
@@ -1265,9 +1277,9 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 59.7 ± 1.9 | 56.3 | 64.7 | 1.00 |
-| `Go` | 363.6 ± 9.0 | 352.8 | 385.1 | 6.09 ± 0.25 |
-| `C++` | 865.9 ± 16.1 | 839.9 | 902.0 | 14.51 ± 0.54 |
+| `Rust` | 63.1 ± 11.3 | 46.0 | 77.6 | 1.00 |
+| `Go` | 487.1 ± 31.1 | 441.0 | 553.5 | 7.72 ± 1.47 |
+| `C++` | 712.8 ± 11.2 | 693.0 | 742.5 | 11.30 ± 2.03 |
 
 ### std.substr
 
@@ -1285,10 +1297,10 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.6 ± 0.1 | 2.3 | 3.5 | 1.00 |
-| `Go` | 8.9 ± 0.6 | 8.0 | 15.3 | 3.46 ± 0.29 |
-| `Scala` | 346.6 ± 9.4 | 337.8 | 375.9 | 134.32 ± 7.51 |
-| `C++` | 31.4 ± 1.0 | 29.7 | 36.4 | 12.17 ± 0.72 |
+| `Rust` | 3.6 ± 0.3 | 2.7 | 4.5 | 1.00 |
+| `Go` | 11.0 ± 1.6 | 6.9 | 13.5 | 3.09 ± 0.52 |
+| `Scala` | 359.7 ± 9.8 | 345.8 | 374.6 | 100.48 ± 8.47 |
+| `C++` | 49.4 ± 10.0 | 29.3 | 62.7 | 13.80 ± 3.00 |
 
 ### Comparsion for array
 
@@ -1306,9 +1318,9 @@ long_array + [1] < long_array + [2]
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 26.0 ± 0.6 | 25.4 | 30.2 | 1.00 |
-| `Go` | 121.5 ± 6.5 | 116.2 | 141.0 | 4.68 ± 0.28 |
-| `C++` | 147098.5 ± 3334.1 | 135178.4 | 150470.0 | 5663.91 ± 187.03 |
+| `Rust` | 45.0 ± 10.3 | 26.6 | 55.2 | 1.00 |
+| `Go` | 160.8 ± 17.0 | 116.2 | 182.1 | 3.57 ± 0.90 |
+| `C++` | 135271.6 ± 10230.4 | 130120.3 | 172035.4 | 3002.97 ± 720.97 |
 
 ### Comparsion for primitives
 
@@ -1325,6 +1337,6 @@ long_array + [1] < long_array + [2]
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 284.7 ± 10.4 | 267.1 | 315.4 | 1.00 |
-| `Go` | 2009.5 ± 46.0 | 1931.3 | 2108.9 | 7.06 ± 0.31 |
-| `Scala` | 550.0 ± 14.8 | 526.3 | 575.4 | 1.93 ± 0.09 |
+| `Rust` | 414.7 ± 10.1 | 394.7 | 437.9 | 1.00 |
+| `Go` | 2087.0 ± 36.5 | 2030.6 | 2148.9 | 5.03 ± 0.15 |
+| `Scala` | 535.1 ± 9.9 | 514.5 | 556.0 | 1.29 ± 0.04 |
