@@ -6,7 +6,7 @@ use jrsonnet_evaluator::{
 	runtime_error,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal},
-	Either, IStr, Result, Thunk, Val,
+	Either, IStr, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
 pub(crate) fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
@@ -22,15 +22,16 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 	if *sz == 0 {
 		return Ok(ArrValue::empty());
 	}
-	if let Some(trivial) = func.evaluate_trivial() {
-		let mut out = Vec::with_capacity(*sz as usize);
-		for _ in 0..*sz {
-			out.push(trivial.clone())
-		}
-		Ok(ArrValue::eager(out))
-	} else {
-		Ok(ArrValue::range_exclusive(0, *sz).map(func))
-	}
+	func.evaluate_trivial().map_or_else(
+		|| Ok(ArrValue::range_exclusive(0, *sz).map(func)),
+		|trivial| {
+			let mut out = Vec::with_capacity(*sz as usize);
+			for _ in 0..*sz {
+				out.push(trivial.clone());
+			}
+			Ok(ArrValue::eager(out))
+		},
+	)
 }
 
 #[builtin]
@@ -180,7 +181,7 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 						out += &sep;
 					}
 					first = false;
-					write!(out, "{item}").unwrap()
+					write!(out, "{item}").unwrap();
 				} else if matches!(item, Val::Null) {
 					continue;
 				} else {
@@ -319,4 +320,62 @@ pub fn builtin_flatten_deep_array(value: Val) -> Result<Vec<Val>> {
 	let mut out = Vec::new();
 	process(value, &mut out)?;
 	Ok(out)
+}
+
+#[builtin]
+pub fn builtin_prune(
+	a: Val,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+) -> Result<Val> {
+	fn is_content(val: &Val) -> bool {
+		match val {
+			Val::Null => false,
+			Val::Arr(a) => !a.is_empty(),
+			Val::Obj(o) => !o.is_empty(),
+			_ => true,
+		}
+	}
+	Ok(match a {
+		Val::Arr(a) => {
+			let mut out = Vec::new();
+			for (i, ele) in a.iter().enumerate() {
+				let ele = ele
+					.and_then(|v| {
+						builtin_prune(
+							v,
+							#[cfg(feature = "exp-preserve-order")]
+							preserve_order,
+						)
+					})
+					.with_description(|| format!("elem <{i}> pruning"))?;
+				if is_content(&ele) {
+					out.push(ele);
+				}
+			}
+			Val::Arr(ArrValue::eager(out))
+		}
+		Val::Obj(o) => {
+			let mut out = ObjValueBuilder::new();
+			for (name, value) in o.iter(
+				#[cfg(feature = "exp-preserve-order")]
+				preserve_order,
+			) {
+				let value = value
+					.and_then(|v| {
+						builtin_prune(
+							v,
+							#[cfg(feature = "exp-preserve-order")]
+							preserve_order,
+						)
+					})
+					.with_description(|| format!("field <{name}> pruning"))?;
+				if !is_content(&value) {
+					continue;
+				}
+				out.field(name).value(value);
+			}
+			Val::Obj(out.build())
+		}
+		_ => a,
+	})
 }

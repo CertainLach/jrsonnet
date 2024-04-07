@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt::Write};
 
-use crate::{bail, Result, State, Val};
+use crate::{bail, Result, ResultExt, State, Val};
 
 pub trait ManifestFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
@@ -235,7 +235,8 @@ fn manifest_json_ex_buf(
 						}
 					}
 					buf.push_str(cur_padding);
-					manifest_json_ex_buf(&item?, buf, cur_padding, options)?;
+					manifest_json_ex_buf(&item?, buf, cur_padding, options)
+						.with_description(|| format!("elem <{i}> manifestification"))?;
 				}
 				cur_padding.truncate(old_len);
 

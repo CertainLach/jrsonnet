@@ -356,16 +356,16 @@ impl Printable for SliceDesc {
 impl Printable for Member {
 	fn print(&self, out: &mut PrintItems) {
 		match self {
-			Member::MemberBindStmt(b) => {
+			Self::MemberBindStmt(b) => {
 				p!(out, { b.obj_local() })
 			}
-			Member::MemberAssertStmt(ass) => {
+			Self::MemberAssertStmt(ass) => {
 				p!(out, { ass.assertion() })
 			}
-			Member::MemberFieldNormal(n) => {
+			Self::MemberFieldNormal(n) => {
 				p!(out, {n.field_name()} if(n.plus_token().is_some())({n.plus_token()}) {n.visibility()} str(" ") {n.expr()})
 			}
-			Member::MemberFieldMethod(m) => {
+			Self::MemberFieldMethod(m) => {
 				p!(out, {m.field_name()} {m.params_desc()} {m.visibility()} str(" ") {m.expr()})
 			}
 		}

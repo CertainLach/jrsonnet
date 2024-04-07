@@ -278,7 +278,7 @@ struct ThisOverride {
 }
 impl ObjectLike for ThisOverride {
 	fn with_this(&self, _me: ObjValue, this: ObjValue) -> ObjValue {
-		ObjValue::new(ThisOverride {
+		ObjValue::new(Self {
 			inner: self.inner.clone(),
 			this,
 		})
@@ -398,7 +398,7 @@ impl ObjValue {
 		self.get_for(key, self.0.this().unwrap_or_else(|| self.clone()))
 	}
 
-	pub fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
+	pub fn get_for(&self, key: IStr, this: Self) -> Result<Option<Val>> {
 		self.0.get_for(key, this)
 	}
 
@@ -410,7 +410,7 @@ impl ObjValue {
 		Ok(value)
 	}
 
-	fn get_raw(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
+	fn get_raw(&self, key: IStr, this: Self) -> Result<Option<Val>> {
 		self.0.get_for_uncached(key, this)
 	}
 
@@ -422,7 +422,7 @@ impl ObjValue {
 		// FIXME: Should it use `self.0.this()` in case of standalone super?
 		self.run_assertions_raw(self.clone())
 	}
-	fn run_assertions_raw(&self, this: ObjValue) -> Result<()> {
+	fn run_assertions_raw(&self, this: Self) -> Result<()> {
 		self.0.run_assertions_raw(this)
 	}
 

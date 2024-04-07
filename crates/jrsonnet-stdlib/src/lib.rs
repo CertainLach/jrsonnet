@@ -92,6 +92,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("remove", builtin_remove::INST),
 		("flattenArrays", builtin_flatten_arrays::INST),
 		("flattenDeepArray", builtin_flatten_deep_array::INST),
+		("prune", builtin_prune::INST),
 		("filterMap", builtin_filter_map::INST),
 		// Math
 		("abs", builtin_abs::INST),
