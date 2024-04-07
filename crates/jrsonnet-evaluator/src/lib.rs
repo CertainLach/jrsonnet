@@ -45,7 +45,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
-use jrsonnet_parser::*;
+use jrsonnet_parser::{ExprLocation, LocExpr, ParserSettings, Source, SourcePath};
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;

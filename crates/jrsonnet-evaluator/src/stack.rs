@@ -24,7 +24,7 @@ thread_local! {
 pub struct StackOverflowError;
 impl From<StackOverflowError> for ErrorKind {
 	fn from(_: StackOverflowError) -> Self {
-		ErrorKind::StackOverflow
+		Self::StackOverflow
 	}
 }
 impl From<StackOverflowError> for Error {

@@ -313,10 +313,10 @@ pub struct ContextInitializer {
 	settings: Rc<RefCell<Settings>>,
 }
 impl ContextInitializer {
-	pub fn new(_s: State, resolver: PathResolver) -> Self {
+	pub fn new(s: State, resolver: PathResolver) -> Self {
 		let settings = Settings {
-			ext_vars: Default::default(),
-			ext_natives: Default::default(),
+			ext_vars: HashMap::new(),
+			ext_natives: HashMap::new(),
 			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
 		};
@@ -324,10 +324,12 @@ impl ContextInitializer {
 		let stdlib_obj = stdlib_uncached(settings.clone());
 		#[cfg(not(feature = "legacy-this-file"))]
 		let stdlib_thunk = Thunk::evaluated(Val::Obj(stdlib_obj));
+		#[cfg(feature = "legacy-this-file")]
+		let _ = s;
 		Self {
 			#[cfg(not(feature = "legacy-this-file"))]
 			context: {
-				let mut context = ContextBuilder::with_capacity(_s, 1);
+				let mut context = ContextBuilder::with_capacity(s, 1);
 				context.bind("std", stdlib_thunk.clone());
 				context.build()
 			},

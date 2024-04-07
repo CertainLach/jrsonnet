@@ -67,11 +67,7 @@ pub fn builtin_trace(
 			v => v.manifest(JsonFormat::debug())?.into(),
 		},
 	);
-	if let Some(rest) = rest {
-		rest.evaluate()
-	} else {
-		Ok(str)
-	}
+	rest.map_or_else(|| Ok(str), |rest| rest.evaluate())
 }
 
 #[allow(clippy::comparison_chain)]
@@ -84,16 +80,15 @@ pub fn builtin_starts_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue
 				return Ok(false);
 			} else if b.len() == a.len() {
 				return equals(&Val::Arr(a), &Val::Arr(b));
-			} else {
-				for (a, b) in a.iter().take(b.len()).zip(b.iter()) {
-					let a = a?;
-					let b = b?;
-					if !equals(&a, &b)? {
-						return Ok(false);
-					}
-				}
-				true
 			}
+			for (a, b) in a.iter().take(b.len()).zip(b.iter()) {
+				let a = a?;
+				let b = b?;
+				if !equals(&a, &b)? {
+					return Ok(false);
+				}
+			}
+			true
 		}
 		_ => bail!("both arguments should be of the same type"),
 	})
@@ -109,17 +104,16 @@ pub fn builtin_ends_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue])
 				return Ok(false);
 			} else if b.len() == a.len() {
 				return equals(&Val::Arr(a), &Val::Arr(b));
-			} else {
-				let a_len = a.len();
-				for (a, b) in a.iter().skip(a_len - b.len()).zip(b.iter()) {
-					let a = a?;
-					let b = b?;
-					if !equals(&a, &b)? {
-						return Ok(false);
-					}
-				}
-				true
 			}
+			let a_len = a.len();
+			for (a, b) in a.iter().skip(a_len - b.len()).zip(b.iter()) {
+				let a = a?;
+				let b = b?;
+				if !equals(&a, &b)? {
+					return Ok(false);
+				}
+			}
+			true
 		}
 		_ => bail!("both arguments should be of the same type"),
 	})

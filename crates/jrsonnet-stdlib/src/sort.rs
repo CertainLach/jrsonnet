@@ -36,7 +36,7 @@ impl Ord for NonNaNf64 {
 
 fn get_sort_type<T>(values: &[T], key_getter: impl Fn(&T) -> &Val) -> Result<SortKeyType> {
 	let mut sort_type = SortKeyType::Unknown;
-	for i in values.iter() {
+	for i in values {
 		let i = key_getter(i);
 		match (i, sort_type) {
 			(Val::Str(_), SortKeyType::Unknown) => sort_type = SortKeyType::String,

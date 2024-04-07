@@ -10,7 +10,7 @@ use jrsonnet_evaluator::{
 	stack::{limit_stack_depth, StackDepthLimitOverrideGuard},
 	FileImportResolver,
 };
-use jrsonnet_gcmodule::with_thread_object_space;
+use jrsonnet_gcmodule::{with_thread_object_space, ObjectSpace};
 pub use manifest::*;
 pub use stdlib::*;
 pub use tla::*;
@@ -88,7 +88,7 @@ pub struct LeakSpace(PhantomData<()>);
 
 impl Drop for LeakSpace {
 	fn drop(&mut self) {
-		with_thread_object_space(|s| s.leak())
+		with_thread_object_space(ObjectSpace::leak);
 	}
 }
 
@@ -102,6 +102,6 @@ impl Drop for GcStatsPrinter {
 			let collected = jrsonnet_gcmodule::collect_thread_cycles();
 			eprintln!("Collected: {collected}");
 		}
-		eprintln!("Tracked: {}", jrsonnet_gcmodule::count_thread_tracked())
+		eprintln!("Tracked: {}", jrsonnet_gcmodule::count_thread_tracked());
 	}
 }

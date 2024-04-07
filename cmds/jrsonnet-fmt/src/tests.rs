@@ -1,4 +1,4 @@
-use dprint_core::formatting::{PrintOptions, PrintItems};
+use dprint_core::formatting::{PrintItems, PrintOptions};
 use indoc::indoc;
 
 use crate::Printable;

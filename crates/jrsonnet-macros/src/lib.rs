@@ -1,3 +1,5 @@
+use std::string::String;
+
 use proc_macro2::TokenStream;
 use quote::quote;
 use syn::{
@@ -205,6 +207,7 @@ pub fn builtin(
 	}
 }
 
+#[allow(clippy::too_many_lines)]
 fn builtin_inner(
 	attr: BuiltinAttrs,
 	fun: ItemFn,
@@ -225,7 +228,7 @@ fn builtin_inner(
 		.map(|arg| ArgInfo::parse(&name, arg))
 		.collect::<Result<Vec<_>>>()?;
 
-	let params_desc = args.iter().flat_map(|a| match a {
+	let params_desc = args.iter().filter_map(|a| match a {
 		ArgInfo::Normal {
 			is_option,
 			name,
@@ -234,8 +237,7 @@ fn builtin_inner(
 		} => {
 			let name = name
 				.as_ref()
-				.map(|n| quote! {ParamName::new_static(#n)})
-				.unwrap_or_else(|| quote! {None});
+				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
 			Some(quote! {
 				#(#cfg_attrs)*
 				BuiltinParam::new(#name, #is_option),
@@ -244,15 +246,12 @@ fn builtin_inner(
 		ArgInfo::Lazy { is_option, name } => {
 			let name = name
 				.as_ref()
-				.map(|n| quote! {ParamName::new_static(#n)})
-				.unwrap_or_else(|| quote! {None});
+				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
 			Some(quote! {
 				BuiltinParam::new(#name, #is_option),
 			})
 		}
-		ArgInfo::Context => None,
-		ArgInfo::Location => None,
-		ArgInfo::This => None,
+		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
 	});
 
 	let mut id = 0usize;
@@ -275,7 +274,7 @@ fn builtin_inner(
 				name,
 				cfg_attrs,
 			} => {
-				let name = name.as_ref().map(|v| v.as_str()).unwrap_or("<unnamed>");
+				let name = name.as_ref().map_or("<unnamed>", String::as_str);
 				let eval = quote! {jrsonnet_evaluator::State::push_description(
 					|| format!("argument <{}> evaluation", #name),
 					|| <#ty>::from_untyped(value.evaluate()?),
@@ -390,6 +389,7 @@ fn builtin_inner(
 }
 
 #[derive(Default)]
+#[allow(clippy::struct_excessive_bools)]
 struct TypedAttr {
 	rename: Option<String>,
 	flatten: bool,
@@ -467,11 +467,8 @@ impl TypedField {
 				"this field should appear in output object, but it has no visible name",
 			));
 		};
-		let (is_option, ty) = if let Some(ty) = extract_type_from_option(&field.ty)? {
-			(true, ty.clone())
-		} else {
-			(false, field.ty.clone())
-		};
+		let (is_option, ty) = extract_type_from_option(&field.ty)?
+			.map_or_else(|| (false, field.ty.clone()), |ty| (true, ty.clone()));
 		if is_option && attr.flatten {
 			if !attr.flatten_ok {
 				return Err(Error::new(
@@ -551,48 +548,53 @@ impl TypedField {
 			#ident: #value,
 		}
 	}
-	fn expand_serialize(&self) -> Result<TokenStream> {
+	fn expand_serialize(&self) -> TokenStream {
 		let ident = &self.ident;
 		let ty = &self.ty;
-		Ok(if let Some(name) = self.name() {
-			let hide = if self.attr.hide {
-				quote! {.hide()}
-			} else {
-				quote! {}
-			};
-			let add = if self.attr.add {
-				quote! {.add()}
-			} else {
-				quote! {}
-			};
-			if self.is_option {
-				quote! {
-					if let Some(value) = self.#ident {
+		self.name().map_or_else(
+			|| {
+				if self.is_option {
+					quote! {
+						if let Some(value) = self.#ident {
+							<#ty as TypedObj>::serialize(value, out)?;
+						}
+					}
+				} else {
+					quote! {
+						<#ty as TypedObj>::serialize(self.#ident, out)?;
+					}
+				}
+			},
+			|name| {
+				let hide = if self.attr.hide {
+					quote! {.hide()}
+				} else {
+					quote! {}
+				};
+				let add = if self.attr.add {
+					quote! {.add()}
+				} else {
+					quote! {}
+				};
+				if self.is_option {
+					quote! {
+						if let Some(value) = self.#ident {
+							out.field(#name)
+								#hide
+								#add
+								.try_value(<#ty as Typed>::into_untyped(value)?)?;
+						}
+					}
+				} else {
+					quote! {
 						out.field(#name)
 							#hide
 							#add
-							.try_value(<#ty as Typed>::into_untyped(value)?)?;
+							.try_value(<#ty as Typed>::into_untyped(self.#ident)?)?;
 					}
 				}
-			} else {
-				quote! {
-					out.field(#name)
-						#hide
-						#add
-						.try_value(<#ty as Typed>::into_untyped(self.#ident)?)?;
-				}
-			}
-		} else if self.is_option {
-			quote! {
-				if let Some(value) = self.#ident {
-					<#ty as TypedObj>::serialize(value, out)?;
-				}
-			}
-		} else {
-			quote! {
-				<#ty as TypedObj>::serialize(self.#ident, out)?;
-			}
-		})
+			},
+		)
 	}
 }
 
@@ -623,7 +625,7 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	let typed = {
 		let fields = fields
 			.iter()
-			.flat_map(TypedField::expand_field)
+			.filter_map(TypedField::expand_field)
 			.collect::<Vec<_>>();
 		quote! {
 			impl #impl_generics Typed for #ident #ty_generics #where_clause {
@@ -650,7 +652,7 @@ fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	let fields_serialize = fields
 		.iter()
 		.map(TypedField::expand_serialize)
-		.collect::<Result<Vec<_>>>()?;
+		.collect::<Vec<_>>();
 
 	Ok(quote! {
 		const _: () = {
@@ -767,7 +769,7 @@ impl FormatInput {
 	}
 }
 
-/// IStr formatting helper
+/// `IStr` formatting helper
 ///
 /// Using `format!("literal with no codes").into()` is slower than just `"literal with no codes".into()`
 /// This macro looks for formatting codes in the input string, and uses

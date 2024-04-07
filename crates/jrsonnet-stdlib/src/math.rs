@@ -131,16 +131,19 @@ pub fn builtin_is_even(x: f64) -> bool {
 }
 
 #[builtin]
+#[allow(clippy::float_cmp)]
 pub fn builtin_is_odd(x: f64) -> bool {
 	builtin_round(x) % 2.0 == 1.0
 }
 
 #[builtin]
+#[allow(clippy::float_cmp)]
 pub fn builtin_is_integer(x: f64) -> bool {
 	builtin_round(x) == x
 }
 
 #[builtin]
+#[allow(clippy::float_cmp)]
 pub fn builtin_is_decimal(x: f64) -> bool {
 	builtin_round(x) != x
 }

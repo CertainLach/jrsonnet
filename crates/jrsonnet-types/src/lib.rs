@@ -166,9 +166,9 @@ fn write_union<'i>(
 
 fn print_array(a: &ComplexValType, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 	if *a == ComplexValType::Any {
-		write!(f, "array")?
+		write!(f, "array")?;
 	} else {
-		write!(f, "Array<{a}>")?
+		write!(f, "Array<{a}>")?;
 	}
 	Ok(())
 }
@@ -176,18 +176,20 @@ fn print_array(a: &ComplexValType, f: &mut std::fmt::Formatter<'_>) -> std::fmt:
 impl Display for ComplexValType {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
-			ComplexValType::Any => write!(f, "any")?,
-			ComplexValType::Simple(s) => write!(f, "{s}")?,
-			ComplexValType::Char => write!(f, "char")?,
-			ComplexValType::BoundedNumber(a, b) => write!(
+			Self::Any => write!(f, "any")?,
+			Self::Simple(s) => write!(f, "{s}")?,
+			Self::Char => write!(f, "char")?,
+			Self::BoundedNumber(a, b) => write!(
 				f,
 				"BoundedNumber<{}, {}>",
-				a.map(|e| e.to_string()).unwrap_or_else(|| "".into()),
-				b.map(|e| e.to_string()).unwrap_or_else(|| "".into())
+				a.map(|e| e.to_string())
+					.unwrap_or_else(|| "open".to_owned()),
+				b.map(|e| e.to_string())
+					.unwrap_or_else(|| "open".to_owned())
 			)?,
-			ComplexValType::ArrayRef(a) => print_array(a, f)?,
-			ComplexValType::Array(a) => print_array(a, f)?,
-			ComplexValType::ObjectRef(fields) => {
+			Self::ArrayRef(a) => print_array(a, f)?,
+			Self::Array(a) => print_array(a, f)?,
+			Self::ObjectRef(fields) => {
 				write!(f, "{{")?;
 				for (i, (k, v)) in fields.iter().enumerate() {
 					if i != 0 {
@@ -197,18 +199,18 @@ impl Display for ComplexValType {
 				}
 				write!(f, "}}")?;
 			}
-			ComplexValType::AttrsOf(a) => {
-				if matches!(a, ComplexValType::Any) {
+			Self::AttrsOf(a) => {
+				if matches!(a, Self::Any) {
 					write!(f, "object")?;
 				} else {
 					write!(f, "AttrsOf<{a}>")?;
 				}
 			}
-			ComplexValType::Union(v) => write_union(f, true, v.iter())?,
-			ComplexValType::UnionRef(v) => write_union(f, true, v.iter().copied())?,
-			ComplexValType::Sum(v) => write_union(f, false, v.iter())?,
-			ComplexValType::SumRef(v) => write_union(f, false, v.iter().copied())?,
-			ComplexValType::Lazy(lazy) => write!(f, "Lazy<{lazy}>")?,
+			Self::Union(v) => write_union(f, true, v.iter())?,
+			Self::UnionRef(v) => write_union(f, true, v.iter().copied())?,
+			Self::Sum(v) => write_union(f, false, v.iter())?,
+			Self::SumRef(v) => write_union(f, false, v.iter().copied())?,
+			Self::Lazy(lazy) => write!(f, "Lazy<{lazy}>")?,
 		};
 		Ok(())
 	}

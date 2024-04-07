@@ -758,10 +758,10 @@ fn destruct(p: &mut Parser) -> CompletedMarker {
 			} else if p.at(T![...]) {
 				// let m_err = p.start_ranger();
 				destruct_rest(p);
-				// if had_rest {
-				// 	p.custom_error(m_err.finish(p), "only one rest can be present in array");
-				// }
-				// had_rest = true;
+			// if had_rest {
+			// 	p.custom_error(m_err.finish(p), "only one rest can be present in array");
+			// }
+			// had_rest = true;
 			} else {
 				destruct(p);
 			}

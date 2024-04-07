@@ -150,6 +150,9 @@ mutable_key_type = "allow"
 redundant_pub_crate = "allow"
 # Sometimes code is fancier without that
 manual_let_else = "allow"
+# Something is broken about that lint, can't be allowed for
+# codegenerated-stdlib block
+similar_names = "allow"
 
 #[profile.test]
 #opt-level = 1

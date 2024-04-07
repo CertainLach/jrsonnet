@@ -237,7 +237,7 @@ impl FuncVal {
 
 	pub fn evaluate_trivial(&self) -> Option<Val> {
 		match self {
-			FuncVal::Normal(n) => n.evaluate_trivial(),
+			Self::Normal(n) => n.evaluate_trivial(),
 			_ => None,
 		}
 	}

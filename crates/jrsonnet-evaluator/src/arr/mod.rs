@@ -42,7 +42,7 @@ impl ArrValue {
 		Self::new(EagerArray(values))
 	}
 
-	pub fn repeated(data: ArrValue, repeats: usize) -> Option<Self> {
+	pub fn repeated(data: Self, repeats: usize) -> Option<Self> {
 		Some(Self::new(RepeatedArray::new(data, repeats)?))
 	}
 
@@ -70,7 +70,7 @@ impl ArrValue {
 		Ok(Self::eager(out))
 	}
 
-	pub fn extended(a: ArrValue, b: ArrValue) -> Self {
+	pub fn extended(a: Self, b: Self) -> Self {
 		// TODO: benchmark for an optimal value, currently just a arbitrary choice
 		const ARR_EXTEND_THRESHOLD: usize = 100;
 

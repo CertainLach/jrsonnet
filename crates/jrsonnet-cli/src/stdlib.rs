@@ -39,11 +39,11 @@ impl FromStr for ExtStr {
 
 	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
 		match s.find('=') {
-			Some(idx) => Ok(ExtStr {
+			Some(idx) => Ok(Self {
 				name: s[..idx].to_owned(),
 				value: s[idx + 1..].to_owned(),
 			}),
-			None => Ok(ExtStr {
+			None => Ok(Self {
 				name: s.to_owned(),
 				value: std::env::var(s).or(Err("missing env var"))?,
 			}),
@@ -109,16 +109,16 @@ impl StdOpts {
 			return Ok(None);
 		}
 		let ctx = ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
-		for ext in self.ext_str.iter() {
+		for ext in &self.ext_str {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
-		for ext in self.ext_str_file.iter() {
+		for ext in &self.ext_str_file {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
-		for ext in self.ext_code.iter() {
+		for ext in &self.ext_code {
 			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
-		for ext in self.ext_code_file.iter() {
+		for ext in &self.ext_code_file {
 			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
 		Ok(Some(ctx))

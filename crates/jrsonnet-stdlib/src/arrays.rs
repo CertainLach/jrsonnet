@@ -9,7 +9,7 @@ use jrsonnet_evaluator::{
 	Either, IStr, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
-pub(crate) fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
+pub fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
 	if let Some(on_empty) = on_empty {
 		on_empty.evaluate()
 	} else {
@@ -270,8 +270,8 @@ pub fn builtin_remove_at(arr: ArrValue, at: usize) -> Result<ArrValue> {
 	let newArrRight = arr.slice(Some(at + 1), None, None);
 
 	Ok(ArrValue::extended(
-		newArrLeft.unwrap_or(ArrValue::empty()),
-		newArrRight.unwrap_or(ArrValue::empty()),
+		newArrLeft.unwrap_or_else(ArrValue::empty),
+		newArrRight.unwrap_or_else(ArrValue::empty),
 	))
 }
 

@@ -358,7 +358,7 @@ where
 		};
 		a.iter()
 			.map(|r| r.and_then(T::from_untyped))
-			.collect::<Result<Vec<T>>>()
+			.collect::<Result<Self>>()
 	}
 }
 
@@ -381,7 +381,7 @@ impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
 		Self::TYPE.check(&value)?;
 		let obj = value.as_obj().expect("typecheck should fail");
 
-		let mut out = BTreeMap::new();
+		let mut out = Self::new();
 		if V::wants_lazy() {
 			for key in obj.fields_ex(
 				false,
@@ -623,8 +623,8 @@ impl Typed for IndexableVal {
 
 	fn into_untyped(value: Self) -> Result<Val> {
 		match value {
-			IndexableVal::Str(s) => Ok(Val::string(s)),
-			IndexableVal::Arr(a) => Ok(Val::Arr(a)),
+			Self::Str(s) => Ok(Val::string(s)),
+			Self::Arr(a) => Ok(Val::Arr(a)),
 		}
 	}
 

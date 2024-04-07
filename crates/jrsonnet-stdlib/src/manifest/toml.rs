@@ -180,7 +180,9 @@ fn manifest_table_internal(
 		options.preserve_order,
 	) {
 		let value = value?;
-		if !is_section(&value)? {
+		if is_section(&value)? {
+			sections.push((key, value));
+		} else {
 			if !first {
 				buf.push('\n');
 			}
@@ -189,8 +191,6 @@ fn manifest_table_internal(
 			escape_key_toml_buf(&key, buf);
 			buf.push_str(" = ");
 			manifest_value(&value, false, buf, cur_padding, options)?;
-		} else {
-			sections.push((key, value));
 		}
 	}
 	for (k, v) in sections {

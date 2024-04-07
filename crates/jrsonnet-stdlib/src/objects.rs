@@ -155,7 +155,7 @@ pub fn builtin_object_remove_key(
 		if k == key {
 			continue;
 		}
-		new_obj.field(k).value(v.unwrap())
+		new_obj.field(k).value(v.unwrap());
 	}
 
 	new_obj.build()

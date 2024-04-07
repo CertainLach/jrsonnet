@@ -26,7 +26,9 @@ fn main() {
 			let dest_path = Path::new(&out_dir).join("stdlib.rs");
 			let mut f = File::create(dest_path).unwrap();
 			f.write_all(
-				("#[allow(clippy::redundant_clone)]".to_owned() + &v.to_string()).as_bytes(),
+				("#[allow(clippy::redundant_clone, clippy::similar_names)]".to_owned()
+					+ &v.to_string())
+					.as_bytes(),
 			)
 			.unwrap();
 		}

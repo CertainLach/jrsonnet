@@ -10,7 +10,7 @@ use std::{
 use fs::File;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath, SourceFifo};
+use jrsonnet_parser::{SourceDirectory, SourceFifo, SourceFile, SourcePath};
 
 use crate::{
 	bail,

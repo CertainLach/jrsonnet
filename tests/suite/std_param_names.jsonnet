@@ -49,6 +49,7 @@ local names = {
     min: ['a', 'b'],
     clamp: ['x', 'minVal', 'maxVal'],
     flattenArrays: ['arrs'],
+    flattenDeepArray: ['value'],
     manifestIni: ['ini'],
     manifestToml: ['value'],
     manifestTomlEx: ['value', 'indent'],

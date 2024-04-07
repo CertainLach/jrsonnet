@@ -75,7 +75,7 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> ArrValue {
 		.enumerate()
 	{
 		if &strb[i..i + pat.len()] == pat {
-			out.push(Val::Num(ch_idx as f64))
+			out.push(Val::Num(ch_idx as f64));
 		}
 	}
 	out.into()
@@ -117,11 +117,6 @@ pub fn builtin_parse_hex(str: IStr) -> Result<f64> {
 }
 
 fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
-	debug_assert!(
-		1 <= BASE && BASE <= 16,
-		"integer base should be between 1 and 16"
-	);
-
 	const ZERO_CODE: u32 = '0' as u32;
 	const UPPER_A_CODE: u32 = 'A' as u32;
 	const LOWER_A_CODE: u32 = 'a' as u32;
@@ -135,10 +130,17 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 		}
 	}
 
-	let base = BASE as f64;
+	debug_assert!(
+		1 <= BASE && BASE <= 16,
+		"integer base should be between 1 and 16"
+	);
+
+	let base = f64::from(BASE);
 
 	raw.chars().try_fold(0f64, |aggregate, digit| {
 		let digit = digit as u32;
+		// if-let-else looks better here than Option combinators
+		#[allow(clippy::option_if_let_else)]
 		let digit = if let Some(digit) = checked_sub_if(BASE > 10, digit, LOWER_A_CODE) {
 			digit + 10
 		} else if let Some(digit) = checked_sub_if(BASE > 10, digit, UPPER_A_CODE) {
@@ -148,7 +150,7 @@ fn parse_nat<const BASE: u32>(raw: &str) -> Result<f64> {
 		};
 
 		if digit < BASE {
-			Ok(base * aggregate + digit as f64)
+			Ok(base.mul_add(aggregate, f64::from(digit)))
 		} else {
 			bail!("{raw:?} is not a base {BASE} integer");
 		}

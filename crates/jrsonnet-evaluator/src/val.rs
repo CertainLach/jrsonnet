@@ -147,7 +147,7 @@ where
 	T: ThunkValue<Output = V>,
 {
 	fn from(value: T) -> Self {
-		Thunk::new(value)
+		Self::new(value)
 	}
 }
 
@@ -221,8 +221,8 @@ pub enum IndexableVal {
 impl IndexableVal {
 	pub fn to_array(self) -> ArrValue {
 		match self {
-			IndexableVal::Str(s) => ArrValue::chars(s.chars()),
-			IndexableVal::Arr(arr) => arr,
+			Self::Str(s) => ArrValue::chars(s.chars()),
+			Self::Arr(arr) => arr,
 		}
 	}
 	/// Slice the value.
@@ -239,7 +239,7 @@ impl IndexableVal {
 		step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
 	) -> Result<Self> {
 		match &self {
-			IndexableVal::Str(s) => {
+			Self::Str(s) => {
 				let mut computed_len = None;
 				let mut get_len = || {
 					computed_len.map_or_else(
@@ -277,7 +277,7 @@ impl IndexableVal {
 					.into(),
 				))
 			}
-			IndexableVal::Arr(arr) => {
+			Self::Arr(arr) => {
 				let get_idx = |pos: Option<i32>, len: usize, default| match pos {
 					Some(v) if v < 0 => len.saturating_sub((-v) as usize),
 					Some(v) => (v as usize).min(len),
@@ -307,7 +307,7 @@ pub enum StrValue {
 	Tree(Rc<(StrValue, StrValue, usize)>),
 }
 impl StrValue {
-	pub fn concat(a: StrValue, b: StrValue) -> Self {
+	pub fn concat(a: Self, b: Self) -> Self {
 		// TODO: benchmark for an optimal value, currently just a arbitrary choice
 		const STRING_EXTEND_THRESHOLD: usize = 100;
 
@@ -334,8 +334,8 @@ impl StrValue {
 			}
 		}
 		match self {
-			StrValue::Flat(f) => f,
-			StrValue::Tree(_) => {
+			Self::Flat(f) => f,
+			Self::Tree(_) => {
 				let mut buf = String::with_capacity(self.len());
 				write_buf(&self, &mut buf);
 				buf.into()
@@ -344,8 +344,8 @@ impl StrValue {
 	}
 	pub fn len(&self) -> usize {
 		match self {
-			StrValue::Flat(v) => v.len(),
-			StrValue::Tree(t) => t.2,
+			Self::Flat(v) => v.len(),
+			Self::Tree(t) => t.2,
 		}
 	}
 	pub fn is_empty(&self) -> bool {
@@ -367,8 +367,8 @@ where
 impl Display for StrValue {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			StrValue::Flat(v) => write!(f, "{v}"),
-			StrValue::Tree(t) => {
+			Self::Flat(v) => write!(f, "{v}"),
+			Self::Tree(t) => {
 				write!(f, "{}", t.0)?;
 				write!(f, "{}", t.1)
 			}
@@ -522,8 +522,8 @@ impl Val {
 
 	pub fn into_indexable(self) -> Result<IndexableVal> {
 		Ok(match self {
-			Val::Str(s) => IndexableVal::Str(s.into_flat()),
-			Val::Arr(arr) => IndexableVal::Arr(arr),
+			Self::Str(s) => IndexableVal::Str(s.into_flat()),
+			Self::Arr(arr) => IndexableVal::Arr(arr),
 			_ => bail!(ValueIsNotIndexable(self.value_type())),
 		})
 	}

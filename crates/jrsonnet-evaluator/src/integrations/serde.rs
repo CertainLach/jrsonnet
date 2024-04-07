@@ -15,7 +15,7 @@ use crate::{
 };
 
 impl<'de> Deserialize<'de> for Val {
-	fn deserialize<D>(deserializer: D) -> Result<Val, D::Error>
+	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
 	where
 		D: serde::Deserializer<'de>,
 	{
@@ -155,10 +155,10 @@ impl Serialize for Val {
 		S: serde::Serializer,
 	{
 		match self {
-			Val::Bool(v) => serializer.serialize_bool(*v),
-			Val::Null => serializer.serialize_none(),
-			Val::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
-			Val::Num(n) => {
+			Self::Bool(v) => serializer.serialize_bool(*v),
+			Self::Null => serializer.serialize_none(),
+			Self::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
+			Self::Num(n) => {
 				if n.fract() == 0.0 {
 					let n = *n as i64;
 					serializer.serialize_i64(n)
@@ -167,8 +167,8 @@ impl Serialize for Val {
 				}
 			}
 			#[cfg(feature = "exp-bigint")]
-			Val::BigInt(b) => b.serialize(serializer),
-			Val::Arr(arr) => {
+			Self::BigInt(b) => b.serialize(serializer),
+			Self::Arr(arr) => {
 				let mut seq = serializer.serialize_seq(Some(arr.len()))?;
 				for (i, element) in arr.iter().enumerate() {
 					let mut serde_error = None;
@@ -190,7 +190,7 @@ impl Serialize for Val {
 				}
 				seq.end()
 			}
-			Val::Obj(obj) => {
+			Self::Obj(obj) => {
 				let mut map = serializer.serialize_map(Some(obj.len()))?;
 				for (field, value) in obj.iter(
 					#[cfg(feature = "exp-preserve-order")]
@@ -215,7 +215,7 @@ impl Serialize for Val {
 				}
 				map.end()
 			}
-			Val::Func(_) => Err(S::Error::custom("tried to manifest function")),
+			Self::Func(_) => Err(S::Error::custom("tried to manifest function")),
 		}
 	}
 }
@@ -248,9 +248,9 @@ impl SerializeSeq for IntoVecValSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
+	fn serialize_element<T>(&mut self, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		let value = value.serialize(IntoValSerializer)?;
 		self.data.push(value);
@@ -272,9 +272,9 @@ impl SerializeTuple for IntoVecValSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_element<T: ?Sized>(&mut self, value: &T) -> Result<()>
+	fn serialize_element<T>(&mut self, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		SerializeSeq::serialize_element(self, value)
 	}
@@ -287,9 +287,9 @@ impl SerializeTupleVariant for IntoVecValSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
+	fn serialize_field<T>(&mut self, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		SerializeSeq::serialize_element(self, value)
 	}
@@ -302,9 +302,9 @@ impl SerializeTupleStruct for IntoVecValSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_field<T: ?Sized>(&mut self, value: &T) -> Result<()>
+	fn serialize_field<T>(&mut self, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		SerializeSeq::serialize_element(self, value)
 	}
@@ -607,7 +607,7 @@ impl Serializer for IntoValSerializer {
 }
 
 impl Val {
-	pub fn from_serde(v: impl Serialize) -> Result<Val, JrError> {
+	pub fn from_serde(v: impl Serialize) -> Result<Self, JrError> {
 		v.serialize(IntoValSerializer)
 	}
 }

@@ -153,7 +153,7 @@ fn main_catch(opts: Opts) -> bool {
 		if let Error::Evaluation(e) = e {
 			let mut out = String::new();
 			trace.write_trace(&mut out, &e).expect("format error");
-			eprintln!("{out}")
+			eprintln!("{out}");
 		} else {
 			eprintln!("{e}");
 		}
