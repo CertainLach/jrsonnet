@@ -1,5 +1,8 @@
-{ stdenv, lib, jekyll, fetchFromGitHub, makeWrapper }:
-
+{
+  stdenv,
+  fetchFromGitHub,
+  makeWrapper,
+}:
 stdenv.mkDerivation rec {
   pname = "jsonnet";
   version = "0.20.0";
@@ -15,7 +18,7 @@ stdenv.mkDerivation rec {
     "jsonnet"
   ];
 
-  nativeBuildInputs = [ makeWrapper ];
+  nativeBuildInputs = [makeWrapper];
 
   installPhase = ''
     mkdir -p $out/bin

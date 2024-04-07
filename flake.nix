@@ -63,7 +63,7 @@
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "";
               }
             ];
@@ -73,7 +73,7 @@
             quick = true;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "";
               }
             ];
@@ -82,15 +82,15 @@
             inherit go-jsonnet sjsonnet jsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "current";
               }
               {
-                drv = jrsonnet-nightly.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet-nightly.override {forBenchmarks = true;};
                 name = "current-nightly";
               }
               {
-                drv = jrsonnet-release.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet-release.override {forBenchmarks = true;};
                 name = "release";
               }
             ];
@@ -100,15 +100,15 @@
             quick = true;
             jrsonnetVariants = [
               {
-                drv = jrsonnet;
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "current";
               }
               {
-                drv = jrsonnet-nightly;
+                drv = jrsonnet-nightly.override {forBenchmarks = true;};
                 name = "current-nightly";
               }
               {
-                drv = jrsonnet-release;
+                drv = jrsonnet-release.override {forBenchmarks = true;};
                 name = "release";
               }
             ];
