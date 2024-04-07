@@ -32,7 +32,7 @@ pub struct InputOpts {
 pub struct MiscOpts {
 	/// Maximal allowed number of stack frames,
 	/// stack overflow error will be raised if this number gets exceeded.
-	#[clap(long, short = 's', default_value = "200")]
+	#[clap(long, short = 's', default_value = "512")]
 	max_stack: usize,
 
 	/// Library search dirs. (right-most wins)
