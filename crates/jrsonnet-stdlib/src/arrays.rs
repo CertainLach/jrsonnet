@@ -302,3 +302,21 @@ pub fn builtin_flatten_arrays(arrs: Vec<ArrValue>) -> ArrValue {
 	}
 	flatten_inner(&arrs)
 }
+
+#[builtin]
+pub fn builtin_flatten_deep_array(value: Val) -> Result<Vec<Val>> {
+	fn process(value: Val, out: &mut Vec<Val>) -> Result<()> {
+		match value {
+			Val::Arr(arr) => {
+				for ele in arr.iter() {
+					process(ele?, out)?;
+				}
+			}
+			_ => out.push(value),
+		}
+		Ok(())
+	}
+	let mut out = Vec::new();
+	process(value, &mut out)?;
+	Ok(out)
+}

@@ -48,6 +48,7 @@ mod regex;
 #[cfg(feature = "exp-regex")]
 pub use crate::regex::*;
 
+#[allow(clippy::too_many_lines)]
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
 
@@ -59,6 +60,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 
 	builder.with_super(eval);
 
+	// FIXME: Use PHF
 	for (name, builtin) in [
 		// Types
 		("type", builtin_type::INST),
@@ -89,6 +91,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("removeAt", builtin_remove_at::INST),
 		("remove", builtin_remove::INST),
 		("flattenArrays", builtin_flatten_arrays::INST),
+		("flattenDeepArray", builtin_flatten_deep_array::INST),
 		("filterMap", builtin_filter_map::INST),
 		// Math
 		("abs", builtin_abs::INST),
@@ -196,7 +199,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("__compare", builtin___compare::INST),
 	]
 	.iter()
-	.cloned()
+	.copied()
 	{
 		builder.method(name, builtin);
 	}
@@ -268,10 +271,10 @@ impl TracePrinter for StdTracePrinter {
 			let locs = loc.0.map_source_locations(&[loc.1]);
 			eprint!(
 				" {}:{}",
-				match loc.0.source_path().path() {
-					Some(p) => self.resolver.resolve(p),
-					None => loc.0.source_path().to_string(),
-				},
+				loc.0.source_path().path().map_or_else(
+					|| loc.0.source_path().to_string(),
+					|p| self.resolver.resolve(p)
+				),
 				locs[0].line
 			);
 		}
@@ -416,6 +419,6 @@ pub trait StateExt {
 impl StateExt for State {
 	fn with_stdlib(&self) {
 		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
-		self.settings_mut().context_initializer = tb!(initializer)
+		self.settings_mut().context_initializer = tb!(initializer);
 	}
 }
