@@ -5,8 +5,9 @@
 {
   stdenv,
   fetchurl,
-  jdk20,
+  jdk21_headless,
   makeWrapper,
+  java ? jdk21_headless,
 }:
 stdenv.mkDerivation rec {
   pname = "sjsonnet";
@@ -18,12 +19,12 @@ stdenv.mkDerivation rec {
   };
 
   unpackPhase = "true";
-  buildInputs = [jdk20 makeWrapper];
+  buildInputs = [java makeWrapper];
 
   installPhase = ''
     mkdir -p $out/bin $out/lib
     cp $src $out/lib/sjsonnet.jar
-    makeWrapper ${jdk20}/bin/java $out/bin/sjsonnet --add-flags "-Xss100m -XX:+UseStringDeduplication -jar $out/lib/sjsonnet.jar"
+    makeWrapper ${java}/bin/java $out/bin/sjsonnet --add-flags "-Xss100m -XX:+UseStringDeduplication -jar $out/lib/sjsonnet.jar"
   '';
   separateDebugInfo = false;
 }
