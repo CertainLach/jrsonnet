@@ -67,9 +67,10 @@ stdenv.mkDerivation {
   unpackPhase = "true";
 
   buildInputs = [
-    go-jsonnet
     sjsonnet
     jsonnet
+    rsjsonnet
+    go-jsonnet
 
     hyperfine
   ];
@@ -78,6 +79,9 @@ stdenv.mkDerivation {
     let
       mkBench = { name, path, omitSource ? false, pathIsGenerator ? false, skipScala ? "", skipCpp ? "", skipGo ? "", vendor ? "" }: ''
         set -oux
+
+        temp=$(mktemp -d)
+        cd $temp
 
         echo >> $out
         echo "### ${name}" >> $out
@@ -113,12 +117,12 @@ stdenv.mkDerivation {
         ''}
         hyperfine -N -w4 -m20 --output=pipe --style=basic --export-markdown result.md \
           ${concatStringsSep " " (forEach jrsonnetVariants (variant:
-            "\"${variant.drv}/bin/jrsonnet $path ${optionalString (vendor != "") "-J${vendor}"}\" -n \"Rust${if variant.name != "" then " (${variant.name})" else ""}\""
+            "\"${variant.drv}/bin/jrsonnet $path${optionalString (vendor != "") " -J${vendor}"}\" -n \"Rust${if variant.name != "" then " (${variant.name})" else ""}\""
           ))} \
-          "rsjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}" -n "Rust (alternative, rsjsonnet)"
-          ${optionalString (skipGo == "") "\"go-jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Go\""} \
-          ${optionalString (skipScala == "") "\"sjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Scala\""} \
-          ${optionalString (skipCpp == "") "\"jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"C++\""}
+          "rsjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}" -n "Rust (alternative, rsjsonnet)" \
+          ${optionalString (skipGo == "") "\"go-jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Go\""} \
+          ${optionalString (skipScala == "") "\"sjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Scala\""} \
+          ${optionalString (skipCpp == "") "\"jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"C++\""}
         cat result.md >> $out
       '';
     in
@@ -147,6 +151,14 @@ stdenv.mkDerivation {
         echo >> $out
         echo "\`\`\`" >> $out
         sjsonnet 2>> $out || true
+        echo "\`\`\`" >> $out
+        echo >> $out
+        echo "</details>" >> $out
+        echo >> $out
+        echo Rust (alternative): >> $out
+        echo >> $out
+        echo "\`\`\`" >> $out
+        rsjsonnet --help 2>> $out || true
         echo "\`\`\`" >> $out
         echo >> $out
         echo "</details>" >> $out

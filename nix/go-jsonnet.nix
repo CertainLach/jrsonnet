@@ -1,6 +1,9 @@
-{ lib, buildGo119Module, fetchFromGitHub, makeWrapper }:
-
-buildGo119Module rec {
+{
+  buildGoModule,
+  fetchFromGitHub,
+  makeWrapper,
+}:
+buildGoModule rec {
   pname = "go-jsonnet";
   version = "0.20.0";
 
@@ -12,7 +15,7 @@ buildGo119Module rec {
   };
   vendorHash = "sha256-j1fTOUpLx34TgzW94A/BctLrg9XoTtb3cBizhVJoEEI=";
 
-  buildInputs = [ makeWrapper ];
+  buildInputs = [makeWrapper];
 
   postInstall = ''
     mv $out/bin/jsonnet $out/bin/go-jsonnet
@@ -21,5 +24,5 @@ buildGo119Module rec {
 
   doCheck = false;
 
-  subPackages = [ "cmd/jsonnet" ];
+  subPackages = ["cmd/jsonnet"];
 }
