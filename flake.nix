@@ -39,6 +39,7 @@
           jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
           # I didn't managed to build it, and nixpkgs version is marked as broken
           # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
+          rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix {};
 
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
             inherit craneLib;
@@ -60,7 +61,7 @@
           };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -69,7 +70,7 @@
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {
@@ -79,7 +80,7 @@
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -96,7 +97,7 @@
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {

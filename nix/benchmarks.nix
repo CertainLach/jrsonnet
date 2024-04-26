@@ -7,6 +7,7 @@
 , go-jsonnet
 , sjsonnet
 , jsonnet
+, rsjsonnet
 , hyperfine
 , quick ? false
 , jrsonnetVariants
@@ -114,6 +115,7 @@ stdenv.mkDerivation {
           ${concatStringsSep " " (forEach jrsonnetVariants (variant:
             "\"${variant.drv}/bin/jrsonnet $path ${optionalString (vendor != "") "-J${vendor}"}\" -n \"Rust${if variant.name != "" then " (${variant.name})" else ""}\""
           ))} \
+          "rsjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}" -n "Rust (alternative, rsjsonnet)"
           ${optionalString (skipGo == "") "\"go-jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Go\""} \
           ${optionalString (skipScala == "") "\"sjsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"Scala\""} \
           ${optionalString (skipCpp == "") "\"jsonnet $path ${optionalString (vendor != "") "-J ${vendor}"}\" -n \"C++\""}

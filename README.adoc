@@ -69,6 +69,7 @@ There already are multiple implementations of this standard implemented in diffe
 * https://github.com/google/jsonnet[C++];
 * https://github.com/google/go-jsonnet/[Go];
 * https://github.com/databricks/sjsonnet[Scala].
+* [NEW] https://github.com/eduardosm/rsjsonnet[Another Rust impl appears].
 
 This implementation shows performance better than all existing implementations.
 For more information see link:./docs/benchmarks.md[benchmarks]
