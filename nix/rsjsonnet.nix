@@ -1,7 +1,7 @@
 {
   fetchFromGitHub,
   rustPlatform,
-  lib,
+  makeWrapper,
 }:
 rustPlatform.buildRustPackage rec {
   pname = "rsjsonnet";
@@ -15,4 +15,10 @@ rustPlatform.buildRustPackage rec {
   };
 
   cargoHash = "sha256-TsUN9oUu6S1l9oTaR6nET1ZdRvMrR29bkP3VEDre8aE=";
+
+  nativeBuildInputs = [makeWrapper];
+
+  postInstall = ''
+    wrapProgram $out/bin/rsjsonnet --add-flags "--max-stack=200000"
+  '';
 }
