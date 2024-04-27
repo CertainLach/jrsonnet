@@ -171,8 +171,6 @@ in
         sjsonnet 2>> $out || true
         echo "\`\`\`" >> $out
         echo >> $out
-        echo "</details>" >> $out
-        echo >> $out
         echo "Rust (alternative):" >> $out
         echo >> $out
         echo "\`\`\`" >> $out

@@ -169,8 +169,6 @@ usage: sjsonnet [sjsonnet-options] script-file
 
 ```
 
-</details>
-
 Rust (alternative):
 
 ```
@@ -201,7 +199,6 @@ Options:
 ```
 
 </details>
-
 
 ## Real world
 
