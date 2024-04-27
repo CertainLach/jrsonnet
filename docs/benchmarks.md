@@ -9,10 +9,10 @@ Unfortunately, I haven't managed to measure performance of Haskell implementatio
 <details>
 <summary>Tested versions</summary>
 
-Go: Jsonnet commandline interpreter (Go implementation) v0.19.1
+Go: Jsonnet commandline interpreter (Go implementation) v0.20.0
 
 ```
-Jsonnet commandline interpreter (Go implementation) v0.19.1
+Jsonnet commandline interpreter (Go implementation) v0.20.0
 
 jsonnet {<option>} <filename>
 
@@ -68,10 +68,10 @@ In all cases:
   advised to use -- if the argument is unknown, e.g. jsonnet -- "$FILENAME".
 ```
 
-C++: Jsonnet commandline interpreter v0.19.1
+C++: Jsonnet commandline interpreter v0.20.0
 
 ```
-Jsonnet commandline interpreter v0.19.1
+Jsonnet commandline interpreter v0.20.0
 
 jsonnet {<option>} <filename>
 
@@ -121,39 +121,82 @@ Scala:
 
 ```
 Missing argument: file <str>
-Expected Signature: Sjsonnet 0.4.3
+Expected Signature: Sjsonnet 0.4.10
 usage: sjsonnet [sjsonnet-options] script-file
-  -i --interactive         Run Mill in interactive mode, suitable for opening REPLs and taking user
-                           input
-  -J --jpath <str>         Specify an additional library search dir (right-most wins)
-  -o --output-file <str>   Write to the output file rather than stdout
-  -m --multi <str>         Write multiple files to the directory, list files on stdout
-  -c --create-output-dirs  Automatically creates all parent directories for files
-  -y --yaml-stream         Write output as a YAML stream of JSON documents
-  -S --string              Expect a string, manifest as plain text
-  -V --ext-str <str>       <var>[=<val>] Provide 'external' variable as string. 'If <val> is
-                           omitted, get from environment var <var>
-  --ext-str-file <str>     <var>=<file> Provide 'external' variable as string from the file
-  -V --ext-code <str>      <var>[=<code>] Provide 'external' variable as Jsonnet code. If <code> is
-                           omitted, get from environment var <var>
-  --ext-code-file <str>    <var>=<file> Provide 'external' variable as Jsonnet code from the file
-  -A --tla-str <str>       <var>[=<val>] Provide top-level arguments as string. 'If <val> is
-                           omitted, get from environment var <var>
-  --tla-str-file <str>     <var>=<file> Provide top-level arguments variable as string from the file
-  -V --tla-code <str>      <var>[=<val>] Provide top-level arguments as Jsonnet code. 'If <val> is
-                           omitted, get from environment var <var>
-  --tla-code-file <str>    <var>=<file> Provide top-level arguments variable as Jsonnet code from
-                           the file
-  -n --indent <int>        How much to indent your output JSON
-  -p --preserve-order      Preserves order of keys in the resulting JSON
-  --strict                 Enforce some additional syntax limitations
-  --yaml-out               Write output as a YAML document
-  file <str>               The jsonnet file you wish to evaluate
-  --yaml-debug             Generate source line comments in the output YAML doc to make it easier to
-                           figure out where values come from.
-  --no-static-errors       Turn static errors into warnings
-  --fatal-warnings         Fail if any warnings were emitted
+  -i --interactive                      Run Mill in interactive mode, suitable for opening REPLs and
+                                        taking user input
+  -J --jpath <str>                      Specify an additional library search dir (right-most wins)
+  -o --output-file <str>                Write to the output file rather than stdout
+  -m --multi <str>                      Write multiple files to the directory, list files on stdout
+  -c --create-output-dirs               Automatically creates all parent directories for files
+  -y --yaml-stream                      Write output as a YAML stream of JSON documents
+  -S --string                           Expect a string, manifest as plain text
+  -V --ext-str <str>                    <var>[=<val>] Provide 'external' variable as string. 'If
+                                        <val> is omitted, get from environment var <var>
+  --ext-str-file <str>                  <var>=<file> Provide 'external' variable as string from the
+                                        file
+  -V --ext-code <str>                   <var>[=<code>] Provide 'external' variable as Jsonnet code.
+                                        If <code> is omitted, get from environment var <var>
+  --ext-code-file <str>                 <var>=<file> Provide 'external' variable as Jsonnet code
+                                        from the file
+  -A --tla-str <str>                    <var>[=<val>] Provide top-level arguments as string. 'If
+                                        <val> is omitted, get from environment var <var>
+  --tla-str-file <str>                  <var>=<file> Provide top-level arguments variable as string
+                                        from the file
+  -V --tla-code <str>                   <var>[=<val>] Provide top-level arguments as Jsonnet code.
+                                        'If <val> is omitted, get from environment var <var>
+  --tla-code-file <str>                 <var>=<file> Provide top-level arguments variable as Jsonnet
+                                        code from the file
+  -n --indent <int>                     How much to indent your output JSON
+  -p --preserve-order                   Preserves order of keys in the resulting JSON
+  --strict                              Enforce some additional syntax limitations
+  --yaml-out                            Write output as a YAML document
+  file <str>                            The jsonnet file you wish to evaluate
+  --yaml-debug                          Generate source line comments in the output YAML doc to make
+                                        it easier to figure out where values come from.
+  --no-static-errors                    Turn static errors into warnings
+  --fatal-warnings                      Fail if any warnings were emitted
+  -e --exec                             Evaluate the given string as Jsonnet rather than treating it
+                                        as a file name
+  --no-duplicate-keys-in-comprehension  Raise an error if an object comprehension contains duplicate
+                                        keys
+  --strict-import-syntax                Raise an error if import expressions are used without proper
+                                        parentheses, e.g. import "foo".bar rather than (import
+                                        "foo").bar
+  --strict-inherited-assertions         Properly handle assertions defined in a Jsonnet dictionary
+                                        that is extended more than once
 
+
+```
+
+</details>
+
+Rust (alternative):
+
+```
+Usage: rsjsonnet [OPTIONS] <filename>
+
+Arguments:
+  <filename>  
+
+Options:
+  -e, --exec                      Treat filename as code
+  -J, --jpath <dir>               Specify an additional library search dir (right-most wins)
+  -o, --output-file <file>        Write to the output file rather than stdout
+  -m, --multi <dir>               Write multiple files to the directory, list files on stdout
+  -y, --yaml-stream               Write output as a YAML stream of JSON documents
+  -S, --string                    Expect a string, manifest as plain text
+  -s, --max-stack <n>             Number of allowed stack frames
+  -t, --max-trace <n>             Max length of stack trace before cropping
+  -V, --ext-str <var=[val]>       
+      --ext-str-file <var=file>   
+      --ext-code <var[=code]>     
+      --ext-code-file <var=file>  
+  -A, --tla-str <var[=val]>       
+      --tla-str-file <var=file>   
+      --tla-code <var[=code]>     
+      --tla-code-file <var=file>  
+  -h, --help                      Print help
 
 ```
 
@@ -238,9 +281,10 @@ local verify_ci = (import 'ci-check.libsonnet').verify_ci;
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 122.0 ± 1.9 | 118.3 | 125.8 | 1.00 |
-| `Go` | 1402.0 ± 31.8 | 1359.7 | 1480.9 | 11.49 ± 0.32 |
-| `Scala` | 869.3 ± 9.6 | 852.0 | 889.4 | 7.12 ± 0.14 |
+| `Rust` | 93.6 ± 0.6 | 92.5 | 94.7 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 263.3 ± 1.8 | 259.0 | 268.4 | 2.81 ± 0.03 |
+| `Go` | 1204.6 ± 5.0 | 1196.0 | 1215.4 | 12.87 ± 0.10 |
+| `Scala` | 720.0 ± 2.9 | 713.4 | 725.3 | 7.70 ± 0.06 |
 
 ### Kube-prometheus manifests
 
@@ -291,10 +335,11 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 113.2 ± 2.9 | 109.7 | 120.1 | 1.00 |
-| `Go` | 2192.3 ± 25.1 | 2166.1 | 2262.2 | 19.36 ± 0.54 |
-| `Scala` | 1117.5 ± 21.9 | 1075.8 | 1152.1 | 9.87 ± 0.31 |
-| `C++` | 88573.2 ± 4833.2 | 84345.6 | 97409.2 | 782.15 ± 47.02 |
+| `Rust` | 129.4 ± 1.4 | 127.7 | 132.8 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 197.0 ± 1.9 | 193.6 | 200.7 | 1.52 ± 0.02 |
+| `Go` | 2127.7 ± 13.8 | 2105.4 | 2151.5 | 16.44 ± 0.21 |
+| `Scala` | 947.9 ± 11.1 | 926.1 | 967.9 | 7.33 ± 0.12 |
+| `C++` | 87633.8 ± 569.9 | 86464.2 | 89118.8 | 677.29 ± 8.72 |
 
 ## Benchmarks from C++ jsonnet (/perf_tests)
 
@@ -313,10 +358,11 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 7.4 ± 0.2 | 6.9 | 8.9 | 1.00 |
-| `Go` | 117.4 ± 5.1 | 112.1 | 139.2 | 15.87 ± 0.85 |
-| `Scala` | 373.1 ± 4.5 | 367.8 | 383.0 | 50.45 ± 1.70 |
-| `C++` | 85.9 ± 2.1 | 82.1 | 90.1 | 11.62 ± 0.46 |
+| `Rust` | 5.6 ± 0.1 | 5.4 | 6.2 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 45.3 ± 0.9 | 43.5 | 47.8 | 8.04 ± 0.25 |
+| `Go` | 98.2 ± 1.6 | 95.0 | 100.8 | 17.45 ± 0.50 |
+| `Scala` | 331.1 ± 5.8 | 322.3 | 343.7 | 58.79 ± 1.73 |
+| `C++` | 76.5 ± 0.7 | 75.4 | 78.0 | 13.59 ± 0.34 |
 
 ### Large string template
 
@@ -324,9 +370,10 @@ local kp =
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 8.2 ± 0.3 | 7.3 | 9.4 | 1.00 |
-| `Scala` | 423.8 ± 5.5 | 416.2 | 437.5 | 51.62 ± 2.00 |
-| `C++` | 15292.1 ± 204.0 | 15070.1 | 15840.7 | 1862.69 ± 72.39 |
+| `Rust` | 6.7 ± 0.1 | 6.4 | 7.1 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 7.1 ± 0.2 | 6.8 | 7.6 | 1.05 ± 0.03 |
+| `Scala` | 392.7 ± 2.7 | 388.2 | 399.8 | 58.29 ± 1.19 |
+| `C++` | 14376.2 ± 35.8 | 14317.5 | 14448.6 | 2133.86 ± 41.53 |
 
 ### Realistic 1
 
@@ -585,10 +632,11 @@ local long_list = [
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 14.6 ± 0.6 | 13.5 | 17.9 | 1.00 |
-| `Go` | 7663.9 ± 114.5 | 7518.9 | 7912.3 | 524.74 ± 24.02 |
-| `Scala` | 414.1 ± 5.4 | 406.8 | 429.4 | 28.35 ± 1.28 |
-| `C++` | 26376.7 ± 354.2 | 25755.3 | 26908.5 | 1806.00 ± 81.81 |
+| `Rust` | 12.6 ± 0.1 | 12.3 | 12.9 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 49.7 ± 1.0 | 47.3 | 53.0 | 3.96 ± 0.09 |
+| `Go` | 6858.1 ± 34.9 | 6815.9 | 6951.8 | 546.32 ± 6.87 |
+| `Scala` | 382.3 ± 3.9 | 371.7 | 387.1 | 30.46 ± 0.47 |
+| `C++` | 24472.7 ± 155.7 | 24230.3 | 24799.3 | 1949.51 ± 25.63 |
 
 ### Realistic 2
 
@@ -707,10 +755,11 @@ function(
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 295.6 ± 8.9 | 285.1 | 319.9 | 1.00 |
-| `Go` | 7540.7 ± 107.5 | 7357.3 | 7792.5 | 25.51 ± 0.85 |
-| `Scala` | 781.0 ± 27.4 | 745.3 | 854.7 | 2.64 ± 0.12 |
-| `C++` | 30144.1 ± 574.5 | 28895.0 | 30967.3 | 101.99 ± 3.62 |
+| `Rust` | 259.9 ± 4.4 | 250.9 | 266.7 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 550.2 ± 16.6 | 531.9 | 600.7 | 2.12 ± 0.07 |
+| `Go` | 6732.4 ± 51.4 | 6660.2 | 6858.6 | 25.90 ± 0.48 |
+| `Scala` | 675.4 ± 10.9 | 667.3 | 720.0 | 2.60 ± 0.06 |
+| `C++` | 26414.5 ± 259.9 | 25948.9 | 26934.4 | 101.63 ± 1.99 |
 
 ## Benchmarks from C++ jsonnet (/benchmarks)
 
@@ -748,10 +797,11 @@ sum(300)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.2 ± 0.1 | 1.9 | 3.6 | 1.00 |
-| `Go` | 6.7 ± 0.6 | 6.0 | 17.0 | 3.10 ± 0.32 |
-| `Scala` | 306.5 ± 2.1 | 302.8 | 311.8 | 141.78 ± 7.81 |
-| `C++` | 34.7 ± 2.2 | 32.6 | 52.1 | 16.04 ± 1.35 |
+| `Rust` | 1.8 ± 0.1 | 1.6 | 2.6 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 3.1 ± 0.1 | 2.8 | 3.4 | 1.69 ± 0.12 |
+| `Go` | 5.3 ± 0.2 | 4.9 | 5.9 | 2.90 ± 0.20 |
+| `Scala` | 287.4 ± 1.2 | 285.4 | 288.9 | 156.55 ± 9.92 |
+| `C++` | 32.1 ± 0.3 | 31.6 | 33.0 | 17.49 ± 1.12 |
 
 ### Inheritance recursion
 
@@ -788,10 +838,11 @@ local Fib = {
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 452.8 ± 20.3 | 425.2 | 494.6 | 1.00 |
-| `Go` | 1076.4 ± 16.2 | 1049.9 | 1111.1 | 2.38 ± 0.11 |
-| `Scala` | 475.5 ± 8.7 | 462.2 | 494.4 | 1.05 ± 0.05 |
-| `C++` | 3029.7 ± 121.1 | 2787.2 | 3214.5 | 6.69 ± 0.40 |
+| `Rust` | 376.1 ± 5.2 | 364.3 | 383.7 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 496.7 ± 13.0 | 470.6 | 506.8 | 1.32 ± 0.04 |
+| `Go` | 873.9 ± 7.1 | 859.3 | 888.0 | 2.32 ± 0.04 |
+| `Scala` | 420.8 ± 6.3 | 413.9 | 437.1 | 1.12 ± 0.02 |
+| `C++` | 2647.5 ± 14.2 | 2630.9 | 2675.6 | 7.04 ± 0.10 |
 
 ### Simple recursive call
 
@@ -828,10 +879,11 @@ fibonacci(25)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 109.2 ± 2.4 | 104.8 | 114.3 | 1.00 |
-| `Go` | 429.0 ± 8.2 | 419.4 | 454.3 | 3.93 ± 0.12 |
-| `Scala` | 338.7 ± 3.2 | 334.6 | 345.6 | 3.10 ± 0.07 |
-| `C++` | 210.0 ± 8.0 | 195.5 | 227.5 | 1.92 ± 0.08 |
+| `Rust` | 81.3 ± 0.3 | 80.9 | 82.4 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 202.3 ± 12.0 | 183.1 | 237.6 | 2.49 ± 0.15 |
+| `Go` | 349.4 ± 1.7 | 347.2 | 354.2 | 4.30 ± 0.03 |
+| `Scala` | 322.5 ± 3.0 | 318.7 | 330.7 | 3.97 ± 0.04 |
+| `C++` | 193.5 ± 0.9 | 191.4 | 194.8 | 2.38 ± 0.01 |
 
 ### Foldl string concat
 
@@ -846,14 +898,15 @@ std.foldl(function(e, res) e + res, std.makeArray(20000, function(i) 'aaaaa'), '
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 12.5 ± 0.6 | 11.4 | 17.3 | 1.00 |
-| `Go` | 64.8 ± 3.1 | 60.8 | 78.8 | 5.16 ± 0.36 |
-| `Scala` | 630.6 ± 15.6 | 606.3 | 659.8 | 50.25 ± 2.83 |
-| `C++` | 1073.3 ± 18.2 | 1041.0 | 1107.6 | 85.53 ± 4.56 |
+| `Rust` | 8.9 ± 0.1 | 8.6 | 9.3 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 303.1 ± 3.8 | 297.6 | 308.1 | 34.06 ± 0.68 |
+| `Go` | 50.9 ± 0.8 | 48.3 | 52.2 | 5.72 ± 0.13 |
+| `Scala` | 550.6 ± 5.5 | 542.8 | 563.7 | 61.86 ± 1.13 |
+| `C++` | 902.6 ± 4.8 | 891.4 | 912.1 | 101.41 ± 1.65 |
 
 ### Array sorts
 
-> Note: No results for Scala, std.reverse is not implemented
+> Note: No results for Scala, sjsonnet doesn't support keyF in std.sort: https://github.com/databricks/sjsonnet/issues/204
 
 <details>
 <summary>Source</summary>
@@ -876,9 +929,10 @@ true
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 4.2 ± 0.1 | 3.9 | 4.9 | 1.00 |
-| `Go` | 14.8 ± 0.5 | 13.7 | 17.8 | 3.51 ± 0.17 |
-| `C++` | 3964.0 ± 187.1 | 3700.2 | 4225.1 | 939.25 ± 55.45 |
+| `Rust` | 3.2 ± 0.2 | 2.9 | 4.1 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 14.4 ± 0.6 | 13.1 | 16.2 | 4.46 ± 0.28 |
+| `Go` | 12.1 ± 0.2 | 11.4 | 12.8 | 3.74 ± 0.20 |
+| `C++` | 3637.1 ± 24.9 | 3557.4 | 3664.7 | 1128.64 ± 56.81 |
 
 ### Lazy array
 
@@ -898,10 +952,11 @@ slowId[15](42)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 58.8 ± 2.0 | 55.6 | 64.2 | 1.00 |
-| `Go` | 661.6 ± 26.6 | 629.6 | 730.1 | 11.25 ± 0.59 |
-| `Scala` | 348.8 ± 6.6 | 339.7 | 365.3 | 5.93 ± 0.23 |
-| `C++` | 206.4 ± 3.3 | 202.5 | 215.2 | 3.51 ± 0.13 |
+| `Rust` | 54.1 ± 1.1 | 52.3 | 56.3 | 1.30 ± 0.03 |
+| `Rust (alternative, rsjsonnet)` | 41.7 ± 0.7 | 39.6 | 43.8 | 1.00 |
+| `Go` | 596.5 ± 5.2 | 585.1 | 606.9 | 14.30 ± 0.29 |
+| `Scala` | 306.6 ± 1.6 | 303.5 | 310.4 | 7.35 ± 0.14 |
+| `C++` | 184.5 ± 1.8 | 182.0 | 187.9 | 4.42 ± 0.09 |
 
 ### Inheritance function recursion
 
@@ -926,10 +981,11 @@ fib(25)
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.6 | 3.3 | 1.00 |
-| `Go` | 3.0 ± 0.2 | 2.7 | 5.1 | 1.58 ± 0.15 |
-| `Scala` | 310.0 ± 9.5 | 299.9 | 341.1 | 161.51 ± 9.88 |
-| `C++` | 1505.6 ± 74.0 | 1363.5 | 1640.8 | 784.26 ± 56.71 |
+| `Rust` | 1.6 ± 0.1 | 1.5 | 2.5 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 2.9 ± 0.1 | 2.7 | 3.7 | 1.78 ± 0.13 |
+| `Go` | 2.4 ± 0.1 | 2.1 | 2.9 | 1.48 ± 0.12 |
+| `Scala` | 293.2 ± 1.5 | 289.9 | 296.1 | 178.20 ± 12.35 |
+| `C++` | 999.1 ± 9.2 | 974.4 | 1010.9 | 607.23 ± 42.34 |
 
 ### String strips
 
@@ -951,10 +1007,11 @@ true
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 9.4 ± 0.3 | 8.7 | 10.4 | 1.00 |
-| `Go` | 15.0 ± 0.5 | 13.9 | 17.6 | 1.60 ± 0.08 |
-| `Scala` | 340.6 ± 5.4 | 333.3 | 359.9 | 36.39 ± 1.36 |
-| `C++` | 37161.7 ± 525.9 | 36471.3 | 38275.4 | 3970.49 ± 145.97 |
+| `Rust` | 8.6 ± 0.2 | 8.4 | 9.5 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 18.4 ± 0.4 | 17.6 | 20.8 | 2.13 ± 0.06 |
+| `Go` | 11.2 ± 0.2 | 10.4 | 11.9 | 1.29 ± 0.04 |
+| `Scala` | 294.9 ± 2.0 | 292.2 | 301.9 | 34.10 ± 0.65 |
+| `C++` | 37345.3 ± 208.2 | 36567.2 | 37689.0 | 4318.10 ± 80.13 |
 
 ### Big object
 
@@ -987,10 +1044,11 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.5 ± 0.1 | 2.3 | 3.3 | 1.00 |
-| `Go` | 5.2 ± 0.3 | 4.6 | 7.0 | 2.07 ± 0.15 |
-| `Scala` | 302.6 ± 6.4 | 290.3 | 312.9 | 120.34 ± 6.71 |
-| `C++` | 29.4 ± 1.4 | 27.7 | 38.5 | 11.71 ± 0.82 |
+| `Rust` | 2.2 ± 0.1 | 1.9 | 3.0 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 3.2 ± 0.1 | 2.9 | 3.5 | 1.46 ± 0.10 |
+| `Go` | 4.1 ± 0.1 | 3.7 | 4.6 | 1.85 ± 0.13 |
+| `Scala` | 292.3 ± 2.9 | 289.3 | 304.0 | 132.11 ± 8.64 |
+| `C++` | 28.3 ± 0.3 | 27.7 | 29.1 | 12.80 ± 0.84 |
 
 ## Benchmarks from Go jsonnet (builtins)
 
@@ -1010,10 +1068,11 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 3.4 ± 0.1 | 3.1 | 4.9 | 1.00 |
-| `Go` | 21.6 ± 0.8 | 19.7 | 27.1 | 6.32 ± 0.34 |
-| `Scala` | 355.0 ± 6.0 | 340.7 | 367.4 | 103.77 ± 4.62 |
-| `C++` | 16359.4 ± 663.5 | 15526.0 | 17805.8 | 4782.25 ± 276.36 |
+| `Rust` | 2.7 ± 0.1 | 2.4 | 3.4 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 2195.9 ± 48.5 | 2098.1 | 2229.6 | 804.07 ± 39.58 |
+| `Go` | 17.0 ± 0.3 | 16.1 | 17.7 | 6.22 ± 0.29 |
+| `Scala` | 313.8 ± 1.2 | 311.3 | 316.1 | 114.91 ± 5.07 |
+| `C++` | 14621.6 ± 110.0 | 14473.9 | 14774.9 | 5354.05 ± 238.94 |
 
 ### std.base64Decode
 
@@ -1031,10 +1090,11 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 3.4 ± 0.2 | 3.1 | 5.3 | 1.00 |
-| `Go` | 21.0 ± 1.5 | 19.6 | 32.2 | 6.24 ± 0.52 |
-| `Scala` | 358.3 ± 7.1 | 349.0 | 379.9 | 106.23 ± 5.27 |
-| `C++` | 10921.3 ± 240.4 | 10653.9 | 11346.7 | 3237.97 ± 163.58 |
+| `Rust` | 2.6 ± 0.1 | 2.3 | 3.1 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 7889.2 ± 74.7 | 7711.6 | 8051.1 | 3045.22 ± 138.95 |
+| `Go` | 15.2 ± 0.3 | 14.6 | 16.5 | 5.85 ± 0.28 |
+| `Scala` | 313.0 ± 2.5 | 309.5 | 321.2 | 120.80 ± 5.47 |
+| `C++` | 9930.9 ± 26.5 | 9895.0 | 9997.9 | 3833.33 ± 171.41 |
 
 ### std.base64DecodeBytes
 
@@ -1052,10 +1112,11 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 45.7 ± 1.4 | 43.6 | 52.1 | 1.00 |
-| `Go` | 303.6 ± 8.4 | 292.1 | 324.7 | 6.64 ± 0.27 |
-| `Scala` | 406.3 ± 8.3 | 397.0 | 424.8 | 8.88 ± 0.32 |
-| `C++` | 10058.3 ± 337.9 | 9738.8 | 10641.5 | 219.86 ± 9.92 |
+| `Rust` | 34.8 ± 0.5 | 33.4 | 36.0 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 8116.2 ± 37.2 | 8049.1 | 8176.2 | 233.52 ± 3.24 |
+| `Go` | 271.1 ± 2.3 | 267.1 | 275.7 | 7.80 ± 0.12 |
+| `Scala` | 357.2 ± 2.3 | 353.5 | 363.4 | 10.28 ± 0.15 |
+| `C++` | 9653.7 ± 22.5 | 9621.4 | 9694.3 | 277.75 ± 3.69 |
 
 ### std.base64 (byte array)
 
@@ -1073,10 +1134,11 @@ local objectBody = std.join('', objContents);
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 37.0 ± 1.8 | 33.7 | 42.5 | 1.00 |
-| `Go` | 195.8 ± 11.5 | 180.9 | 219.5 | 5.28 ± 0.41 |
-| `Scala` | 419.2 ± 13.0 | 396.5 | 454.6 | 11.32 ± 0.66 |
-| `C++` | 15605.3 ± 310.2 | 15173.1 | 16065.6 | 421.22 ± 22.47 |
+| `Rust` | 30.3 ± 0.4 | 29.1 | 31.6 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 1460.8 ± 47.6 | 1375.2 | 1568.3 | 48.26 ± 1.72 |
+| `Go` | 156.5 ± 1.9 | 152.5 | 159.4 | 5.17 ± 0.10 |
+| `Scala` | 355.9 ± 2.9 | 351.4 | 365.6 | 11.76 ± 0.20 |
+| `C++` | 13362.4 ± 88.3 | 13028.4 | 13473.8 | 441.41 ± 7.01 |
 
 ### std.foldl
 
@@ -1093,10 +1155,11 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 7.7 ± 0.7 | 6.8 | 18.5 | 1.00 |
-| `Go` | 32.6 ± 1.1 | 30.6 | 37.8 | 4.26 ± 0.41 |
-| `Scala` | 461.7 ± 8.5 | 445.0 | 484.5 | 60.35 ± 5.54 |
-| `C++` | 320.3 ± 6.0 | 308.6 | 335.0 | 41.87 ± 3.85 |
+| `Rust` | 5.3 ± 0.2 | 5.0 | 6.2 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 81.5 ± 1.6 | 78.9 | 83.8 | 15.38 ± 0.55 |
+| `Go` | 26.6 ± 0.5 | 25.0 | 27.5 | 5.02 ± 0.18 |
+| `Scala` | 405.4 ± 3.0 | 400.9 | 413.6 | 76.52 ± 2.34 |
+| `C++` | 265.3 ± 2.7 | 260.6 | 271.5 | 50.08 ± 1.57 |
 
 ### std.manifestJsonEx
 
@@ -1156,14 +1219,15 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.7 | 3.0 | 1.00 |
-| `Go` | 4.2 ± 0.3 | 3.6 | 8.0 | 2.14 ± 0.18 |
-| `Scala` | 338.9 ± 3.4 | 334.9 | 348.8 | 174.49 ± 8.63 |
-| `C++` | 106.6 ± 3.2 | 102.8 | 113.2 | 54.90 ± 3.12 |
+| `Rust` | 1.7 ± 0.1 | 1.4 | 2.7 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 2.9 ± 0.1 | 2.7 | 3.3 | 1.73 ± 0.13 |
+| `Go` | 3.2 ± 0.1 | 2.7 | 3.8 | 1.92 ± 0.15 |
+| `Scala` | 294.7 ± 1.7 | 291.6 | 299.0 | 175.84 ± 12.30 |
+| `C++` | 101.4 ± 0.8 | 99.3 | 102.9 | 60.48 ± 4.24 |
 
 ### std.manifestTomlEx
 
-> Note: No results for Scala, std.manifestTomlEx is not implemented
+> Note: No results for Scala, std.manifestTomlEx is not implemented: https://github.com/databricks/sjsonnet/issues/111
 
 <details>
 <summary>Source</summary>
@@ -1222,9 +1286,10 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 1.9 ± 0.1 | 1.8 | 2.7 | 1.00 |
-| `Go` | 4.2 ± 0.3 | 3.7 | 8.0 | 2.17 ± 0.19 |
-| `C++` | 1131.6 ± 28.1 | 1089.2 | 1198.7 | 584.01 ± 30.62 |
+| `Rust` | 1.7 ± 0.1 | 1.4 | 2.7 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 7.8 ± 0.2 | 7.3 | 8.5 | 4.65 ± 0.36 |
+| `Go` | 3.2 ± 0.1 | 2.9 | 3.7 | 1.90 ± 0.16 |
+| `C++` | 1046.1 ± 4.9 | 1039.7 | 1053.9 | 622.36 ± 44.25 |
 
 ### std.parseInt
 
@@ -1242,14 +1307,13 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.0 ± 0.1 | 1.7 | 3.2 | 1.00 |
-| `Go` | 3.7 ± 0.4 | 3.1 | 9.0 | 1.85 ± 0.21 |
-| `Scala` | 332.3 ± 7.2 | 326.1 | 359.7 | 168.32 ± 10.37 |
-| `C++` | 110.2 ± 1.9 | 106.9 | 115.1 | 55.82 ± 3.36 |
+| `Rust` | 1.7 ± 0.1 | 1.4 | 2.6 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 2.9 ± 0.1 | 2.6 | 3.4 | 1.71 ± 0.16 |
+| `Go` | 2.8 ± 0.1 | 2.4 | 3.3 | 1.64 ± 0.16 |
+| `Scala` | 292.7 ± 1.7 | 289.2 | 295.8 | 170.68 ± 14.76 |
+| `C++` | 101.0 ± 0.7 | 99.0 | 102.0 | 58.88 ± 5.10 |
 
 ### std.reverse
-
-> Note: No results for Scala, std.reverse is not implemented
 
 <details>
 <summary>Source</summary>
@@ -1265,9 +1329,11 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 59.7 ± 1.9 | 56.3 | 64.7 | 1.00 |
-| `Go` | 363.6 ± 9.0 | 352.8 | 385.1 | 6.09 ± 0.25 |
-| `C++` | 865.9 ± 16.1 | 839.9 | 902.0 | 14.51 ± 0.54 |
+| `Rust` | 45.3 ± 0.5 | 44.0 | 46.5 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 784.1 ± 20.4 | 741.5 | 802.0 | 17.31 ± 0.49 |
+| `Go` | 327.4 ± 2.1 | 323.8 | 331.4 | 7.23 ± 0.10 |
+| `Scala` | 367.0 ± 2.4 | 361.1 | 370.2 | 8.10 ± 0.11 |
+| `C++` | 659.3 ± 5.4 | 644.6 | 666.0 | 14.55 ± 0.21 |
 
 ### std.substr
 
@@ -1285,10 +1351,11 @@ std.foldl(function(acc, value) acc + value, input, '')
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 2.6 ± 0.1 | 2.3 | 3.5 | 1.00 |
-| `Go` | 8.9 ± 0.6 | 8.0 | 15.3 | 3.46 ± 0.29 |
-| `Scala` | 346.6 ± 9.4 | 337.8 | 375.9 | 134.32 ± 7.51 |
-| `C++` | 31.4 ± 1.0 | 29.7 | 36.4 | 12.17 ± 0.72 |
+| `Rust` | 2.2 ± 0.2 | 1.9 | 3.2 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 3.2 ± 0.1 | 3.1 | 3.6 | 1.49 ± 0.11 |
+| `Go` | 6.8 ± 0.2 | 6.3 | 7.4 | 3.12 ± 0.24 |
+| `Scala` | 303.6 ± 3.6 | 300.5 | 318.2 | 139.43 ± 9.76 |
+| `C++` | 29.1 ± 0.4 | 28.3 | 30.2 | 13.36 ± 0.94 |
 
 ### Comparsion for array
 
@@ -1306,9 +1373,10 @@ long_array + [1] < long_array + [2]
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 26.0 ± 0.6 | 25.4 | 30.2 | 1.00 |
-| `Go` | 121.5 ± 6.5 | 116.2 | 141.0 | 4.68 ± 0.28 |
-| `C++` | 147098.5 ± 3334.1 | 135178.4 | 150470.0 | 5663.91 ± 187.03 |
+| `Rust` | 25.7 ± 0.2 | 25.0 | 26.0 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 228.1 ± 7.9 | 214.0 | 245.1 | 8.89 ± 0.31 |
+| `Go` | 150.4 ± 10.4 | 135.9 | 169.4 | 5.86 ± 0.41 |
+| `C++` | 125755.8 ± 989.6 | 123095.8 | 127475.4 | 4901.85 ± 49.12 |
 
 ### Comparsion for primitives
 
@@ -1325,6 +1393,7 @@ long_array + [1] < long_array + [2]
 
 | Command | Mean [ms] | Min [ms] | Max [ms] | Relative |
 |:---|---:|---:|---:|---:|
-| `Rust` | 284.7 ± 10.4 | 267.1 | 315.4 | 1.00 |
-| `Go` | 2009.5 ± 46.0 | 1931.3 | 2108.9 | 7.06 ± 0.31 |
-| `Scala` | 550.0 ± 14.8 | 526.3 | 575.4 | 1.93 ± 0.09 |
+| `Rust` | 385.9 ± 4.2 | 372.4 | 391.5 | 1.00 |
+| `Rust (alternative, rsjsonnet)` | 1287.4 ± 27.0 | 1244.2 | 1335.1 | 3.34 ± 0.08 |
+| `Go` | 1817.1 ± 18.6 | 1779.7 | 1842.9 | 4.71 ± 0.07 |
+| `Scala` | 453.1 ± 3.9 | 448.1 | 462.2 | 1.17 ± 0.02 |

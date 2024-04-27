@@ -39,6 +39,7 @@
           jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
           # I didn't managed to build it, and nixpkgs version is marked as broken
           # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
+          rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix {};
 
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
             inherit craneLib;
@@ -60,55 +61,55 @@
           };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "";
               }
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "";
               }
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
-                drv = jrsonnet.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "current";
               }
               {
-                drv = jrsonnet-nightly.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet-nightly.override {forBenchmarks = true;};
                 name = "current-nightly";
               }
               {
-                drv = jrsonnet-release.overrideAttrs {forBenchmarks = true;};
+                drv = jrsonnet-release.override {forBenchmarks = true;};
                 name = "release";
               }
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet;
+            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {
-                drv = jrsonnet;
+                drv = jrsonnet.override {forBenchmarks = true;};
                 name = "current";
               }
               {
-                drv = jrsonnet-nightly;
+                drv = jrsonnet-nightly.override {forBenchmarks = true;};
                 name = "current-nightly";
               }
               {
-                drv = jrsonnet-release;
+                drv = jrsonnet-release.override {forBenchmarks = true;};
                 name = "release";
               }
             ];
