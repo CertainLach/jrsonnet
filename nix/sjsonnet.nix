@@ -11,11 +11,11 @@
 }:
 stdenv.mkDerivation rec {
   pname = "sjsonnet";
-  version = "0.4.9";
+  version = "0.4.10";
 
   src = fetchurl {
     url = "https://github.com/databricks/${pname}/releases/download/${version}/${pname}-${version}.jar";
-    hash = "sha256-2W5qhe+MFsHQFlbPr7RQO4mx9qRjdfpI1z4qQGcVnYM=";
+    hash = "sha256-zKlmh+jXm23x78CKwna8fGHNqziWuPipSbWTPUCADrY=";
   };
 
   unpackPhase = "true";
