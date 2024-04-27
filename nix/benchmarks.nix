@@ -89,11 +89,6 @@ in
         skipGo ? "",
         vendor ? "",
       }: ''
-        set -oux
-
-        temp=$(mktemp -d)
-        cd $temp
-
         echo >> $out
         echo "### ${name}" >> $out
         echo >> $out
@@ -145,6 +140,11 @@ in
         cat result.md >> $out
       '';
     in ''
+      set -oux
+
+      temp=$(mktemp -d)
+      cd $temp
+
       touch $out
       ${optionalString (!quick) ''
         cat ${./benchmarks.md} >> $out
@@ -173,7 +173,7 @@ in
         echo >> $out
         echo "</details>" >> $out
         echo >> $out
-        echo Rust (alternative): >> $out
+        echo "Rust (alternative):" >> $out
         echo >> $out
         echo "\`\`\`" >> $out
         rsjsonnet --help 2>> $out || true
