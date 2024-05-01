@@ -95,7 +95,11 @@ fn manifest_jsonml(v: &JSONMLValue, buf: &mut String, opts: &XmlJsonmlFormat) ->
 			buf.push('<');
 			buf.push_str(&tag);
 			attrs.run_assertions()?;
-			for (key, value) in attrs.iter() {
+			for (key, value) in attrs.iter(
+				// Not much sense to preserve order here
+				#[cfg(feature = "exp-preserve-order")]
+				false,
+			) {
 				buf.push(' ');
 				buf.push_str(&key);
 				buf.push('=');

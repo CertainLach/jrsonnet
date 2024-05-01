@@ -9,6 +9,15 @@ pub struct PythonFormat {
 	preserve_order: bool,
 }
 
+impl PythonFormat {
+	pub fn std(#[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> Self {
+		Self {
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+}
+
 impl ManifestFormat for PythonFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
 		match val {
@@ -17,6 +26,8 @@ impl ManifestFormat for PythonFormat {
 			Val::Null => buf.push_str("None"),
 			Val::Str(s) => escape_string_json_buf(&s.to_string(), buf),
 			Val::Num(_) => ToStringFormat.manifest_buf(val, buf)?,
+			#[cfg(feature = "exp-bigint")]
+			Val::BigInt(_) => ToStringFormat.manifest_buf(val, buf)?,
 			Val::Arr(arr) => {
 				buf.push('[');
 				for (i, el) in arr.iter().enumerate() {
@@ -57,7 +68,14 @@ pub struct PythonVarsFormat {
 	preserve_order: bool,
 }
 
-impl PythonVarsFormat {}
+impl PythonVarsFormat {
+	pub fn std(#[cfg(feature = "exp-preserve-order")] preserve_order: bool) -> Self {
+		Self {
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		}
+	}
+}
 
 impl ManifestFormat for PythonVarsFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
