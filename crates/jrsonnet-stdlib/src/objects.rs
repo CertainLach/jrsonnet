@@ -57,7 +57,9 @@ pub fn builtin_object_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
 
-	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	o.values_ex(
 		include_hidden,
@@ -99,7 +101,10 @@ pub fn builtin_object_values_all(
 pub fn builtin_object_keys_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	o.key_values_ex(
 		include_hidden,

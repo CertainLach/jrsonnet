@@ -322,6 +322,7 @@ pub fn builtin_flatten_deep_array(value: Val) -> Result<Vec<Val>> {
 #[builtin]
 pub fn builtin_prune(
 	a: Val,
+
 	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
