@@ -1,9 +1,15 @@
+#![allow(clippy::similar_names)]
+
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
 	rc::Rc,
 };
 
+pub use arrays::*;
+pub use compat::*;
+pub use encoding::*;
+pub use hash::*;
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{CallLocation, FuncVal, TlaArg},
@@ -13,40 +19,37 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
-
-mod expr;
-mod types;
-pub use types::*;
-mod arrays;
-pub use arrays::*;
-mod math;
-pub use math::*;
-mod operator;
-pub use operator::*;
-mod sort;
-pub use sort::*;
-mod hash;
-pub use hash::*;
-mod encoding;
-pub use encoding::*;
-mod objects;
-pub use objects::*;
-mod manifest;
 pub use manifest::*;
-mod parse;
-pub use parse::*;
-mod strings;
-pub use strings::*;
-mod misc;
+pub use math::*;
 pub use misc::*;
-mod sets;
+pub use objects::*;
+pub use operator::*;
+pub use parse::*;
 pub use sets::*;
-mod compat;
-pub use compat::*;
-#[cfg(feature = "exp-regex")]
-mod regex;
+pub use sort::*;
+pub use strings::*;
+pub use types::*;
+
 #[cfg(feature = "exp-regex")]
 pub use crate::regex::*;
+
+mod arrays;
+mod compat;
+mod encoding;
+mod expr;
+mod hash;
+mod manifest;
+mod math;
+mod misc;
+mod objects;
+mod operator;
+mod parse;
+#[cfg(feature = "exp-regex")]
+mod regex;
+mod sets;
+mod sort;
+mod strings;
+mod types;
 
 #[allow(clippy::too_many_lines)]
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
@@ -244,9 +247,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		);
 		builder.method(
 			"regexGlobalReplace",
-			builtin_regex_global_replace {
-				cache: regex_cache.clone(),
-			},
+			builtin_regex_global_replace { cache: regex_cache },
 		);
 	};
 
@@ -395,15 +396,16 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	}
 	#[cfg(feature = "legacy-this-file")]
 	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
-		use jrsonnet_evaluator::val::StrValue;
-
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
 		std.field("thisFile")
 			.hide()
-			.value(match source.source_path().path() {
-				Some(p) => self.settings().path_resolver.resolve(p),
-				None => source.source_path().to_string(),
+			.value({
+				let source_path = source.source_path();
+				source_path.path().map_or_else(
+					|| source_path.to_string(),
+					|p| self.settings().path_resolver.resolve(p),
+				)
 			});
 		let stdlib_with_this_file = std.build();
 

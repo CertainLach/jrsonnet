@@ -40,7 +40,7 @@ impl Drop for StackDepthGuard {
 	fn drop(&mut self) {
 		STACK_LIMIT
 			.current_depth
-			.set(STACK_LIMIT.current_depth.get() - 1)
+			.set(STACK_LIMIT.current_depth.get() - 1);
 	}
 	#[cfg(not(feature = "nightly"))]
 	fn drop(&mut self) {
@@ -75,7 +75,7 @@ pub struct StackDepthLimitOverrideGuard {
 impl Drop for StackDepthLimitOverrideGuard {
 	#[cfg(feature = "nightly")]
 	fn drop(&mut self) {
-		STACK_LIMIT.max_stack_size.set(self.old_limit)
+		STACK_LIMIT.max_stack_size.set(self.old_limit);
 	}
 	#[cfg(not(feature = "nightly"))]
 	fn drop(&mut self) {

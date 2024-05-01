@@ -143,6 +143,7 @@ macro_rules! impl_int {
 					_ => unreachable!(),
 				}
 			}
+			#[allow(clippy::cast_lossless)]
 			fn into_untyped(value: Self) -> Result<Val> {
 				Ok(Val::Num(value as f64))
 			}
@@ -199,6 +200,7 @@ macro_rules! impl_bounded_int {
 				}
 			}
 
+			#[allow(clippy::cast_lossless)]
 			fn into_untyped(value: Self) -> Result<Val> {
 				Ok(Val::Num(value.0 as f64))
 			}

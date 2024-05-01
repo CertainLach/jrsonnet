@@ -1,4 +1,4 @@
-use std::{borrow::Cow, fmt::Write};
+use std::{borrow::Cow, fmt::Write, ptr};
 
 use crate::{bail, Result, ResultExt, State, Val};
 
@@ -404,7 +404,7 @@ static ESCAPE: [u8; 256] = [
 
 pub fn escape_string_json_buf(value: &str, buf: &mut String) {
 	// Safety: we only write correct utf-8 in this function
-	let buf: &mut Vec<u8> = unsafe { &mut *(buf as *mut String).cast::<Vec<u8>>() };
+	let buf: &mut Vec<u8> = unsafe { &mut *ptr::from_mut(buf).cast::<Vec<u8>>() };
 	let bytes = value.as_bytes();
 
 	// Perfect for ascii strings, removes any reallocations

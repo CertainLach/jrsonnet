@@ -346,9 +346,9 @@ impl SerializeMap for IntoObjValueSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_key<T: ?Sized>(&mut self, key: &T) -> Result<()>
+	fn serialize_key<T>(&mut self, key: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		let key = key.serialize(IntoValSerializer)?;
 		let key = key.to_string()?;
@@ -356,9 +356,9 @@ impl SerializeMap for IntoObjValueSerializer {
 		Ok(())
 	}
 
-	fn serialize_value<T: ?Sized>(&mut self, value: &T) -> Result<()>
+	fn serialize_value<T>(&mut self, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		let key = self.key.take().expect("no serialize_key called");
 		let value = value.serialize(IntoValSerializer)?;
@@ -367,10 +367,10 @@ impl SerializeMap for IntoObjValueSerializer {
 	}
 
 	// TODO: serialize_key/serialize_value
-	fn serialize_entry<K: ?Sized, V: ?Sized>(&mut self, key: &K, value: &V) -> Result<()>
+	fn serialize_entry<K, V>(&mut self, key: &K, value: &V) -> Result<()>
 	where
-		K: Serialize,
-		V: Serialize,
+		K: ?Sized + Serialize,
+		V: ?Sized + Serialize,
 	{
 		let key = key.serialize(IntoValSerializer)?;
 		let key = key.to_string()?;
@@ -394,9 +394,9 @@ impl SerializeStruct for IntoObjValueSerializer {
 	type Ok = Val;
 	type Error = JrError;
 
-	fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
+	fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		SerializeMap::serialize_entry(self, key, value)?;
 		Ok(())
@@ -411,9 +411,9 @@ impl SerializeStructVariant for IntoObjValueSerializer {
 
 	type Error = JrError;
 
-	fn serialize_field<T: ?Sized>(&mut self, key: &'static str, value: &T) -> Result<()>
+	fn serialize_field<T>(&mut self, key: &'static str, value: &T) -> Result<()>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		SerializeMap::serialize_entry(self, key, value)?;
 		Ok(())
@@ -504,9 +504,9 @@ impl Serializer for IntoValSerializer {
 		Ok(Val::Null)
 	}
 
-	fn serialize_some<T: ?Sized>(self, value: &T) -> Result<Val>
+	fn serialize_some<T>(self, value: &T) -> Result<Val>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		value.serialize(self)
 	}
@@ -528,14 +528,14 @@ impl Serializer for IntoValSerializer {
 		Ok(Val::Str(variant.into()))
 	}
 
-	fn serialize_newtype_struct<T: ?Sized>(self, _name: &'static str, value: &T) -> Result<Val>
+	fn serialize_newtype_struct<T>(self, _name: &'static str, value: &T) -> Result<Val>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		value.serialize(self)
 	}
 
-	fn serialize_newtype_variant<T: ?Sized>(
+	fn serialize_newtype_variant<T>(
 		self,
 		_name: &'static str,
 		_variant_index: u32,
@@ -543,7 +543,7 @@ impl Serializer for IntoValSerializer {
 		value: &T,
 	) -> Result<Val>
 	where
-		T: Serialize,
+		T: ?Sized + Serialize,
 	{
 		let mut out = ObjValue::builder_with_capacity(1);
 		let value = value.serialize(self)?;

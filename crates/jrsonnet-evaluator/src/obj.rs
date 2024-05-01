@@ -88,7 +88,7 @@ mod ordering {
 	}
 }
 
-use ordering::*;
+use ordering::{FieldIndex, FieldSortKey, SuperDepth};
 
 // 0 - add
 //  12 - visibility
