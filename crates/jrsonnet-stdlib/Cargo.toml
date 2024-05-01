@@ -20,11 +20,11 @@ legacy-this-file = []
 # Add order preservation flag to some functions
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
 # Bigint type
-exp-bigint = ["num-bigint", "jrsonnet-evaluator/exp-bigint"]
+exp-bigint = ["dep:num-bigint", "jrsonnet-evaluator/exp-bigint"]
 
 exp-null-coaelse = ["jrsonnet-parser/exp-null-coaelse", "jrsonnet-evaluator/exp-null-coaelse"]
 # std.regexMatch and other helpers
-exp-regex = ["regex", "lru", "rustc-hash"]
+exp-regex = ["dep:regex", "dep:lru", "dep:rustc-hash"]
 
 [dependencies]
 jrsonnet-evaluator.workspace = true
