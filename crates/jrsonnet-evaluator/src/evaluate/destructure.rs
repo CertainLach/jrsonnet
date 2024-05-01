@@ -110,10 +110,7 @@ pub fn destruct(
 						fn get(self: Box<Self>) -> Result<Self::Output> {
 							let full = self.full.evaluate()?;
 							let to = full.len() - self.end;
-							Ok(Val::Arr(
-								full.slice(Some(self.start), Some(to), None)
-									.expect("arguments checked"),
-							))
+							Ok(Val::Arr(full.slice(Some(self.start as i32), Some(to as i32), None)))
 						}
 					}
 

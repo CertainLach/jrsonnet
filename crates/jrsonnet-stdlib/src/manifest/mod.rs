@@ -10,8 +10,8 @@ use jrsonnet_evaluator::{
 };
 pub use python::{PythonFormat, PythonVarsFormat};
 pub use toml::TomlFormat;
-pub use yaml::YamlFormat;
 pub use xml::XmlJsonmlFormat;
+pub use yaml::YamlFormat;
 
 #[builtin]
 pub fn builtin_escape_string_json(str_: IStr) -> Result<String> {
@@ -150,12 +150,30 @@ pub fn builtin_to_string(a: Val) -> Result<IStr> {
 }
 
 #[builtin]
-pub fn builtin_manifest_python(v: Val) -> Result<String> {
-	v.manifest(PythonFormat {})
+pub fn builtin_manifest_python(
+	v: Val,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
+) -> Result<String> {
+	v.manifest(PythonFormat::std(
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	))
 }
 #[builtin]
-pub fn builtin_manifest_python_vars(v: Val) -> Result<String> {
-	v.manifest(PythonVarsFormat {})
+pub fn builtin_manifest_python_vars(
+	v: Val,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
+) -> Result<String> {
+	v.manifest(PythonVarsFormat::std(
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	))
 }
 
 #[builtin]
