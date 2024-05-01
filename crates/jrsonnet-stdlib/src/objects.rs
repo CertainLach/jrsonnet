@@ -8,10 +8,11 @@ use jrsonnet_evaluator::{
 pub fn builtin_object_fields_ex(
 	obj: ObjValue,
 	hidden: bool,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
-) -> Vec<Val> {
+
+	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
-	let preserve_order = preserve_order.unwrap_or(false);
+	preserve_order: bool,
+) -> Vec<Val> {
 	let out = obj.fields_ex(
 		hidden,
 		#[cfg(feature = "exp-preserve-order")]
@@ -23,7 +24,10 @@ pub fn builtin_object_fields_ex(
 #[builtin]
 pub fn builtin_object_fields(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> Vec<Val> {
 	builtin_object_fields_ex(
 		o,
@@ -36,7 +40,10 @@ pub fn builtin_object_fields(
 #[builtin]
 pub fn builtin_object_fields_all(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> Vec<Val> {
 	builtin_object_fields_ex(
 		o,
@@ -49,10 +56,9 @@ pub fn builtin_object_fields_all(
 pub fn builtin_object_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 ) -> ArrValue {
-	#[cfg(feature = "exp-preserve-order")]
-	let preserve_order = preserve_order.unwrap_or(false);
 	o.values_ex(
 		include_hidden,
 		#[cfg(feature = "exp-preserve-order")]
@@ -62,7 +68,10 @@ pub fn builtin_object_values_ex(
 #[builtin]
 pub fn builtin_object_values(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	builtin_object_values_ex(
 		o,
@@ -74,7 +83,10 @@ pub fn builtin_object_values(
 #[builtin]
 pub fn builtin_object_values_all(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	builtin_object_values_ex(
 		o,
@@ -87,10 +99,8 @@ pub fn builtin_object_values_all(
 pub fn builtin_object_keys_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
 ) -> ArrValue {
-	#[cfg(feature = "exp-preserve-order")]
-	let preserve_order = preserve_order.unwrap_or(false);
 	o.key_values_ex(
 		include_hidden,
 		#[cfg(feature = "exp-preserve-order")]
@@ -100,7 +110,10 @@ pub fn builtin_object_keys_values_ex(
 #[builtin]
 pub fn builtin_object_keys_values(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	builtin_object_keys_values_ex(
 		o,
@@ -112,7 +125,10 @@ pub fn builtin_object_keys_values(
 #[builtin]
 pub fn builtin_object_keys_values_all(
 	o: ObjValue,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> ArrValue {
 	builtin_object_keys_values_ex(
 		o,
@@ -141,12 +157,13 @@ pub fn builtin_object_has_all(o: ObjValue, f: IStr) -> bool {
 pub fn builtin_object_remove_key(
 	obj: ObjValue,
 	key: IStr,
+
 	// Standard implementation uses std.objectFields without such argument, we can't
 	// assume order preservation should always be enabled/disabled
-	#[cfg(feature = "exp-preserve-order")] preserve_order: Option<bool>,
-) -> ObjValue {
+	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
-	let preserve_order = preserve_order.unwrap_or(false);
+	preserve_order: bool,
+) -> ObjValue {
 	let mut new_obj = ObjValueBuilder::with_capacity(obj.len() - 1);
 	for (k, v) in obj.iter(
 		#[cfg(feature = "exp-preserve-order")]

@@ -139,8 +139,12 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 }
 
 #[builtin]
-pub fn builtin_sort(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
-	super::sort::sort(arr, keyF.unwrap_or_else(FuncVal::identity))
+pub fn builtin_sort(
+	arr: ArrValue,
+
+	#[default(FuncVal::identity())] keyF: FuncVal,
+) -> Result<ArrValue> {
+	super::sort::sort(arr, keyF)
 }
 
 fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
@@ -174,11 +178,14 @@ fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_uniq(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_uniq(
+	arr: ArrValue,
+
+	#[default(FuncVal::identity())] keyF: FuncVal,
+) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	let keyF = keyF.unwrap_or(FuncVal::identity());
 	if keyF.is_identity() {
 		Ok(ArrValue::eager(uniq_identity(
 			arr.iter().collect::<Result<Vec<Val>>>()?,
@@ -190,11 +197,14 @@ pub fn builtin_uniq(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
 
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_set(arr: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_set(
+	arr: ArrValue,
+
+	#[default(FuncVal::identity())] keyF: FuncVal,
+) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
-	let keyF = keyF.unwrap_or(FuncVal::identity());
 	if keyF.is_identity() {
 		let arr = arr.iter().collect::<Result<Vec<Val>>>()?;
 		let arr = sort_identity(arr)?;

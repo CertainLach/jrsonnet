@@ -1,0 +1,173 @@
+use jrsonnet_evaluator::{
+	bail,
+	manifest::{ManifestFormat, ToStringFormat},
+	typed::{ComplexValType, Either4, Typed, ValType},
+	val::{ArrValue, IndexableVal},
+	Either, ObjValue, Result, ResultExt, Val,
+};
+
+pub struct XmlJsonmlFormat {
+	force_closing: bool,
+}
+impl XmlJsonmlFormat {
+	pub fn std_to_xml() -> Self {
+		Self {
+			force_closing: true,
+		}
+	}
+	pub fn cli() -> Self {
+		Self {
+			force_closing: false,
+		}
+	}
+}
+
+enum JSONMLValue {
+	Tag {
+		tag: String,
+		attrs: ObjValue,
+		children: Vec<JSONMLValue>,
+	},
+	String(String),
+}
+impl Typed for JSONMLValue {
+	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
+
+	fn into_untyped(_typed: Self) -> Result<Val> {
+		unreachable!("not used, reserved for parseXML?")
+	}
+
+	fn from_untyped(untyped: Val) -> Result<Self> {
+		let Val::Arr(arr) = untyped else {
+			if let Val::Str(s) = untyped {
+				return Ok(Self::String(s.to_string()));
+			};
+			bail!("expected JSONML value (an array or string)");
+		};
+		if arr.len() < 1 {
+			bail!("JSONML value should have tag");
+		};
+		let tag = String::from_untyped(
+			arr.get(0)
+				.with_description(|| "getting JSONML tag")?
+				.expect("length checked"),
+		)?;
+		let (has_attrs, attrs) = if arr.len() >= 2 {
+			let maybe_attrs = arr
+				.get(1)
+				.with_description(|| "getting JSONML attrs")?
+				.expect("length checked");
+			if let Val::Obj(attrs) = maybe_attrs {
+				(true, attrs)
+			} else {
+				(false, ObjValue::new_empty())
+			}
+		} else {
+			(false, ObjValue::new_empty())
+		};
+		Ok(Self::Tag {
+			tag,
+			attrs,
+			children: Typed::from_untyped(Val::Arr(arr.slice(
+				Some(if has_attrs { 2 } else { 1 }),
+				None,
+				None,
+			)))?,
+		})
+	}
+}
+
+impl ManifestFormat for XmlJsonmlFormat {
+	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()> {
+		let val = JSONMLValue::from_untyped(val).with_description(|| "parsing JSONML value")?;
+		manifest_jsonml(&val, buf, self)
+	}
+}
+
+fn manifest_jsonml(v: &JSONMLValue, buf: &mut String, opts: &XmlJsonmlFormat) -> Result<()> {
+	match v {
+		JSONMLValue::Tag {
+			tag,
+			attrs,
+			children,
+		} => {
+			let has_children = !children.is_empty();
+			buf.push('<');
+			buf.push_str(&tag);
+			attrs.run_assertions()?;
+			for (key, value) in attrs.iter() {
+				buf.push(' ');
+				buf.push_str(&key);
+				buf.push('=');
+				buf.push('"');
+				let value = value?;
+				let value = if let Val::Str(s) = value {
+					s.to_string()
+				} else {
+					ToStringFormat.manifest(value)?
+				};
+				escape_string_xml_buf(&value, buf);
+				buf.push('"');
+			}
+			if !has_children && !opts.force_closing {
+				buf.push('/');
+			}
+			buf.push('>');
+			for child in children {
+				manifest_jsonml(&child, buf, opts)?;
+			}
+			if has_children || opts.force_closing {
+				buf.push('<');
+				buf.push('/');
+				buf.push_str(&tag);
+				buf.push('>');
+			}
+			Ok(())
+		}
+		JSONMLValue::String(s) => {
+			escape_string_xml_buf(s, buf);
+			Ok(())
+		}
+	}
+}
+
+pub fn escape_string_xml(str: &str) -> String {
+	let mut out = String::new();
+	escape_string_xml_buf(str, &mut out);
+	out
+}
+
+fn escape_string_xml_buf(str: &str, out: &mut String) {
+	if str.is_empty() {
+		return;
+	}
+	let mut remaining = str;
+
+	let mut found = false;
+	while let Some(position) = remaining
+		.bytes()
+		.position(|c| matches!(c, b'<' | b'>' | b'&' | b'"' | b'\''))
+	{
+		found = true;
+
+		let (plain, rem) = remaining.split_at(position);
+		out.push_str(plain);
+
+		out.push_str(match rem.as_bytes()[0] {
+			b'<' => "&lt;",
+			b'>' => "&gt;",
+			b'&' => "&amp;",
+			b'"' => "&quot;",
+			b'\'' => "&apos;",
+			_ => unreachable!("position() searches for those matches"),
+		});
+
+		remaining = &rem[1..];
+	}
+	if !found {
+		// No match - no escapes required
+		out.push_str(&str);
+		return;
+	}
+	out.push_str(&remaining);
+}

@@ -28,6 +28,20 @@ pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
 }
 
 #[builtin]
+pub fn builtin_escape_string_bash(str: String) -> String {
+	const QUOTE: char = '\'';
+	let mut out = str.replace(QUOTE, "'\"'\"'");
+	out.insert(0, QUOTE);
+	out.push(QUOTE);
+	out
+}
+
+#[builtin]
+pub fn builtin_escape_string_dollars(str: String) -> String {
+	str.replace('$', "$$")
+}
+
+#[builtin]
 pub fn builtin_is_empty(str: String) -> bool {
 	str.is_empty()
 }
@@ -63,6 +77,12 @@ pub fn builtin_splitlimitr(str: IStr, c: IStr, maxsplits: Either![usize, M1]) ->
 		}
 		B(_) => str.split(&c as &str).map(Val::string).collect(),
 	}
+}
+
+#[builtin]
+pub fn builtin_split(str: IStr, c: IStr) -> ArrValue {
+	use Either2::*;
+	builtin_splitlimit(str, c, B(M1))
 }
 
 #[builtin]

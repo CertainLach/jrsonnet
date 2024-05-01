@@ -1,6 +1,5 @@
 {
   local std = self,
-  local id = std.id,
 
   thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support.\nThis will slow down stdlib caching a bit, though',
 
@@ -19,8 +18,6 @@
 
   stripChars(str, chars)::
     std.lstripChars(std.rstripChars(str, chars), chars),
-
-  split(str, c):: std.splitLimit(str, c, -1),
 
   mapWithIndex(func, arr)::
     if !std.isFunction(func) then
@@ -55,11 +52,6 @@
     else
       error 'Assertion failed. ' + a + ' != ' + b,
 
-  clamp(x, minVal, maxVal)::
-    if x < minVal then minVal
-    else if x > maxVal then maxVal
-    else x,
-
   manifestIni(ini)::
     local body_lines(body) =
       std.join([], [
@@ -79,97 +71,6 @@
       for k in std.objectFields(ini.sections)
     ];
     std.join('\n', main_body + std.flattenArrays(all_sections) + ['']),
-
-  manifestToml(value):: std.manifestTomlEx(value, '  '),
-
-  escapeStringPython(str)::
-    std.escapeStringJson(str),
-
-  escapeStringBash(str_)::
-    local str = std.toString(str_);
-    local trans(ch) =
-      if ch == "'" then
-        "'\"'\"'"
-      else
-        ch;
-    "'%s'" % std.join('', [trans(ch) for ch in std.stringChars(str)]),
-
-  escapeStringDollars(str_)::
-    local str = std.toString(str_);
-    local trans(ch) =
-      if ch == '$' then
-        '$$'
-      else
-        ch;
-    std.foldl(function(a, b) a + trans(b), std.stringChars(str), ''),
-
-  local xml_escapes = {
-    '<': '&lt;',
-    '>': '&gt;',
-    '&': '&amp;',
-    '"': '&quot;',
-    "'": '&apos;',
-  },
-
-  escapeStringXML(str_)::
-    local str = std.toString(str_);
-    std.join('', [std.get(xml_escapes, ch, ch) for ch in std.stringChars(str)]),
-
-  manifestJson(value):: std.manifestJsonEx(value, '    ') tailstrict,
-
-  manifestJsonMinified(value):: std.manifestJsonEx(value, '', '', ':'),
-
-  manifestYamlStream(value, indent_array_in_object=false, c_document_end=true, quote_keys=true)::
-    if !std.isArray(value) then
-      error 'manifestYamlStream only takes arrays, got ' + std.type(value)
-    else
-      '---\n' + std.join(
-        '\n---\n', [std.manifestYamlDoc(e, indent_array_in_object, quote_keys) for e in value]
-      ) + if c_document_end then '\n...\n' else '\n',
-
-  manifestPython(v)::
-    if std.isObject(v) then
-      local fields = [
-        '%s: %s' % [std.escapeStringPython(k), std.manifestPython(v[k])]
-        for k in std.objectFields(v)
-      ];
-      '{%s}' % [std.join(', ', fields)]
-    else if std.isArray(v) then
-      '[%s]' % [std.join(', ', [std.manifestPython(v2) for v2 in v])]
-    else if std.isString(v) then
-      '%s' % [std.escapeStringPython(v)]
-    else if std.isFunction(v) then
-      error 'cannot manifest function'
-    else if std.isNumber(v) then
-      std.toString(v)
-    else if v == true then
-      'True'
-    else if v == false then
-      'False'
-    else if v == null then
-      'None',
-
-  manifestPythonVars(conf)::
-    local vars = ['%s = %s' % [k, std.manifestPython(conf[k])] for k in std.objectFields(conf)];
-    std.join('\n', vars + ['']),
-
-  manifestXmlJsonml(value)::
-    if !std.isArray(value) then
-      error 'Expected a JSONML value (an array), got %s' % std.type(value)
-    else
-      local aux(v) =
-        if std.isString(v) then
-          v
-        else
-          local tag = v[0];
-          local has_attrs = std.length(v) > 1 && std.isObject(v[1]);
-          local attrs = if has_attrs then v[1] else {};
-          local children = if has_attrs then v[2:] else v[1:];
-          local attrs_str =
-            std.join('', [' %s="%s"' % [k, attrs[k]] for k in std.objectFields(attrs)]);
-          std.deepJoin(['<', tag, attrs_str, '>', [aux(x) for x in children], '</', tag, '>']);
-
-      aux(value),
 
   mergePatch(target, patch)::
     if std.isObject(patch) then
@@ -194,9 +95,6 @@
       }
     else
       patch,
-
-  get(o, f, default=null, inc_hidden=true)::
-    if std.objectHasEx(o, f, inc_hidden) then o[f] else default,
 
   resolvePath(f, r)::
     local arr = std.split(f, '/');

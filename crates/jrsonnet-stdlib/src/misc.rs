@@ -23,6 +23,30 @@ pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> usize {
 	}
 }
 
+#[builtin]
+pub fn builtin_get(
+	o: ObjValue,
+	f: IStr,
+	default: Option<Thunk<Val>>,
+	#[default(true)]
+	inc_hidden: bool,
+) -> Result<Val> {
+	let do_default = move || {
+		let Some(default) = default else {
+			return Ok(Val::Null);
+		};
+		default.evaluate()
+	};
+	// Happy path for invisible fields
+	if !inc_hidden && !o.has_field_ex(f.clone(), false) {
+		return do_default();
+	}
+	let Some(v) = o.get(f)? else {
+		return do_default();
+	};
+	Ok(v)
+}
+
 #[builtin(fields(
 	settings: Rc<RefCell<Settings>>,
 ))]

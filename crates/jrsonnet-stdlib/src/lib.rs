@@ -102,6 +102,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("sign", builtin_sign::INST),
 		("max", builtin_max::INST),
 		("min", builtin_min::INST),
+		("clamp", builtin_clamp::INST),
 		("sum", builtin_sum::INST),
 		("modulo", builtin_modulo::INST),
 		("floor", builtin_floor::INST),
@@ -163,11 +164,20 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("objectRemoveKey", builtin_object_remove_key::INST),
 		// Manifest
 		("escapeStringJson", builtin_escape_string_json::INST),
+		("escapeStringPython", builtin_escape_string_json::INST),
+		("escapeStringXML", builtin_escape_string_xml::INST),
 		("manifestJsonEx", builtin_manifest_json_ex::INST),
+		("manifestJson", builtin_manifest_json::INST),
+		("manifestJsonMinified", builtin_manifest_json_minified::INST),
 		("manifestYamlDoc", builtin_manifest_yaml_doc::INST),
+		("manifestYamlStream", builtin_manifest_yaml_stream::INST),
 		("manifestTomlEx", builtin_manifest_toml_ex::INST),
+		("manifestToml", builtin_manifest_toml::INST),
 		("toString", builtin_to_string::INST),
-		// Parsing
+		("manifestPython", builtin_manifest_python::INST),
+		("manifestPythonVars", builtin_manifest_python_vars::INST),
+		("manifestXmlJsonml", builtin_manifest_xml_jsonml::INST),
+		// Parse
 		("parseJson", builtin_parse_json::INST),
 		("parseYaml", builtin_parse_yaml::INST),
 		// Strings
@@ -175,10 +185,13 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("substr", builtin_substr::INST),
 		("char", builtin_char::INST),
 		("strReplace", builtin_str_replace::INST),
+		("escapeStringBash", builtin_escape_string_bash::INST),
+		("escapeStringDollars", builtin_escape_string_dollars::INST),
 		("isEmpty", builtin_is_empty::INST),
 		("equalsIgnoreCase", builtin_equals_ignore_case::INST),
 		("splitLimit", builtin_splitlimit::INST),
 		("splitLimitR", builtin_splitlimitr::INST),
+		("split", builtin_split::INST),
 		("asciiUpper", builtin_ascii_upper::INST),
 		("asciiLower", builtin_ascii_lower::INST),
 		("findSubstr", builtin_find_substr::INST),
@@ -190,6 +203,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("stringChars", builtin_string_chars::INST),
 		// Misc
 		("length", builtin_length::INST),
+		("get", builtin_get::INST),
 		("startsWith", builtin_starts_with::INST),
 		("endsWith", builtin_ends_with::INST),
 		// Sets

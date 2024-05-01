@@ -2,6 +2,7 @@ use std::{
 	cell::RefCell,
 	fmt::{self, Debug, Display},
 	mem::replace,
+	num::{NonZeroU32, NonZeroUsize},
 	rc::Rc,
 };
 
@@ -277,26 +278,11 @@ impl IndexableVal {
 					.into(),
 				))
 			}
-			Self::Arr(arr) => {
-				let get_idx = |pos: Option<i32>, len: usize, default| match pos {
-					Some(v) if v < 0 => len.saturating_sub((-v) as usize),
-					Some(v) => (v as usize).min(len),
-					None => default,
-				};
-				let index = get_idx(index, arr.len(), 0);
-				let end = get_idx(end, arr.len(), arr.len());
-				let step = step.as_deref().copied().unwrap_or(1);
-
-				if index >= end {
-					return Ok(Self::Arr(ArrValue::empty()));
-				}
-
-				Ok(Self::Arr(
-					arr.clone()
-						.slice(Some(index), Some(end), Some(step))
-						.expect("arguments checked"),
-				))
-			}
+			Self::Arr(arr) => Ok(Self::Arr(arr.clone().slice(
+				index,
+				end,
+				step.map(|v| NonZeroU32::new(v.value() as u32).expect("bounded != 0")),
+			))),
 		}
 	}
 }

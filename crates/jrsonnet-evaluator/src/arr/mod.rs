@@ -1,4 +1,7 @@
-use std::any::Any;
+use std::{
+	any::Any,
+	num::{NonZeroU32, NonZeroUsize},
+};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
@@ -99,28 +102,29 @@ impl ArrValue {
 		Self::new(RangeArray::new_inclusive(a, b))
 	}
 
+	/// # Panics
+	/// If step == 0
 	#[must_use]
-	pub fn slice(
-		self,
-		from: Option<usize>,
-		to: Option<usize>,
-		step: Option<usize>,
-	) -> Option<Self> {
-		let len = self.len();
-		let from = from.unwrap_or(0);
-		let to = to.unwrap_or(len).min(len);
-		let step = step.unwrap_or(1);
+	pub fn slice(self, index: Option<i32>, end: Option<i32>, step: Option<NonZeroU32>) -> Self {
+		let get_idx = |pos: Option<i32>, len: usize, default| match pos {
+			Some(v) if v < 0 => len.saturating_sub((-v) as usize),
+			Some(v) => (v as usize).min(len),
+			None => default,
+		};
+		let index = get_idx(index, self.len(), 0);
+		let end = get_idx(end, self.len(), self.len());
+		let step = step.unwrap_or_else(|| NonZeroU32::new(1).expect("1 != 0"));
 
-		if from >= to || step == 0 {
-			return None;
+		if index >= end {
+			return Self::empty();
 		}
 
-		Some(Self::new(SliceArray {
+		Self::new(SliceArray {
 			inner: self,
-			from: from as u32,
-			to: to as u32,
-			step: step as u32,
-		}))
+			from: index as u32,
+			to: end as u32,
+			step: step.get(),
+		})
 	}
 
 	/// Array length.
