@@ -24,6 +24,12 @@ pub fn builtin_min(a: f64, b: f64) -> f64 {
 	a.min(b)
 }
 
+#[allow(non_snake_case)]
+#[builtin]
+pub fn builtin_clamp(x: f64, minVal: f64, maxVal: f64) -> f64 {
+	x.clamp(minVal, maxVal)
+}
+
 #[builtin]
 pub fn builtin_sum(arr: Vec<f64>) -> f64 {
 	arr.iter().sum()

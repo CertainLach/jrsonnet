@@ -340,7 +340,28 @@ impl ManifestFormat for StringFormat {
 	}
 }
 
-pub struct YamlStreamFormat<I>(pub I);
+pub struct YamlStreamFormat<I> {
+	inner: I,
+	c_document_end: bool,
+	end_newline: bool,
+}
+impl<I> YamlStreamFormat<I> {
+	pub fn std_yaml_stream(inner: I, c_document_end: bool) -> Self {
+		Self {
+			inner,
+			c_document_end,
+			// Stdlib format always inserts newline at the end
+			end_newline: true,
+		}
+	}
+	pub fn cli(inner: I) -> Self {
+		Self {
+			inner,
+			c_document_end: true,
+			end_newline: false,
+		}
+	}
+}
 impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
 		let Val::Arr(arr) = val else {
@@ -353,10 +374,15 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 			for v in arr.iter() {
 				let v = v?;
 				out.push_str("---\n");
-				self.0.manifest_buf(v, out)?;
+				self.inner.manifest_buf(v, out)?;
 				out.push('\n');
 			}
+		}
+		if self.c_document_end {
 			out.push_str("...");
+		}
+		if self.end_newline {
+			out.push('\n');
 		}
 		Ok(())
 	}

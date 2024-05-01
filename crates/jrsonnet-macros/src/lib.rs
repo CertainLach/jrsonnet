@@ -34,6 +34,12 @@ where
 
 	Ok(Some(attr))
 }
+fn remove_attr<I>(attrs: &mut Vec<Attribute>, ident: I)
+where
+	Ident: PartialEq<I>,
+{
+	attrs.retain(|a| !a.path().is_ident(&ident));
+}
 
 fn path_is(path: &Path, needed: &str) -> bool {
 	path.leading_colon.is_none()
@@ -121,10 +127,21 @@ impl Parse for BuiltinAttrs {
 	}
 }
 
+enum Optionality {
+	Required,
+	Optional,
+	Default(Expr),
+}
+impl Optionality {
+	fn is_optional(&self) -> bool {
+		!matches!(self, Self::Required)
+	}
+}
+
 enum ArgInfo {
 	Normal {
 		ty: Box<Type>,
-		is_option: bool,
+		optionality: Optionality,
 		name: Option<String>,
 		cfg_attrs: Vec<Attribute>,
 	},
@@ -138,7 +155,7 @@ enum ArgInfo {
 }
 
 impl ArgInfo {
-	fn parse(name: &str, arg: &FnArg) -> Result<Self> {
+	fn parse(name: &str, arg: &mut FnArg) -> Result<Self> {
 		let FnArg::Typed(arg) = arg else {
 			unreachable!()
 		};
@@ -163,7 +180,10 @@ impl ArgInfo {
 			_ => {}
 		}
 
-		let (is_option, ty) = if let Some(ty) = extract_type_from_option(ty)? {
+		let (optionality, ty) = if let Some(default) = parse_attr::<_, _>(&arg.attrs, "default")? {
+			remove_attr(&mut arg.attrs, "default");
+			(Optionality::Default(default), ty.clone())
+		} else if let Some(ty) = extract_type_from_option(ty)? {
 			if type_is_path(ty, "Thunk").is_some() {
 				return Ok(Self::Lazy {
 					is_option: true,
@@ -171,9 +191,9 @@ impl ArgInfo {
 				});
 			}
 
-			(true, Box::new(ty.clone()))
+			(Optionality::Optional, Box::new(ty.clone()))
 		} else {
-			(false, ty.clone())
+			(Optionality::Required, ty.clone())
 		};
 
 		let cfg_attrs = arg
@@ -185,7 +205,7 @@ impl ArgInfo {
 
 		Ok(Self::Normal {
 			ty,
-			is_option,
+			optionality,
 			name: ident.map(|v| v.to_string()),
 			cfg_attrs,
 		})
@@ -201,18 +221,14 @@ pub fn builtin(
 	let item_fn = item.clone();
 	let item_fn: ItemFn = parse_macro_input!(item_fn);
 
-	match builtin_inner(attr, item_fn, item.into()) {
+	match builtin_inner(attr, item_fn) {
 		Ok(v) => v.into(),
 		Err(e) => e.into_compile_error().into(),
 	}
 }
 
 #[allow(clippy::too_many_lines)]
-fn builtin_inner(
-	attr: BuiltinAttrs,
-	fun: ItemFn,
-	item: proc_macro2::TokenStream,
-) -> syn::Result<TokenStream> {
+fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream> {
 	let ReturnType::Type(_, result) = &fun.sig.output else {
 		return Err(Error::new(
 			fun.sig.span(),
@@ -224,13 +240,13 @@ fn builtin_inner(
 	let args = fun
 		.sig
 		.inputs
-		.iter()
+		.iter_mut()
 		.map(|arg| ArgInfo::parse(&name, arg))
 		.collect::<Result<Vec<_>>>()?;
 
 	let params_desc = args.iter().filter_map(|a| match a {
 		ArgInfo::Normal {
-			is_option,
+			optionality,
 			name,
 			cfg_attrs,
 			..
@@ -238,9 +254,10 @@ fn builtin_inner(
 			let name = name
 				.as_ref()
 				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
+			let is_optional = optionality.is_optional();
 			Some(quote! {
 				#(#cfg_attrs)*
-				BuiltinParam::new(#name, #is_option),
+				BuiltinParam::new(#name, #is_optional),
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
@@ -270,7 +287,7 @@ fn builtin_inner(
 		.map(|(id, a)| match a {
 			ArgInfo::Normal {
 				ty,
-				is_option,
+				optionality,
 				name,
 				cfg_attrs,
 			} => {
@@ -279,17 +296,22 @@ fn builtin_inner(
 					|| format!("argument <{}> evaluation", #name),
 					|| <#ty>::from_untyped(value.evaluate()?),
 				)?};
-				let value = if *is_option {
-					quote! {if let Some(value) = &parsed[#id] {
+				let value = match optionality {
+					Optionality::Required => quote! {{
+						let value = parsed[#id].as_ref().expect("args shape is checked");
+						#eval
+					},},
+					Optionality::Optional => quote! {if let Some(value) = &parsed[#id] {
 						Some(#eval)
 					} else {
 						None
-					},}
-				} else {
-					quote! {{
-						let value = parsed[#id].as_ref().expect("args shape is checked");
+					},},
+					Optionality::Default(expr) => quote! {if let Some(value) = &parsed[#id] {
 						#eval
-					},}
+					} else {
+						let v: #ty = #expr;
+						v
+					},},
 				};
 				quote! {
 					#(#cfg_attrs)*
@@ -302,7 +324,7 @@ fn builtin_inner(
 						Some(value.clone())
 					} else {
 						None
-					}}
+					},}
 				} else {
 					quote! {
 						parsed[#id].as_ref().expect("args shape is correct").clone(),
@@ -343,7 +365,7 @@ fn builtin_inner(
 	};
 
 	Ok(quote! {
-		#item
+		#fun
 
 		#[doc(hidden)]
 		#[allow(non_camel_case_types)]
@@ -373,7 +395,7 @@ fn builtin_inner(
 				fn params(&self) -> &[BuiltinParam] {
 					PARAMS
 				}
-				#[allow(unused_variable)]
+				#[allow(unused_variables)]
 				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
 					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
 

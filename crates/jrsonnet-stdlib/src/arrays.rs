@@ -265,21 +265,18 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 }
 
 #[builtin]
-pub fn builtin_remove_at(arr: ArrValue, at: usize) -> Result<ArrValue> {
+pub fn builtin_remove_at(arr: ArrValue, at: i32) -> Result<ArrValue> {
 	let newArrLeft = arr.clone().slice(None, Some(at), None);
 	let newArrRight = arr.slice(Some(at + 1), None, None);
 
-	Ok(ArrValue::extended(
-		newArrLeft.unwrap_or_else(ArrValue::empty),
-		newArrRight.unwrap_or_else(ArrValue::empty),
-	))
+	Ok(ArrValue::extended(newArrLeft, newArrRight))
 }
 
 #[builtin]
 pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
 	for (index, item) in arr.iter().enumerate() {
 		if equals(&item?, &elem)? {
-			return builtin_remove_at(arr.clone(), index);
+			return builtin_remove_at(arr.clone(), index as i32);
 		}
 	}
 	Ok(arr)
@@ -325,7 +322,9 @@ pub fn builtin_flatten_deep_array(value: Val) -> Result<Vec<Val>> {
 #[builtin]
 pub fn builtin_prune(
 	a: Val,
-	#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
 ) -> Result<Val> {
 	fn is_content(val: &Val) -> bool {
 		match val {
