@@ -9,3 +9,5 @@ jobs:
       - uses: auguwu/clippy-action@1.3.0
         with:
           token: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      checks: write
