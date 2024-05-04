@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	bail,
 	manifest::{escape_string_json_buf, ManifestFormat},
 	val::ArrValue,
-	IStr, ObjValue, Result, Val,
+	IStr, ObjValue, Result, ResultExt, Val, State,
 };
 
 pub struct TomlFormat<'s> {
@@ -106,16 +106,15 @@ fn manifest_value(
 		#[cfg(feature = "exp-bigint")]
 		Val::BigInt(n) => write!(buf, "{n}").unwrap(),
 		Val::Arr(a) => {
-			if a.is_empty() {
-				buf.push_str("[]");
-				return Ok(());
-			}
+			buf.push('[');
+
+			let mut had_items = false;
 			for (i, e) in a.iter().enumerate() {
-				let e = e?;
+				had_items = true;
+				let e = e.with_description(|| format!("elem <{i}> evaluation"))?;
+
 				if i != 0 {
 					buf.push(',');
-				} else {
-					buf.push('[');
 				}
 				if inline {
 					buf.push(' ');
@@ -124,9 +123,15 @@ fn manifest_value(
 					buf.push_str(cur_padding);
 					buf.push_str(&options.padding);
 				}
-				manifest_value(&e, true, buf, "", options)?;
+
+				State::push_description(
+					|| format!("elem <{i}> manifestification"),
+					|| manifest_value(&e, true, buf, "", options),
+				)?;
 			}
-			if inline {
+
+			if !had_items {
+			} else if inline {
 				buf.push(' ');
 			} else {
 				buf.push('\n');
@@ -135,10 +140,10 @@ fn manifest_value(
 			buf.push(']');
 		}
 		Val::Obj(o) => {
-			if o.is_empty() {
-				buf.push_str("{}");
-			}
-			buf.push_str("{ ");
+			o.run_assertions()?;
+			buf.push('{');
+
+			let mut had_fields = false;
 			for (i, (k, v)) in o
 				.iter(
 					#[cfg(feature = "exp-preserve-order")]
@@ -146,15 +151,27 @@ fn manifest_value(
 				)
 				.enumerate()
 			{
-				let v = v?;
+				had_fields = true;
+				let v = v.with_description(|| format!("field <{k}> evaluation"))?;
+
 				if i != 0 {
-					buf.push_str(", ");
+					buf.push(',');
 				}
+				buf.push(' ');
+
 				escape_key_toml_buf(&k, buf);
 				buf.push_str(" = ");
-				manifest_value(&v, true, buf, "", options)?;
+				State::push_description(
+					|| format!("field <{k}> manifestification"),
+					|| manifest_value(&v, true, buf, "", options),
+				)?;
 			}
-			buf.push_str(" }");
+
+			if had_fields {
+				buf.push(' ');
+			}
+
+			buf.push('}');
 		}
 		Val::Null => {
 			bail!("tried to manifest null")

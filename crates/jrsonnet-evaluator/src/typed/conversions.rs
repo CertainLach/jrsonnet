@@ -11,7 +11,7 @@ use crate::{
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	typed::CheckType,
 	val::{IndexableVal, StrValue, ThunkMapper},
-	ObjValue, ObjValueBuilder, Result, Thunk, Val,
+	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
 #[derive(Trace)]
@@ -359,7 +359,12 @@ where
 			unreachable!("typecheck should fail")
 		};
 		a.iter()
-			.map(|r| r.and_then(T::from_untyped))
+			.enumerate()
+			.map(|(i, r)| {
+				r.and_then(|t| {
+					T::from_untyped(t).with_description(|| format!("parsing elem <{i}>"))
+				})
+			})
 			.collect::<Result<Self>>()
 	}
 }
