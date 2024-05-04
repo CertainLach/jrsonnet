@@ -3,7 +3,7 @@ use std::{borrow::Cow, fmt::Write};
 use jrsonnet_evaluator::{
 	bail,
 	manifest::{escape_string_json_buf, ManifestFormat},
-	Result, Val,
+	Result, ResultExt, State, Val,
 };
 
 pub struct YamlFormat<'s> {
@@ -152,80 +152,87 @@ fn manifest_yaml_ex_buf(
 		#[cfg(feature = "exp-bigint")]
 		Val::BigInt(n) => write!(buf, "{}", *n).unwrap(),
 		Val::Arr(a) => {
-			if a.is_empty() {
-				buf.push_str("[]");
-			} else {
-				for (i, item) in a.iter().enumerate() {
-					if i != 0 {
+			let mut had_items = false;
+			for (i, item) in a.iter().enumerate() {
+				had_items = true;
+				let item = item.with_description(|| format!("elem <{i}> evaluation"))?;
+				if i != 0 {
+					buf.push('\n');
+					buf.push_str(cur_padding);
+				}
+				buf.push('-');
+				match &item {
+					Val::Arr(a) if !a.is_empty() => {
 						buf.push('\n');
 						buf.push_str(cur_padding);
+						buf.push_str(&options.padding);
 					}
-					let item = item?;
-					buf.push('-');
-					match &item {
-						Val::Arr(a) if !a.is_empty() => {
-							buf.push('\n');
-							buf.push_str(cur_padding);
-							buf.push_str(&options.padding);
-						}
-						_ => buf.push(' '),
-					}
-					let extra_padding = match &item {
-						Val::Arr(a) => !a.is_empty(),
-						Val::Obj(o) => !o.is_empty(),
-						_ => false,
-					};
-					let prev_len = cur_padding.len();
-					if extra_padding {
-						cur_padding.push_str(&options.padding);
-					}
-					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
-					cur_padding.truncate(prev_len);
+					_ => buf.push(' '),
 				}
+				let extra_padding = match &item {
+					Val::Arr(a) => !a.is_empty(),
+					Val::Obj(o) => !o.is_empty(),
+					_ => false,
+				};
+				let prev_len = cur_padding.len();
+				if extra_padding {
+					cur_padding.push_str(&options.padding);
+				}
+				State::push_description(
+					|| format!("elem <{i}> manifestification"),
+					|| manifest_yaml_ex_buf(&item, buf, cur_padding, options),
+				)?;
+				cur_padding.truncate(prev_len);
+			}
+			if !had_items {
+				buf.push_str("[]");
 			}
 		}
 		Val::Obj(o) => {
-			if o.is_empty() {
-				buf.push_str("{}");
-			} else {
-				for (i, key) in o
-					.fields(
-						#[cfg(feature = "exp-preserve-order")]
-						options.preserve_order,
-					)
-					.iter()
-					.enumerate()
-				{
-					if i != 0 {
+			let mut had_fields = false;
+			for (i, (key, value)) in o
+				.iter(
+					#[cfg(feature = "exp-preserve-order")]
+					options.preserve_order,
+				)
+				.enumerate()
+			{
+				had_fields = true;
+				let value = value.with_description(|| format!("field <{key}> evaluation"))?;
+				if i != 0 {
+					buf.push('\n');
+					buf.push_str(cur_padding);
+				}
+				if !options.quote_keys && !yaml_needs_quotes(&key) {
+					buf.push_str(&key);
+				} else {
+					escape_string_json_buf(&key, buf);
+				}
+				buf.push(':');
+				let prev_len = cur_padding.len();
+				match &value {
+					Val::Arr(a) if !a.is_empty() => {
 						buf.push('\n');
 						buf.push_str(cur_padding);
+						buf.push_str(&options.arr_element_padding);
+						cur_padding.push_str(&options.arr_element_padding);
 					}
-					if !options.quote_keys && !yaml_needs_quotes(key) {
-						buf.push_str(key);
-					} else {
-						escape_string_json_buf(key, buf);
+					Val::Obj(o) if !o.is_empty() => {
+						buf.push('\n');
+						buf.push_str(cur_padding);
+						buf.push_str(&options.padding);
+						cur_padding.push_str(&options.padding);
 					}
-					buf.push(':');
-					let prev_len = cur_padding.len();
-					let item = o.get(key.clone())?.expect("field exists");
-					match &item {
-						Val::Arr(a) if !a.is_empty() => {
-							buf.push('\n');
-							buf.push_str(cur_padding);
-							buf.push_str(&options.arr_element_padding);
-							cur_padding.push_str(&options.arr_element_padding);
-						}
-						Val::Obj(o) if !o.is_empty() => {
-							buf.push('\n');
-							buf.push_str(cur_padding);
-							buf.push_str(&options.padding);
-							cur_padding.push_str(&options.padding);
-						}
-						_ => buf.push(' '),
-					}
-					manifest_yaml_ex_buf(&item, buf, cur_padding, options)?;
-					cur_padding.truncate(prev_len);
+					_ => buf.push(' '),
 				}
+				State::push_description(
+					|| format!("field <{key}> manifestification"),
+					|| manifest_yaml_ex_buf(&value, buf, cur_padding, options),
+				)?;
+				cur_padding.truncate(prev_len);
+			}
+			if !had_fields {
+				buf.push_str("{}");
 			}
 		}
 		Val::Func(_) => bail!("tried to manifest function"),

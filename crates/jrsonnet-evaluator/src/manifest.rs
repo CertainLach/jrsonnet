@@ -183,6 +183,8 @@ fn manifest_json_ex_buf(
 	cur_padding: &mut String,
 	options: &JsonFormat<'_>,
 ) -> Result<()> {
+	use JsonFormatting::*;
+
 	let mtype = options.mtype;
 	match val {
 		Val::Bool(v) => {
@@ -218,89 +220,118 @@ fn manifest_json_ex_buf(
 		}
 		Val::Arr(items) => {
 			buf.push('[');
-			if !items.is_empty() {
-				if mtype != JsonFormatting::ToString && mtype != JsonFormatting::Minify {
-					buf.push_str(options.newline);
-				}
 
-				let old_len = cur_padding.len();
-				cur_padding.push_str(&options.padding);
-				for (i, item) in items.iter().enumerate() {
-					if i != 0 {
-						buf.push(',');
-						if mtype == JsonFormatting::ToString {
-							buf.push(' ');
-						} else if mtype != JsonFormatting::Minify {
-							buf.push_str(options.newline);
-						}
+			let old_len = cur_padding.len();
+			cur_padding.push_str(&options.padding);
+
+			let mut had_items = false;
+			for (i, item) in items.iter().enumerate() {
+				had_items = true;
+				let item = item.with_description(|| format!("elem <{i}> evaluation"))?;
+
+				if i != 0 {
+					buf.push(',');
+				}
+				match mtype {
+					Manifest | Std => {
+						buf.push_str(options.newline);
+						buf.push_str(cur_padding);
 					}
-					buf.push_str(cur_padding);
-					manifest_json_ex_buf(&item?, buf, cur_padding, options)
-						.with_description(|| format!("elem <{i}> manifestification"))?;
-				}
-				cur_padding.truncate(old_len);
+					ToString => buf.push(' '),
+					Minify => {}
+				};
 
-				if mtype != JsonFormatting::ToString && mtype != JsonFormatting::Minify {
+				buf.push_str(cur_padding);
+				State::push_description(
+					|| format!("elem <{i}> manifestification"),
+					|| manifest_json_ex_buf(&item, buf, cur_padding, options),
+				)?;
+			}
+
+			cur_padding.truncate(old_len);
+
+			match mtype {
+				Manifest | ToString if !had_items => {
+					// Empty array as "[ ]"
+					buf.push(' ');
+				}
+				Manifest => {
 					buf.push_str(options.newline);
 					buf.push_str(cur_padding);
 				}
-			} else if mtype == JsonFormatting::Std {
-				buf.push_str(options.newline);
-				buf.push_str(options.newline);
-				buf.push_str(cur_padding);
-			} else if mtype == JsonFormatting::ToString || mtype == JsonFormatting::Manifest {
-				buf.push(' ');
+				Std => {
+					if !had_items {
+						// Stdlib formats empty array as "[\n\n]"
+						buf.push_str(options.newline);
+					}
+					buf.push_str(options.newline);
+					buf.push_str(cur_padding);
+				}
+				Minify | ToString => {}
 			}
+
 			buf.push(']');
 		}
 		Val::Obj(obj) => {
 			obj.run_assertions()?;
 			buf.push('{');
-			let fields = obj.fields(
-				#[cfg(feature = "exp-preserve-order")]
-				options.preserve_order,
-			);
-			if !fields.is_empty() {
-				if mtype != JsonFormatting::ToString && mtype != JsonFormatting::Minify {
-					buf.push_str(options.newline);
-				}
 
-				let old_len = cur_padding.len();
-				cur_padding.push_str(&options.padding);
-				for (i, field) in fields.into_iter().enumerate() {
-					if i != 0 {
-						buf.push(',');
-						if mtype == JsonFormatting::ToString {
-							buf.push(' ');
-						} else if mtype != JsonFormatting::Minify {
-							buf.push_str(options.newline);
-						}
+			let old_len = cur_padding.len();
+			cur_padding.push_str(&options.padding);
+
+			let mut had_fields = false;
+			for (i, (key, value)) in obj
+				.iter(
+					#[cfg(feature = "exp-preserve-order")]
+					options.preserve_order,
+				)
+				.enumerate()
+			{
+				had_fields = true;
+				let value = value.with_description(|| format!("field <{key}> evaluation"))?;
+
+				if i != 0 {
+					buf.push(',');
+				}
+				match mtype {
+					Manifest | Std => {
+						buf.push_str(options.newline);
+						buf.push_str(cur_padding);
 					}
-					buf.push_str(cur_padding);
-					escape_string_json_buf(&field, buf);
-					buf.push_str(options.key_val_sep);
-					State::push_description(
-						|| format!("field <{}> manifestification", field.clone()),
-						|| {
-							let value = obj.get(field.clone())?.unwrap();
-							manifest_json_ex_buf(&value, buf, cur_padding, options)?;
-							Ok(())
-						},
-					)?;
+					ToString => buf.push(' '),
+					Minify => {}
 				}
-				cur_padding.truncate(old_len);
 
-				if mtype != JsonFormatting::ToString && mtype != JsonFormatting::Minify {
+				escape_string_json_buf(&key, buf);
+				buf.push_str(options.key_val_sep);
+				State::push_description(
+					|| format!("field <{key}> manifestification"),
+					|| manifest_json_ex_buf(&value, buf, cur_padding, options),
+				)?;
+			}
+
+			cur_padding.truncate(old_len);
+
+			match mtype {
+				Manifest | ToString if !had_fields => {
+					// Empty object as "{ }"
+					buf.push(' ');
+				}
+				Manifest => {
 					buf.push_str(options.newline);
 					buf.push_str(cur_padding);
 				}
-			} else if mtype == JsonFormatting::Std {
-				buf.push_str(options.newline);
-				buf.push_str(options.newline);
-				buf.push_str(cur_padding);
-			} else if mtype == JsonFormatting::ToString || mtype == JsonFormatting::Manifest {
-				buf.push(' ');
+				Std => {
+					if !had_fields {
+						// Stdlib formats empty object as "{\n\n}"
+						buf.push_str(options.newline);
+					}
+					buf.push_str(options.newline);
+					buf.push_str(cur_padding);
+				}
+				Minify | ToString => {}
 			}
+
 			buf.push('}');
 		}
 		Val::Func(_) => bail!("tried to manifest function"),
@@ -350,7 +381,7 @@ impl<I> YamlStreamFormat<I> {
 		Self {
 			inner,
 			c_document_end,
-			// Stdlib format always inserts newline at the end
+			// Stdlib format always inserts useless newline at the end
 			end_newline: true,
 		}
 	}
@@ -371,10 +402,13 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 			)
 		};
 		if !arr.is_empty() {
-			for v in arr.iter() {
-				let v = v?;
+			for (i, v) in arr.iter().enumerate() {
+				let v = v.with_description(|| format!("elem <{i}> evaluation"))?;
 				out.push_str("---\n");
-				self.inner.manifest_buf(v, out)?;
+				State::push_description(
+					|| format!("elem <{i}> manifestification"),
+					|| self.inner.manifest_buf(v, out),
+				)?;
 				out.push('\n');
 			}
 		}
