@@ -669,17 +669,18 @@ impl ObjectLike for OopObject {
 	}
 
 	fn len(&self) -> usize {
+		// Maybe it will be better to not compute sort key here?
 		self.fields_visibility()
 			.into_iter()
 			.filter(|(_, (visible, _))| *visible)
 			.count()
 	}
 
+	/// Returns false only if there is any visible entry.
+	///
+	/// Note that object with hidden fields `{a:: 1}` will be reported as empty here.
 	fn is_empty(&self) -> bool {
-		if !self.this_entries.is_empty() {
-			return false;
-		}
-		self.sup.as_ref().map_or(true, ObjValue::is_empty)
+		self.len() != 0
 	}
 
 	/// Run callback for every field found in object

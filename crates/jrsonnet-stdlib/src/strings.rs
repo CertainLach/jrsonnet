@@ -28,9 +28,9 @@ pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
 }
 
 #[builtin]
-pub fn builtin_escape_string_bash(str: String) -> String {
+pub fn builtin_escape_string_bash(str_: String) -> String {
 	const QUOTE: char = '\'';
-	let mut out = str.replace(QUOTE, "'\"'\"'");
+	let mut out = str_.replace(QUOTE, "'\"'\"'");
 	out.insert(0, QUOTE);
 	out.push(QUOTE);
 	out
