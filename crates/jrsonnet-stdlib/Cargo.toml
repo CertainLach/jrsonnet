@@ -12,9 +12,13 @@ workspace = true
 
 [features]
 default = ["codegenerated-stdlib"]
-# Speed-up initialization by generating code for parsed stdlib, instead
-# of invoking parser for it
+# Speed-up initialization by generating code for parsed stdlib,
+# instead of invoking parser for it.
+# This is mutually exclusive with `serialized-stdlib`.
 codegenerated-stdlib = ["jrsonnet-parser/structdump"]
+# Use the embedded serialized stdlib.
+# This is mutually exclusive with `codegenerated-stdlib`.
+serialized-stdlib = []
 # Enables legacy `std.thisFile` support, at the cost of worse caching
 legacy-this-file = []
 # Add order preservation flag to some functions
