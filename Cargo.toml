@@ -153,6 +153,8 @@ manual_let_else = "allow"
 # Something is broken about that lint, can't be allowed for
 # codegenerated-stdlib block
 similar_names = "allow"
+# seems to produce false positives
+thread_local_initializer_can_be_made_const = "allow"
 
 #[profile.test]
 #opt-level = 1
