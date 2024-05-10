@@ -8,6 +8,7 @@ struct StackLimit {
 }
 
 #[cfg(feature = "nightly")]
+#[allow(clippy::thread_local_initializer_can_be_made_const)]
 #[thread_local]
 static STACK_LIMIT: StackLimit = StackLimit {
 	max_stack_size: Cell::new(200),
@@ -15,9 +16,11 @@ static STACK_LIMIT: StackLimit = StackLimit {
 };
 #[cfg(not(feature = "nightly"))]
 thread_local! {
-	static STACK_LIMIT: StackLimit = StackLimit {
-		max_stack_size: Cell::new(200),
-		current_depth: Cell::new(0),
+	static STACK_LIMIT: StackLimit = const {
+		StackLimit {
+			max_stack_size: Cell::new(200),
+			current_depth: Cell::new(0),
+		}
 	};
 }
 
