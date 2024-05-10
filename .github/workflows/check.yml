@@ -1,7 +1,8 @@
-on: [ push, pull_request ]
-name: Clippy check
+name: Checks
+on: [ pull_request ]
 jobs:
-  clippy_check:
+  lints:
+    name: Lints
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.1.4
@@ -11,3 +12,11 @@ jobs:
           token: ${{ secrets.GITHUB_TOKEN }}
     permissions:
       checks: write
+  formatting:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+      - uses: actions-rust-lang/rustfmt@v1.1.0
+
