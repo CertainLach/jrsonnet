@@ -398,15 +398,13 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
-		std.field("thisFile")
-			.hide()
-			.value({
-				let source_path = source.source_path();
-				source_path.path().map_or_else(
-					|| source_path.to_string(),
-					|p| self.settings().path_resolver.resolve(p),
-				)
-			});
+		std.field("thisFile").hide().value({
+			let source_path = source.source_path();
+			source_path.path().map_or_else(
+				|| source_path.to_string(),
+				|p| self.settings().path_resolver.resolve(p),
+			)
+		});
 		let stdlib_with_this_file = std.build();
 
 		builder.bind("std", Thunk::evaluated(Val::Obj(stdlib_with_this_file)));
