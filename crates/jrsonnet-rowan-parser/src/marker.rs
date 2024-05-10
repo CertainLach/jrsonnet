@@ -22,6 +22,7 @@ use crate::{
 
 pub struct FinishedRanger {
 	pub start_token: usize,
+	#[allow(dead_code)]
 	pub end_token: usize,
 }
 impl FinishedRanger {
