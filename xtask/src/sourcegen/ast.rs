@@ -62,6 +62,7 @@ pub struct AstEnumSrc {
 
 #[derive(Debug, Clone)]
 pub struct AstTokenEnumSrc {
+	#[allow(dead_code)]
 	pub doc: Vec<String>,
 	pub name: String,
 	pub variants: Vec<String>,

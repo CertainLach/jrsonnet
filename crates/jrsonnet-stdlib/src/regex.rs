@@ -50,16 +50,16 @@ pub fn regex_match_inner(regex: &Regex, str: String) -> Result<Val> {
 
 	for ele in captured.iter().skip(1) {
 		if let Some(ele) = ele {
-			captures.push(Val::Str(StrValue::Flat(ele.as_str().into())))
+			captures.push(Val::Str(StrValue::Flat(ele.as_str().into())));
 		} else {
-			captures.push(Val::Str(StrValue::Flat(IStr::empty())))
+			captures.push(Val::Str(StrValue::Flat(IStr::empty())));
 		}
 	}
 	for (i, name) in regex
 		.capture_names()
 		.skip(1)
 		.enumerate()
-		.flat_map(|(i, v)| Some((i, v?)))
+		.filter_map(|(i, v)| Some((i, v?)))
 	{
 		let capture = captures[i].clone();
 		named_captures.field(name).try_value(capture)?;

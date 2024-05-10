@@ -1,0 +1,25 @@
+name: Checks
+on: [ pull_request ]
+jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/test.yaml
+  lints:
+    name: Lints
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+      - uses: auguwu/clippy-action@1.3.0
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+    permissions:
+      checks: write
+  formatting:
+    name: Formatting
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+      - uses: actions-rust-lang/rustfmt@v1.1.0
+

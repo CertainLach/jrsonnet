@@ -1,0 +1,21 @@
+name: Test
+on: [ workflow_call ]
+jobs:
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+      - run: cargo test --all
+  test-stable:
+    name: Test on stable
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4.1.4
+      - name: Install the latest stable toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+        with:
+          toolchain: stable
+      - run: cargo test --all
+

@@ -1,7 +1,11 @@
 use jrsonnet_parser::LocExpr;
 
 pub fn stdlib_expr() -> LocExpr {
-	#[cfg(feature = "serialized-stdlib")]
+	#[cfg(all(feature = "serialized-stdlib", feature = "codegenerated-stdlib"))]
+	compile_error!(
+		"features `serialized-stdlib` and `codegenerated-stdlib` are mutually exclusive"
+	);
+	#[cfg(all(feature = "serialized-stdlib", not(feature = "codegenerated-stdlib")))]
 	{
 		use bincode::{BincodeRead, DefaultOptions, Options};
 		use serde::{Deserialize, Deserializer};
@@ -77,7 +81,7 @@ pub fn stdlib_expr() -> LocExpr {
 		LocExpr::deserialize(&mut deserializer).unwrap()
 	}
 
-	#[cfg(feature = "codegenerated-stdlib")]
+	#[cfg(all(feature = "codegenerated-stdlib", not(feature = "serialized-stdlib")))]
 	{
 		mod structdump_import {
 			pub(super) use std::{option::Option, rc::Rc, vec};
@@ -88,7 +92,7 @@ pub fn stdlib_expr() -> LocExpr {
 		include!(concat!(env!("OUT_DIR"), "/stdlib.rs"))
 	}
 
-	#[cfg(not(feature = "codegenerated-stdlib"))]
+	#[cfg(not(any(feature = "serialized-stdlib", feature = "codegenerated-stdlib")))]
 	{
 		use jrsonnet_parser::Source;
 

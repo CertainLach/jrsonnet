@@ -1,4 +1,5 @@
-#![cfg(never)]
+// `never`
+#![cfg(any())]
 
 use miette::{
 	Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ThemeCharacters, ThemeStyles,

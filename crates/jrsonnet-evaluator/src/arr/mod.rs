@@ -7,8 +7,7 @@ use jrsonnet_parser::LocExpr;
 use crate::{function::FuncVal, gc::TraceBox, tb, Context, Result, Thunk, Val};
 
 mod spec;
-pub use spec::ArrayLike;
-pub(crate) use spec::*;
+pub use spec::{ArrayLike, *};
 
 /// Represents a Jsonnet array value.
 #[derive(Debug, Clone, Trace)]

@@ -76,13 +76,6 @@ impl ArgLike for TlaArg {
 	}
 }
 
-mod sealed {
-	/// Implemented for `ArgsLike`, where only unnamed arguments present
-	pub trait Unnamed {}
-	/// Implemented for `ArgsLike`, where only named arguments present
-	pub trait Named {}
-}
-
 pub trait ArgsLike {
 	fn unnamed_len(&self) -> usize;
 	fn unnamed_iter(
@@ -182,7 +175,6 @@ impl ArgsLike for ArgsDesc {
 	}
 }
 
-impl<V: ArgLike, S> sealed::Named for HashMap<IStr, V, S> {}
 impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 	fn unnamed_len(&self) -> usize {
 		0
@@ -247,7 +239,6 @@ impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 
 macro_rules! impl_args_like {
 	($count:expr; $($gen:ident)*) => {
-		impl<$($gen: ArgLike,)*> sealed::Unnamed for ($($gen,)*) {}
 		impl<$($gen: ArgLike,)*> ArgsLike for ($($gen,)*) {
 			fn unnamed_len(&self) -> usize {
 				$count
@@ -279,7 +270,6 @@ macro_rules! impl_args_like {
 		}
 		impl<$($gen: ArgLike,)*> OptionalContext for ($($gen,)*) where $($gen: OptionalContext),* {}
 
-		impl<$($gen: ArgLike,)*> sealed::Named for ($((IStr, $gen),)*) {}
 		impl<$($gen: ArgLike,)*> ArgsLike for ($((IStr, $gen),)*) {
 			fn unnamed_len(&self) -> usize {
 				0

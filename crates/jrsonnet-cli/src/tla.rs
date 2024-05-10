@@ -14,7 +14,7 @@ use crate::{ExtFile, ExtStr};
 pub struct TlaOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.
-	/// This is preferred to ExtVars method.
+	/// This is preferred to [`ExtVars`] method.
 	/// If [=data] is not set then it will be read from `name` env variable.
 	#[clap(long, short = 'A', name = "name[=tla data]", number_of_values = 1)]
 	tla_str: Vec<ExtStr>,

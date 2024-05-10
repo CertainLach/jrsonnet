@@ -14,6 +14,7 @@ pub enum TokenKind {
 	Error {
 		grammar_name: String,
 		name: String,
+		#[allow(dead_code)]
 		/// Is this error returned by lexer directly, or from lex.rs
 		is_lexer_error: bool,
 		regex: Option<String>,

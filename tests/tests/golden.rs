@@ -27,11 +27,7 @@ fn run(file: &Path) -> String {
 		Ok(v) => v,
 		Err(e) => return trace_format.format(&e).unwrap(),
 	};
-	match v.manifest(
-		JsonFormat::default(),
-		#[cfg(feature = "exp-preserve-order")]
-		false,
-	) {
+	match v.manifest(JsonFormat::default()) {
 		Ok(v) => v.to_string(),
 		Err(e) => trace_format.format(&e).unwrap(),
 	}
