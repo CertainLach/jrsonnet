@@ -23,7 +23,7 @@ fn reformat(input: &str) -> String {
 
 #[test]
 fn complex_comments_snapshot() {
-	insta::assert_display_snapshot!(reformat(indoc!(
+	insta::assert_snapshot!(reformat(indoc!(
 		"{
 		  comments: {
 			_: '',
