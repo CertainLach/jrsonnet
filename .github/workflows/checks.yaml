@@ -1,6 +1,9 @@
 name: Checks
 on: [ pull_request ]
 jobs:
+  tests:
+    name: Tests
+    uses: ./.github/workflows/test.yaml
   lints:
     name: Lints
     runs-on: ubuntu-latest
