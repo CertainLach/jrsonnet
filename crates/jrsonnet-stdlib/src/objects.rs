@@ -57,7 +57,6 @@ pub fn builtin_object_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
 
-	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
 ) -> ArrValue {
@@ -102,7 +101,6 @@ pub fn builtin_object_keys_values_ex(
 	o: ObjValue,
 	include_hidden: bool,
 
-	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
 ) -> ArrValue {
