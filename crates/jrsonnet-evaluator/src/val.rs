@@ -2,7 +2,7 @@ use std::{
 	cell::RefCell,
 	fmt::{self, Debug, Display},
 	mem::replace,
-	num::{NonZeroU32, NonZeroUsize},
+	num::NonZeroU32,
 	rc::Rc,
 };
 

@@ -218,8 +218,7 @@ pub fn builtin(
 	item: proc_macro::TokenStream,
 ) -> proc_macro::TokenStream {
 	let attr = parse_macro_input!(attr as BuiltinAttrs);
-	let item_fn = item.clone();
-	let item_fn: ItemFn = parse_macro_input!(item_fn);
+	let item_fn = parse_macro_input!(item as ItemFn);
 
 	match builtin_inner(attr, item_fn) {
 		Ok(v) => v.into(),

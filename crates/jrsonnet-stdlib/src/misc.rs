@@ -28,8 +28,7 @@ pub fn builtin_get(
 	o: ObjValue,
 	f: IStr,
 	default: Option<Thunk<Val>>,
-	#[default(true)]
-	inc_hidden: bool,
+	#[default(true)] inc_hidden: bool,
 ) -> Result<Val> {
 	let do_default = move || {
 		let Some(default) = default else {
