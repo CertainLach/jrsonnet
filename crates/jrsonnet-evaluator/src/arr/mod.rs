@@ -11,7 +11,7 @@ pub use spec::{ArrayLike, *};
 
 /// Represents a Jsonnet array value.
 #[derive(Debug, Clone, Trace)]
-// may contrain other ArrValue
+// may contain other ArrValue
 #[trace(tracking(force))]
 pub struct ArrValue(Cc<TraceBox<dyn ArrayLike>>);
 

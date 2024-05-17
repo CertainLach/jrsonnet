@@ -3,22 +3,6 @@
 
   thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support.\nThis will slow down stdlib caching a bit, though',
 
-  lstripChars(str, chars)::
-    if std.length(str) > 0 && std.member(chars, str[0]) then
-      std.lstripChars(str[1:], chars)
-    else
-      str,
-
-  rstripChars(str, chars)::
-    local len = std.length(str);
-    if len > 0 && std.member(chars, str[len - 1]) then
-      std.rstripChars(str[:len - 1], chars)
-    else
-      str,
-
-  stripChars(str, chars)::
-    std.lstripChars(std.rstripChars(str, chars), chars),
-
   mapWithIndex(func, arr)::
     if !std.isFunction(func) then
       error ('std.mapWithIndex first param must be function, got ' + std.type(func))
