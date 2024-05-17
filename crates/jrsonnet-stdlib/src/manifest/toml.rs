@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	bail,
 	manifest::{escape_string_json_buf, ManifestFormat},
 	val::ArrValue,
-	IStr, ObjValue, Result, ResultExt, Val, State,
+	IStr, ObjValue, Result, ResultExt, State, Val,
 };
 
 pub struct TomlFormat<'s> {

@@ -1,9 +1,9 @@
 use jrsonnet_evaluator::{
 	bail,
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::{ComplexValType, Either2, Either4, Typed, ValType},
-	val::{ArrValue, IndexableVal},
-	Either, ObjValue, Result, ResultExt, Val, State,
+	typed::{ComplexValType, Either2, Typed, ValType},
+	val::ArrValue,
+	Either, ObjValue, Result, ResultExt, State, Val,
 };
 
 pub struct XmlJsonmlFormat {
@@ -39,20 +39,20 @@ impl Typed for JSONMLValue {
 
 	fn from_untyped(untyped: Val) -> Result<Self> {
 		let val = <Either![ArrValue, String]>::from_untyped(untyped)
-			.with_description(|| format!("parsing JSONML value (an array or string)"))?;
+			.description("parsing JSONML value (an array or string)")?;
 		let arr = match val {
 			Either2::A(a) => a,
 			Either2::B(s) => return Ok(Self::String(s)),
 		};
-		if arr.len() < 1 {
+		if arr.is_empty() {
 			bail!("JSONML value should have tag (array length should be >=1)");
 		};
 		let tag = String::from_untyped(
 			arr.get(0)
-				.with_description(|| "getting JSONML tag")?
+				.description("getting JSONML tag")?
 				.expect("length checked"),
 		)
-		.with_description(|| format!("parsing JSONML tag"))?;
+		.description("parsing JSONML tag")?;
 
 		let (has_attrs, attrs) = if arr.len() >= 2 {
 			let maybe_attrs = arr
@@ -71,7 +71,7 @@ impl Typed for JSONMLValue {
 			tag,
 			attrs,
 			children: State::push_description(
-				|| format!("parsing children"),
+				|| "parsing children".to_owned(),
 				|| {
 					Typed::from_untyped(Val::Arr(arr.slice(
 						Some(if has_attrs { 2 } else { 1 }),
@@ -100,7 +100,7 @@ fn manifest_jsonml(v: &JSONMLValue, buf: &mut String, opts: &XmlJsonmlFormat) ->
 		} => {
 			let has_children = !children.is_empty();
 			buf.push('<');
-			buf.push_str(&tag);
+			buf.push_str(tag);
 			attrs.run_assertions()?;
 			for (key, value) in attrs.iter(
 				// Not much sense to preserve order here
@@ -125,12 +125,12 @@ fn manifest_jsonml(v: &JSONMLValue, buf: &mut String, opts: &XmlJsonmlFormat) ->
 			}
 			buf.push('>');
 			for child in children {
-				manifest_jsonml(&child, buf, opts)?;
+				manifest_jsonml(child, buf, opts)?;
 			}
 			if has_children || opts.force_closing {
 				buf.push('<');
 				buf.push('/');
-				buf.push_str(&tag);
+				buf.push_str(tag);
 				buf.push('>');
 			}
 			Ok(())
@@ -177,8 +177,8 @@ fn escape_string_xml_buf(str: &str, out: &mut String) {
 	}
 	if !found {
 		// No match - no escapes required
-		out.push_str(&str);
+		out.push_str(str);
 		return;
 	}
-	out.push_str(&remaining);
+	out.push_str(remaining);
 }

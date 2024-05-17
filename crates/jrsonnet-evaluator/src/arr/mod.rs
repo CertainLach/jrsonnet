@@ -1,7 +1,4 @@
-use std::{
-	any::Any,
-	num::{NonZeroU32, NonZeroUsize},
-};
+use std::{any::Any, num::NonZeroU32};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
