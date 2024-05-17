@@ -201,6 +201,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("parseOctal", builtin_parse_octal::INST),
 		("parseHex", builtin_parse_hex::INST),
 		("stringChars", builtin_string_chars::INST),
+		("lstripChars", builtin_lstrip_chars::INST),
+		("rstripChars", builtin_rstrip_chars::INST),
+		("stripChars", builtin_strip_chars::INST),
 		// Misc
 		("length", builtin_length::INST),
 		("get", builtin_get::INST),
