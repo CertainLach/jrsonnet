@@ -2,18 +2,21 @@
   fetchFromGitHub,
   rustPlatform,
   makeWrapper,
+  # This derivation should only be used for benchmarks-against-release task
+  forBenchmarks ? true,
+  _unused ? forBenchmarks,
 }:
 rustPlatform.buildRustPackage rec {
   pname = "jrsonnet";
-  version = "pre9";
+  version = "release";
 
   src = fetchFromGitHub {
     owner = "CertainLach";
     repo = pname;
-    rev = "5dc3b98bcc3b9848031f17165bcc2e86e8a65ba3";
-    hash = "sha256-KM1yqsFzt7Vj4xiEzJJiuFaG49/utF80r9A2dSwCAjo=";
+    rev = "ad68a2495da324ce7a893992a6b32851849c64eb";
+    hash = "sha256-N2z0JcJG6iQ+eAE1GGF+c1+T7Pti8oCgx+QWdhT+33M=";
   };
-  cargoHash = "sha256-y2YiktT1h263vpFaC+kRL8yaAWQThhEkS+NSQ6B6Ylk=";
+  cargoHash = "sha256-A/sdqI51kD7Tfo9R95ep2CecaSEzSz3suhZXdND6/nQ=";
 
   cargoTestFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
   cargoBuildFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
