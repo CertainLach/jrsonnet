@@ -20,13 +20,6 @@
   stripChars(str, chars)::
     std.lstripChars(std.rstripChars(str, chars), chars),
 
-  splitLimitR(str, c, maxsplits)::
-    if maxsplits == -1 then
-      std.splitLimit(str, c, -1)
-    else
-      local revStr(str) = std.join('', std.reverse(std.stringChars(str)));
-      std.map(function(e) revStr(e), std.reverse(std.splitLimit(revStr(str), revStr(c), maxsplits))),
-
   split(str, c):: std.splitLimit(str, c, -1),
 
   mapWithIndex(func, arr)::

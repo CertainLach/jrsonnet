@@ -47,6 +47,21 @@ pub fn builtin_splitlimit(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> 
 }
 
 #[builtin]
+pub fn builtin_splitlimitr(str: IStr, c: IStr, maxsplits: Either![usize, M1]) -> ArrValue {
+	use Either2::*;
+	match maxsplits {
+		A(n) =>
+			// rsplitn does not implement DoubleEndedIterator so collect into
+			// a temporary vec
+			str
+				.rsplitn(n + 1, &c as &str)
+				.map(Val::string)
+				.collect::<Vec<_>>().into_iter().rev().collect(),
+		B(_) => str.split(&c as &str).map(Val::string).collect(),
+	}
+}
+
+#[builtin]
 pub fn builtin_ascii_upper(str: IStr) -> String {
 	str.to_ascii_uppercase()
 }
