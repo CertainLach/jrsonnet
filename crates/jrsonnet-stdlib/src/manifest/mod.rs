@@ -19,6 +19,11 @@ pub fn builtin_escape_string_json(str_: IStr) -> Result<String> {
 }
 
 #[builtin]
+pub fn builtin_escape_string_python(str: IStr) -> Result<String> {
+	Ok(escape_string_json(&str))
+}
+
+#[builtin]
 pub fn builtin_manifest_json_ex(
 	value: Val,
 	indent: String,
@@ -164,13 +169,13 @@ pub fn builtin_manifest_python(
 }
 #[builtin]
 pub fn builtin_manifest_python_vars(
-	v: Val,
+	conf: Val,
 
 	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
 ) -> Result<String> {
-	v.manifest(PythonVarsFormat::std(
+	conf.manifest(PythonVarsFormat::std(
 		#[cfg(feature = "exp-preserve-order")]
 		preserve_order,
 	))

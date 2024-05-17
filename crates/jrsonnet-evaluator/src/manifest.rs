@@ -241,7 +241,6 @@ fn manifest_json_ex_buf(
 					Minify => {}
 				};
 
-				buf.push_str(cur_padding);
 				State::push_description(
 					|| format!("elem <{i}> manifestification"),
 					|| manifest_json_ex_buf(&item, buf, cur_padding, options),
@@ -298,8 +297,8 @@ fn manifest_json_ex_buf(
 						buf.push_str(options.newline);
 						buf.push_str(cur_padding);
 					}
-					ToString => buf.push(' '),
-					Minify => {}
+					ToString if i != 0 => buf.push(' '),
+					Minify | ToString => {}
 				}
 
 				escape_string_json_buf(&key, buf);
