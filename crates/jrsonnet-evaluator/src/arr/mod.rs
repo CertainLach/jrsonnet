@@ -99,8 +99,6 @@ impl ArrValue {
 		Self::new(RangeArray::new_inclusive(a, b))
 	}
 
-	/// # Panics
-	/// If step == 0
 	#[must_use]
 	pub fn slice(self, index: Option<i32>, end: Option<i32>, step: Option<NonZeroU32>) -> Self {
 		let get_idx = |pos: Option<i32>, len: usize, default| match pos {
