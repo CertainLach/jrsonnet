@@ -220,6 +220,13 @@ pub enum IndexableVal {
 	Arr(ArrValue),
 }
 impl IndexableVal {
+	pub fn is_empty(&self) -> bool {
+		match self {
+			Self::Str(s) => s.is_empty(),
+			Self::Arr(s) => s.is_empty(),
+		}
+	}
+
 	pub fn to_array(self) -> ArrValue {
 		match self {
 			Self::Str(s) => ArrValue::chars(s.chars()),

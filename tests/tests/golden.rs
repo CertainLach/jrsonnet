@@ -9,7 +9,6 @@ use jrsonnet_evaluator::{
 	FileImportResolver, State,
 };
 use jrsonnet_stdlib::StateExt;
-
 mod common;
 
 fn run(file: &Path) -> String {
@@ -35,6 +34,8 @@ fn run(file: &Path) -> String {
 
 #[test]
 fn test() -> io::Result<()> {
+	use json_structural_diff::JsonDiff;
+
 	let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 	root.push("golden");
 
@@ -53,6 +54,35 @@ fn test() -> io::Result<()> {
 			fs::write(golden_path, &result)?;
 		} else {
 			let golden = fs::read_to_string(golden_path)?;
+
+			match (serde_json::from_str(&result), serde_json::from_str(&golden)) {
+				(Err(_), Ok(_)) => assert_eq!(
+					result,
+					golden,
+					"unexpected error for golden {}",
+					entry.path().display()
+				),
+				(Ok(_), Err(_)) => assert_eq!(
+					result,
+					golden,
+					"expected error for golden {}",
+					entry.path().display()
+				),
+				(Ok(result), Ok(golden)) => {
+					// Show diff relative to golden`.
+					let diff = JsonDiff::diff_string(&golden, &result, false);
+					if let Some(diff) = diff {
+						panic!(
+							"Result \n{result:#}\n\
+								and golden \n{golden:#}\n\
+								did not match structurally:\n{diff:#}\n\
+								for golden {}",
+							entry.path().display()
+						);
+					}
+				}
+				(Err(_), Err(_)) => {}
+			};
 
 			assert_eq!(
 				result,

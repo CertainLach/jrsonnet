@@ -1,9 +1,11 @@
+use std::collections::BTreeSet;
+
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
 	function::builtin,
-	typed::{Either2, M1},
-	val::ArrValue,
+	typed::{Either2, Typed, M1},
+	val::{ArrValue, IndexableVal},
 	Either, IStr, Val,
 };
 
@@ -215,6 +217,53 @@ pub fn builtin_bigint(v: Either![f64, IStr]) -> Result<Val> {
 	})
 }
 
+#[builtin]
+pub fn builtin_string_chars(str: IStr) -> ArrValue {
+	ArrValue::chars(str.chars())
+}
+
+#[builtin]
+pub fn builtin_lstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+	if str.is_empty() || chars.is_empty() {
+		return Ok(str);
+	}
+
+	let pattern = new_trim_pattern(chars)?;
+	Ok(str.as_str().trim_start_matches(pattern).into())
+}
+
+#[builtin]
+pub fn builtin_rstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+	if str.is_empty() || chars.is_empty() {
+		return Ok(str);
+	}
+
+	let pattern = new_trim_pattern(chars)?;
+	Ok(str.as_str().trim_end_matches(pattern).into())
+}
+
+#[builtin]
+pub fn builtin_strip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+	if str.is_empty() || chars.is_empty() {
+		return Ok(str);
+	}
+
+	let pattern = new_trim_pattern(chars)?;
+	Ok(str.as_str().trim_matches(pattern).into())
+}
+
+fn new_trim_pattern(chars: IndexableVal) -> Result<impl Fn(char) -> bool> {
+	let chars: BTreeSet<char> = match chars {
+		IndexableVal::Str(chars) => chars.chars().collect(),
+		IndexableVal::Arr(chars) => chars
+			.iter()
+			.filter_map(|it| it.map(|it| char::from_untyped(it).ok()).transpose())
+			.collect::<Result<_, _>>()?,
+	};
+
+	Ok(move |char| chars.contains(&char))
+}
+
 #[cfg(test)]
 mod tests {
 	use super::*;
@@ -242,9 +291,4 @@ mod tests {
 		assert_eq!(parse_nat::<16>("a9").unwrap(), 0xA9 as f64);
 		assert_eq!(parse_nat::<16>("BbC").unwrap(), 0xBBC as f64);
 	}
-}
-
-#[builtin]
-pub fn builtin_string_chars(str: IStr) -> ArrValue {
-	ArrValue::chars(str.chars())
 }
