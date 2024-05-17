@@ -37,8 +37,8 @@ pub fn builtin_escape_string_bash(str_: String) -> String {
 }
 
 #[builtin]
-pub fn builtin_escape_string_dollars(str: String) -> String {
-	str.replace('$', "$$")
+pub fn builtin_escape_string_dollars(str_: String) -> String {
+	str_.replace('$', "$$")
 }
 
 #[builtin]
