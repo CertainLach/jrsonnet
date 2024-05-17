@@ -1,0 +1,20 @@
+{
+    "split": [
+        "ab",
+        "cd",
+        "ef"
+    ],
+    "splitlimit": [
+        "ab",
+        "cd::ef"
+    ],
+    "splitlimitR": [
+        "ab::cd",
+        "ef"
+    ],
+    "splitlimitRNoLimit": [
+        "ab",
+        "cd",
+        "ef"
+    ]
+}
