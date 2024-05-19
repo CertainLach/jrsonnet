@@ -253,10 +253,14 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			let name = name
 				.as_ref()
 				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
-			let is_optional = optionality.is_optional();
+			let default = match optionality {
+				Optionality::Required => quote!(ParamDefault::None),
+				Optionality::Optional => quote!(ParamDefault::Exists),
+				Optionality::Default(e) => quote!(ParamDefault::Literal(stringify!(#e))),
+			};
 			Some(quote! {
 				#(#cfg_attrs)*
-				BuiltinParam::new(#name, #is_optional),
+				BuiltinParam::new(#name, #default),
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
@@ -264,7 +268,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				.as_ref()
 				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
 			Some(quote! {
-				BuiltinParam::new(#name, #is_option),
+				BuiltinParam::new(#name, ParamDefault::exists(#is_option)),
 			})
 		}
 		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
@@ -375,7 +379,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				State, Val,
-				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName}, CallLocation, ArgsLike, parse::parse_builtin_call},
+				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				Result, Context, typed::Typed,
 				parser::ExprLocation,
 			};

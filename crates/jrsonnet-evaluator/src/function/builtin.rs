@@ -33,22 +33,40 @@ impl PartialEq<IStr> for ParamName {
 	}
 }
 
+#[derive(Clone, Copy, Debug, Trace)]
+pub enum ParamDefault {
+	None,
+	Exists,
+	Literal(&'static str),
+}
+impl ParamDefault {
+	pub const fn exists(is_exists: bool) -> Self {
+		if is_exists {
+			Self::Exists
+		} else {
+			Self::None
+		}
+	}
+}
+
 #[derive(Clone, Trace)]
 pub struct BuiltinParam {
 	name: ParamName,
-	has_default: bool,
+	default: ParamDefault,
 }
 impl BuiltinParam {
-	pub const fn new(name: ParamName, has_default: bool) -> Self {
-		Self { name, has_default }
+	pub const fn new(name: ParamName, default: ParamDefault) -> Self {
+		Self { name, default }
 	}
 	/// Parameter name for named call parsing
 	pub fn name(&self) -> &ParamName {
 		&self.name
 	}
-	/// Is implementation allowed to return empty value
+	pub fn default(&self) -> ParamDefault {
+		self.default
+	}
 	pub fn has_default(&self) -> bool {
-		self.has_default
+		!matches!(self.default, ParamDefault::None)
 	}
 }
 
@@ -87,7 +105,7 @@ impl NativeCallback {
 				.into_iter()
 				.map(|n| BuiltinParam {
 					name: ParamName::new_dynamic(n),
-					has_default: false,
+					default: ParamDefault::Exists,
 				})
 				.collect(),
 			handler: tb!(handler),

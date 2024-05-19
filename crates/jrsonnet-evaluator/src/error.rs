@@ -10,7 +10,12 @@ use jrsonnet_parser::{BinaryOpType, ExprLocation, LocExpr, Source, SourcePath, U
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
-use crate::{function::CallLocation, stdlib::format::FormatError, typed::TypeLocError, ObjValue};
+use crate::{
+	function::{builtin::ParamDefault, CallLocation},
+	stdlib::format::FormatError,
+	typed::TypeLocError,
+	ObjValue,
+};
 
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
@@ -43,7 +48,7 @@ fn format_signature(sig: &FunctionSignature) -> String {
 	if sig.is_empty() {
 		out.push_str("/*no arguments*/");
 	} else {
-		for (i, (name, has_default)) in sig.iter().enumerate() {
+		for (i, (name, default)) in sig.iter().enumerate() {
 			if i != 0 {
 				out.push_str(", ");
 			}
@@ -52,8 +57,13 @@ fn format_signature(sig: &FunctionSignature) -> String {
 			} else {
 				out.push_str("<unnamed>");
 			}
-			if *has_default {
-				out.push_str(" = <default>");
+			match default {
+				ParamDefault::None => {}
+				ParamDefault::Exists => out.push_str(" = <default>"),
+				ParamDefault::Literal(lit) => {
+					out.push_str(" = ");
+					out.push_str(lit);
+				}
 			}
 		}
 	}
@@ -88,7 +98,7 @@ pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
 	heap.into_iter().map(|v| v.1).collect()
 }
 
-type FunctionSignature = Vec<(Option<IStr>, bool)>;
+type FunctionSignature = Vec<(Option<IStr>, ParamDefault)>;
 
 /// Possible errors
 #[allow(missing_docs)]
