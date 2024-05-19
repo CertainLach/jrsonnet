@@ -6,7 +6,7 @@ use jrsonnet_evaluator::{
 	runtime_error,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal},
-	Either, IStr, ObjValueBuilder, Result, ResultExt, Thunk, Val,
+	Either, IStr, ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
 pub fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
@@ -65,6 +65,16 @@ pub fn builtin_map(func: FuncVal, arr: IndexableVal) -> ArrValue {
 pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
 	let arr = arr.to_array();
 	arr.map_with_index(func)
+}
+
+#[builtin]
+pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
+	let mut out = ObjValueBuilder::new();
+	for (k, v) in obj.iter() {
+		let v = v?;
+		out.field(k).value(func.evaluate_simple(&(v,), false)?);
+	}
+	Ok(out.build())
 }
 
 #[builtin]
