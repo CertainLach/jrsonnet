@@ -11,9 +11,6 @@
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
 
-  lines(arr)::
-    std.join('\n', arr + ['']),
-
   deepJoin(arr)::
     if std.isString(arr) then
       arr

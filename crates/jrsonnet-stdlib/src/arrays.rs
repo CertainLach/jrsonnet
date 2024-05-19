@@ -201,6 +201,14 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 }
 
 #[builtin]
+pub fn builtin_lines(arr: ArrValue) -> Result<IndexableVal> {
+	builtin_join(
+		IndexableVal::Str("\n".into()),
+		ArrValue::extended(arr, ArrValue::eager(vec![Val::string("")])).into(),
+	)
+}
+
+#[builtin]
 pub fn builtin_reverse(arr: ArrValue) -> ArrValue {
 	arr.reversed()
 }
