@@ -1,8 +1,10 @@
+mod ini;
 mod python;
 mod toml;
 mod xml;
 mod yaml;
 
+pub use ini::IniFormat;
 use jrsonnet_evaluator::{
 	function::builtin,
 	manifest::{escape_string_json, JsonFormat, YamlStreamFormat},
@@ -189,4 +191,18 @@ pub fn builtin_escape_string_xml(str_: String) -> String {
 #[builtin]
 pub fn builtin_manifest_xml_jsonml(value: Val) -> Result<String> {
 	value.manifest(XmlJsonmlFormat::std_to_xml())
+}
+
+#[builtin]
+pub fn builtin_manifest_ini(
+	ini: Val,
+
+	#[default(false)]
+	#[cfg(feature = "exp-preserve-order")]
+	preserve_order: bool,
+) -> Result<String> {
+	ini.manifest(IniFormat::std(
+		#[cfg(feature = "exp-preserve-order")]
+		preserve_order,
+	))
 }
