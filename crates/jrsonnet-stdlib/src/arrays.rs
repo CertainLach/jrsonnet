@@ -208,6 +208,14 @@ pub fn builtin_lines(arr: ArrValue) -> Result<IndexableVal> {
 	)
 }
 
+#[builtin]
+pub fn builtin_resolve_path(f: String, r: String) -> String {
+	let Some(pos) = f.rfind('/') else {
+		return r;
+	};
+	format!("{}{}", &f[..=pos], r)
+}
+
 pub fn deep_join_inner(out: &mut String, arr: IndexableVal) -> Result<()> {
 	use std::fmt::Write;
 	match arr {

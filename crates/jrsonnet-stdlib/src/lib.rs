@@ -86,6 +86,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("range", builtin_range::INST),
 		("join", builtin_join::INST),
 		("lines", builtin_lines::INST),
+		("resolvePath", builtin_resolve_path::INST),
 		("deepJoin", builtin_deep_join::INST),
 		("reverse", builtin_reverse::INST),
 		("any", builtin_any::INST),
