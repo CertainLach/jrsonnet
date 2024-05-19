@@ -8,10 +8,11 @@ fn example_native(a: u32, b: u32) -> u32 {
 
 #[test]
 fn std_native() {
-	let state = State::default();
-	let std = ContextInitializer::new(state.clone(), PathResolver::Absolute);
+	let mut state = State::builder();
+	let std = ContextInitializer::new(PathResolver::Absolute);
 	std.add_native("example", example_native::INST);
-	state.set_context_initializer(std);
+	state.context_initializer(std);
+	let state = state.build();
 
 	assert!(state
 		.evaluate_snippet("test", "std.native('example')(1, 3) == 4")

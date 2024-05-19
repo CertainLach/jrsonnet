@@ -1,8 +1,10 @@
 use jrsonnet_evaluator::{
 	bail,
 	function::{builtin, FuncVal},
-	ObjValueBuilder, Result, State, Thunk, Val,
+	parser::Source,
+	ContextBuilder, ContextInitializer as ContextInitializerT, ObjValueBuilder, Result, Thunk, Val,
 };
+use jrsonnet_gcmodule::Trace;
 
 #[macro_export]
 macro_rules! ensure_eq {
@@ -74,11 +76,18 @@ fn param_names(fun: FuncVal) -> Vec<String> {
 	}
 }
 
-#[allow(dead_code)]
-pub fn with_test(s: &State) {
-	let mut bobj = ObjValueBuilder::new();
-	bobj.method("assertThrow", assert_throw::INST);
-	bobj.method("paramNames", param_names::INST);
+#[derive(Trace)]
+pub struct ContextInitializer;
+impl ContextInitializerT for ContextInitializer {
+	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
+		let mut bobj = ObjValueBuilder::new();
+		bobj.method("assertThrow", assert_throw::INST);
+		bobj.method("paramNames", param_names::INST);
 
-	s.add_global("test".into(), Thunk::evaluated(Val::Obj(bobj.build())))
+		builder.bind("test", Thunk::evaluated(Val::Obj(bobj.build())));
+	}
+
+	fn as_any(&self) -> &dyn std::any::Any {
+		self
+	}
 }

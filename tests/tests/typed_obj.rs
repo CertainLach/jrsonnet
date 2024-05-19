@@ -2,8 +2,8 @@ mod common;
 
 use std::fmt::Debug;
 
-use jrsonnet_evaluator::{typed::Typed, Result, State};
-use jrsonnet_stdlib::StateExt;
+use jrsonnet_evaluator::{trace::PathResolver, typed::Typed, Result, State};
+use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone, Typed, PartialEq, Debug)]
 struct A {
@@ -23,8 +23,10 @@ fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T) -> Result<()> 
 
 #[test]
 fn simple_object() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let a = A::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?)?;
 	ensure_eq!(a, A { a: 1, b: 2 });
 	test_roundtrip(a)?;
@@ -40,8 +42,10 @@ struct B {
 
 #[test]
 fn renamed_field() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let b = B::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, c: 2}")?)?;
 	ensure_eq!(b, B { a: 1, b: 2 });
 	ensure_eq!(
@@ -69,8 +73,10 @@ struct Object {
 
 #[test]
 fn flattened_object() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let obj = Object::from_untyped(
 		s.evaluate_snippet("snip".to_owned(), "{apiVersion: 'ver', kind: 'kind', b: 2}")?,
 	)?;
@@ -100,8 +106,10 @@ struct C {
 
 #[test]
 fn optional_field_some() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{a: 1, b: 2}")?)?;
 	ensure_eq!(c, C { a: Some(1), b: 2 });
 	ensure_eq!(
@@ -114,8 +122,10 @@ fn optional_field_some() -> Result<()> {
 
 #[test]
 fn optional_field_none() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let c = C::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2}")?)?;
 	ensure_eq!(c, C { a: None, b: 2 });
 	ensure_eq!(
@@ -140,8 +150,10 @@ struct E {
 
 #[test]
 fn flatten_optional_some() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let d = D::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2, v:1}")?)?;
 	ensure_eq!(
 		d,
@@ -160,8 +172,10 @@ fn flatten_optional_some() -> Result<()> {
 
 #[test]
 fn flatten_optional_none() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let s = s.build();
+
 	let d = D::from_untyped(s.evaluate_snippet("snip".to_owned(), "{b: 2, v: '1'}")?)?;
 	ensure_eq!(d, D { e: None, b: 2 });
 	ensure_eq!(

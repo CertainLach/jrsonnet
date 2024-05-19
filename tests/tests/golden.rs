@@ -8,14 +8,19 @@ use jrsonnet_evaluator::{
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State,
 };
-use jrsonnet_stdlib::StateExt;
+use jrsonnet_stdlib::ContextInitializer;
 mod common;
+use common::ContextInitializer as TestContextInitializer;
 
 fn run(file: &Path) -> String {
-	let s = State::default();
-	s.with_stdlib();
-	common::with_test(&s);
-	s.set_import_resolver(FileImportResolver::default());
+	let mut s = State::builder();
+	s.context_initializer((
+		ContextInitializer::new(PathResolver::new_cwd_fallback()),
+		TestContextInitializer,
+	))
+	.import_resolver(FileImportResolver::default());
+	let s = s.build();
+
 	let trace_format = CompactFormat {
 		resolver: PathResolver::FileName,
 		max_trace: 20,

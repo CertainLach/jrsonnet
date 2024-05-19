@@ -27,7 +27,7 @@ pub mod val;
 
 use std::{
 	any::Any,
-	cell::{Ref, RefCell, RefMut},
+	cell::{RefCell, RefMut},
 	fmt::{self, Debug},
 	path::Path,
 };
@@ -147,24 +147,6 @@ impl_context_initializer! {
 	A @ B C D E F G
 }
 
-/// Dynamically reconfigurable evaluation settings
-#[derive(Trace)]
-pub struct EvaluationSettings {
-	/// Context initializer, which will be used for imports and everything
-	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
-	pub context_initializer: TraceBox<dyn ContextInitializer>,
-	/// Used to resolve file locations/contents
-	pub import_resolver: TraceBox<dyn ImportResolver>,
-}
-impl Default for EvaluationSettings {
-	fn default() -> Self {
-		Self {
-			context_initializer: tb!(()),
-			import_resolver: tb!(DummyImportResolver),
-		}
-	}
-}
-
 #[derive(Trace)]
 struct FileData {
 	string: Option<IStr>,
@@ -207,16 +189,19 @@ impl FileData {
 	}
 }
 
-#[derive(Default, Trace)]
+#[derive(Trace)]
 pub struct EvaluationStateInternals {
 	/// Internal state
 	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
-	/// Settings, safe to change at runtime
-	settings: RefCell<EvaluationSettings>,
+	/// Context initializer, which will be used for imports and everything
+	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
+	context_initializer: TraceBox<dyn ContextInitializer>,
+	/// Used to resolve file locations/contents
+	import_resolver: TraceBox<dyn ImportResolver>,
 }
 
 /// Maintains stack trace and import resolution
-#[derive(Default, Clone, Trace)]
+#[derive(Clone, Trace)]
 pub struct State(Cc<EvaluationStateInternals>);
 
 impl State {
@@ -228,7 +213,7 @@ impl State {
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
 			RawEntryMut::Vacant(v) => {
-				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				let data = self.import_resolver().load_file_contents(&path)?;
 				v.insert(
 					path.clone(),
 					FileData::new_string(
@@ -252,7 +237,7 @@ impl State {
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
 			RawEntryMut::Vacant(v) => {
-				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				let data = self.import_resolver().load_file_contents(&path)?;
 				v.insert(path.clone(), FileData::new_bytes(data.as_slice().into()))
 					.1
 			}
@@ -279,7 +264,7 @@ impl State {
 		let file = match file {
 			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
 			RawEntryMut::Vacant(v) => {
-				let data = self.settings().import_resolver.load_file_contents(&path)?;
+				let data = self.import_resolver().load_file_contents(&path)?;
 				v.insert(
 					path.clone(),
 					FileData::new_string(
@@ -350,8 +335,7 @@ impl State {
 
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self, source: Source) -> Context {
-		let context_initializer = &self.settings().context_initializer;
-		context_initializer.initialize(self.clone(), source)
+		self.context_initializer().initialize(self.clone(), source)
 	}
 
 	/// Creates context with all passed global variables, calling custom modifier
@@ -360,7 +344,7 @@ impl State {
 		source: Source,
 		context_initializer: impl ContextInitializer,
 	) -> Context {
-		let default_initializer = &self.settings().context_initializer;
+		let default_initializer = self.context_initializer();
 		let mut builder = ContextBuilder::with_capacity(
 			self.clone(),
 			default_initializer.reserve_vars() + context_initializer.reserve_vars(),
@@ -408,49 +392,6 @@ impl State {
 impl State {
 	fn file_cache(&self) -> RefMut<'_, GcHashMap<SourcePath, FileData>> {
 		self.0.file_cache.borrow_mut()
-	}
-	pub fn settings(&self) -> Ref<'_, EvaluationSettings> {
-		self.0.settings.borrow()
-	}
-	pub fn settings_mut(&self) -> RefMut<'_, EvaluationSettings> {
-		self.0.settings.borrow_mut()
-	}
-	pub fn add_global(&self, name: IStr, value: Thunk<Val>) {
-		#[derive(Trace)]
-		struct GlobalsCtx {
-			globals: RefCell<GcHashMap<IStr, Thunk<Val>>>,
-			inner: TraceBox<dyn ContextInitializer>,
-		}
-		impl ContextInitializer for GlobalsCtx {
-			fn reserve_vars(&self) -> usize {
-				self.inner.reserve_vars() + self.globals.borrow().len()
-			}
-			fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
-				self.inner.populate(for_file, builder);
-				for (name, val) in self.globals.borrow().iter() {
-					builder.bind(name.clone(), val.clone());
-				}
-			}
-
-			fn as_any(&self) -> &dyn Any {
-				self
-			}
-		}
-		let mut settings = self.settings_mut();
-		let initializer = &mut settings.context_initializer;
-		if let Some(global) = initializer.as_any().downcast_ref::<GlobalsCtx>() {
-			global.globals.borrow_mut().insert(name, value);
-		} else {
-			let inner = std::mem::replace(&mut settings.context_initializer, tb!(()));
-			settings.context_initializer = tb!(GlobalsCtx {
-				globals: {
-					let mut out = GcHashMap::with_capacity(1);
-					out.insert(name, value);
-					RefCell::new(out)
-				},
-				inner
-			});
-		}
 	}
 }
 
@@ -523,16 +464,51 @@ impl State {
 	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
 		self.import_resolver().resolve(path.as_ref())
 	}
-	pub fn import_resolver(&self) -> Ref<'_, dyn ImportResolver> {
-		Ref::map(self.settings(), |s| &*s.import_resolver)
+	pub fn import_resolver(&self) -> &dyn ImportResolver {
+		&*self.0.import_resolver
 	}
-	pub fn set_import_resolver(&self, resolver: impl ImportResolver) {
-		self.settings_mut().import_resolver = tb!(resolver);
+	pub fn context_initializer(&self) -> &dyn ContextInitializer {
+		&*self.0.context_initializer
 	}
-	pub fn context_initializer(&self) -> Ref<'_, dyn ContextInitializer> {
-		Ref::map(self.settings(), |s| &*s.context_initializer)
+}
+
+impl State {
+	pub fn builder() -> StateBuilder {
+		StateBuilder::default()
 	}
-	pub fn set_context_initializer(&self, initializer: impl ContextInitializer) {
-		self.settings_mut().context_initializer = tb!(initializer);
+}
+
+impl Default for State {
+	fn default() -> Self {
+		Self::builder().build()
+	}
+}
+
+#[derive(Default)]
+pub struct StateBuilder {
+	import_resolver: Option<TraceBox<dyn ImportResolver>>,
+	context_initializer: Option<TraceBox<dyn ContextInitializer>>,
+}
+impl StateBuilder {
+	pub fn import_resolver(&mut self, import_resolver: impl ImportResolver) -> &mut Self {
+		let _ = self.import_resolver.insert(tb!(import_resolver));
+		self
+	}
+	pub fn context_initializer(
+		&mut self,
+		context_initializer: impl ContextInitializer,
+	) -> &mut Self {
+		let _ = self.context_initializer.insert(tb!(context_initializer));
+		self
+	}
+	pub fn build(mut self) -> State {
+		State(Cc::new(EvaluationStateInternals {
+			file_cache: RefCell::new(GcHashMap::new()),
+			context_initializer: self.context_initializer.take().unwrap_or_else(|| tb!(())),
+			import_resolver: self
+				.import_resolver
+				.take()
+				.unwrap_or_else(|| tb!(DummyImportResolver)),
+		}))
 	}
 }

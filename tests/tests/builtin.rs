@@ -2,10 +2,13 @@ mod common;
 
 use jrsonnet_evaluator::{
 	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
+	parser::Source,
+	trace::PathResolver,
 	typed::Typed,
-	ContextBuilder, Result, State, Thunk, Val,
+	ContextBuilder, ContextInitializer, FileImportResolver, Result, State, Thunk, Val,
 };
-use jrsonnet_stdlib::StateExt;
+use jrsonnet_gcmodule::Trace;
+use jrsonnet_stdlib::ContextInitializer as StdContextInitializer;
 
 #[builtin]
 fn a() -> Result<u32> {
@@ -29,15 +32,30 @@ fn basic_function() -> Result<()> {
 fn native_add(a: u32, b: u32) -> Result<u32> {
 	Ok(a + b)
 }
+#[derive(Trace)]
+struct NativeAddContextInitializer;
+impl ContextInitializer for NativeAddContextInitializer {
+	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
+		builder.bind(
+			"nativeAdd",
+			Thunk::evaluated(Val::function(native_add::INST)),
+		);
+	}
+
+	fn as_any(&self) -> &dyn std::any::Any {
+		self
+	}
+}
 
 #[test]
 fn call_from_code() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
-	s.add_global(
-		"nativeAdd".into(),
-		Thunk::evaluated(Val::function(native_add::INST)),
-	);
+	let mut s = State::builder();
+	s.context_initializer((
+		StdContextInitializer::new(PathResolver::new_cwd_fallback()),
+		NativeAddContextInitializer,
+	))
+	.import_resolver(FileImportResolver::default());
+	let s = s.build();
 
 	let v = s.evaluate_snippet(
 		"snip".to_owned(),
@@ -62,15 +80,27 @@ fn curried_add(this: &curried_add, b: u32) -> Result<u32> {
 fn curry_add(a: u32) -> Result<FuncVal> {
 	Ok(FuncVal::builtin(curried_add { a }))
 }
+#[derive(Trace)]
+struct CurryAddContextInitializer;
+impl ContextInitializer for CurryAddContextInitializer {
+	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
+		builder.bind("curryAdd", Thunk::evaluated(Val::function(curry_add::INST)));
+	}
+
+	fn as_any(&self) -> &dyn std::any::Any {
+		self
+	}
+}
 
 #[test]
 fn nonstatic_builtin() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
-	s.add_global(
-		"curryAdd".into(),
-		Thunk::evaluated(Val::function(curry_add::INST)),
-	);
+	let mut s = State::builder();
+	s.context_initializer((
+		StdContextInitializer::new(PathResolver::new_cwd_fallback()),
+		CurryAddContextInitializer,
+	))
+	.import_resolver(FileImportResolver::default());
+	let s = s.build();
 
 	let v = s.evaluate_snippet(
 		"snip".to_owned(),
