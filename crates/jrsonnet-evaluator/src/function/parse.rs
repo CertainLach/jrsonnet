@@ -10,6 +10,7 @@ use crate::{
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
 	evaluate_named,
+	function::builtin::ParamDefault,
 	gc::GcHashMap,
 	val::ThunkValue,
 	Context, Pending, Thunk, Val,
@@ -49,7 +50,10 @@ pub fn parse_function_call(
 	if args.unnamed_len() > params.len() {
 		bail!(TooManyArgsFunctionHas(
 			params.len(),
-			params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
+			params
+				.iter()
+				.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
+				.collect()
 		))
 	}
 
@@ -127,7 +131,10 @@ pub fn parse_function_call(
 				if !found {
 					bail!(FunctionParameterNotBoundInCall(
 						param.0.clone().name(),
-						params.iter().map(|p| (p.0.name(), p.1.is_some())).collect()
+						params
+							.iter()
+							.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
+							.collect()
 					));
 				}
 			}
@@ -163,7 +170,7 @@ pub fn parse_builtin_call(
 			params.len(),
 			params
 				.iter()
-				.map(|p| (p.name().as_str().map(IStr::from), p.has_default()))
+				.map(|p| (p.name().as_str().map(IStr::from), p.default()))
 				.collect()
 		))
 	}
@@ -211,7 +218,7 @@ pub fn parse_builtin_call(
 						param.name().as_str().map(IStr::from),
 						params
 							.iter()
-							.map(|p| (p.name().as_str().map(IStr::from), p.has_default()))
+							.map(|p| (p.name().as_str().map(IStr::from), p.default()))
 							.collect()
 					));
 				}
@@ -232,7 +239,10 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		fn get(self: Box<Self>) -> Result<Val> {
 			Err(FunctionParameterNotBoundInCall(
 				Some(self.0.clone()),
-				self.1.iter().map(|p| (p.0.name(), p.1.is_some())).collect(),
+				self.1
+					.iter()
+					.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
+					.collect(),
 			)
 			.into())
 		}

@@ -8,7 +8,7 @@ use jrsonnet_parser::{Destruct, Expr, ExprLocation, LocExpr, ParamsDesc};
 
 use self::{
 	arglike::OptionalContext,
-	builtin::{Builtin, BuiltinParam, ParamName, StaticBuiltin},
+	builtin::{Builtin, BuiltinParam, ParamDefault, ParamName, StaticBuiltin},
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
@@ -142,7 +142,7 @@ impl FuncVal {
 							.as_ref()
 							.map(IStr::to_string)
 							.map_or(ParamName::ANONYMOUS, ParamName::new_dynamic),
-						p.1.is_some(),
+						ParamDefault::exists(p.1.is_some()),
 					)
 				})
 				.collect(),
