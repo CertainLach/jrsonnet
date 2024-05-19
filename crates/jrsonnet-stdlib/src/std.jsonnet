@@ -10,8 +10,4 @@
       error ('std.mapWithKey second param must be object, got ' + std.type(obj))
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
-
-  resolvePath(f, r)::
-    local arr = std.split(f, '/');
-    std.join('/', std.makeArray(std.length(arr) - 1, function(i) arr[i]) + [r]),
 }
