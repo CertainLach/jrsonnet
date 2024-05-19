@@ -1,3 +1,5 @@
+// FIXME: Replace various helper here with inflector?
+
 use std::{fs, path::Path};
 
 use anyhow::Result;
@@ -5,11 +7,11 @@ use xshell::{cmd, Shell};
 
 /// Checks that the `file` has the specified `contents`. If that is not the
 /// case, updates the file and then fails the test.
-pub fn ensure_file_contents(file: &Path, contents: &str) -> Result<()> {
+pub fn ensure_file_contents(file: &Path, contents: &str) {
 	if let Ok(old_contents) = fs::read_to_string(file) {
 		if normalize_newlines(&old_contents) == normalize_newlines(contents) {
 			// File is already up to date.
-			return Ok(());
+			return;
 		}
 	}
 
@@ -18,7 +20,6 @@ pub fn ensure_file_contents(file: &Path, contents: &str) -> Result<()> {
 		let _ = fs::create_dir_all(parent);
 	}
 	fs::write(file, contents).unwrap();
-	Ok(())
 }
 
 // Eww, someone configured git to use crlf?
@@ -26,8 +27,9 @@ fn normalize_newlines(s: &str) -> String {
 	s.replace("\r\n", "\n")
 }
 
-pub(crate) fn pluralize(s: &str) -> String {
-	format!("{}s", s)
+pub fn pluralize(s: &str) -> String {
+	// FIXME: Inflector?
+	format!("{s}s")
 }
 
 pub fn to_upper_snake_case(s: &str) -> String {
@@ -35,7 +37,7 @@ pub fn to_upper_snake_case(s: &str) -> String {
 	let mut prev = false;
 	for c in s.chars() {
 		if c.is_ascii_uppercase() && prev {
-			buf.push('_')
+			buf.push('_');
 		}
 		prev = true;
 
@@ -48,7 +50,7 @@ pub fn to_lower_snake_case(s: &str) -> String {
 	let mut prev = false;
 	for c in s.chars() {
 		if c.is_ascii_uppercase() && prev {
-			buf.push('_')
+			buf.push('_');
 		}
 		prev = true;
 

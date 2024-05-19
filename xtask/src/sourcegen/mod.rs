@@ -49,27 +49,27 @@ pub fn generate_ungrammar() -> Result<()> {
 				match special {
 					SpecialName::Literal => panic!("literal is not defined: {name}"),
 					SpecialName::Meta => {
-						eprintln!("implicit meta: {}", name);
+						eprintln!("implicit meta: {name}");
 						kinds.define_token(TokenKind::Meta {
 							grammar_name: token.to_owned(),
-							name: format!("META_{}", name),
-						})
+							name: format!("META_{name}"),
+						});
 					}
 					SpecialName::Error => {
-						eprintln!("implicit error: {}", name);
+						eprintln!("implicit error: {name}");
 						kinds.define_token(TokenKind::Error {
 							grammar_name: token.to_owned(),
-							name: format!("ERROR_{}", name),
+							name: format!("ERROR_{name}"),
 							regex: None,
 							priority: None,
 							is_lexer_error: true,
-						})
+						});
 					}
 				};
 				continue;
 			};
 			let name = to_upper_snake_case(token);
-			eprintln!("implicit kw: {}", token);
+			eprintln!("implicit kw: {token}");
 			kinds.define_token(TokenKind::Keyword {
 				code: token.to_owned(),
 				name: format!("{name}_KW"),
@@ -98,14 +98,14 @@ pub fn generate_ungrammar() -> Result<()> {
 			"/../crates/jrsonnet-rowan-parser/src/generated/syntax_kinds.rs",
 		)),
 		&syntax_kinds,
-	)?;
+	);
 	ensure_file_contents(
 		&PathBuf::from(concat!(
 			env!("CARGO_MANIFEST_DIR"),
 			"/../crates/jrsonnet-rowan-parser/src/generated/nodes.rs",
 		)),
 		&nodes,
-	)?;
+	);
 	Ok(())
 }
 
@@ -189,6 +189,7 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 	reformat(&ast.to_string())
 }
 
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 	let (node_defs, node_boilerplate_impls): (Vec<_>, Vec<_>) = grammar
 		.nodes
@@ -524,7 +525,7 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 fn write_doc_comment(contents: &[String], dest: &mut String) {
 	use std::fmt::Write;
 	for line in contents {
-		writeln!(dest, "///{}", line).unwrap();
+		writeln!(dest, "///{line}").unwrap();
 	}
 }
 

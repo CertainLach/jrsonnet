@@ -72,7 +72,7 @@ impl Field {
 	pub fn is_many(&self) -> bool {
 		matches!(
 			self,
-			Field::Node {
+			Self::Node {
 				cardinality: Cardinality::Many,
 				..
 			}
@@ -81,44 +81,41 @@ impl Field {
 
 	pub fn token_name(&self) -> Option<String> {
 		match self {
-			Field::Token(token) => Some(token.clone()),
-			_ => None,
+			Self::Token(token) => Some(token.clone()),
+			Self::Node { .. } => None,
 		}
 	}
 	pub fn token_kind(&self, kinds: &KindsSrc) -> Option<TokenStream> {
 		match self {
-			Field::Token(token) => Some(kinds.token(token).expect("token exists").reference()),
-			_ => None,
+			Self::Token(token) => Some(kinds.token(token).expect("token exists").reference()),
+			Self::Node { .. } => None,
 		}
 	}
 	pub fn is_token_enum(&self, grammar: &AstSrc) -> bool {
 		match self {
-			Field::Node { ty, .. } => grammar.token_enums.iter().any(|e| &e.name == ty),
-			_ => false,
+			Self::Node { ty, .. } => grammar.token_enums.iter().any(|e| &e.name == ty),
+			Self::Token(_) => false,
 		}
 	}
 
 	pub fn method_name(&self, kinds: &KindsSrc) -> proc_macro2::Ident {
 		match self {
-			Field::Token(name) => kinds.token(name).expect("token exists").method_name(),
-			Field::Node { name, .. } => {
+			Self::Token(name) => kinds.token(name).expect("token exists").method_name(),
+			Self::Node { name, .. } => {
 				format_ident!("{}", name)
 			}
 		}
 	}
 	pub fn ty(&self) -> proc_macro2::Ident {
 		match self {
-			Field::Token(_) => format_ident!("SyntaxToken"),
-			Field::Node { ty, .. } => format_ident!("{}", ty),
+			Self::Token(_) => format_ident!("SyntaxToken"),
+			Self::Node { ty, .. } => format_ident!("{}", ty),
 		}
 	}
 }
 
 pub fn lower(kinds: &KindsSrc, grammar: &Grammar) -> AstSrc {
-	let mut res = AstSrc {
-		// tokens,
-		..Default::default()
-	};
+	let mut res = AstSrc::default();
 
 	let nodes = grammar.iter().collect::<Vec<_>>();
 
@@ -135,16 +132,15 @@ pub fn lower(kinds: &KindsSrc, grammar: &Grammar) -> AstSrc {
 				};
 				res.enums.push(enum_src);
 			}
-			None => match lower_token_enum(grammar, rule) {
-				Some(variants) => {
+			None => {
+				if let Some(variants) = lower_token_enum(grammar, rule) {
 					let tokens_enum_src = AstTokenEnumSrc {
 						doc: Vec::new(),
 						name,
 						variants,
 					};
 					res.token_enums.push(tokens_enum_src);
-				}
-				None => {
+				} else {
 					let mut fields = Vec::new();
 					lower_rule(&mut fields, grammar, None, rule, false);
 					let mut types = HashMap::new();
@@ -173,7 +169,7 @@ pub fn lower(kinds: &KindsSrc, grammar: &Grammar) -> AstSrc {
 						fields,
 					});
 				}
-			},
+			}
 		}
 	}
 
@@ -240,7 +236,7 @@ fn lower_rule(
 			acc.push(field);
 		}
 		Rule::Token(token) => {
-			assert!(label.is_none(), "uexpected label: {:?}", label);
+			assert!(label.is_none(), "uexpected label: {label:?}");
 			let name = grammar[*token].name.clone();
 			let field = Field::Token(name);
 			acc.push(field);
@@ -267,7 +263,7 @@ fn lower_rule(
 		}
 		Rule::Seq(rules) | Rule::Alt(rules) => {
 			for rule in rules {
-				lower_rule(acc, grammar, label, rule, in_optional)
+				lower_rule(acc, grammar, label, rule, in_optional);
 			}
 		}
 		Rule::Opt(rule) => lower_rule(acc, grammar, label, rule, true),

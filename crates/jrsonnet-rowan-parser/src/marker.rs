@@ -146,7 +146,7 @@ impl CompletedMarker {
 		p: &mut Parser,
 		kind: SyntaxKind,
 		error: Option<SyntaxError>,
-	) -> CompletedMarker {
+	) -> Self {
 		let new_m = p.start();
 		match &mut p.events[self.start_event_idx] {
 			Event::Start { forward_parent, .. } => {
@@ -173,10 +173,10 @@ impl CompletedMarker {
 		}
 		completed
 	}
-	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind) -> CompletedMarker {
+	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind) -> Self {
 		self.wrap_raw(p, kind, None)
 	}
-	pub fn wrap_error(self, p: &mut Parser, msg: impl AsRef<str>) -> CompletedMarker {
+	pub fn wrap_error(self, p: &mut Parser, msg: impl AsRef<str>) -> Self {
 		self.wrap_raw(
 			p,
 			SyntaxKind::ERROR_CUSTOM,

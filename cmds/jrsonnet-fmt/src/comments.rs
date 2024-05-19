@@ -1,3 +1,5 @@
+use std::string::String;
+
 use dprint_core::formatting::PrintItems;
 use jrsonnet_rowan_parser::{nodes::TriviaKind, AstToken};
 
@@ -12,6 +14,7 @@ pub enum CommentLocation {
 	EndOfItems,
 }
 
+#[allow(clippy::too_many_lines, clippy::cognitive_complexity)]
 pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut PrintItems) {
 	for c in comments {
 		let Ok(c) = c else {
@@ -62,14 +65,14 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 						}
 					})
 					.collect::<Vec<_>>();
-				while lines.last().map(|l| l.is_empty()).unwrap_or(false) {
+				while lines.last().is_some_and(String::is_empty) {
 					lines.pop();
 				}
 				if lines.len() == 1 && !doc {
 					if matches!(loc, CommentLocation::ItemInline) {
 						p!(out, str(" "));
 					}
-					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */") nl)
+					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */") nl);
 				} else if !lines.is_empty() {
 					fn common_ws_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 						let offset = a
@@ -95,7 +98,7 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 					}
 					for line in lines
 						.iter_mut()
-						.skip(if immediate_start { 1 } else { 0 })
+						.skip(usize::from(immediate_start))
 						.filter(|l| !l.is_empty())
 					{
 						*line = line
@@ -127,13 +130,13 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 								}
 								line = new_line.to_string();
 							}
-							p!(out, string(line.to_string()) nl)
+							p!(out, string(line.to_string()) nl);
 						}
 					}
 					if doc {
 						p!(out, str(" "));
 					}
-					p!(out, str("*/") nl)
+					p!(out, str("*/") nl);
 				}
 			}
 			// TODO: Keep common padding for multiple continous lines of single-line comments
@@ -154,20 +157,20 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 			// ```
 			TriviaKind::SingleLineHashComment => {
 				if matches!(loc, CommentLocation::ItemInline) {
-					p!(out, str(" "))
+					p!(out, str(" "));
 				}
 				p!(out, str("# ") string(c.text().strip_prefix('#').expect("hash comment starts with #").trim().to_string()));
 				if !matches!(loc, CommentLocation::ItemInline) {
-					p!(out, nl)
+					p!(out, nl);
 				}
 			}
 			TriviaKind::SingleLineSlashComment => {
 				if matches!(loc, CommentLocation::ItemInline) {
-					p!(out, str(" "))
+					p!(out, str(" "));
 				}
 				p!(out, str("// ") string(c.text().strip_prefix("//").expect("comment starts with //").trim().to_string()));
 				if !matches!(loc, CommentLocation::ItemInline) {
-					p!(out, nl)
+					p!(out, nl);
 				}
 			}
 			// Garbage in - garbage out

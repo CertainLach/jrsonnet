@@ -13,8 +13,7 @@ impl BinaryOperatorKind {
 			Self::BitXor => (8, 9),
 			Self::BitOr => (6, 7),
 			Self::And => (4, 5),
-			Self::NullCoaelse => (2, 3),
-			Self::Or => (2, 3),
+			Self::NullCoaelse | Self::Or => (2, 3),
 			Self::ErrorNoOperator => (0, 1),
 		}
 	}
@@ -23,9 +22,7 @@ impl BinaryOperatorKind {
 impl UnaryOperatorKind {
 	pub fn binding_power(&self) -> ((), u8) {
 		match self {
-			Self::Minus => ((), 20),
-			Self::Not => ((), 20),
-			Self::BitNot => ((), 20),
+			Self::Minus | Self::Not | Self::BitNot => ((), 20),
 		}
 	}
 }

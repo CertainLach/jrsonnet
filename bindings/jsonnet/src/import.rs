@@ -64,7 +64,7 @@ impl ImportResolver for CallbackImportResolver {
 				self.ctx,
 				base.as_ptr(),
 				rel.as_ptr(),
-				&mut (found_here as *const _),
+				&mut found_here.cast_const(),
 				&mut buf,
 				&mut buf_len,
 			)
@@ -121,7 +121,7 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 		cb,
 		ctx,
 		out: RefCell::new(HashMap::new()),
-	})
+	});
 }
 
 /// # Safety

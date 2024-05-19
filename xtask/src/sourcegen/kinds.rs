@@ -41,33 +41,33 @@ pub enum TokenKind {
 impl TokenKind {
 	pub fn grammar_name(&self) -> &str {
 		match self {
-			TokenKind::Keyword { code, .. } => code,
-			TokenKind::Literal { grammar_name, .. } => grammar_name,
-			TokenKind::Meta { grammar_name, .. } => grammar_name,
-			TokenKind::Error { grammar_name, .. } => grammar_name,
+			Self::Keyword { code, .. } => code,
+			Self::Literal { grammar_name, .. }
+			| Self::Meta { grammar_name, .. }
+			| Self::Error { grammar_name, .. } => grammar_name,
 		}
 	}
 	/// How this keyword should appear in kinds enum, screaming snake cased
 	pub fn name(&self) -> &str {
 		match self {
-			TokenKind::Keyword { name, .. } => name,
-			TokenKind::Literal { name, .. } => name,
-			TokenKind::Meta { name, .. } => name,
-			TokenKind::Error { name, .. } => name,
+			Self::Keyword { name, .. }
+			| Self::Literal { name, .. }
+			| Self::Meta { name, .. }
+			| Self::Error { name, .. } => name,
 		}
 	}
 	pub fn expand_kind(&self) -> TokenStream {
 		let name = format_ident!("{}", self.name());
 		let attr = match self {
-			TokenKind::Keyword { code, .. } => quote! {#[token(#code)]},
-			TokenKind::Literal { regex, lexer, .. } => {
+			Self::Keyword { code, .. } => quote! {#[token(#code)]},
+			Self::Literal { regex, lexer, .. } => {
 				let lexer = lexer
 					.as_deref()
 					.map(TokenStream::from_str)
 					.map(|r| r.expect("path is correct"));
 				quote! {#[regex(#regex, #lexer)]}
 			}
-			TokenKind::Error {
+			Self::Error {
 				regex, priority, ..
 			} if regex.is_some() => {
 				let priority = priority.map(|p| quote! {, priority = #p});
@@ -82,7 +82,7 @@ impl TokenKind {
 	}
 	pub fn expand_t_macros(&self) -> Option<TokenStream> {
 		match self {
-			TokenKind::Keyword { code, name } => {
+			Self::Keyword { code, name } => {
 				let code = escape_token_macro(code);
 				let name = format_ident!("{name}");
 				Some(quote! {
@@ -98,29 +98,26 @@ impl TokenKind {
 	/// Keywords are referenced with `T![_]` macro,
 	/// and literals are referenced directly by name
 	pub fn reference(&self) -> TokenStream {
-		match self {
-			TokenKind::Keyword { code, .. } => {
-				let code = escape_token_macro(code);
-				quote! {T![#code]}
-			}
-			_ => {
-				let name = self.name();
-				let ident = format_ident!("{name}");
-				quote! {#ident}
-			}
+		if let Self::Keyword { code, .. } = self {
+			let code = escape_token_macro(code);
+			quote! {T![#code]}
+		} else {
+			let name = self.name();
+			let ident = format_ident!("{name}");
+			quote! {#ident}
 		}
 	}
 
 	pub fn method_name(&self) -> Ident {
 		match self {
-			TokenKind::Keyword { name, .. } => {
+			Self::Keyword { name, .. } => {
 				format_ident!("{}_token", name.to_lowercase())
 			}
-			TokenKind::Literal { name, .. } => {
+			Self::Literal { name, .. } => {
 				format_ident!("{}_lit", name.to_lowercase())
 			}
-			TokenKind::Meta { name, .. } => format_ident!("{}_meta", name.to_lowercase()),
-			TokenKind::Error { name, .. } => format_ident!("{}_error", name.to_lowercase()),
+			Self::Meta { name, .. } => format_ident!("{}_meta", name.to_lowercase()),
+			Self::Error { name, .. } => format_ident!("{}_error", name.to_lowercase()),
 		}
 	}
 }
@@ -188,15 +185,14 @@ impl KindsSrc {
 				.is_none(),
 			"token already defined: {}",
 			token.grammar_name()
-		)
+		);
 	}
 	pub fn define_node(&mut self, node: &str) {
 		assert!(
 			self.defined_node_names.insert(node.to_owned()),
-			"node name already defined: {}",
-			node
+			"node name already defined: {node}"
 		);
-		self.nodes.push(node.to_string())
+		self.nodes.push(node.to_string());
 	}
 	pub fn token(&self, tok: &str) -> Option<&TokenKind> {
 		self.defined_tokens.get(tok)

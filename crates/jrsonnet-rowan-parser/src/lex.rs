@@ -37,9 +37,10 @@ impl<'a> Iterator for Lexer<'a> {
 			// In kinds, string blocks is parsed at least as `|||`
 			lexer.bump(3);
 			let res = lex_str_block(&mut lexer);
-			debug_assert!(lexer.next().is_none(), "str_block is lexed");
+			let next = lexer.next();
+			assert!(next.is_none(), "str_block is lexed");
 			match res {
-				Ok(_) => {}
+				Ok(()) => {}
 				Err(e) => {
 					kind = Ok(match e {
 						StringBlockError::UnexpectedEnd => ERROR_STRING_BLOCK_UNEXPECTED_END,
@@ -48,7 +49,7 @@ impl<'a> Iterator for Lexer<'a> {
 							ERROR_STRING_BLOCK_MISSING_TERMINATION
 						}
 						StringBlockError::MissingIndent => ERROR_STRING_BLOCK_MISSING_INDENT,
-					})
+					});
 				}
 			}
 		}
