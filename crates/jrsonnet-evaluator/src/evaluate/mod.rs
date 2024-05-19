@@ -37,7 +37,9 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 	}
 	Some(match &*expr.0 {
 		Expr::Str(s) => Val::string(s.clone()),
-		Expr::Num(n) => Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values")),
+		Expr::Num(n) => {
+			Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values"))
+		}
 		Expr::Literal(LiteralType::False) => Val::Bool(false),
 		Expr::Literal(LiteralType::True) => Val::Bool(true),
 		Expr::Literal(LiteralType::Null) => Val::Null,
