@@ -3,14 +3,6 @@
 
   thisFile:: error 'std.thisFile is deprecated, to enable its support in jrsonnet - recompile it with "legacy-this-file" support.\nThis will slow down stdlib caching a bit, though',
 
-  mapWithIndex(func, arr)::
-    if !std.isFunction(func) then
-      error ('std.mapWithIndex first param must be function, got ' + std.type(func))
-    else if !std.isArray(arr) && !std.isString(arr) then
-      error ('std.mapWithIndex second param must be array, got ' + std.type(arr))
-    else
-      std.makeArray(std.length(arr), function(i) func(i, arr[i])),
-
   mapWithKey(func, obj)::
     if !std.isFunction(func) then
       error ('std.mapWithKey first param must be function, got ' + std.type(func))

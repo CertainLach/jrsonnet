@@ -430,12 +430,12 @@ impl ArrayLike for ReverseArray {
 }
 
 #[derive(Trace, Debug, Clone)]
-pub struct MappedArray {
+pub struct MappedArray<const WithIndex: bool> {
 	inner: ArrValue,
 	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
 	mapper: FuncVal,
 }
-impl MappedArray {
+impl<const WithIndex: bool> MappedArray<WithIndex> {
 	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
 		let len = inner.len();
 		Self {
@@ -444,8 +444,15 @@ impl MappedArray {
 			mapper,
 		}
 	}
+	fn evaluate(&self, index: usize, value: Val) -> Result<Val> {
+		if WithIndex {
+			self.mapper.evaluate_simple(&(index, value), false)
+		} else {
+			self.mapper.evaluate_simple(&(value,), false)
+		}
+	}
 }
-impl ArrayLike for MappedArray {
+impl<const WithIndex: bool> ArrayLike for MappedArray<WithIndex> {
 	fn len(&self) -> usize {
 		self.cached.borrow().len()
 	}
@@ -472,7 +479,7 @@ impl ArrayLike for MappedArray {
 			.get(index)
 			.transpose()
 			.expect("index checked")
-			.and_then(|r| self.mapper.evaluate_simple(&(r,), false));
+			.and_then(|r| self.evaluate(index, r));
 
 		let new_value = match val {
 			Ok(v) => v,
@@ -486,12 +493,12 @@ impl ArrayLike for MappedArray {
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		#[derive(Trace)]
-		struct ArrayElement {
-			arr_thunk: MappedArray,
+		struct ArrayElement<const WithIndex: bool> {
+			arr_thunk: MappedArray<WithIndex>,
 			index: usize,
 		}
 
-		impl ThunkValue for ArrayElement {
+		impl<const WithIndex: bool> ThunkValue for ArrayElement<WithIndex> {
 			type Output = Val;
 
 			fn get(self: Box<Self>) -> Result<Self::Output> {
