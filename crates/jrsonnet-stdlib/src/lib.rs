@@ -91,6 +91,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("any", builtin_any::INST),
 		("all", builtin_all::INST),
 		("member", builtin_member::INST),
+		("find", builtin_find::INST),
 		("contains", builtin_contains::INST),
 		("count", builtin_count::INST),
 		("avg", builtin_avg::INST),
@@ -213,6 +214,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("get", builtin_get::INST),
 		("startsWith", builtin_starts_with::INST),
 		("endsWith", builtin_ends_with::INST),
+		("assertEqual", builtin_assert_equal::INST),
 		// Sets
 		("setMember", builtin_set_member::INST),
 		("setInter", builtin_set_inter::INST),

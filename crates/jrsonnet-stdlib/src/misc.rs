@@ -7,7 +7,7 @@ use jrsonnet_evaluator::{
 	manifest::JsonFormat,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
-	Context, Either, IStr, ObjValue, Thunk, Val,
+	Context, Either, IStr, ObjValue, ResultExt, Thunk, Val,
 };
 
 use crate::{extvar_source, Settings};
@@ -140,4 +140,15 @@ pub fn builtin_ends_with(a: Either![IStr, ArrValue], b: Either![IStr, ArrValue])
 		}
 		_ => bail!("both arguments should be of the same type"),
 	})
+}
+
+#[builtin]
+pub fn builtin_assert_equal(a: Val, b: Val) -> Result<bool> {
+	if equals(&a, &b)? {
+		return Ok(true);
+	}
+	let format = JsonFormat::std_to_json("  ".to_owned(), "\n", ": ");
+	let a = a.manifest(&format).description("<a> manifestification")?;
+	let b = b.manifest(&format).description("<b> manifestification")?;
+	bail!("assertion failed: A != B\nA: {a}\nB: {b}")
 }

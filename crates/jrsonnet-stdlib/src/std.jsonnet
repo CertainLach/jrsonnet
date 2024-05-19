@@ -11,12 +11,6 @@
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
 
-  assertEqual(a, b)::
-    if a == b then
-      true
-    else
-      error 'Assertion failed. ' + a + ' != ' + b,
-
   mergePatch(target, patch)::
     if std.isObject(patch) then
       local target_object =
@@ -44,10 +38,4 @@
   resolvePath(f, r)::
     local arr = std.split(f, '/');
     std.join('/', std.makeArray(std.length(arr) - 1, function(i) arr[i]) + [r]),
-
-  find(value, arr)::
-    if !std.isArray(arr) then
-      error 'find second parameter should be an array, got ' + std.type(arr)
-    else
-      std.filter(function(i) arr[i] == value, std.range(0, std.length(arr) - 1)),
 }

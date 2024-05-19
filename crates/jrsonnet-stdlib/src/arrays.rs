@@ -276,6 +276,18 @@ pub fn builtin_member(arr: IndexableVal, x: Val) -> Result<bool> {
 }
 
 #[builtin]
+pub fn builtin_find(value: Val, arr: ArrValue) -> Result<Vec<usize>> {
+	let mut out = Vec::new();
+	for (i, ele) in arr.iter().enumerate() {
+		let ele = ele?;
+		if equals(&ele, &value)? {
+			out.push(i);
+		}
+	}
+	Ok(out)
+}
+
+#[builtin]
 pub fn builtin_contains(arr: IndexableVal, elem: Val) -> Result<bool> {
 	builtin_member(arr, elem)
 }
