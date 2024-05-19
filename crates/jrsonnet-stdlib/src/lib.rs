@@ -219,6 +219,14 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("regexQuoteMeta", builtin_regex_quote_meta::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
+		("__compare_array", builtin___compare_array::INST),
+		("__array_less", builtin___array_less::INST),
+		("__array_greater", builtin___array_greater::INST),
+		("__array_less_or_equal", builtin___array_less_or_equal::INST),
+		(
+			"__array_greater_or_equal",
+			builtin___array_greater_or_equal::INST,
+		),
 	]
 	.iter()
 	.copied()
