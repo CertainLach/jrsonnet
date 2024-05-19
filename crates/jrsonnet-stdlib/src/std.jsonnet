@@ -11,14 +11,6 @@
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
 
-  deepJoin(arr)::
-    if std.isString(arr) then
-      arr
-    else if std.isArray(arr) then
-      std.join('', [std.deepJoin(x) for x in arr])
-    else
-      error 'Expected string or array, got %s' % std.type(arr),
-
   assertEqual(a, b)::
     if a == b then
       true
