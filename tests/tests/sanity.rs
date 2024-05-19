@@ -1,16 +1,18 @@
 use jrsonnet_evaluator::{
 	bail,
-	trace::{CompactFormat, TraceFormat},
-	Result, State, Val,
+	trace::{CompactFormat, PathResolver, TraceFormat},
+	FileImportResolver, Result, State, Val,
 };
-use jrsonnet_stdlib::StateExt;
+use jrsonnet_stdlib::ContextInitializer;
 
 mod common;
 
 #[test]
 fn assert_positive() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()))
+		.import_resolver(FileImportResolver::default());
+	let s = s.build();
 
 	let v = s.evaluate_snippet("snip".to_owned(), "assert 1 == 1: 'fail'; null")?;
 	ensure_val_eq!(v, Val::Null);
@@ -22,8 +24,11 @@ fn assert_positive() -> Result<()> {
 
 #[test]
 fn assert_negative() -> Result<()> {
-	let s = State::default();
-	s.with_stdlib();
+	let mut s = State::builder();
+	s.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()))
+		.import_resolver(FileImportResolver::default());
+	let s = s.build();
+
 	let trace_format = CompactFormat::default();
 
 	{
@@ -38,7 +43,7 @@ fn assert_negative() -> Result<()> {
 			bail!("assertion should fail")
 		};
 		let e = trace_format.format(&e).unwrap();
-		ensure!(e.starts_with("runtime error: Assertion failed. 1 != 2"))
+		ensure!(e.starts_with("runtime error: assertion failed: A != B\nA: 1\nB: 2\n"));
 	}
 
 	Ok(())
