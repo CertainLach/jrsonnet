@@ -28,7 +28,7 @@ pub fn trivia_before(node: SyntaxNode, end: Option<&SyntaxElement>) -> ChildTriv
 				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
-			)
+			);
 		}
 	}
 	out
@@ -48,13 +48,13 @@ pub fn trivia_after(node: SyntaxNode, start: Option<&SyntaxElement>) -> ChildTri
 		if let Some(trivia) = item.as_token().cloned().and_then(Trivia::cast) {
 			out.push(Ok(trivia));
 		} else if CustomError::can_cast(item.kind()) {
-			out.push(Err(item.to_string()))
+			out.push(Err(item.to_string()));
 		} else {
 			assert!(
 				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
-			)
+			);
 		}
 	}
 	out
@@ -115,11 +115,7 @@ fn count_newlines_after(tt: &ChildTrivia) -> usize {
 				TriviaKind::Whitespace => {
 					nl_count += t.text().bytes().filter(|b| *b == b'\n').count();
 				}
-				TriviaKind::SingleLineHashComment => {
-					nl_count += 1;
-					break;
-				}
-				TriviaKind::SingleLineSlashComment => {
+				TriviaKind::SingleLineHashComment | TriviaKind::SingleLineSlashComment => {
 					nl_count += 1;
 					break;
 				}
@@ -163,7 +159,7 @@ pub fn children<T: AstNode + Debug>(
 				inline_trivia: Vec::new(),
 			});
 			if let Some(last_child) = last_child {
-				out.push(last_child)
+				out.push(last_child);
 			}
 			had_some = true;
 			started_next = false;
@@ -188,7 +184,7 @@ pub fn children<T: AstNode + Debug>(
 			}
 			had_some = true;
 		} else if CustomError::can_cast(item.kind()) {
-			next.push(Err(item.to_string()))
+			next.push(Err(item.to_string()));
 		} else if loose {
 			if had_some {
 				break;
@@ -199,7 +195,7 @@ pub fn children<T: AstNode + Debug>(
 				TS![, ;].contains(item.kind()),
 				"silently eaten token: {:?}",
 				item.kind()
-			)
+			);
 		}
 	}
 

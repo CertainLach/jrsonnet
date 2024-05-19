@@ -10,21 +10,23 @@ impl SyntaxKindSet {
 	pub const EMPTY: Self = Self(0);
 	pub const ALL: Self = Self(u128::MAX);
 
-	pub const fn new(kinds: &[SyntaxKind]) -> SyntaxKindSet {
+	pub const fn new(kinds: &[SyntaxKind]) -> Self {
 		let mut res = 0u128;
 		let mut i = 0;
 		while i < kinds.len() {
 			res |= mask(kinds[i]);
-			i += 1
+			i += 1;
 		}
-		SyntaxKindSet(res)
+		Self(res)
 	}
 
-	pub const fn union(self, other: SyntaxKindSet) -> SyntaxKindSet {
-		SyntaxKindSet(self.0 | other.0)
+	#[must_use]
+	pub const fn union(self, other: Self) -> Self {
+		Self(self.0 | other.0)
 	}
-	pub const fn with(self, kind: SyntaxKind) -> SyntaxKindSet {
-		SyntaxKindSet(self.0 | mask(kind))
+	#[must_use]
+	pub const fn with(self, kind: SyntaxKind) -> Self {
+		Self(self.0 | mask(kind))
 	}
 
 	pub fn contains(&self, kind: SyntaxKind) -> bool {
@@ -40,7 +42,7 @@ impl fmt::Display for SyntaxKindSet {
 		let mut variants = <Vec<SyntaxKind>>::new();
 		for i in 0..128 {
 			if v & 1 == 1 {
-				variants.push(SyntaxKind::from_raw(i))
+				variants.push(SyntaxKind::from_raw(i));
 			}
 			v >>= 1;
 			if v == 0 {
@@ -65,7 +67,7 @@ impl fmt::Debug for SyntaxKindSet {
 		let mut variants = <Vec<SyntaxKind>>::new();
 		for i in 0..128 {
 			if v & 1 == 1 {
-				variants.push(SyntaxKind::from_raw(i))
+				variants.push(SyntaxKind::from_raw(i));
 			}
 			v >>= 1;
 			if v == 0 {
@@ -77,9 +79,7 @@ impl fmt::Debug for SyntaxKindSet {
 }
 
 const fn mask(kind: SyntaxKind) -> u128 {
-	if kind as u32 > 128 {
-		panic!("mask for not a token kind")
-	}
+	assert!(kind as u32 <= 128, "mask for not a token kind");
 	1u128 << (kind as u128)
 }
 

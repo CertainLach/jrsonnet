@@ -27,7 +27,7 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *c
 		.add_ext_str(
 			name.to_str().expect("name is not utf-8").into(),
 			value.to_str().expect("value is not utf-8").into(),
-		)
+		);
 }
 
 /// Binds a Jsonnet external variable to the given code.
@@ -51,7 +51,7 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *c
 			name.to_str().expect("name is not utf-8"),
 			code.to_str().expect("code is not utf-8"),
 		)
-		.expect("can't parse ext code")
+		.expect("can't parse ext code");
 }
 
 /// Binds a top-level string argument for a top-level parameter.

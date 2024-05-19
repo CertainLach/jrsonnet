@@ -86,7 +86,6 @@ pub extern "C" fn jsonnet_make() -> *mut VM {
 	let state = State::default();
 	state.settings_mut().import_resolver = tb!(FileImportResolver::default());
 	state.settings_mut().context_initializer = tb!(jrsonnet_stdlib::ContextInitializer::new(
-		state.clone(),
 		PathResolver::new_cwd_fallback(),
 	));
 	Box::into_raw(Box::new(VM {
@@ -107,7 +106,7 @@ pub extern "C" fn jsonnet_destroy(vm: Box<VM>) {
 /// Set the maximum stack depth.
 #[no_mangle]
 pub extern "C" fn jsonnet_max_stack(_vm: &VM, v: c_uint) {
-	set_stack_depth_limit(v as usize)
+	set_stack_depth_limit(v as usize);
 }
 
 /// Set the number of objects required before a garbage collection cycle is allowed.
@@ -175,7 +174,7 @@ pub extern "C" fn jsonnet_json_destroy(_vm: &VM, v: Box<Val>) {
 #[no_mangle]
 pub extern "C" fn jsonnet_max_trace(vm: &mut VM, v: c_uint) {
 	if let Some(format) = vm.trace_format.as_any_mut().downcast_mut::<CompactFormat>() {
-		format.max_trace = v as usize
+		format.max_trace = v as usize;
 	} else {
 		panic!("max_trace is not supported by current tracing format")
 	}
@@ -183,7 +182,7 @@ pub extern "C" fn jsonnet_max_trace(vm: &mut VM, v: c_uint) {
 
 /// Evaluate a file containing Jsonnet code, return a JSON string.
 ///
-/// The returned string should be cleaned up with jsonnet_realloc.
+/// The returned string should be cleaned up with `jsonnet_realloc`.
 ///
 /// # Safety
 ///
@@ -216,7 +215,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 
 /// Evaluate a string containing Jsonnet code, return a JSON string.
 ///
-/// The returned string should be cleaned up with jsonnet_realloc.
+/// The returned string should be cleaned up with `jsonnet_realloc`.
 ///
 /// # Safety
 ///
@@ -359,7 +358,7 @@ fn stream_to_raw(multi: Vec<IStr>) -> *const c_char {
 	out.push(0);
 	let v = out.as_ptr();
 	std::mem::forget(out);
-	v as *const c_char
+	v.cast::<c_char>()
 }
 
 /// # Safety

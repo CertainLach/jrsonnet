@@ -17,6 +17,7 @@ pub fn lex_str_block_test(lex: &mut Lexer<SyntaxKind>) {
 	let _ = lex_str_block(lex);
 }
 
+#[allow(clippy::too_many_lines)]
 pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError> {
 	struct Context<'a> {
 		source: &'a str,
@@ -78,6 +79,7 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 			};
 		}
 
+		#[allow(clippy::range_plus_one)]
 		fn pos(&self) -> Range<usize> {
 			if self.index == self.source.len() {
 				self.offset + self.index..self.offset + self.index
@@ -120,8 +122,7 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 		let end_index = ctx
 			.rest()
 			.find("|||")
-			.map(|v| v + 3)
-			.unwrap_or_else(|| ctx.rest().len());
+			.map_or_else(|| ctx.rest().len(), |v| v + 3);
 		lex.bump(ctx.index + end_index);
 	}
 
@@ -150,7 +151,7 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 	}
 
 	// Process leading blank lines before calculating string block indent
-	while let Some('\n') = ctx.peek() {
+	while ctx.peek() == Some('\n') {
 		ctx.next();
 	}
 
@@ -179,7 +180,7 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 		}
 
 		// Skip any blank lines
-		while let Some('\n') = ctx.peek() {
+		while ctx.peek() == Some('\n') {
 			ctx.next();
 		}
 
@@ -187,9 +188,11 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 		num_whitespace = check_whitespace(str_block_indent, ctx.rest());
 		if num_whitespace == 0 {
 			// End of the text block
-			let mut term_indent = String::with_capacity(num_whitespace);
+			// let mut term_indent = String::with_capacity(num_whitespace);
 			while let Some(' ' | '\t') = ctx.peek() {
-				term_indent.push(ctx.next().unwrap());
+				// term_indent.push(
+				ctx.next().unwrap();
+				// );
 			}
 
 			if !ctx.rest().starts_with("|||") {

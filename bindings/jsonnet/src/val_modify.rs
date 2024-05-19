@@ -12,7 +12,7 @@ use crate::VM;
 ///
 /// # Safety
 ///
-/// `arr` should be a pointer to array value allocated by make_array, or returned by other library call
+/// `arr` should be a pointer to array value allocated by `make_array`, or returned by other library call
 /// `val` should be a pointer to value allocated using this library
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &VM, arr: &mut Val, val: &Val) {

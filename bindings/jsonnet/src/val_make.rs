@@ -5,7 +5,10 @@ use std::{
 	os::raw::{c_char, c_double, c_int},
 };
 
-use jrsonnet_evaluator::{val::ArrValue, ObjValue, Val};
+use jrsonnet_evaluator::{
+	val::{ArrValue, NumValue},
+	ObjValue, Val,
+};
 
 use crate::VM;
 
@@ -24,7 +27,9 @@ pub unsafe extern "C" fn jsonnet_json_make_string(_vm: &VM, val: *const c_char) 
 /// Convert the given double to a `JsonnetJsonValue`.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_number(_vm: &VM, v: c_double) -> *mut Val {
-	Box::into_raw(Box::new(Val::Num(v)))
+	Box::into_raw(Box::new(Val::Num(
+		NumValue::new(v).expect("jsonnet numbers are finite"),
+	)))
 }
 
 /// Convert the given `bool` (`1` or `0`) to a `JsonnetJsonValue`.

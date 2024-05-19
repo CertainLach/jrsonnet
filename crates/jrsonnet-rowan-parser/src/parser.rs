@@ -72,9 +72,9 @@ impl Parser {
 			.rev()
 			.take_while(|h| h.0 > self.entered)
 			.count();
-		self.hints.truncate(self.hints.len() - amount)
+		self.hints.truncate(self.hints.len() - amount);
 	}
-	fn clear_expected_syntaxes(&mut self) {
+	fn clear_expected_syntaxes(&self) {
 		self.expected_syntax_tracking_state
 			.set(ExpectedSyntax::Unnamed(TS![]));
 	}
@@ -104,7 +104,7 @@ impl Parser {
 	}
 
 	pub(crate) fn expect(&mut self, kind: SyntaxKind) {
-		self.expect_with_recovery_set(kind, TS![])
+		self.expect_with_recovery_set(kind, TS![]);
 	}
 
 	pub(crate) fn expect_with_recovery_set(
@@ -153,7 +153,7 @@ impl Parser {
 		m
 	}
 	fn bump_assert(&mut self, kind: SyntaxKind) {
-		assert!(self.at(kind), "expected {:?}", kind);
+		assert!(self.at(kind), "expected {kind:?}");
 		self.bump_remap(self.current());
 	}
 	fn bump(&mut self) {
@@ -168,11 +168,11 @@ impl Parser {
 	fn step(&self) {
 		use std::fmt::Write;
 		let steps = self.steps.get();
-		if steps >= 15000000 {
+		if steps >= 15_000_000 {
 			let mut out = "seems like parsing is stuck".to_owned();
 			{
 				let last = 20;
-				write!(out, "\n\nLast {} events:", last).unwrap();
+				write!(out, "\n\nLast {last} events:").unwrap();
 				for (i, event) in self
 					.events
 					.iter()
@@ -205,38 +205,38 @@ impl Parser {
 		self.nth(0)
 	}
 	#[must_use]
-	pub(crate) fn expected_syntax_name(&mut self, name: &'static str) -> ExpectedSyntaxGuard {
+	pub(crate) fn expected_syntax_name(&self, name: &'static str) -> ExpectedSyntaxGuard {
 		self.expected_syntax_tracking_state
 			.set(ExpectedSyntax::Named(name));
 
 		ExpectedSyntaxGuard::new(Rc::clone(&self.expected_syntax_tracking_state))
 	}
-	pub fn at(&mut self, kind: SyntaxKind) -> bool {
+	pub fn at(&self, kind: SyntaxKind) -> bool {
 		self.nth_at(0, kind)
 	}
-	pub fn nth_at(&mut self, n: usize, kind: SyntaxKind) -> bool {
+	pub fn nth_at(&self, n: usize, kind: SyntaxKind) -> bool {
 		if n == 0 {
 			if let ExpectedSyntax::Unnamed(kinds) = self.expected_syntax_tracking_state.get() {
 				let kinds = kinds.with(kind);
 				self.expected_syntax_tracking_state
-					.set(ExpectedSyntax::Unnamed(kinds))
+					.set(ExpectedSyntax::Unnamed(kinds));
 			}
 		}
 		self.nth(n) == kind
 	}
-	pub fn at_ts(&mut self, set: SyntaxKindSet) -> bool {
+	pub fn at_ts(&self, set: SyntaxKindSet) -> bool {
 		if let ExpectedSyntax::Unnamed(kinds) = self.expected_syntax_tracking_state.get() {
 			let kinds = kinds.union(set);
 			self.expected_syntax_tracking_state
-				.set(ExpectedSyntax::Unnamed(kinds))
+				.set(ExpectedSyntax::Unnamed(kinds));
 		}
 		set.contains(self.current())
 	}
-	pub fn at_end(&mut self) -> bool {
+	pub fn at_end(&self) -> bool {
 		self.at(EOF)
 	}
 }
-pub(crate) struct ExpectedSyntaxGuard {
+pub struct ExpectedSyntaxGuard {
 	expected_syntax_tracking_state: Rc<Cell<ExpectedSyntax>>,
 }
 
@@ -263,8 +263,8 @@ pub enum ExpectedSyntax {
 impl fmt::Display for ExpectedSyntax {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			ExpectedSyntax::Named(name) => write!(f, "{name}"),
-			ExpectedSyntax::Unnamed(set) => write!(f, "{set}"),
+			Self::Named(name) => write!(f, "{name}"),
+			Self::Unnamed(set) => write!(f, "{set}"),
 		}
 	}
 }
@@ -298,8 +298,7 @@ fn expr(p: &mut Parser) -> CompletedMarker {
 		}
 	}
 	match expr_binding_power(p, 0) {
-		Ok(m) => m,
-		Err(m) => m,
+		Ok(m) | Err(m) => m,
 	};
 	m.complete(p, EXPR)
 }
@@ -399,7 +398,7 @@ fn field_name(p: &mut Parser) {
 }
 fn visibility(p: &mut Parser) {
 	if p.at_ts(TS![: :: :::]) {
-		p.bump()
+		p.bump();
 	} else {
 		p.error_with_recovery_set(TS![=]);
 	}
@@ -556,7 +555,7 @@ fn args_desc(p: &mut Parser) {
 			expr(p);
 			let arg = m.complete(p, ARG);
 			if started_named.get() {
-				unnamed_after_named.push(arg)
+				unnamed_after_named.push(arg);
 			}
 		}
 		if comma(p) {
@@ -566,7 +565,7 @@ fn args_desc(p: &mut Parser) {
 	}
 	p.expect(T![')']);
 	if p.at(T![tailstrict]) {
-		p.bump()
+		p.bump();
 	}
 
 	for errored in unnamed_after_named {
@@ -719,7 +718,7 @@ fn destruct_rest(p: &mut Parser) {
 	let m = p.start();
 	p.bump_assert(T![...]);
 	if p.at(IDENT) {
-		p.bump()
+		p.bump();
 	}
 	m.complete(p, DESTRUCT_REST);
 }

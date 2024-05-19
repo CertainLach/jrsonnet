@@ -26,7 +26,7 @@ pub extern "C" fn jsonnet_json_extract_string(_vm: &VM, v: &Val) -> *mut c_char 
 pub extern "C" fn jsonnet_json_extract_number(_vm: &VM, v: &Val, out: &mut c_double) -> c_int {
 	match v {
 		Val::Num(n) => {
-			*out = *n;
+			*out = n.get();
 			1
 		}
 		_ => 0,
