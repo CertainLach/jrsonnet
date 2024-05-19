@@ -84,8 +84,9 @@ impl<'s> JsonFormat<'s> {
 			debug_truncate_strings: None,
 		}
 	}
-	// Same format as std.toString
-	pub fn std_to_string() -> Self {
+	/// Same format as std.toString, except does not keeps top-level string as-is
+	/// To avoid confusion, the format is private in jrsonnet, use [`ToStringFormat`] instead
+	const fn std_to_string_helper() -> Self {
 		Self {
 			padding: Cow::Borrowed(""),
 			mtype: JsonFormatting::ToString,
@@ -344,10 +345,17 @@ impl ManifestFormat for JsonFormat<'_> {
 	}
 }
 
+/// Same as [`JsonFormat`] with pre-set options, but top-level string is serialized as-is,
+/// without quoting.
 pub struct ToStringFormat;
 impl ManifestFormat for ToStringFormat {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
-		JsonFormat::std_to_string().manifest_buf(val, out)
+		const JSON_TO_STRING: JsonFormat = JsonFormat::std_to_string_helper();
+		if let Some(str) = val.as_str() {
+			out.push_str(&str);
+			return Ok(());
+		}
+		JSON_TO_STRING.manifest_buf(val, out)
 	}
 	fn file_trailing_newline(&self) -> bool {
 		false

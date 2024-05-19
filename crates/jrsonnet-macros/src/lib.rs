@@ -132,11 +132,6 @@ enum Optionality {
 	Optional,
 	Default(Expr),
 }
-impl Optionality {
-	fn is_optional(&self) -> bool {
-		!matches!(self, Self::Required)
-	}
-}
 
 enum ArgInfo {
 	Normal {
