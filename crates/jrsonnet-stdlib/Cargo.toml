@@ -11,8 +11,6 @@ version.workspace = true
 workspace = true
 
 [features]
-# Enables legacy `std.thisFile` support, at the cost of worse caching
-legacy-this-file = []
 # Add order preservation flag to some functions
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
 # Bigint type

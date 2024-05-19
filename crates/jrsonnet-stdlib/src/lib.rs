@@ -13,9 +13,8 @@ pub use hash::*;
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{CallLocation, FuncVal, TlaArg},
-	tb,
 	trace::PathResolver,
-	ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
+	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
@@ -328,19 +327,12 @@ fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 
 #[derive(Trace, Clone)]
 pub struct ContextInitializer {
-	/// When we don't need to support legacy-this-file, we can reuse same context for all files
-	#[cfg(not(feature = "legacy-this-file"))]
-	context: jrsonnet_evaluator::Context,
-	/// For `populate`
-	#[cfg(not(feature = "legacy-this-file"))]
-	stdlib_thunk: Thunk<Val>,
-	/// Otherwise, we can only keep first stdlib layer, and then stack thisFile on top of it
-	#[cfg(feature = "legacy-this-file")]
+	/// std without applied thisFile overlay
 	stdlib_obj: ObjValue,
 	settings: Rc<RefCell<Settings>>,
 }
 impl ContextInitializer {
-	pub fn new(s: State, resolver: PathResolver) -> Self {
+	pub fn new(resolver: PathResolver) -> Self {
 		let settings = Settings {
 			ext_vars: HashMap::new(),
 			ext_natives: HashMap::new(),
@@ -349,20 +341,7 @@ impl ContextInitializer {
 		};
 		let settings = Rc::new(RefCell::new(settings));
 		let stdlib_obj = stdlib_uncached(settings.clone());
-		#[cfg(not(feature = "legacy-this-file"))]
-		let stdlib_thunk = Thunk::evaluated(Val::Obj(stdlib_obj));
-		#[cfg(feature = "legacy-this-file")]
-		let _ = s;
 		Self {
-			#[cfg(not(feature = "legacy-this-file"))]
-			context: {
-				let mut context = ContextBuilder::with_capacity(s, 1);
-				context.bind("std", stdlib_thunk.clone());
-				context.build()
-			},
-			#[cfg(not(feature = "legacy-this-file"))]
-			stdlib_thunk,
-			#[cfg(feature = "legacy-this-file")]
 			stdlib_obj,
 			settings,
 		}
@@ -412,15 +391,6 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	fn reserve_vars(&self) -> usize {
 		1
 	}
-	#[cfg(not(feature = "legacy-this-file"))]
-	fn initialize(&self, _s: State, _source: Source) -> jrsonnet_evaluator::Context {
-		self.context.clone()
-	}
-	#[cfg(not(feature = "legacy-this-file"))]
-	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
-		builder.bind("std", self.stdlib_thunk.clone());
-	}
-	#[cfg(feature = "legacy-this-file")]
 	fn populate(&self, source: Source, builder: &mut ContextBuilder) {
 		let mut std = ObjValueBuilder::new();
 		std.with_super(self.stdlib_obj.clone());
@@ -437,17 +407,5 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 	}
 	fn as_any(&self) -> &dyn std::any::Any {
 		self
-	}
-}
-
-pub trait StateExt {
-	/// This method was previously implemented in jrsonnet-evaluator itself
-	fn with_stdlib(&self);
-}
-
-impl StateExt for State {
-	fn with_stdlib(&self) {
-		let initializer = ContextInitializer::new(self.clone(), PathResolver::new_cwd_fallback());
-		self.settings_mut().context_initializer = tb!(initializer);
 	}
 }
