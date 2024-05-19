@@ -2,7 +2,7 @@ use std::borrow::Cow;
 
 use jrsonnet_interner::IStr;
 use serde::{
-	de::Visitor,
+	de::{self, Visitor},
 	ser::{
 		Error, SerializeMap, SerializeSeq, SerializeStruct, SerializeStructVariant, SerializeTuple,
 		SerializeTupleStruct, SerializeTupleVariant,
@@ -11,7 +11,8 @@ use serde::{
 };
 
 use crate::{
-	arr::ArrValue, runtime_error, Error as JrError, ObjValue, ObjValueBuilder, Result, State, Val,
+	arr::ArrValue, runtime_error, val::NumValue, Error as JrError, ObjValue, ObjValueBuilder,
+	Result, State, Val,
 };
 
 impl<'de> Deserialize<'de> for Val {
@@ -37,22 +38,21 @@ impl<'de> Deserialize<'de> for Val {
 
 			fn visit_bool<E>(self, v: bool) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				Ok(Val::Bool(v))
 			}
 			fn visit_f64<E>(self, v: f64) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
-				if !v.is_finite() {
-					return Err(E::custom("only finite numbers are supported"));
-				}
-				Ok(Val::Num(v))
+				Ok(Val::Num(NumValue::new(v).ok_or_else(|| {
+					E::custom("only finite numbers are supported")
+				})?))
 			}
 			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				Ok(Val::string(v))
 			}
@@ -67,27 +67,27 @@ impl<'de> Deserialize<'de> for Val {
 			// }
 			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
-				Ok(Val::Num(v as f64))
+				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
 			}
 			fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
-				Ok(Val::Num(v as f64))
+				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
 			}
 
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				Ok(Val::Arr(ArrValue::bytes(v.into())))
 			}
 
 			fn visit_none<E>(self) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				Ok(Val::Null)
 			}
@@ -100,7 +100,7 @@ impl<'de> Deserialize<'de> for Val {
 
 			fn visit_unit<E>(self) -> Result<Self::Value, E>
 			where
-				E: serde::de::Error,
+				E: de::Error,
 			{
 				Ok(Val::Null)
 			}
@@ -114,7 +114,7 @@ impl<'de> Deserialize<'de> for Val {
 
 			fn visit_seq<A>(self, mut seq: A) -> Result<Self::Value, A::Error>
 			where
-				A: serde::de::SeqAccess<'de>,
+				A: de::SeqAccess<'de>,
 			{
 				let mut out = seq.size_hint().map_or_else(Vec::new, Vec::with_capacity);
 
@@ -127,7 +127,7 @@ impl<'de> Deserialize<'de> for Val {
 
 			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
 			where
-				A: serde::de::MapAccess<'de>,
+				A: de::MapAccess<'de>,
 			{
 				let mut out = map
 					.size_hint()
@@ -159,11 +159,12 @@ impl Serialize for Val {
 			Self::Null => serializer.serialize_none(),
 			Self::Str(s) => serializer.serialize_str(&s.clone().into_flat()),
 			Self::Num(n) => {
+				let n = n.get();
 				if n.fract() == 0.0 {
-					let n = *n as i64;
+					let n = n as i64;
 					serializer.serialize_i64(n)
 				} else {
-					serializer.serialize_f64(*n)
+					serializer.serialize_f64(n)
 				}
 			}
 			#[cfg(feature = "exp-bigint")]
@@ -449,15 +450,15 @@ impl Serializer for IntoValSerializer {
 	}
 
 	fn serialize_i8(self, v: i8) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_i16(self, v: i16) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_i32(self, v: i32) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_i64(self, v: i64) -> Result<Val> {
@@ -465,15 +466,15 @@ impl Serializer for IntoValSerializer {
 	}
 
 	fn serialize_u8(self, v: u8) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_u16(self, v: u16) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_u32(self, v: u32) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::Num(v.into()))
 	}
 
 	fn serialize_u64(self, v: u64) -> Result<Val> {
@@ -481,11 +482,11 @@ impl Serializer for IntoValSerializer {
 	}
 
 	fn serialize_f32(self, v: f32) -> Result<Val> {
-		Ok(Val::Num(f64::from(v)))
+		Ok(Val::try_num(f64::from(v))?)
 	}
 
 	fn serialize_f64(self, v: f64) -> Result<Val> {
-		Ok(Val::Num(v))
+		Ok(Val::try_num(v)?)
 	}
 
 	fn serialize_char(self, v: char) -> Result<Val> {

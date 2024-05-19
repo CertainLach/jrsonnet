@@ -275,7 +275,7 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	Ok(Val::Num(arr.iter().sum::<f64>() / (arr.len() as f64)))
+	Ok(Val::try_num(arr.iter().sum::<f64>() / (arr.len() as f64))?)
 }
 
 #[builtin]

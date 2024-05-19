@@ -1,6 +1,6 @@
 use std::{fmt::Display, rc::Rc};
 
-mod conversions;
+pub(crate) mod conversions;
 pub use conversions::*;
 use jrsonnet_gcmodule::Trace;
 pub use jrsonnet_types::{ComplexValType, ValType};
@@ -155,10 +155,11 @@ impl CheckType for ComplexValType {
 			},
 			Self::BoundedNumber(from, to) => {
 				if let Val::Num(n) = value {
-					if from.map(|from| from > *n).unwrap_or(false)
-						|| to.map(|to| to < *n).unwrap_or(false)
+					let n = n.get();
+					if from.map(|from| from > n).unwrap_or(false)
+						|| to.map(|to| to < n).unwrap_or(false)
 					{
-						return Err(TypeError::BoundsFailed(*n, *from, *to).into());
+						return Err(TypeError::BoundsFailed(n, *from, *to).into());
 					}
 					Ok(())
 				} else {

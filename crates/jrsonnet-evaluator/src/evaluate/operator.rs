@@ -17,10 +17,10 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	use UnaryOpType::*;
 	use Val::*;
 	Ok(match (op, b) {
-		(Plus, Num(n)) => Num(*n),
-		(Minus, Num(n)) => Num(-*n),
+		(Plus, Num(n)) => Val::Num(*n),
+		(Minus, Num(n)) => Val::try_num(-n.get())?,
 		(Not, Bool(v)) => Bool(!v),
-		(BitNot, Num(n)) => Num(!(*n as i64) as f64),
+		(BitNot, Num(n)) => Val::try_num(!(n.get() as i64) as f64)?,
 		(op, o) => bail!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
 }
@@ -40,7 +40,7 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 		(Obj(v1), Obj(v2)) => Obj(v2.extend_from(v1.clone())),
 		(Arr(a), Arr(b)) => Val::Arr(ArrValue::extended(a.clone(), b.clone())),
 
-		(Num(v1), Num(v2)) => Val::new_checked_num(v1 + v2)?,
+		(Num(v1), Num(v2)) => Val::try_num(v1.get() + v2.get())?,
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a + &**b)),
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
@@ -55,10 +55,10 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 	use Val::*;
 	match (a, b) {
 		(Num(a), Num(b)) => {
-			if *b == 0.0 {
+			if b.get() == 0.0 {
 				bail!(DivisionByZero)
 			}
-			Ok(Num(a % b))
+			Ok(Val::try_num(a.get() % b.get())?)
 		}
 		(Str(str), vals) => {
 			String::into_untyped(std_format(&str.clone().into_flat(), vals.clone())?)
@@ -143,39 +143,39 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone().into_flat(), true)),
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
-		(Str(v1), Mul, Num(v2)) => Val::string(v1.to_string().repeat(*v2 as usize)),
+		(Str(v1), Mul, Num(v2)) => Val::string(v1.to_string().repeat(v2.get() as usize)),
 
 		// Bool X Bool
 		(Bool(a), And, Bool(b)) => Bool(*a && *b),
 		(Bool(a), Or, Bool(b)) => Bool(*a || *b),
 
 		// Num X Num
-		(Num(v1), Mul, Num(v2)) => Val::new_checked_num(v1 * v2)?,
+		(Num(v1), Mul, Num(v2)) => Val::try_num(v1.get() * v2.get())?,
 		(Num(v1), Div, Num(v2)) => {
-			if *v2 == 0.0 {
+			if v2.get() == 0.0 {
 				bail!(DivisionByZero)
 			}
-			Val::new_checked_num(v1 / v2)?
+			Val::try_num(v1.get() / v2.get())?
 		}
 
-		(Num(v1), Sub, Num(v2)) => Val::new_checked_num(v1 - v2)?,
+		(Num(v1), Sub, Num(v2)) => Val::try_num(v1.get() - v2.get())?,
 
-		(Num(v1), BitAnd, Num(v2)) => Num((*v1 as i64 & *v2 as i64) as f64),
-		(Num(v1), BitOr, Num(v2)) => Num((*v1 as i64 | *v2 as i64) as f64),
-		(Num(v1), BitXor, Num(v2)) => Num((*v1 as i64 ^ *v2 as i64) as f64),
+		(Num(v1), BitAnd, Num(v2)) => Val::try_num((v1.get() as i64 & v2.get() as i64) as f64)?,
+		(Num(v1), BitOr, Num(v2)) => Val::try_num((v1.get() as i64 | v2.get() as i64) as f64)?,
+		(Num(v1), BitXor, Num(v2)) => Val::try_num((v1.get() as i64 ^ v2.get() as i64) as f64)?,
 		(Num(v1), Lhs, Num(v2)) => {
-			if *v2 < 0.0 {
+			if v2.get() < 0.0 {
 				bail!("shift by negative exponent")
 			}
-			let exp = ((*v2 as i64) & 63) as u32;
-			Num((*v1 as i64).wrapping_shl(exp) as f64)
+			let exp = ((v2.get() as i64) & 63) as u32;
+			Val::try_num((v1.get() as i64).wrapping_shl(exp) as f64)?
 		}
 		(Num(v1), Rhs, Num(v2)) => {
-			if *v2 < 0.0 {
+			if v2.get() < 0.0 {
 				bail!("shift by negative exponent")
 			}
-			let exp = ((*v2 as i64) & 63) as u32;
-			Num((*v1 as i64).wrapping_shr(exp) as f64)
+			let exp = ((v2.get() as i64) & 63) as u32;
+			Val::try_num((v1.get() as i64).wrapping_shr(exp) as f64)?
 		}
 
 		// Bigint X Bigint
