@@ -1,4 +1,4 @@
-use std::{cell::RefCell, rc::Rc};
+use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 
 use jrsonnet_evaluator::{
 	bail,
@@ -7,7 +7,7 @@ use jrsonnet_evaluator::{
 	manifest::JsonFormat,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
-	Context, Either, IStr, ObjValue, ResultExt, Thunk, Val,
+	Context, Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
 };
 
 use crate::{extvar_source, Settings};
@@ -151,4 +151,34 @@ pub fn builtin_assert_equal(a: Val, b: Val) -> Result<bool> {
 	let a = a.manifest(&format).description("<a> manifestification")?;
 	let b = b.manifest(&format).description("<b> manifestification")?;
 	bail!("assertion failed: A != B\nA: {a}\nB: {b}")
+}
+
+#[builtin]
+pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
+	let Some(patch) = patch.as_obj() else {
+		return Ok(patch);
+	};
+	let Some(target) = target.as_obj() else {
+		return Ok(Val::Obj(patch));
+	};
+	let target_fields = target.fields().into_iter().collect::<BTreeSet<IStr>>();
+	let patch_fields = patch.fields().into_iter().collect::<BTreeSet<IStr>>();
+
+	let mut out = ObjValueBuilder::new();
+	for field in target_fields.union(&patch_fields) {
+		let Some(field_patch) = patch.get(field.clone())? else {
+			out.field(field.clone()).value(target.get(field.clone())?.expect("we're iterating over fields union, if field is missing in patch - it exists in target"));
+			continue;
+		};
+		if matches!(field_patch, Val::Null) {
+			continue;
+		}
+		let Some(field_target) = target.get(field.clone())? else {
+			out.field(field.clone()).value(field_patch);
+			continue;
+		};
+		out.field(field.clone())
+			.value(builtin_merge_patch(field_target, field_patch)?);
+	}
+	Ok(out.build().into())
 }

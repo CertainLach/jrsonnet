@@ -11,30 +11,6 @@
     else
       { [k]: func(k, obj[k]) for k in std.objectFields(obj) },
 
-  mergePatch(target, patch)::
-    if std.isObject(patch) then
-      local target_object =
-        if std.isObject(target) then target else {};
-
-      local target_fields =
-        if std.isObject(target_object) then std.objectFields(target_object) else [];
-
-      local null_fields = [k for k in std.objectFields(patch) if patch[k] == null];
-      local both_fields = std.setUnion(target_fields, std.objectFields(patch));
-
-      {
-        [k]:
-          if !std.objectHas(patch, k) then
-            target_object[k]
-          else if !std.objectHas(target_object, k) then
-            std.mergePatch(null, patch[k]) tailstrict
-          else
-            std.mergePatch(target_object[k], patch[k]) tailstrict
-        for k in std.setDiff(both_fields, null_fields)
-      }
-    else
-      patch,
-
   resolvePath(f, r)::
     local arr = std.split(f, '/');
     std.join('/', std.makeArray(std.length(arr) - 1, function(i) arr[i]) + [r]),

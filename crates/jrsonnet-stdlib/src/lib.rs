@@ -215,6 +215,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("startsWith", builtin_starts_with::INST),
 		("endsWith", builtin_ends_with::INST),
 		("assertEqual", builtin_assert_equal::INST),
+		("mergePatch", builtin_merge_patch::INST),
 		// Sets
 		("setMember", builtin_set_member::INST),
 		("setInter", builtin_set_inter::INST),
