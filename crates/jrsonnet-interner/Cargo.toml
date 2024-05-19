@@ -10,20 +10,8 @@ version.workspace = true
 [lints]
 workspace = true
 
-[features]
-default = []
-# Implement value serialization using structdump
-structdump = ["dep:structdump"]
-# Implement value serialization using serde
-#
-# Warning: serialized values won't be deduplicated
-serde = ["dep:serde"]
-
 [dependencies]
 jrsonnet-gcmodule.workspace = true
-
-serde = { workspace = true, optional = true }
-structdump = { workspace = true, optional = true }
 
 rustc-hash.workspace = true
 hashbrown = { workspace = true, features = ["inline-more"] }

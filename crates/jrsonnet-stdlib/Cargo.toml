@@ -11,14 +11,6 @@ version.workspace = true
 workspace = true
 
 [features]
-default = ["codegenerated-stdlib"]
-# Speed-up initialization by generating code for parsed stdlib,
-# instead of invoking parser for it.
-# This is mutually exclusive with `serialized-stdlib`.
-codegenerated-stdlib = ["jrsonnet-parser/structdump"]
-# Use the embedded serialized stdlib.
-# This is mutually exclusive with `codegenerated-stdlib`.
-serialized-stdlib = []
 # Enables legacy `std.thisFile` support, at the cost of worse caching
 legacy-this-file = []
 # Add order preservation flag to some functions
@@ -36,9 +28,7 @@ jrsonnet-macros.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-gcmodule.workspace = true
 
-# Used for stdlib AST serialization
-bincode = { workspace = true, optional = true }
-# Used both for stdlib AST serialization and std.parseJson/std.parseYaml
+# Used for std.parseJson/std.parseYaml
 serde.workspace = true
 
 # std.md5
@@ -65,4 +55,3 @@ rustc-hash = { workspace = true, optional = true }
 
 [build-dependencies]
 jrsonnet-parser.workspace = true
-structdump = { workspace = true, features = ["derive"] }

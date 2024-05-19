@@ -219,45 +219,6 @@ impl From<&[u8]> for IBytes {
 	}
 }
 
-#[cfg(feature = "serde")]
-impl serde::Serialize for IStr {
-	fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
-	where
-		S: serde::Serializer,
-	{
-		self.as_str().serialize(serializer)
-	}
-}
-
-#[cfg(feature = "serde")]
-impl<'de> serde::Deserialize<'de> for IStr {
-	fn deserialize<D>(deserializer: D) -> Result<Self, D::Error>
-	where
-		D: serde::Deserializer<'de>,
-	{
-		let str = <&str>::deserialize(deserializer)?;
-		Ok(intern_str(str))
-	}
-}
-
-#[cfg(feature = "structdump")]
-impl structdump::Codegen for IStr {
-	fn gen_code(
-		&self,
-		res: &mut structdump::CodegenResult,
-		_unique: bool,
-	) -> structdump::TokenStream {
-		let s: &str = self;
-		res.add_code(
-			structdump::quote! {
-				structdump_import::IStr::from(#s)
-			},
-			Some(structdump::quote![structdump_import::IStr]),
-			false,
-		)
-	}
-}
-
 thread_local! {
 	static POOL: RefCell<HashMap<Inner, (), BuildHasherDefault<FxHasher>>> = RefCell::new(HashMap::with_capacity_and_hasher(200, BuildHasherDefault::default()));
 }
