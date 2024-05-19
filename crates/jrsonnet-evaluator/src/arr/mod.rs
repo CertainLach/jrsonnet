@@ -54,7 +54,12 @@ impl ArrValue {
 
 	#[must_use]
 	pub fn map(self, mapper: FuncVal) -> Self {
-		Self::new(MappedArray::new(self, mapper))
+		Self::new(<MappedArray<false>>::new(self, mapper))
+	}
+
+	#[must_use]
+	pub fn map_with_index(self, mapper: FuncVal) -> Self {
+		Self::new(<MappedArray<true>>::new(self, mapper))
 	}
 
 	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {

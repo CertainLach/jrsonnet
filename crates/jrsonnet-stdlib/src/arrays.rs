@@ -62,6 +62,12 @@ pub fn builtin_map(func: FuncVal, arr: IndexableVal) -> ArrValue {
 }
 
 #[builtin]
+pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
+	let arr = arr.to_array();
+	arr.map_with_index(func)
+}
+
+#[builtin]
 pub fn builtin_flatmap(
 	func: NativeFn<((Either![String, Val],), Val)>,
 	arr: IndexableVal,
