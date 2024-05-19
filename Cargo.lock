@@ -543,8 +543,6 @@ dependencies = [
  "hashbrown 0.14.5",
  "jrsonnet-gcmodule",
  "rustc-hash",
- "serde",
- "structdump",
 ]
 
 [[package]]
@@ -563,9 +561,7 @@ dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
  "peg",
- "serde",
  "static_assertions",
- "structdump",
 ]
 
 [[package]]
@@ -586,7 +582,6 @@ name = "jrsonnet-stdlib"
 version = "0.5.0-pre96"
 dependencies = [
  "base64",
- "bincode",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
  "jrsonnet-macros",
@@ -602,7 +597,6 @@ dependencies = [
  "sha1",
  "sha2",
  "sha3",
- "structdump",
 ]
 
 [[package]]
@@ -1102,28 +1096,6 @@ name = "strsim"
 version = "0.11.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7da8b5736845d9f2fcb837ea5d9e2628564b3b043a70948a3f0b778838c5fb4f"
-
-[[package]]
-name = "structdump"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "b0570327507bf281d8a6e6b0d4c082b12cb6bcee27efce755aa5efacd44076c1"
-dependencies = [
- "proc-macro2",
- "quote",
- "structdump-derive",
-]
-
-[[package]]
-name = "structdump-derive"
-version = "0.2.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "29cc0b59cfa11f1bceda09a9a7e37e6a6c3138575fd24ade8aa9af6d09aedf28"
-dependencies = [
- "proc-macro2",
- "quote",
- "syn 1.0.109",
-]
 
 [[package]]
 name = "syn"

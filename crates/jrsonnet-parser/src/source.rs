@@ -8,10 +8,6 @@ use std::{
 
 use jrsonnet_gcmodule::{Trace, Tracer};
 use jrsonnet_interner::{IBytes, IStr};
-#[cfg(feature = "serde")]
-use serde::{Deserialize, Serialize};
-#[cfg(feature = "structdump")]
-use structdump::Codegen;
 
 use crate::location::{location_to_offset, offset_to_location, CodeLocation};
 
@@ -133,31 +129,6 @@ impl Default for SourcePath {
 	}
 }
 
-#[cfg(feature = "structdump")]
-impl Codegen for SourcePath {
-	fn gen_code(
-		&self,
-		res: &mut structdump::CodegenResult,
-		unique: bool,
-	) -> structdump::TokenStream {
-		let source_virtual = self
-			.0
-			.as_any()
-			.downcast_ref::<SourceVirtual>()
-			.expect("can only codegen for virtual source paths!")
-			.0
-			.clone();
-		let val = res.add_value(source_virtual, false);
-		res.add_code(
-			structdump::quote! {
-				structdump_import::SourcePath::new(structdump_import::SourceVirtual(#val))
-			},
-			Some(structdump::quote!(SourcePath)),
-			unique,
-		)
-	}
-}
-
 #[derive(Trace, Hash, PartialEq, Eq, Debug)]
 struct SourceDefault;
 impl Display for SourceDefault {
@@ -237,7 +208,6 @@ impl SourcePathT for SourceDirectory {
 ///
 /// It is used for --ext-code=.../--tla-code=.../standard library source code by default,
 /// and user can construct arbitrary values by hand, without asking import resolver
-#[cfg_attr(feature = "structdump", derive(Codegen))]
 #[derive(Trace, Hash, PartialEq, Eq, Debug, Clone)]
 pub struct SourceVirtual(pub IStr);
 impl Display for SourceVirtual {
@@ -288,8 +258,6 @@ impl SourcePathT for SourceFifo {
 
 /// Either real file, or virtual
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
-#[cfg_attr(feature = "structdump", derive(Codegen))]
-#[cfg_attr(feature = "serde", derive(Serialize, Deserialize))]
 #[derive(Clone, PartialEq, Eq, Debug)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
 

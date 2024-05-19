@@ -36,7 +36,6 @@ pub use crate::regex::*;
 mod arrays;
 mod compat;
 mod encoding;
-mod expr;
 mod hash;
 mod manifest;
 mod math;
@@ -54,14 +53,6 @@ mod types;
 #[allow(clippy::too_many_lines)]
 pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
-
-	let expr = expr::stdlib_expr();
-	let eval = jrsonnet_evaluator::evaluate(ContextBuilder::dangerous_empty_state().build(), &expr)
-		.expect("stdlib.jsonnet should have no errors")
-		.as_obj()
-		.expect("stdlib.jsonnet should evaluate to object");
-
-	builder.with_super(eval);
 
 	// FIXME: Use PHF
 	for (name, builtin) in [

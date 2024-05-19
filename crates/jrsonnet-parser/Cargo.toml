@@ -11,21 +11,6 @@ version.workspace = true
 default = []
 exp-destruct = []
 exp-null-coaelse = []
-# Implement serialization of AST using structdump
-#
-# Structdump generates code, which exactly replicated passed AST
-# Contrary to serde, has no code bloat problem, and is recommended
-#
-# The only limitation is serialized form is only useable if built from build script
-structdump = ["dep:structdump", "jrsonnet-interner/structdump"]
-# Implement serialization of AST using serde
-#
-# Warning: as serde doesn't deduplicate strings, `Source` struct will bloat
-# output binary with repeating source code. To resolve this issue, you should either
-# override serialization of this struct using custom `Serializer`/`Deserializer`,
-# not rely on Source, and fill its `source_code` with empty value, or use `structdump`
-# instead
-serde = ["dep:serde"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
@@ -34,6 +19,3 @@ jrsonnet-gcmodule.workspace = true
 static_assertions.workspace = true
 
 peg.workspace = true
-
-serde = { workspace = true, features = ["derive", "rc"], optional = true }
-structdump = { workspace = true, features = ["derive"], optional = true }
