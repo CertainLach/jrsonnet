@@ -44,9 +44,6 @@ exp-null-coaelse = [
 # --exp-apply
 exp-apply = []
 
-# std.thisFile support
-legacy-this-file = ["jrsonnet-cli/legacy-this-file"]
-
 nightly = ["jrsonnet-evaluator/nightly"]
 
 [dependencies]

@@ -170,7 +170,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 	let import_resolver = opts.misc.import_resolver();
 	s.set_import_resolver(import_resolver);
 
-	let std = opts.std.context_initializer(s)?;
+	let std = opts.std.context_initializer()?;
 	if let Some(std) = std {
 		s.set_context_initializer(std);
 	}

@@ -1,7 +1,7 @@
 use std::{fs::read_to_string, str::FromStr};
 
 use clap::Parser;
-use jrsonnet_evaluator::{trace::PathResolver, Result, State};
+use jrsonnet_evaluator::{trace::PathResolver, Result};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone)]
@@ -104,11 +104,11 @@ pub struct StdOpts {
 	ext_code_file: Vec<ExtFile>,
 }
 impl StdOpts {
-	pub fn context_initializer(&self, s: &State) -> Result<Option<ContextInitializer>> {
+	pub fn context_initializer(&self) -> Result<Option<ContextInitializer>> {
 		if self.no_stdlib {
 			return Ok(None);
 		}
-		let ctx = ContextInitializer::new(s.clone(), PathResolver::new_cwd_fallback());
+		let ctx = ContextInitializer::new(PathResolver::new_cwd_fallback());
 		for ext in &self.ext_str {
 			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
 		}
