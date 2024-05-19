@@ -196,7 +196,7 @@ fn manifest_table_internal(
 		#[cfg(feature = "exp-preserve-order")]
 		options.preserve_order,
 	) {
-		let value = value?;
+		let value = value.with_description(|| format!("field <{key}> evaluation"))?;
 		if is_section(&value)? {
 			sections.push((key, value));
 		} else {

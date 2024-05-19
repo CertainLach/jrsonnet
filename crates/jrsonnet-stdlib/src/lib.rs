@@ -179,6 +179,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("manifestPython", builtin_manifest_python::INST),
 		("manifestPythonVars", builtin_manifest_python_vars::INST),
 		("manifestXmlJsonml", builtin_manifest_xml_jsonml::INST),
+		("manifestIni", builtin_manifest_ini::INST),
 		// Parse
 		("parseJson", builtin_parse_json::INST),
 		("parseYaml", builtin_parse_yaml::INST),

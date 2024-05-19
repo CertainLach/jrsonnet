@@ -4,7 +4,7 @@ use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::manifest::{
 	JsonFormat, ManifestFormat, StringFormat, ToStringFormat, YamlStreamFormat,
 };
-use jrsonnet_stdlib::{TomlFormat, XmlJsonmlFormat, YamlFormat};
+use jrsonnet_stdlib::{IniFormat, TomlFormat, XmlJsonmlFormat, YamlFormat};
 
 #[derive(Clone, Copy, ValueEnum)]
 pub enum ManifestFormatName {
@@ -14,6 +14,7 @@ pub enum ManifestFormatName {
 	Yaml,
 	Toml,
 	XmlJsonml,
+	Ini,
 }
 
 #[derive(Parser)]
@@ -72,6 +73,10 @@ impl ManifestOpts {
 					preserve_order,
 				)),
 				ManifestFormatName::XmlJsonml => Box::new(XmlJsonmlFormat::cli()),
+				ManifestFormatName::Ini => Box::new(IniFormat::cli(
+					#[cfg(feature = "exp-preserve-order")]
+					preserve_order,
+				)),
 			}
 		};
 		if self.yaml_stream {
