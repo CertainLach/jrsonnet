@@ -1,7 +1,5 @@
 use std::{
-	cmp::Ordering,
-	fmt::{Debug, Display},
-	path::PathBuf,
+	cmp::Ordering, convert::Infallible, fmt::{Debug, Display}, path::PathBuf
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -14,6 +12,7 @@ use crate::{
 	function::{builtin::ParamDefault, CallLocation},
 	stdlib::format::FormatError,
 	typed::TypeLocError,
+	val::ConvertNumValueError,
 	ObjValue,
 };
 
@@ -236,6 +235,9 @@ pub enum ErrorKind {
 	#[error("invalid unicode codepoint: {0}")]
 	InvalidUnicodeCodepointGot(u32),
 
+	#[error("convert num value: {0}")]
+	ConvertNumValue(#[from] ConvertNumValueError),
+
 	#[error("format error: {0}")]
 	Format(#[from] FormatError),
 	#[error("type error: {0}")]
@@ -256,6 +258,12 @@ impl From<anyhow::Error> for Error {
 impl From<ErrorKind> for Error {
 	fn from(e: ErrorKind) -> Self {
 		Self::new(e)
+	}
+}
+
+impl From<Infallible> for Error {
+	fn from(_value: Infallible) -> Self {
+		unreachable!()
 	}
 }
 

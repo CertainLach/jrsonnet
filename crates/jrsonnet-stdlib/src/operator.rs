@@ -6,12 +6,12 @@ use jrsonnet_evaluator::{
 	operator::evaluate_mod_op,
 	stdlib::std_format,
 	typed::{Either, Either2},
-	val::{equals, primitive_equals},
+	val::{equals, primitive_equals, NumValue},
 	IStr, Result, Val,
 };
 
 #[builtin]
-pub fn builtin_mod(a: Either![f64, IStr], b: Val) -> Result<Val> {
+pub fn builtin_mod(a: Either![NumValue, IStr], b: Val) -> Result<Val> {
 	use Either2::*;
 	evaluate_mod_op(
 		&match a {

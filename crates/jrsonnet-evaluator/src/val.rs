@@ -1,14 +1,18 @@
 use std::{
 	cell::RefCell,
+	cmp::Ordering,
 	fmt::{self, Debug, Display},
 	mem::replace,
 	num::NonZeroU32,
+	ops::Deref,
 	rc::Rc,
 };
 
+use derivative::Derivative;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_types::ValType;
+use thiserror::Error;
 
 pub use crate::arr::{ArrValue, ArrayLike};
 use crate::{
@@ -379,15 +383,124 @@ impl PartialEq for StrValue {
 }
 impl Eq for StrValue {}
 impl PartialOrd for StrValue {
-	fn partial_cmp(&self, other: &Self) -> Option<std::cmp::Ordering> {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
 }
 impl Ord for StrValue {
-	fn cmp(&self, other: &Self) -> std::cmp::Ordering {
+	fn cmp(&self, other: &Self) -> Ordering {
 		let a = self.clone().into_flat();
 		let b = other.clone().into_flat();
 		a.cmp(&b)
+	}
+}
+
+/// Represents jsonnet number
+/// Jsonnet numbers are finite f64, with NaNs disallowed
+#[derive(Trace, Clone, Copy, Derivative)]
+#[derivative(Debug = "transparent")]
+#[repr(transparent)]
+pub struct NumValue(f64);
+impl NumValue {
+	/// Creates a [`NumValue`], if value is finite and not NaN
+	pub fn new(v: f64) -> Option<Self> {
+		if !v.is_finite() {
+			return None;
+		}
+		Some(Self(v))
+	}
+	pub const fn get(&self) -> f64 {
+		self.0
+	}
+}
+impl PartialEq for NumValue {
+	fn eq(&self, other: &Self) -> bool {
+		self.0 == other.0
+	}
+}
+impl Eq for NumValue {}
+impl Ord for NumValue {
+	fn cmp(&self, other: &Self) -> Ordering {
+		// Can't use `total_cmp`: its behavior for `-0` and `0`
+		// is not following wanted.
+		self.0.partial_cmp(&other.0).expect("NaNs are disallowed")
+	}
+}
+impl PartialOrd for NumValue {
+	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
+		Some(self.cmp(other))
+	}
+}
+impl Display for NumValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		Display::fmt(&self.0, f)
+	}
+}
+impl Deref for NumValue {
+	type Target = f64;
+
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+macro_rules! impl_num {
+	($($ty:ty),+) => {$(
+		impl From<$ty> for NumValue {
+			fn from(value: $ty) -> Self {
+				Self(value.into())
+			}
+		}
+	)+};
+}
+impl_num!(i8, u8, i16, u16, i32, u32);
+
+#[derive(Clone, Copy, Debug, Error, Trace)]
+pub enum ConvertNumValueError {
+	#[error("overflow")]
+	Overflow,
+	#[error("underflow")]
+	Underflow,
+	#[error("non-finite")]
+	NonFinite,
+}
+impl From<ConvertNumValueError> for Error {
+	fn from(e: ConvertNumValueError) -> Self {
+		Self::new(e.into())
+	}
+}
+
+macro_rules! impl_try_num {
+	($($ty:ty),+) => {$(
+		impl TryFrom<$ty> for NumValue {
+			type Error = ConvertNumValueError;
+			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
+				use crate::typed::conversions::{MIN_SAFE_INTEGER, MAX_SAFE_INTEGER};
+				let value = value as f64;
+				if value < MIN_SAFE_INTEGER {
+					return Err(ConvertNumValueError::Underflow)
+				} else if value > MAX_SAFE_INTEGER {
+					return Err(ConvertNumValueError::Overflow)
+				}
+				// Number is finite.
+				Ok(Self(value))
+			}
+		}
+	)+};
+}
+impl_try_num!(usize, isize, i64, u64);
+
+impl TryFrom<f64> for NumValue {
+	type Error = ConvertNumValueError;
+
+	fn try_from(value: f64) -> Result<Self, Self::Error> {
+		Self::new(value).ok_or(ConvertNumValueError::NonFinite)
+	}
+}
+impl TryFrom<f32> for NumValue {
+	type Error = ConvertNumValueError;
+
+	fn try_from(value: f32) -> Result<Self, Self::Error> {
+		Self::new(f64::from(value)).ok_or(ConvertNumValueError::NonFinite)
 	}
 }
 
@@ -404,7 +517,7 @@ pub enum Val {
 	/// Represents a Jsonnet number.
 	/// Should be finite, and not NaN
 	/// This restriction isn't enforced by enum, as enum field can't be marked as private
-	Num(f64),
+	Num(NumValue),
 	/// Experimental bigint
 	#[cfg(feature = "exp-bigint")]
 	BigInt(#[trace(skip)] Box<num_bigint::BigInt>),
@@ -449,7 +562,7 @@ impl Val {
 	}
 	pub const fn as_num(&self) -> Option<f64> {
 		match self {
-			Self::Num(n) => Some(*n),
+			Self::Num(n) => Some(n.get()),
 			_ => None,
 		}
 	}
@@ -469,16 +582,6 @@ impl Val {
 		match self {
 			Self::Func(f) => Some(f.clone()),
 			_ => None,
-		}
-	}
-
-	/// Creates `Val::Num` after checking for numeric overflow.
-	/// As numbers are `f64`, we can just check for their finity.
-	pub fn new_checked_num(num: f64) -> Result<Self> {
-		if num.is_finite() {
-			Ok(Self::Num(num))
-		} else {
-			bail!("overflow")
 		}
 	}
 
@@ -527,6 +630,15 @@ impl Val {
 	pub fn string(string: impl Into<StrValue>) -> Self {
 		Self::Str(string.into())
 	}
+	pub fn num(num: impl Into<NumValue>) -> Self {
+		Self::Num(num.into())
+	}
+	pub fn try_num<V, E>(num: V) -> Result<Self, E>
+	where
+		NumValue: TryFrom<V, Error = E>,
+	{
+		Ok(Self::Num(num.try_into()?))
+	}
 }
 
 impl From<IStr> for Val {
@@ -560,7 +672,7 @@ pub fn primitive_equals(val_a: &Val, val_b: &Val) -> Result<bool> {
 		(Val::Bool(a), Val::Bool(b)) => a == b,
 		(Val::Null, Val::Null) => true,
 		(Val::Str(a), Val::Str(b)) => a == b,
-		(Val::Num(a), Val::Num(b)) => (a - b).abs() <= f64::EPSILON,
+		(Val::Num(a), Val::Num(b)) => (a.get() - b.get()).abs() <= f64::EPSILON,
 		#[cfg(feature = "exp-bigint")]
 		(Val::BigInt(a), Val::BigInt(b)) => a == b,
 		(Val::Arr(_), Val::Arr(_)) => {

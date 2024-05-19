@@ -17,7 +17,7 @@ use crate::{
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	typed::Typed,
-	val::{CachedUnbound, IndexableVal, StrValue, Thunk, ThunkValue},
+	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk, ThunkValue},
 	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
 	ResultExt, State, Unbound, Val,
 };
@@ -37,7 +37,7 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 	}
 	Some(match &*expr.0 {
 		Expr::Str(s) => Val::string(s.clone()),
-		Expr::Num(n) => Val::Num(*n),
+		Expr::Num(n) => Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values")),
 		Expr::Literal(LiteralType::False) => Val::Bool(false),
 		Expr::Literal(LiteralType::True) => Val::Bool(true),
 		Expr::Literal(LiteralType::Null) => Val::Null,
@@ -438,7 +438,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::Null) => Val::Null,
 		Parened(e) => evaluate(ctx, e)?,
 		Str(v) => Val::string(v.clone()),
-		Num(v) => Val::new_checked_num(*v)?,
+		Num(v) => Val::try_num(*v)?,
 		// I have tried to remove special behavior from super by implementing standalone-super
 		// expresion, but looks like this case still needs special treatment.
 		//
@@ -530,6 +530,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 						n.value_type(),
 					)),
 					(Val::Arr(v), Val::Num(n)) => {
+						let n = n.get();
 						if n.fract() > f64::EPSILON {
 							bail!(FractionalIndex)
 						}
@@ -553,13 +554,13 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 							.clone()
 							.into_flat()
 							.chars()
-							.skip(n as usize)
+							.skip(n.get() as usize)
 							.take(1)
 							.collect::<String>()
 							.into();
 						if v.is_empty() {
 							let size = s.into_flat().chars().count();
-							bail!(StringBoundsError(n as usize, size))
+							bail!(StringBoundsError(n.get() as usize, size))
 						}
 						StrValue::Flat(v)
 					}),

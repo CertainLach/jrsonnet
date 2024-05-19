@@ -116,7 +116,9 @@ pub fn builtin_find_substr(pat: IStr, str: IStr) -> ArrValue {
 		.enumerate()
 	{
 		if &strb[i..i + pat.len()] == pat {
-			out.push(Val::Num(ch_idx as f64));
+			out.push(Val::Num(
+				ch_idx.try_into().expect("unrealisticly long string"),
+			));
 		}
 	}
 	out.into()

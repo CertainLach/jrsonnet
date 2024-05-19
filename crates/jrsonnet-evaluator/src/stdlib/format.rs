@@ -604,10 +604,13 @@ pub fn format_code(
 			}
 		}
 		ConvTypeV::Char => match value.clone() {
-			Val::Num(n) => tmp_out.push(
-				std::char::from_u32(n as u32)
-					.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
-			),
+			Val::Num(n) => {
+				let n = n.get();
+				tmp_out.push(
+					std::char::from_u32(n as u32)
+						.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
+				)
+			}
 			Val::Str(s) => {
 				let s = s.into_flat();
 				if s.chars().count() != 1 {
@@ -786,6 +789,7 @@ pub fn format_obj(str: &str, values: &ObjValue) -> Result<String> {
 #[cfg(test)]
 pub mod test_format {
 	use super::*;
+	use crate::val::NumValue;
 
 	#[test]
 	fn parse() {
@@ -799,17 +803,21 @@ pub mod test_format {
 		);
 	}
 
+	fn num(v: f64) -> Val {
+		Val::Num(NumValue::new(v).expect("finite"))
+	}
+
 	#[test]
 	fn octals() {
-		assert_eq!(format_arr("%#o", &[Val::Num(8.0)]).unwrap(), "010");
-		assert_eq!(format_arr("%#4o", &[Val::Num(8.0)]).unwrap(), " 010");
-		assert_eq!(format_arr("%4o", &[Val::Num(8.0)]).unwrap(), "  10");
-		assert_eq!(format_arr("%04o", &[Val::Num(8.0)]).unwrap(), "0010");
-		assert_eq!(format_arr("%+4o", &[Val::Num(8.0)]).unwrap(), " +10");
-		assert_eq!(format_arr("%+04o", &[Val::Num(8.0)]).unwrap(), "+010");
-		assert_eq!(format_arr("%-4o", &[Val::Num(8.0)]).unwrap(), "10  ");
-		assert_eq!(format_arr("%+-4o", &[Val::Num(8.0)]).unwrap(), "+10 ");
-		assert_eq!(format_arr("%+-04o", &[Val::Num(8.0)]).unwrap(), "+10 ");
+		assert_eq!(format_arr("%#o", &[num(8.0)]).unwrap(), "010");
+		assert_eq!(format_arr("%#4o", &[num(8.0)]).unwrap(), " 010");
+		assert_eq!(format_arr("%4o", &[num(8.0)]).unwrap(), "  10");
+		assert_eq!(format_arr("%04o", &[num(8.0)]).unwrap(), "0010");
+		assert_eq!(format_arr("%+4o", &[num(8.0)]).unwrap(), " +10");
+		assert_eq!(format_arr("%+04o", &[num(8.0)]).unwrap(), "+010");
+		assert_eq!(format_arr("%-4o", &[num(8.0)]).unwrap(), "10  ");
+		assert_eq!(format_arr("%+-4o", &[num(8.0)]).unwrap(), "+10 ");
+		assert_eq!(format_arr("%+-04o", &[num(8.0)]).unwrap(), "+10 ");
 	}
 
 	#[test]
@@ -817,7 +825,7 @@ pub mod test_format {
 		assert_eq!(
 			format_arr(
 				"How much error budget is left looking at our %.3f%% availability gurantees?",
-				&[Val::Num(4.0)]
+				&[num(4.0)]
 			)
 			.unwrap(),
 			"How much error budget is left looking at our 4.000% availability gurantees?"

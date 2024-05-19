@@ -10,7 +10,7 @@ use crate::{
 	bail,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	typed::CheckType,
-	val::{IndexableVal, StrValue, ThunkMapper},
+	val::{IndexableVal, NumValue, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
@@ -120,7 +120,8 @@ where
 	}
 }
 
-const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
+pub const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
+pub const MIN_SAFE_INTEGER: f64 = -MAX_SAFE_INTEGER;
 
 macro_rules! impl_int {
 	($($ty:ty)*) => {$(
@@ -131,6 +132,7 @@ macro_rules! impl_int {
 				<Self as Typed>::TYPE.check(&value)?;
 				match value {
 					Val::Num(n) => {
+						let n = n.get();
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
 							bail!(
@@ -143,9 +145,8 @@ macro_rules! impl_int {
 					_ => unreachable!(),
 				}
 			}
-			#[allow(clippy::cast_lossless)]
 			fn into_untyped(value: Self) -> Result<Val> {
-				Ok(Val::Num(value as f64))
+				Ok(Val::Num(value.into()))
 			}
 		}
 	)*};
@@ -187,6 +188,7 @@ macro_rules! impl_bounded_int {
 				<Self as Typed>::TYPE.check(&value)?;
 				match value {
 					Val::Num(n) => {
+						let n = n.get();
 						#[allow(clippy::float_cmp)]
 						if n.trunc() != n {
 							bail!(
@@ -202,7 +204,7 @@ macro_rules! impl_bounded_int {
 
 			#[allow(clippy::cast_lossless)]
 			fn into_untyped(value: Self) -> Result<Val> {
-				Ok(Val::Num(value.0 as f64))
+				Ok(Val::try_num(value.0)?)
 			}
 		}
 	)*};
@@ -220,13 +222,13 @@ impl Typed for f64 {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Num);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Num(value))
+		Ok(Val::try_num(value)?)
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Num(n) => Ok(n),
+			Val::Num(n) => Ok(n.get()),
 			_ => unreachable!(),
 		}
 	}
@@ -237,13 +239,13 @@ impl Typed for PositiveF64 {
 	const TYPE: &'static ComplexValType = &ComplexValType::BoundedNumber(Some(0.0), None);
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		Ok(Val::Num(value.0))
+		Ok(Val::try_num(value.0)?)
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
-			Val::Num(n) => Ok(Self(n)),
+			Val::Num(n) => Ok(Self(n.get())),
 			_ => unreachable!(),
 		}
 	}
@@ -253,16 +255,14 @@ impl Typed for usize {
 		&ComplexValType::BoundedNumber(Some(0.0), Some(MAX_SAFE_INTEGER));
 
 	fn into_untyped(value: Self) -> Result<Val> {
-		if value > MAX_SAFE_INTEGER as Self {
-			bail!("number is too large")
-		}
-		Ok(Val::Num(value as f64))
+		Ok(Val::try_num(value)?)
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
 		<Self as Typed>::TYPE.check(&value)?;
 		match value {
 			Val::Num(n) => {
+				let n = n.get();
 				#[allow(clippy::float_cmp)]
 				if n.trunc() != n {
 					bail!("cannot convert number with fractional part to usize")
@@ -479,7 +479,7 @@ impl Typed for M1 {
 	const TYPE: &'static ComplexValType = &ComplexValType::BoundedNumber(Some(-1.0), Some(-1.0));
 
 	fn into_untyped(_: Self) -> Result<Val> {
-		Ok(Val::Num(-1.0))
+		Ok(Val::Num(NumValue::new(-1.0).expect("finite")))
 	}
 
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -677,5 +677,21 @@ impl<D: NativeDesc> Typed for NativeFn<D> {
 				.expect("shape is checked")
 				.into_native::<D>(),
 		))
+	}
+}
+
+impl Typed for NumValue {
+	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Num);
+
+	fn into_untyped(typed: Self) -> Result<Val> {
+		Ok(Val::Num(typed))
+	}
+
+	fn from_untyped(untyped: Val) -> Result<Self> {
+		Self::TYPE.check(&untyped)?;
+		match untyped {
+			Val::Num(v) => Ok(v),
+			_ => unreachable!(),
+		}
 	}
 }

@@ -120,7 +120,7 @@ impl ArrayLike for BytesArray {
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		self.0.get(index).map(|v| Val::Num(f64::from(*v)))
+		self.0.get(index).map(|v| Val::Num((*v).into()))
 	}
 	fn is_cheap(&self) -> bool {
 		true
@@ -399,7 +399,7 @@ impl ArrayLike for RangeArray {
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		self.range().nth(index).map(|i| Val::Num(f64::from(i)))
+		self.range().nth(index).map(|i| Val::Num(i.into()))
 	}
 	fn is_cheap(&self) -> bool {
 		true
@@ -430,12 +430,12 @@ impl ArrayLike for ReverseArray {
 }
 
 #[derive(Trace, Debug, Clone)]
-pub struct MappedArray<const WithIndex: bool> {
+pub struct MappedArray<const WITH_INDEX: bool> {
 	inner: ArrValue,
 	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
 	mapper: FuncVal,
 }
-impl<const WithIndex: bool> MappedArray<WithIndex> {
+impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
 	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
 		let len = inner.len();
 		Self {
@@ -445,14 +445,14 @@ impl<const WithIndex: bool> MappedArray<WithIndex> {
 		}
 	}
 	fn evaluate(&self, index: usize, value: Val) -> Result<Val> {
-		if WithIndex {
+		if WITH_INDEX {
 			self.mapper.evaluate_simple(&(index, value), false)
 		} else {
 			self.mapper.evaluate_simple(&(value,), false)
 		}
 	}
 }
-impl<const WithIndex: bool> ArrayLike for MappedArray<WithIndex> {
+impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 	fn len(&self) -> usize {
 		self.cached.borrow().len()
 	}
@@ -493,12 +493,12 @@ impl<const WithIndex: bool> ArrayLike for MappedArray<WithIndex> {
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		#[derive(Trace)]
-		struct ArrayElement<const WithIndex: bool> {
-			arr_thunk: MappedArray<WithIndex>,
+		struct ArrayElement<const WITH_INDEX: bool> {
+			arr_thunk: MappedArray<WITH_INDEX>,
 			index: usize,
 		}
 
-		impl<const WithIndex: bool> ThunkValue for ArrayElement<WithIndex> {
+		impl<const WITH_INDEX: bool> ThunkValue for ArrayElement<WITH_INDEX> {
 			type Output = Val;
 
 			fn get(self: Box<Self>) -> Result<Self::Output> {
