@@ -680,7 +680,7 @@ impl ObjectLike for OopObject {
 	///
 	/// Note that object with hidden fields `{a:: 1}` will be reported as empty here.
 	fn is_empty(&self) -> bool {
-		self.len() != 0
+		self.len() == 0
 	}
 
 	/// Run callback for every field found in object
