@@ -79,6 +79,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("slice", builtin_slice::INST),
 		("map", builtin_map::INST),
 		("mapWithIndex", builtin_map_with_index::INST),
+		("mapWithKey", builtin_map_with_key::INST),
 		("flatMap", builtin_flatmap::INST),
 		("filter", builtin_filter::INST),
 		("foldl", builtin_foldl::INST),
