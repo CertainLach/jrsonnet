@@ -609,7 +609,7 @@ pub fn format_code(
 				tmp_out.push(
 					std::char::from_u32(n as u32)
 						.ok_or_else(|| InvalidUnicodeCodepointGot(n as u32))?,
-				)
+				);
 			}
 			Val::Str(s) => {
 				let s = s.into_flat();
