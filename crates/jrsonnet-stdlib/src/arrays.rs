@@ -204,8 +204,29 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 pub fn builtin_lines(arr: ArrValue) -> Result<IndexableVal> {
 	builtin_join(
 		IndexableVal::Str("\n".into()),
-		ArrValue::extended(arr, ArrValue::eager(vec![Val::string("")])).into(),
+		ArrValue::extended(arr, ArrValue::eager(vec![Val::string("")])),
 	)
+}
+
+pub fn deep_join_inner(out: &mut String, arr: IndexableVal) -> Result<()> {
+	use std::fmt::Write;
+	match arr {
+		IndexableVal::Str(s) => write!(out, "{s}").expect("no error"),
+		IndexableVal::Arr(arr) => {
+			for ele in arr.iter() {
+				let indexable = IndexableVal::from_untyped(ele?)?;
+				deep_join_inner(out, indexable)?;
+			}
+		}
+	}
+	Ok(())
+}
+
+#[builtin]
+pub fn builtin_deep_join(arr: IndexableVal) -> Result<String> {
+	let mut out = String::new();
+	deep_join_inner(&mut out, arr)?;
+	Ok(out)
 }
 
 #[builtin]
