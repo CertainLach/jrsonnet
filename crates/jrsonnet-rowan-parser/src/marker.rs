@@ -141,12 +141,7 @@ impl CompletedMarker {
 		new_m
 	}
 	/// Create new node around existing marker, not counting anything that comes after it
-	fn wrap_raw(
-		self,
-		p: &mut Parser,
-		kind: SyntaxKind,
-		error: Option<SyntaxError>,
-	) -> Self {
+	fn wrap_raw(self, p: &mut Parser, kind: SyntaxKind, error: Option<SyntaxError>) -> Self {
 		let new_m = p.start();
 		match &mut p.events[self.start_event_idx] {
 			Event::Start { forward_parent, .. } => {

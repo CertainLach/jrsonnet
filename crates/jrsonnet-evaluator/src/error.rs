@@ -1,5 +1,8 @@
 use std::{
-	cmp::Ordering, convert::Infallible, fmt::{Debug, Display}, path::PathBuf
+	cmp::Ordering,
+	convert::Infallible,
+	fmt::{Debug, Display},
+	path::PathBuf,
 };
 
 use jrsonnet_gcmodule::Trace;
