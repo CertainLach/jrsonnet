@@ -116,7 +116,7 @@
           };
         };
         devShells.default = craneLib.devShell {
-          nativeBuildInputs = with pkgs; [
+          packages = with pkgs; [
             alejandra
             cargo-edit
             cargo-asm
@@ -126,6 +126,9 @@
             lld
             hyperfine
             graphviz
+          ] ++ lib.optionals (!stdenv.isDarwin) [
+            valgrind
+            kcachegrind
           ];
         };
       }
