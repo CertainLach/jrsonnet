@@ -8,7 +8,7 @@ use std::{
 
 use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ExprLocation, Visibility};
+use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::FxHashMap;
 
 use crate::{
@@ -135,7 +135,7 @@ pub struct ObjMember {
 	flags: ObjFieldFlags,
 	original_index: FieldIndex,
 	pub invoke: MaybeUnbound,
-	pub location: Option<ExprLocation>,
+	pub location: Option<Span>,
 }
 
 pub trait ObjectAssertion: Trace {
@@ -896,7 +896,7 @@ pub struct ObjMemberBuilder<Kind> {
 	add: bool,
 	visibility: Visibility,
 	original_index: FieldIndex,
-	location: Option<ExprLocation>,
+	location: Option<Span>,
 }
 
 #[allow(clippy::missing_const_for_fn)]
@@ -926,7 +926,7 @@ impl<Kind> ObjMemberBuilder<Kind> {
 	pub fn hide(self) -> Self {
 		self.with_visibility(Visibility::Hidden)
 	}
-	pub fn with_location(mut self, location: ExprLocation) -> Self {
+	pub fn with_location(mut self, location: Span) -> Self {
 		self.location = Some(location);
 		self
 	}

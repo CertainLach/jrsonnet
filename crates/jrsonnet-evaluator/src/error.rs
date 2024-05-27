@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, ExprLocation, LocExpr, Source, SourcePath, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, LocExpr, Source, SourcePath, Span, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -275,7 +275,7 @@ impl From<Infallible> for Error {
 pub struct StackTraceElement {
 	/// Source of this frame
 	/// Some frames only act as description, without attached source
-	pub location: Option<ExprLocation>,
+	pub location: Option<Span>,
 	/// Frame description
 	pub desc: String,
 }
@@ -324,20 +324,20 @@ impl Debug for Error {
 impl std::error::Error for Error {}
 
 pub trait ErrorSource {
-	fn to_location(self) -> Option<ExprLocation>;
+	fn to_location(self) -> Option<Span>;
 }
 impl ErrorSource for &LocExpr {
-	fn to_location(self) -> Option<ExprLocation> {
-		Some(self.1.clone())
+	fn to_location(self) -> Option<Span> {
+		Some(self.span())
 	}
 }
-impl ErrorSource for &ExprLocation {
-	fn to_location(self) -> Option<ExprLocation> {
+impl ErrorSource for &Span {
+	fn to_location(self) -> Option<Span> {
 		Some(self.clone())
 	}
 }
 impl ErrorSource for CallLocation<'_> {
-	fn to_location(self) -> Option<ExprLocation> {
+	fn to_location(self) -> Option<Span> {
 		self.0.cloned()
 	}
 }

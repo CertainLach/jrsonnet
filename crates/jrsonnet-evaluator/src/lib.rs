@@ -45,7 +45,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
-use jrsonnet_parser::{ExprLocation, LocExpr, ParserSettings, Source, SourcePath};
+use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath, Span};
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;
@@ -369,7 +369,7 @@ impl State {
 	/// Executes code creating a new stack frame
 	pub fn push_val(
 		&self,
-		e: &ExprLocation,
+		e: &Span,
 		frame_desc: impl FnOnce() -> String,
 		f: impl FnOnce() -> Result<Val>,
 	) -> Result<Val> {

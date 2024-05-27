@@ -385,17 +385,16 @@ pub struct IndexPart {
 #[derive(Clone, PartialEq, Eq, Trace)]
 #[trace(skip)]
 #[repr(C)]
-pub struct ExprLocation(pub Source, pub u32, pub u32);
-impl ExprLocation {
-	pub fn belongs_to(&self, other: &ExprLocation) -> bool {
+pub struct Span(pub Source, pub u32, pub u32);
+impl Span {
+	pub fn belongs_to(&self, other: &Span) -> bool {
 		other.0 == self.0 && other.1 <= self.1 && other.2 >= self.2
 	}
 }
 
-#[cfg(target_pointer_width = "64")]
-static_assertions::assert_eq_size!(ExprLocation, [u8; 16]);
+static_assertions::assert_eq_size!(Span, (usize, usize));
 
-impl Debug for ExprLocation {
+impl Debug for Span {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)
 	}
@@ -403,19 +402,32 @@ impl Debug for ExprLocation {
 
 /// Holds AST expression and its location in source file
 #[derive(Clone, PartialEq, Trace)]
-pub struct LocExpr(pub Rc<Expr>, pub ExprLocation);
+pub struct LocExpr(Rc<(Expr, Span)>);
+impl LocExpr {
+	pub fn new(expr: Expr, span: Span) -> Self {
+		Self(Rc::new((expr, span)))
+	}
+	#[inline]
+	pub fn span(&self) -> Span {
+		self.0 .1.clone()
+	}
+	#[inline]
+	pub fn expr(&self) -> &Expr {
+		&self.0 .0
+	}
+}
 
-#[cfg(target_pointer_width = "64")]
-static_assertions::assert_eq_size!(LocExpr, [u8; 24]);
+static_assertions::assert_eq_size!(LocExpr, usize);
 
 impl Debug for LocExpr {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let expr = self.expr();
 		if f.alternate() {
-			write!(f, "{:#?}", self.0)?;
+			write!(f, "{:#?}", expr)?;
 		} else {
-			write!(f, "{:?}", self.0)?;
+			write!(f, "{:?}", expr)?;
 		}
-		write!(f, " from {:?}", self.1)?;
+		write!(f, " from {:?}", self.span())?;
 		Ok(())
 	}
 }

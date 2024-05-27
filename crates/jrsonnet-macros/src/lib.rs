@@ -376,7 +376,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				State, Val,
 				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				Result, Context, typed::Typed,
-				parser::ExprLocation,
+				parser::Span,
 			};
 			const PARAMS: &'static [BuiltinParam] = &[
 				#(#params_desc)*

@@ -232,7 +232,7 @@ parser! {
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr
-			= a:position!() n:id() b:position!() { LocExpr(Rc::new(expr::Expr::Str(n)), ExprLocation(s.source.clone(), a as u32,b as u32)) }
+			= a:position!() n:id() b:position!() { LocExpr::new(expr::Expr::Str(n), Span(s.source.clone(), a as u32,b as u32)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
 			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
 				cond,
@@ -299,7 +299,7 @@ parser! {
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= precedence! {
-				start:position!() v:@ end:position!() { LocExpr(Rc::new(v), ExprLocation(s.source.clone(), start as u32, end as u32)) }
+				start:position!() v:@ end:position!() { LocExpr::new(v, Span(s.source.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				a:(@) _ binop(<"??">) _ ensure_null_coaelse() b:@ {
@@ -370,10 +370,7 @@ pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError
 /// Used for importstr values
 pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
 	let len = str.len();
-	LocExpr(
-		Rc::new(Expr::Str(str)),
-		ExprLocation(settings.source.clone(), 0, len as u32),
-	)
+	LocExpr::new(Expr::Str(str), Span(settings.source.clone(), 0, len as u32))
 }
 
 #[cfg(test)]
@@ -398,9 +395,9 @@ pub mod tests {
 
 	macro_rules! el {
 		($expr:expr, $from:expr, $to:expr$(,)?) => {
-			LocExpr(
-				std::rc::Rc::new($expr),
-				ExprLocation(
+			LocExpr::new(
+				$expr,
+				Span(
 					Source::new_virtual("<test>".into(), IStr::empty()),
 					$from,
 					$to,

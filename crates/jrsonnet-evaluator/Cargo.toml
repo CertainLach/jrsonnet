@@ -53,8 +53,6 @@ strsim.workspace = true
 serde.workspace = true
 
 anyhow = { workspace = true, optional = true }
-# Serialized stdlib
-bincode = { workspace = true, optional = true }
 # Explaining traces
 annotate-snippets = { workspace = true, optional = true }
 # Better explaining traces
