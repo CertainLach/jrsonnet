@@ -147,9 +147,8 @@ impl From<ErrorKind> for Error {
 }
 
 fn main_catch(opts: Opts) -> bool {
-	let s = State::default();
 	let trace = opts.trace.trace_format();
-	if let Err(e) = main_real(&s, opts) {
+	if let Err(e) = main_real(opts) {
 		if let Error::Evaluation(e) = e {
 			let mut out = String::new();
 			trace.write_trace(&mut out, &e).expect("format error");
@@ -162,18 +161,17 @@ fn main_catch(opts: Opts) -> bool {
 	true
 }
 
-fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
+fn main_real(opts: Opts) -> Result<(), Error> {
 	let _gc_leak_guard = opts.gc.leak_on_exit();
 	let _gc_print_stats = opts.gc.stats_printer();
 	let _stack_depth_override = opts.misc.stack_size_override();
 
 	let import_resolver = opts.misc.import_resolver();
-	s.set_import_resolver(import_resolver);
-
 	let std = opts.std.context_initializer()?;
-	if let Some(std) = std {
-		s.set_context_initializer(std);
-	}
+
+	let mut s = State::builder();
+	s.import_resolver(import_resolver).context_initializer(std);
+	let s = s.build();
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
@@ -189,7 +187,7 @@ fn main_real(s: &State, opts: Opts) -> Result<(), Error> {
 
 	let tla = opts.tla.tla_opts()?;
 	#[allow(unused_mut)]
-	let mut val = apply_tla(s.clone(), &tla, val)?;
+	let mut val = apply_tla(s, &tla, val)?;
 
 	#[cfg(feature = "exp-apply")]
 	for apply in opts.input.exp_apply {
