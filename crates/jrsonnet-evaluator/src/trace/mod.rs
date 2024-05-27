@@ -5,7 +5,7 @@ use std::{
 };
 
 use jrsonnet_gcmodule::Trace;
-use jrsonnet_parser::{CodeLocation, ExprLocation, Source};
+use jrsonnet_parser::{CodeLocation, Source, Span};
 
 use crate::{error::ErrorKind, Error};
 
@@ -380,7 +380,7 @@ impl TraceFormat for AssStrokeFormat {
 		error: &Error,
 	) -> Result<(), std::fmt::Error> {
 		struct ResetData {
-			loc: ExprLocation,
+			loc: Span,
 		}
 		use hi_doc::{source_to_ansi, Formatting, SnippetBuilder, Text};
 
@@ -399,7 +399,7 @@ impl TraceFormat for AssStrokeFormat {
 		}
 		let trace = &error.trace();
 		let snippet_builder: RefCell<Option<SnippetBuilder>> = RefCell::new(None);
-		let mut last_location: Option<ExprLocation> = None;
+		let mut last_location: Option<Span> = None;
 		let mut flush_builder = |data: Option<ResetData>| {
 			use std::fmt::Write;
 			let mut out = String::new();

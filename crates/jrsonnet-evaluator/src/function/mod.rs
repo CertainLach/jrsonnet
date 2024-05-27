@@ -4,7 +4,7 @@ pub use arglike::{ArgLike, ArgsLike, TlaArg};
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{Destruct, Expr, ExprLocation, LocExpr, ParamsDesc};
+use jrsonnet_parser::{Destruct, Expr, LocExpr, ParamsDesc, Span};
 
 use self::{
 	arglike::OptionalContext,
@@ -22,10 +22,10 @@ pub mod parse;
 /// Function callsite location.
 /// Either from other jsonnet code, specified by expression location, or from native (without location).
 #[derive(Clone, Copy)]
-pub struct CallLocation<'l>(pub Option<&'l ExprLocation>);
+pub struct CallLocation<'l>(pub Option<&'l Span>);
 impl<'l> CallLocation<'l> {
 	/// Construct new location for calls coming from specified jsonnet expression location.
-	pub const fn new(loc: &'l ExprLocation) -> Self {
+	pub const fn new(loc: &'l Span) -> Self {
 		Self(Some(loc))
 	}
 }
@@ -225,7 +225,7 @@ impl FuncVal {
 					#[cfg(feature = "exp-destruct")]
 					_ => return false,
 				};
-				&desc.body.0 as &Expr == &Expr::Var(id.clone())
+				desc.body.expr() == &Expr::Var(id.clone())
 			}
 			_ => false,
 		}
