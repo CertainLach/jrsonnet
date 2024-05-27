@@ -94,7 +94,7 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 	use Val::*;
 	Ok(match (a, b) {
 		(Str(a), Str(b)) => a.cmp(b),
-		(Num(a), Num(b)) => a.partial_cmp(b).expect("jsonnet numbers are non NaN"),
+		(Num(a), Num(b)) => a.cmp(b),
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => a.cmp(b),
 		(Arr(a), Arr(b)) => {
