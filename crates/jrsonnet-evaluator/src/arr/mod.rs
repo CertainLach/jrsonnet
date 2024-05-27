@@ -145,6 +145,9 @@ impl ArrValue {
 	}
 
 	/// Returns None if get is either non cheap, or out of bounds
+	/// Note that non-cheap access includes errorable values
+	///
+	/// Prefer it to `get_lazy`, but use `get` when you can.
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		self.0.get_cheap(index)
 	}
@@ -165,6 +168,7 @@ impl ArrValue {
 		(0..self.len()).map(|i| self.get_lazy(i).expect("length checked"))
 	}
 
+	/// Prefer it over `iter_lazy`, but do not use it where `iter` will do.
 	pub fn iter_cheap(&self) -> Option<impl ArrayLikeIter<Val> + '_> {
 		if self.is_cheap() {
 			Some((0..self.len()).map(|i| self.get_cheap(i).expect("length and is_cheap checked")))
