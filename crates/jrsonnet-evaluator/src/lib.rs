@@ -116,6 +116,29 @@ impl ContextInitializer for () {
 	}
 }
 
+impl<T> ContextInitializer for Option<T>
+where
+	T: ContextInitializer,
+{
+	fn initialize(&self, state: State, for_file: Source) -> Context {
+		if let Some(ctx) = self {
+			ctx.initialize(state, for_file)
+		} else {
+			().initialize(state, for_file)
+		}
+	}
+
+	fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
+		if let Some(ctx) = self {
+			ctx.populate(for_file, builder);
+		}
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+}
+
 macro_rules! impl_context_initializer {
 	($($gen:ident)*) => {
 		#[allow(non_snake_case)]
