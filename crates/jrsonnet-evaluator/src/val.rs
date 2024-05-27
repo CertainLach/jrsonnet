@@ -409,6 +409,7 @@ impl NumValue {
 		}
 		Some(Self(v))
 	}
+	#[inline]
 	pub const fn get(&self) -> f64 {
 		self.0
 	}
@@ -420,13 +421,15 @@ impl PartialEq for NumValue {
 }
 impl Eq for NumValue {}
 impl Ord for NumValue {
+	#[inline]
 	fn cmp(&self, other: &Self) -> Ordering {
 		// Can't use `total_cmp`: its behavior for `-0` and `0`
 		// is not following wanted.
-		self.0.partial_cmp(&other.0).expect("NaNs are disallowed")
+		unsafe { self.0.partial_cmp(&other.0).unwrap_unchecked() }
 	}
 }
 impl PartialOrd for NumValue {
+	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
 	}
@@ -439,6 +442,7 @@ impl Display for NumValue {
 impl Deref for NumValue {
 	type Target = f64;
 
+	#[inline]
 	fn deref(&self) -> &Self::Target {
 		&self.0
 	}
@@ -446,6 +450,7 @@ impl Deref for NumValue {
 macro_rules! impl_num {
 	($($ty:ty),+) => {$(
 		impl From<$ty> for NumValue {
+			#[inline]
 			fn from(value: $ty) -> Self {
 				Self(value.into())
 			}
@@ -473,6 +478,7 @@ macro_rules! impl_try_num {
 	($($ty:ty),+) => {$(
 		impl TryFrom<$ty> for NumValue {
 			type Error = ConvertNumValueError;
+			#[inline]
 			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
 				use crate::typed::conversions::{MIN_SAFE_INTEGER, MAX_SAFE_INTEGER};
 				let value = value as f64;
@@ -492,6 +498,7 @@ impl_try_num!(usize, isize, i64, u64);
 impl TryFrom<f64> for NumValue {
 	type Error = ConvertNumValueError;
 
+	#[inline]
 	fn try_from(value: f64) -> Result<Self, Self::Error> {
 		Self::new(value).ok_or(ConvertNumValueError::NonFinite)
 	}
@@ -499,6 +506,7 @@ impl TryFrom<f64> for NumValue {
 impl TryFrom<f32> for NumValue {
 	type Error = ConvertNumValueError;
 
+	#[inline]
 	fn try_from(value: f32) -> Result<Self, Self::Error> {
 		Self::new(f64::from(value)).ok_or(ConvertNumValueError::NonFinite)
 	}

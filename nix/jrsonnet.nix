@@ -17,7 +17,7 @@ with lib;
     pname = "jrsonnet";
     version = "current${optionalString withNightlyFeatures "-nightly"}${optionalString withExperimentalFeatures "-experimental"}";
 
-    cargoExtraArgs = "--locked --features=mimalloc,legacy-this-file${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}";
+    cargoExtraArgs = "--locked --features=mimalloc${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}";
 
     nativeBuildInputs = [makeWrapper];
 
