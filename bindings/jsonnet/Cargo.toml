@@ -23,6 +23,7 @@ jrsonnet-evaluator.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
 jrsonnet-gcmodule.workspace = true
+jrsonnet-interner.workspace = true
 
 [lib]
 name = "jsonnet"

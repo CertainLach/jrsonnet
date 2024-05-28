@@ -40,7 +40,7 @@ pub extern "C" fn _start() {}
 /// then there is a mismatch between header and compiled library.
 #[no_mangle]
 pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
-	b"v0.19.1\0"
+	b"v0.20.0\0"
 }
 
 unsafe fn parse_path(input: &CStr) -> Cow<Path> {
