@@ -1,7 +1,5 @@
 //! Jrsonnet specific additional binding helpers
 
-use crate::VM;
-
 #[cfg(feature = "interop-wasm")]
 pub mod wasm {
 	use std::ffi::{c_char, c_int, c_void};
