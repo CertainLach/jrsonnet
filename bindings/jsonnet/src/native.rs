@@ -10,7 +10,7 @@ use jrsonnet_evaluator::{
 	IStr, Val,
 };
 
-use crate::VM;
+use crate::VMRef;
 
 /// The returned `JsonnetJsonValue*` should be allocated with `jsonnet_realloc`. It will be cleaned up
 /// along with the objects rooted at `argv` by `libjsonnet` when no-longer needed. Return a string upon
@@ -21,16 +21,13 @@ use crate::VM;
 /// - `argv` Array of arguments from Jsonnet code.
 /// - `param` success Set this byref param to 1 to indicate success and 0 for failure.
 /// Returns the content of the imported file, or an error message.
-type JsonnetNativeCallback = unsafe extern "C" fn(
-	ctx: *const c_void,
-	argv: *const *const Val,
-	success: *mut c_int,
-) -> *mut Val;
+type JsonnetNativeCallback =
+	unsafe extern "C" fn(ctx: CtxRef, argv: *const *const Val, success: *mut c_int) -> *mut Val;
 
 #[derive(jrsonnet_gcmodule::Trace)]
 struct JsonnetNativeCallbackHandler {
 	#[trace(skip)]
-	ctx: *const c_void,
+	ctx: CtxRef,
 	#[trace(skip)]
 	cb: JsonnetNativeCallback,
 }
@@ -53,6 +50,13 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 	}
 }
 
+#[repr(transparent)]
+#[derive(Clone, Copy)]
+pub struct CtxRef(*const c_void);
+
+unsafe impl Send for CtxRef {}
+unsafe impl Sync for CtxRef {}
+
 /// Callback to provide native extensions to Jsonnet.
 ///
 /// # Safety
@@ -63,10 +67,10 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// `raw_params` should point to a NULL-terminated array of NUL-terminated strings
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_native_callback(
-	vm: &VM,
+	vm: VMRef,
 	name: *const c_char,
 	cb: JsonnetNativeCallback,
-	ctx: *const c_void,
+	ctx: CtxRef,
 	mut raw_params: *const *const c_char,
 ) {
 	let name = unsafe { CStr::from_ptr(name).to_str().expect("name is not utf-8") };
@@ -84,14 +88,16 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 		raw_params = unsafe { raw_params.offset(1) };
 	}
 
-	let any_resolver = vm.state.context_initializer();
-	any_resolver
-		.as_any()
-		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
-		.expect("only stdlib context initializer supported")
-		.add_native(
-			name,
-			#[allow(deprecated)]
-			NativeCallback::new(params, JsonnetNativeCallbackHandler { ctx, cb }),
-		);
+	vm.run_in_thread(|vm| {
+		let any_resolver = vm.state.context_initializer();
+		any_resolver
+			.as_any()
+			.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
+			.expect("only stdlib context initializer supported")
+			.add_native(
+				name,
+				#[allow(deprecated)]
+				NativeCallback::new(params, JsonnetNativeCallbackHandler { ctx, cb }),
+			);
+	});
 }

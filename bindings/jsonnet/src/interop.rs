@@ -87,12 +87,22 @@ mod common {
 }
 
 #[cfg(feature = "interop-threading")]
-mod threading {
-	use std::{ffi::c_int, thread::ThreadId};
+pub mod threading {
+	use std::{ffi::c_int, ptr::null_mut, sync::atomic::AtomicPtr, thread::ThreadId};
+
+	use crossbeam::atomic::AtomicConsume;
 
 	pub struct ThreadCTX {
 		interner: *mut jrsonnet_interner::interop::PoolState,
 		gc: *mut jrsonnet_gcmodule::interop::GcState,
+	}
+	impl ThreadCTX {
+		pub fn invalid() -> Self {
+			Self {
+				interner: null_mut(),
+				gc: null_mut(),
+			}
+		}
 	}
 
 	/// Golang jrsonnet bindings require Jsonnet VM to be movable.
@@ -106,25 +116,20 @@ mod threading {
 	/// Current thread GC will be broken after this call, need to call
 	/// `jrsonet_enter_thread` before doing anything.
 	#[no_mangle]
-	pub unsafe extern "C" fn jrsonnet_exit_thread() -> *mut ThreadCTX {
-		Box::into_raw(Box::new(ThreadCTX {
+	pub unsafe extern "C" fn jrsonnet_exit_thread() -> AtomicPtr<ThreadCTX> {
+		AtomicPtr::new(Box::into_raw(Box::new(ThreadCTX {
 			interner: jrsonnet_interner::interop::exit_thread(),
 			gc: unsafe { jrsonnet_gcmodule::interop::exit_thread() },
-		}))
+		})))
 	}
 
 	#[no_mangle]
-	pub extern "C" fn jrsonnet_reenter_thread(mut ctx: Box<ThreadCTX>) {
-		use std::ptr::null_mut;
-		assert!(
-			!ctx.interner.is_null() && !ctx.gc.is_null(),
-			"reused context?"
-		);
+	pub extern "C" fn jrsonnet_reenter_thread(ctx: AtomicPtr<ThreadCTX>) {
+		let ctx = ctx.load_consume();
+		assert!(!ctx.is_null(), "reused context?");
+		let ctx = unsafe { Box::from_raw(ctx) };
 		unsafe { jrsonnet_interner::interop::reenter_thread(ctx.interner) }
 		unsafe { jrsonnet_gcmodule::interop::reenter_thread(ctx.gc) }
-		// Just in case
-		ctx.interner = null_mut();
-		ctx.gc = null_mut();
 	}
 
 	// ThreadId is compatible with u64, and there is unstable cast

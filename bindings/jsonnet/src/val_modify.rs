@@ -6,7 +6,7 @@ use std::{ffi::CStr, os::raw::c_char};
 
 use jrsonnet_evaluator::{val::ArrValue, Thunk, Val};
 
-use crate::VM;
+use crate::{VMRef, ValRef, VM};
 
 /// Adds value to the end of the array `arr`.
 ///
@@ -15,19 +15,19 @@ use crate::VM;
 /// `arr` should be a pointer to array value allocated by `make_array`, or returned by other library call
 /// `val` should be a pointer to value allocated using this library
 #[no_mangle]
-pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &VM, arr: &mut Val, val: &Val) {
-	match arr {
+pub unsafe extern "C" fn jsonnet_json_array_append(vm: VMRef, mut arr: ValRef, val: ValRef) {
+	vm.run_in_thread(|_| match arr.as_mut() {
 		Val::Arr(old) => {
 			let mut new = Vec::new();
 			for item in old.iter_lazy() {
 				new.push(item);
 			}
 
-			new.push(Thunk::evaluated(val.clone()));
-			*arr = Val::Arr(ArrValue::lazy(new));
+			new.push(Thunk::evaluated(val.as_ref().clone()));
+			*old = ArrValue::lazy(new);
 		}
 		_ => panic!("should receive array"),
-	}
+	});
 }
 
 /// Adds the field to the object, bound to value.
@@ -40,15 +40,15 @@ pub unsafe extern "C" fn jsonnet_json_array_append(_vm: &VM, arr: &mut Val, val:
 /// `name` should be NUL-terminated string
 #[no_mangle]
 pub unsafe extern "C" fn jsonnet_json_object_append(
-	_vm: &VM,
-	obj: &mut Val,
+	vm: VMRef,
+	mut obj: ValRef,
 	name: *const c_char,
-	val: &Val,
+	val: ValRef,
 ) {
-	match obj {
-		Val::Obj(old) => old
-			.extend_field(unsafe { CStr::from_ptr(name).to_str().unwrap().into() })
-			.value(val.clone()),
+	let name = unsafe { CStr::from_ptr(name).to_str().unwrap() };
+
+	vm.run_in_thread(|_| match obj.as_mut() {
+		Val::Obj(old) => old.extend_field(name.into()).value(val.as_ref().clone()),
 		_ => panic!("should receive object"),
-	}
+	});
 }

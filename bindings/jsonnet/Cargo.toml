@@ -24,6 +24,8 @@ jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
 jrsonnet-gcmodule.workspace = true
 jrsonnet-interner.workspace = true
+crossbeam = { version = "0.8.4", features = ["crossbeam-channel"] }
+rayon = "1.10.0"
 
 [lib]
 name = "jsonnet"
