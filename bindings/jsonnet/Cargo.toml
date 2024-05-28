@@ -27,11 +27,17 @@ jrsonnet-interner.workspace = true
 
 [lib]
 name = "jsonnet"
-crate-type = ["cdylib"]
+crate-type = ["cdylib", "staticlib"]
 
 [features]
+default = ["interop-common", "interop-wasm", "interop-threading"]
 # Export additional functions for native integration, i.e ability to set custom trace format
-interop = []
+interop-common = []
+# Provide ability to statically override callbacks from WASM (by using imports)
+interop-wasm = []
+# Provide ability to move jsonnet vm state between threads
+interop-threading = []
+
 experimental = ["exp-preserve-order", "exp-destruct"]
 exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
