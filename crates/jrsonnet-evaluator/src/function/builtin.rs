@@ -105,7 +105,7 @@ impl NativeCallback {
 				.into_iter()
 				.map(|n| BuiltinParam {
 					name: ParamName::new_dynamic(n),
-					default: ParamDefault::Exists,
+					default: ParamDefault::None,
 				})
 				.collect(),
 			handler: tb!(handler),
