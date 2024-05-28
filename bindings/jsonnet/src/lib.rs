@@ -1,6 +1,5 @@
 #![allow(clippy::box_default)]
 
-#[cfg(feature = "interop")]
 pub mod interop;
 
 pub mod import;
@@ -12,22 +11,27 @@ pub mod vars_tlas;
 
 use std::{
 	alloc::Layout,
+	any::Any,
 	borrow::Cow,
+	cell::RefCell,
 	ffi::{CStr, CString, OsStr},
 	os::raw::{c_char, c_double, c_int, c_uint},
-	path::Path,
+	path::{Path, PathBuf},
 };
 
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	function::TlaArg,
-	gc::GcHashMap,
+	gc::{GcHashMap, TraceBox},
 	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
 	stack::set_stack_depth_limit,
 	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, IStr, Result, State, Val,
+	FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
+use jrsonnet_gcmodule::Trace;
+use jrsonnet_parser::SourcePath;
+use jrsonnet_stdlib::ContextInitializer;
 
 /// WASM stub
 #[cfg(target_arch = "wasm32")]
@@ -72,22 +76,84 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 	}
 }
 
+#[derive(Trace)]
+struct VMImportResolver {
+	#[trace(tracking(force))]
+	inner: RefCell<TraceBox<dyn ImportResolver>>,
+}
+impl VMImportResolver {
+	fn new(value: impl ImportResolver) -> Self {
+		Self {
+			inner: RefCell::new(tb!(value)),
+		}
+	}
+}
+impl ImportResolver for VMImportResolver {
+	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
+		self.inner.borrow().load_file_contents(resolved)
+	}
+
+	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+		self.inner.borrow().resolve_from(from, path)
+	}
+
+	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
+		self.inner.borrow().resolve_from_default(path)
+	}
+
+	fn resolve(&self, path: &Path) -> Result<SourcePath> {
+		self.inner.borrow().resolve(path)
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self
+	}
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
+	}
+}
+
 pub struct VM {
 	state: State,
 	manifest_format: Box<dyn ManifestFormat>,
 	trace_format: Box<dyn TraceFormat>,
 	tla_args: GcHashMap<IStr, TlaArg>,
 }
+impl VM {
+	fn replace_import_resolver(&self, resolver: impl ImportResolver) {
+		*self
+			.state
+			.import_resolver()
+			.as_any()
+			.downcast_ref::<VMImportResolver>()
+			.expect("valid resolver ty")
+			.inner
+			.borrow_mut() = tb!(resolver);
+	}
+	fn add_jpath(&self, path: PathBuf) {
+		self.state
+			.import_resolver()
+			.as_any()
+			.downcast_ref::<VMImportResolver>()
+			.expect("valid resolver ty")
+			.inner
+			.borrow_mut()
+			.as_any_mut()
+			.downcast_mut::<FileImportResolver>()
+			.expect("jpaths are not compatible with callback imports!")
+			.add_jpath(path);
+	}
+}
 
 /// Creates a new Jsonnet virtual machine.
 #[no_mangle]
 #[allow(clippy::box_default)]
 pub extern "C" fn jsonnet_make() -> *mut VM {
-	let state = State::default();
-	state.settings_mut().import_resolver = tb!(FileImportResolver::default());
-	state.settings_mut().context_initializer = tb!(jrsonnet_stdlib::ContextInitializer::new(
-		PathResolver::new_cwd_fallback(),
-	));
+	let mut state = State::builder();
+	state
+		.import_resolver(VMImportResolver::new(FileImportResolver::default()))
+		.context_initializer(ContextInitializer::new(PathResolver::new_cwd_fallback()));
+	let state = state.build();
 	Box::into_raw(Box::new(VM {
 		state,
 		manifest_format: Box::new(JsonFormat::default()),

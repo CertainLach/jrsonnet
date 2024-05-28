@@ -15,7 +15,7 @@ use std::{
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	FileImportResolver, ImportResolver,
+	ImportResolver,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
@@ -106,6 +106,10 @@ impl ImportResolver for CallbackImportResolver {
 	fn as_any(&self) -> &dyn Any {
 		self
 	}
+
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
+	}
 }
 
 /// # Safety
@@ -117,7 +121,7 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 	cb: JsonnetImportCallback,
 	ctx: *mut c_void,
 ) {
-	vm.state.set_import_resolver(CallbackImportResolver {
+	vm.replace_import_resolver(CallbackImportResolver {
 		cb,
 		ctx,
 		out: RefCell::new(HashMap::new()),
@@ -131,10 +135,5 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &VM, path: *const c_char) {
 	let cstr = unsafe { CStr::from_ptr(path) };
 	let path = PathBuf::from(cstr.to_str().unwrap());
-	let any_resolver = vm.state.import_resolver();
-	let resolver = any_resolver
-		.as_any()
-		.downcast_ref::<FileImportResolver>()
-		.expect("jpaths are not compatible with callback imports!");
-	resolver.add_jpath(path);
+	vm.add_jpath(path);
 }
