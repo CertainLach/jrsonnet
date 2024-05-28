@@ -16,7 +16,7 @@ enum Opts {
 		callgrind: bool,
 		#[arg(long)]
 		cachegrind: bool,
-		#[arg(long, default_value = "x86_64-unknown-linux-gnu")]
+		#[arg(long, default_value = env!("TARGET_PLATFORM"))]
 		target: String,
 		args: Vec<String>,
 	},
@@ -26,9 +26,13 @@ enum Opts {
 		#[arg(long)]
 		fix: bool,
 	},
+	/// Build and run test file from `bindings/c`
 	TestCBindings {
-		#[arg(long, default_value = "x86_64-unknown-linux-gnu")]
+		#[arg(long, default_value = env!("TARGET_PLATFORM"))]
 		target: String,
+		/// Which bindings file to build and run
+		#[arg(long, default_value = "libjsonnet_test_file")]
+		test_file: String,
 		args: Vec<String>,
 	},
 }
@@ -78,7 +82,11 @@ fn main() -> Result<()> {
 			cmd!(sh, "cargo fmt {fmt_check...}").run()?;
 			Ok(())
 		}
-		Opts::TestCBindings { target, args } => {
+		Opts::TestCBindings {
+			target,
+			test_file,
+			args,
+		} => {
 			cmd!(
 				sh,
 				"cargo build -p libjsonnet --target={target} --release --no-default-features --features=interop-common,interop-threading"
@@ -86,7 +94,6 @@ fn main() -> Result<()> {
 			.run()?;
 			let built = format!("./target/{target}/release/libjsonnet.a");
 			let c_bindings = "./bindings/c/";
-			let test_file = "libjsonnet_test_file";
 			cmd!(sh, "cp {built} {c_bindings}").run()?;
 			sh.change_dir(c_bindings);
 
