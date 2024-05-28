@@ -26,6 +26,11 @@ enum Opts {
 		#[arg(long)]
 		fix: bool,
 	},
+	TestCBindings {
+		#[arg(long, default_value = "x86_64-unknown-linux-gnu")]
+		target: String,
+		args: Vec<String>,
+	},
 }
 
 fn main() -> Result<()> {
@@ -71,6 +76,27 @@ fn main() -> Result<()> {
 		Opts::Lint { fix } => {
 			let fmt_check = if fix { None } else { Some("--check") };
 			cmd!(sh, "cargo fmt {fmt_check...}").run()?;
+			Ok(())
+		}
+		Opts::TestCBindings { target, args } => {
+			cmd!(
+				sh,
+				"cargo build -p libjsonnet --target={target} --release --no-default-features --features=interop-common,interop-threading"
+			)
+			.run()?;
+			let built = format!("./target/{target}/release/libjsonnet.a");
+			let c_bindings = "./bindings/c/";
+			let test_file = "libjsonnet_test_file";
+			cmd!(sh, "cp {built} {c_bindings}").run()?;
+			sh.change_dir(c_bindings);
+
+			// TODO: Pass target to gcc?
+			cmd!(sh, "gcc -c {test_file}.c").run()?;
+			cmd!(sh, "gcc -o {test_file} -lc -lm {test_file}.o libjsonnet.a").run()?;
+			let sh = Shell::new()?;
+
+			cmd!(sh, "{c_bindings}{test_file} {args...}").run()?;
+
 			Ok(())
 		}
 	}
