@@ -1,22 +1,9 @@
-/*
-Copyright 2015 Google Inc. All rights reserved.
-Licensed under the Apache License, Version 2.0 (the "License");
-you may not use this file except in compliance with the License.
-You may obtain a copy of the License at
-    http://www.apache.org/licenses/LICENSE-2.0
-Unless required by applicable law or agreed to in writing, software
-distributed under the License is distributed on an "AS IS" BASIS,
-WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-See the License for the specific language governing permissions and
-limitations under the License.
-*/
-
 #ifndef LIB_JSONNET_H
 #define LIB_JSONNET_H
 
 #include <stddef.h>
 
-/** \file This file is a library interface for evaluating Jsonnet.  It is written in C++ but exposes
+/** \file This file is a library interface for evaluating Jsonnet. It is written in Rust but exposes
  * a C interface for easier wrapping by other languages.  See \see jsonnet_lib_test.c for an example
  * of using the library.
  */
@@ -28,10 +15,10 @@ limitations under the License.
  *
  * If this isn't the sae as jsonnet_version() then you've got a mismatched binary / header.
  */
-#define LIB_JSONNET_VERSION "v0.16.0"
+#define LIB_JSONNET_VERSION "v0.20.0"
 
 /** Return the version string of the Jsonnet interpreter.  Conforms to semantic versioning
- * http://semver.org/ If this does not match LIB_JSONNET_VERSION then there is a mismatch between
+ * https://semver.org/ If this does not match LIB_JSONNET_VERSION then there is a mismatch between
  * header and compiled library.
  */
 const char *jsonnet_version(void);
@@ -66,10 +53,12 @@ void jsonnet_string_output(struct JsonnetVm *vm, int v);
  *     process's CWD.  This is necessary so that imports from the content of the imported file can
  *     be resolved correctly.  Allocate memory with jsonnet_realloc.  Only use when *success = 1.
  * \param success Set this byref param to 1 to indicate success and 0 for failure.
- * \returns The content of the imported file, or an error message.
+ * \param buf Set this byref param to the content of the imported file, or an error message.  Allocate memory with jsonnet_realloc.  Do not include a null terminator byte.
+ * \param buflen Set this byref param to the length of the data returned in buf.
+ * \returns 0 to indicate success and 1 for failure.  On success, the content is in *buf.  On failure, an error message is in *buf.
  */
-typedef char *JsonnetImportCallback(void *ctx, const char *base, const char *rel, char **found_here,
-									int *success);
+typedef int JsonnetImportCallback(void *ctx, const char *base, const char *rel,
+                                  char **found_here, char **buf, size_t *buflen);
 
 /** An opaque type which can only be utilized via the jsonnet_json_* family of functions.
  */
@@ -82,7 +71,7 @@ const char *jsonnet_json_extract_string(struct JsonnetVm *vm, const struct Jsonn
 /** If the value is a number, return 1 and store the number in out, otherwise return 0.
  */
 int jsonnet_json_extract_number(struct JsonnetVm *vm, const struct JsonnetJsonValue *v,
-								double *out);
+                                double *out);
 
 /** Return 0 if the value is false, 1 if it is true, and 2 if it is not a bool.
  */
@@ -117,7 +106,7 @@ struct JsonnetJsonValue *jsonnet_json_make_array(struct JsonnetVm *vm);
 /** Add v to the end of the array.
  */
 void jsonnet_json_array_append(struct JsonnetVm *vm, struct JsonnetJsonValue *arr,
-							   struct JsonnetJsonValue *v);
+                               struct JsonnetJsonValue *v);
 
 /** Make a JsonnetJsonValue representing an object with the given number of fields.
  *
@@ -130,7 +119,7 @@ struct JsonnetJsonValue *jsonnet_json_make_object(struct JsonnetVm *vm);
  * This replaces any previous binding of the field.
  */
 void jsonnet_json_object_append(struct JsonnetVm *vm, struct JsonnetJsonValue *obj, const char *f,
-								struct JsonnetJsonValue *v);
+                                struct JsonnetJsonValue *v);
 
 /** Clean up a JSON subtree.
  *
@@ -151,8 +140,8 @@ void jsonnet_json_destroy(struct JsonnetVm *vm, struct JsonnetJsonValue *v);
  * \returns The content of the imported file, or an error message.
  */
 typedef struct JsonnetJsonValue *JsonnetNativeCallback(void *ctx,
-													   const struct JsonnetJsonValue *const *argv,
-													   int *success);
+                                                       const struct JsonnetJsonValue *const *argv,
+                                                       int *success);
 
 /** Allocate, resize, or free a buffer.  This will abort if the memory cannot be allocated.  It will
  * only return NULL if sz was zero.
@@ -181,7 +170,7 @@ void jsonnet_import_callback(struct JsonnetVm *vm, JsonnetImportCallback *cb, vo
  * \param params NULL-terminated array of the names of the params.  Must be valid identifiers.
  */
 void jsonnet_native_callback(struct JsonnetVm *vm, const char *name, JsonnetNativeCallback *cb,
-							 void *ctx, const char *const *params);
+                             void *ctx, const char *const *params);
 
 /** Bind a Jsonnet external var to the given string.
  *
@@ -236,7 +225,7 @@ char *jsonnet_evaluate_file(struct JsonnetVm *vm, const char *filename, int *err
  * \returns Either JSON or the error message.
  */
 char *jsonnet_evaluate_snippet(struct JsonnetVm *vm, const char *filename, const char *snippet,
-							   int *error);
+                               int *error);
 
 /** Evaluate a file containing Jsonnet code, return a number of named JSON files.
  *
@@ -260,7 +249,7 @@ char *jsonnet_evaluate_file_multi(struct JsonnetVm *vm, const char *filename, in
  * \returns Either the error, or a sequence of strings separated by \0, terminated with \0\0.
  */
 char *jsonnet_evaluate_snippet_multi(struct JsonnetVm *vm, const char *filename,
-									 const char *snippet, int *error);
+                                     const char *snippet, int *error);
 
 /** Evaluate a file containing Jsonnet code, return a number of JSON files.
  *
@@ -284,9 +273,46 @@ char *jsonnet_evaluate_file_stream(struct JsonnetVm *vm, const char *filename, i
  * \returns Either the error, or a sequence of strings separated by \0, terminated with \0\0.
  */
 char *jsonnet_evaluate_snippet_stream(struct JsonnetVm *vm, const char *filename,
-									  const char *snippet, int *error);
+                                      const char *snippet, int *error);
 
 /** Complement of \see jsonnet_vm_make. */
 void jsonnet_destroy(struct JsonnetVm *vm);
 
-#endif // LIB_JSONNET_H
+/** Jrsonnet addition.
+ *
+ * In jrsonnet, vm state is bound to the thread, because interpreter
+ * also uses thread_local storage for some things (I.e GC).
+ *
+ * It makes it impossible to correctly use those bindings in golang,
+ * where developer has little control over goroutine scheduler.
+ *
+ * To make it work, jrsonnet provides methods to dump and restore thread
+ * state manually, making it possible to wire it with golang.
+ */
+struct JrThreadCTX;
+
+/** Dump current thread state, to be restored with
+ * jrsonnet_reenter_thread.
+ */
+struct JrThreadCTX *jrsonnet_exit_thread();
+/** Restore thread state, freeing JrThreadCTX.
+ */
+void jrsonnet_reenter_thread(struct JrThreadCTX *ctx);
+
+struct JrThreadId;
+
+/** Get current thread id (opaque pointer).
+ */
+struct JrThreadId* jrsonnet_thread_id();
+
+/** Compare two thread ids, it is not the same as a == b.
+ *
+ * \returns 1 if the same thread, 0 otherwise
+ */
+int jrsonnet_thread_id_compare(struct JrThreadId *a, struct JrThreadId *b);
+
+/** Free thread id value.
+ */
+void jrsonnet_thread_id_free(struct JrThreadId *id);
+
+#endif  // LIB_JSONNET_H

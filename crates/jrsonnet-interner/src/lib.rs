@@ -219,8 +219,45 @@ impl From<&[u8]> for IBytes {
 	}
 }
 
+type PoolMap = HashMap<Inner, (), BuildHasherDefault<FxHasher>>;
+
 thread_local! {
-	static POOL: RefCell<HashMap<Inner, (), BuildHasherDefault<FxHasher>>> = RefCell::new(HashMap::with_capacity_and_hasher(200, BuildHasherDefault::default()));
+	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, BuildHasherDefault::default()));
+}
+
+/// Jrsonnet golang bindings require that it is possible to move jsonnet
+/// VM between OS threads, and this is not possible due to usage of
+/// `thread_local`. Instead, there is two methods added, one should be
+/// called at the end of current thread work, and one that should be
+/// used when using other thread.
+pub mod interop {
+	use std::mem;
+
+	use crate::{PoolMap, POOL};
+
+	pub enum PoolState {}
+
+	/// Dump current interned string pool, to be restored by
+	/// `reenter_thread`
+	pub fn exit_thread() -> *mut PoolState {
+		Box::into_raw(Box::new(POOL.with_borrow_mut(mem::take))).cast()
+	}
+
+	/// Reenter thread, using state dumped by `exit_thread`.
+	///
+	/// # Safety
+	///
+	/// `state` should be acquired from `exit_thread`, it is not allowed
+	/// to reuse state to reenter multiple threads.
+	pub unsafe fn reenter_thread(state: *mut PoolState) {
+		let ptr: *mut PoolMap = state.cast();
+		// SAFETY: ptr is an unique state per method safety requirements.
+		let ptr: Box<PoolMap> = unsafe { Box::from_raw(ptr) };
+		let ptr: PoolMap = *ptr;
+		POOL.with_borrow_mut(|pool| {
+			let _ = mem::replace(pool, ptr);
+		});
+	}
 }
 
 #[must_use]
