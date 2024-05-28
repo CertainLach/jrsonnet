@@ -8,7 +8,7 @@ use thiserror::Error;
 
 use crate::{
 	error::{Error, ErrorKind, Result},
-	State, Val,
+	in_description_frame, Val,
 };
 
 #[derive(Debug, Error, Clone, Trace)]
@@ -89,7 +89,7 @@ fn push_type_description(
 	path: impl Fn() -> ValuePathItem,
 	item: impl Fn() -> Result<()>,
 ) -> Result<()> {
-	State::push_description(error_reason, || match item() {
+	in_description_frame(error_reason, || match item() {
 		Ok(()) => Ok(()),
 		Err(mut e) => {
 			if let ErrorKind::TypeError(e) = &mut e.error_mut() {

@@ -3,12 +3,12 @@
 
 use format::{format_arr, format_obj};
 
-use crate::{function::CallLocation, Result, State, Val};
+use crate::{function::CallLocation, in_frame, Result, Val};
 
 pub mod format;
 
 pub fn std_format(str: &str, vals: Val) -> Result<String> {
-	State::push(
+	in_frame(
 		CallLocation::native(),
 		|| format!("std.format of {str}"),
 		|| {

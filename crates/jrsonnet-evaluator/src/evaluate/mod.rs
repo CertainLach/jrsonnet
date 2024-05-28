@@ -16,10 +16,11 @@ use crate::{
 	error::{suggest_object_fields, ErrorKind::*},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
+	in_frame,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk, ThunkValue},
 	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, State, Unbound, Val,
+	ResultExt, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -71,7 +72,7 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocEx
 pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		FieldName::Fixed(n) => Some(n.clone()),
-		FieldName::Dyn(expr) => State::push(
+		FieldName::Dyn(expr) => in_frame(
 			CallLocation::new(&expr.span()),
 			|| "evaluating field name".to_string(),
 			|| {
@@ -374,7 +375,7 @@ pub fn evaluate_apply(
 			if tailstrict {
 				body()?
 			} else {
-				State::push(loc, || format!("function <{}> call", f.name()), body)?
+				in_frame(loc, || format!("function <{}> call", f.name()), body)?
 			}
 		}
 		v => bail!(OnlyFunctionsCanBeCalledGot(v.value_type())),
@@ -384,13 +385,13 @@ pub fn evaluate_apply(
 pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
-	let assertion_result = State::push(
+	let assertion_result = in_frame(
 		CallLocation::new(&value.span()),
 		|| "assertion condition".to_owned(),
 		|| bool::from_untyped(evaluate(ctx.clone(), value)?),
 	)?;
 	if !assertion_result {
-		State::push(
+		in_frame(
 			CallLocation::new(&value.span()),
 			|| "assertion failure".to_owned(),
 			|| {
@@ -457,7 +458,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		}
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
-		Var(name) => State::push(
+		Var(name) => in_frame(
 			CallLocation::new(&loc),
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
@@ -645,7 +646,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			evaluate_assert(ctx.clone(), assert)?;
 			evaluate(ctx, returned)?
 		}
-		ErrorStmt(e) => State::push(
+		ErrorStmt(e) => in_frame(
 			CallLocation::new(&loc),
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
@@ -655,7 +656,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			cond_then,
 			cond_else,
 		} => {
-			if State::push(
+			if in_frame(
 				CallLocation::new(&loc),
 				|| "if condition".to_owned(),
 				|| bool::from_untyped(evaluate(ctx.clone(), &cond.0)?),
@@ -676,7 +677,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
-					Ok(Some(State::push(
+					Ok(Some(in_frame(
 						loc,
 						|| format!("slice {desc}"),
 						|| T::from_untyped(evaluate(ctx.clone(), value)?),
@@ -703,7 +704,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let s = ctx.state();
 			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
 			match i {
-				Import(_) => State::push(
+				Import(_) => in_frame(
 					CallLocation::new(&loc),
 					|| format!("import {:?}", path.clone()),
 					|| s.import_resolved(resolved_path),

@@ -45,7 +45,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
-use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath, Span};
+use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;
@@ -377,38 +377,6 @@ impl State {
 
 		builder.build()
 	}
-
-	/// Executes code creating a new stack frame
-	pub fn push<T>(
-		e: CallLocation<'_>,
-		frame_desc: impl FnOnce() -> String,
-		f: impl FnOnce() -> Result<T>,
-	) -> Result<T> {
-		let _guard = check_depth()?;
-
-		f().with_description_src(e, frame_desc)
-	}
-
-	/// Executes code creating a new stack frame
-	pub fn push_val(
-		&self,
-		e: &Span,
-		frame_desc: impl FnOnce() -> String,
-		f: impl FnOnce() -> Result<Val>,
-	) -> Result<Val> {
-		let _guard = check_depth()?;
-
-		f().with_description_src(e, frame_desc)
-	}
-	/// Executes code creating a new stack frame
-	pub fn push_description<T>(
-		frame_desc: impl FnOnce() -> String,
-		f: impl FnOnce() -> Result<T>,
-	) -> Result<T> {
-		let _guard = check_depth()?;
-
-		f().with_description(frame_desc)
-	}
 }
 
 /// Internals
@@ -416,6 +384,26 @@ impl State {
 	fn file_cache(&self) -> RefMut<'_, GcHashMap<SourcePath, FileData>> {
 		self.0.file_cache.borrow_mut()
 	}
+}
+/// Executes code creating a new stack frame, to be replaced with try{}
+pub fn in_frame<T>(
+	e: CallLocation<'_>,
+	frame_desc: impl FnOnce() -> String,
+	f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+	let _guard = check_depth()?;
+
+	f().with_description_src(e, frame_desc)
+}
+
+/// Executes code creating a new stack frame, to be replaced with try{}
+pub fn in_description_frame<T>(
+	frame_desc: impl FnOnce() -> String,
+	f: impl FnOnce() -> Result<T>,
+) -> Result<T> {
+	let _guard = check_depth()?;
+
+	f().with_description(frame_desc)
 }
 
 #[derive(Trace)]

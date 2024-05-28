@@ -1,6 +1,6 @@
 use std::{borrow::Cow, fmt::Write, ptr};
 
-use crate::{bail, Result, ResultExt, State, Val};
+use crate::{bail, in_description_frame, Result, ResultExt, Val};
 
 pub trait ManifestFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
@@ -242,7 +242,7 @@ fn manifest_json_ex_buf(
 					Minify | ToString => {}
 				};
 
-				State::push_description(
+				in_description_frame(
 					|| format!("elem <{i}> manifestification"),
 					|| manifest_json_ex_buf(&item, buf, cur_padding, options),
 				)?;
@@ -304,7 +304,7 @@ fn manifest_json_ex_buf(
 
 				escape_string_json_buf(&key, buf);
 				buf.push_str(options.key_val_sep);
-				State::push_description(
+				in_description_frame(
 					|| format!("field <{key}> manifestification"),
 					|| manifest_json_ex_buf(&value, buf, cur_padding, options),
 				)?;
@@ -412,7 +412,7 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 			for (i, v) in arr.iter().enumerate() {
 				let v = v.with_description(|| format!("elem <{i}> evaluation"))?;
 				out.push_str("---\n");
-				State::push_description(
+				in_description_frame(
 					|| format!("elem <{i}> manifestification"),
 					|| self.inner.manifest_buf(v, out),
 				)?;
