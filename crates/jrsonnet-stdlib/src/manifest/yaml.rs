@@ -1,9 +1,9 @@
 use std::{borrow::Cow, fmt::Write};
 
 use jrsonnet_evaluator::{
-	bail,
+	bail, in_description_frame,
 	manifest::{escape_string_json_buf, ManifestFormat},
-	Result, ResultExt, State, Val,
+	Result, ResultExt, Val,
 };
 
 pub struct YamlFormat<'s> {
@@ -178,7 +178,7 @@ fn manifest_yaml_ex_buf(
 				if extra_padding {
 					cur_padding.push_str(&options.padding);
 				}
-				State::push_description(
+				in_description_frame(
 					|| format!("elem <{i}> manifestification"),
 					|| manifest_yaml_ex_buf(&item, buf, cur_padding, options),
 				)?;
@@ -225,7 +225,7 @@ fn manifest_yaml_ex_buf(
 					}
 					_ => buf.push(' '),
 				}
-				State::push_description(
+				in_description_frame(
 					|| format!("field <{key}> manifestification"),
 					|| manifest_yaml_ex_buf(&value, buf, cur_padding, options),
 				)?;

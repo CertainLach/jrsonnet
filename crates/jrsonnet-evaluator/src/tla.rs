@@ -3,12 +3,12 @@ use jrsonnet_parser::Source;
 
 use crate::{
 	function::{ArgsLike, CallLocation},
-	Result, State, Val,
+	in_description_frame, Result, State, Val,
 };
 
 pub fn apply_tla<A: ArgsLike>(s: State, args: &A, val: Val) -> Result<Val> {
 	Ok(if let Val::Func(func) = val {
-		State::push_description(
+		in_description_frame(
 			|| "during TLA call".to_owned(),
 			|| {
 				func.evaluate(

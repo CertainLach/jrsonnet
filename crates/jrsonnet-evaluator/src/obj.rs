@@ -17,10 +17,11 @@ use crate::{
 	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::{CallLocation, FuncVal},
 	gc::{GcHashMap, GcHashSet, TraceBox},
+	in_frame,
 	operator::evaluate_add_op,
 	tb,
 	val::{ArrValue, ThunkValue},
-	MaybeUnbound, Result, State, Thunk, Unbound, Val,
+	MaybeUnbound, Result, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -969,7 +970,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 		let location = member.location.clone();
 		let old = receiver.0.map.insert(name.clone(), member);
 		if old.is_some() {
-			State::push(
+			in_frame(
 				CallLocation(location.as_ref()),
 				|| format!("field <{}> initializtion", name.clone()),
 				|| bail!(DuplicateFieldName(name.clone())),

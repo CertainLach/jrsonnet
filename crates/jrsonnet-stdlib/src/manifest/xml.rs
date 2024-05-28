@@ -1,9 +1,9 @@
 use jrsonnet_evaluator::{
-	bail,
+	bail, in_description_frame,
 	manifest::{ManifestFormat, ToStringFormat},
 	typed::{ComplexValType, Either2, Typed, ValType},
 	val::ArrValue,
-	Either, ObjValue, Result, ResultExt, State, Val,
+	Either, ObjValue, Result, ResultExt, Val,
 };
 
 pub struct XmlJsonmlFormat {
@@ -70,7 +70,7 @@ impl Typed for JSONMLValue {
 		Ok(Self::Tag {
 			tag,
 			attrs,
-			children: State::push_description(
+			children: in_description_frame(
 				|| "parsing children".to_owned(),
 				|| {
 					Typed::from_untyped(Val::Arr(arr.slice(

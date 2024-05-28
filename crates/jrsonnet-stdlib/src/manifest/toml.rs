@@ -1,10 +1,10 @@
 use std::borrow::Cow;
 
 use jrsonnet_evaluator::{
-	bail,
+	bail, in_description_frame,
 	manifest::{escape_string_json_buf, ManifestFormat},
 	val::ArrValue,
-	IStr, ObjValue, Result, ResultExt, State, Val,
+	IStr, ObjValue, Result, ResultExt, Val,
 };
 
 pub struct TomlFormat<'s> {
@@ -124,7 +124,7 @@ fn manifest_value(
 					buf.push_str(&options.padding);
 				}
 
-				State::push_description(
+				in_description_frame(
 					|| format!("elem <{i}> manifestification"),
 					|| manifest_value(&e, true, buf, "", options),
 				)?;
@@ -161,7 +161,7 @@ fn manifest_value(
 
 				escape_key_toml_buf(&k, buf);
 				buf.push_str(" = ");
-				State::push_description(
+				in_description_frame(
 					|| format!("field <{k}> manifestification"),
 					|| manifest_value(&v, true, buf, "", options),
 				)?;

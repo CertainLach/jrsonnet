@@ -290,7 +290,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				cfg_attrs,
 			} => {
 				let name = name.as_ref().map_or("<unnamed>", String::as_str);
-				let eval = quote! {jrsonnet_evaluator::State::push_description(
+				let eval = quote! {jrsonnet_evaluator::in_description_frame(
 					|| format!("argument <{}> evaluation", #name),
 					|| <#ty>::from_untyped(value.evaluate()?),
 				)?};

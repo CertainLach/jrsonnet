@@ -11,8 +11,8 @@ use serde::{
 };
 
 use crate::{
-	arr::ArrValue, runtime_error, val::NumValue, Error as JrError, ObjValue, ObjValueBuilder,
-	Result, State, Val,
+	arr::ArrValue, in_description_frame, runtime_error, val::NumValue, Error as JrError, ObjValue,
+	ObjValueBuilder, Result, Val,
 };
 
 impl<'de> Deserialize<'de> for Val {
@@ -173,8 +173,7 @@ impl Serialize for Val {
 				let mut seq = serializer.serialize_seq(Some(arr.len()))?;
 				for (i, element) in arr.iter().enumerate() {
 					let mut serde_error = None;
-					// TODO: rewrite using try{} after stabilization
-					State::push_description(
+					in_description_frame(
 						|| format!("array index [{i}]"),
 						|| {
 							let e = element?;
@@ -199,7 +198,7 @@ impl Serialize for Val {
 				) {
 					let mut serde_error = None;
 					// TODO: rewrite using try{} after stabilization
-					State::push_description(
+					in_description_frame(
 						|| format!("object field {field:?}"),
 						|| {
 							let v = value?;

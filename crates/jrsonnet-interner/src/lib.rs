@@ -235,6 +235,7 @@ pub mod interop {
 
 	use crate::{PoolMap, POOL};
 
+	/// Type-erased interned string pool
 	pub enum PoolState {}
 
 	/// Dump current interned string pool, to be restored by

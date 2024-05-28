@@ -1,6 +1,5 @@
 use std::{
 	any::Any,
-	cell::RefCell,
 	env::current_dir,
 	fs,
 	io::{ErrorKind, Read},
@@ -41,8 +40,10 @@ pub trait ImportResolver: Trace {
 	/// this cannot be resolved using associated type, as evaluator uses object instead of generic for [`ImportResolver`]
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>>;
 
-	/// For downcasts
+	// For downcasts, will be removed after trait_upcasting_coercion
+	// stabilization.
 	fn as_any(&self) -> &dyn Any;
+	fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Dummy resolver, can't resolve/load any file
@@ -54,6 +55,9 @@ impl ImportResolver for DummyImportResolver {
 	}
 
 	fn as_any(&self) -> &dyn Any {
+		self
+	}
+	fn as_any_mut(&mut self) -> &mut dyn Any {
 		self
 	}
 }
@@ -69,17 +73,15 @@ impl Default for Box<dyn ImportResolver> {
 pub struct FileImportResolver {
 	/// Library directories to search for file.
 	/// Referred to as `jpath` in original jsonnet implementation.
-	library_paths: RefCell<Vec<PathBuf>>,
+	library_paths: Vec<PathBuf>,
 }
 impl FileImportResolver {
-	pub fn new(jpath: Vec<PathBuf>) -> Self {
-		Self {
-			library_paths: RefCell::new(jpath),
-		}
+	pub fn new(library_paths: Vec<PathBuf>) -> Self {
+		Self { library_paths }
 	}
 	/// Dynamically add new jpath, used by bindings
-	pub fn add_jpath(&self, path: PathBuf) {
-		self.library_paths.borrow_mut().push(path);
+	pub fn add_jpath(&mut self, path: PathBuf) {
+		self.library_paths.push(path);
 	}
 }
 
@@ -132,7 +134,7 @@ impl ImportResolver for FileImportResolver {
 		if let Some(direct) = check_path(&direct)? {
 			return Ok(direct);
 		}
-		for library_path in self.library_paths.borrow().iter() {
+		for library_path in &self.library_paths {
 			let mut cloned = library_path.clone();
 			cloned.push(path);
 			if let Some(cloned) = check_path(&cloned)? {
@@ -165,11 +167,15 @@ impl ImportResolver for FileImportResolver {
 		Ok(out)
 	}
 
+	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
+		self.resolve_from(&SourcePath::default(), path)
+	}
+
 	fn as_any(&self) -> &dyn Any {
 		self
 	}
 
-	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
-		self.resolve_from(&SourcePath::default(), path)
+	fn as_any_mut(&mut self) -> &mut dyn Any {
+		self
 	}
 }
