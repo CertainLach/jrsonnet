@@ -317,6 +317,8 @@ pub fn render_integer(
 	} else {
 		let mut v = iv.abs();
 		let mut nums = Vec::with_capacity(1);
+
+		#[allow(clippy::while_float)]
 		while v != 0.0 {
 			nums.push((v % radix) as u8);
 			v = (v / radix).floor();
