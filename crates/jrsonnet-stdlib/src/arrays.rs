@@ -70,7 +70,13 @@ pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
 #[builtin]
 pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 	let mut out = ObjValueBuilder::new();
-	for (k, v) in obj.iter() {
+	for (k, v) in obj.iter(
+		// Makes sense mapped object should be ordered the same way, should not break anything when the output is not ordered (the default).
+		// The thrown error might be different, but jsonnet
+		// does not specify the evaluation order.
+		#[cfg(feature = "exp-preserve-order")]
+		true,
+	) {
 		let v = v?;
 		out.field(k.clone())
 			.value(func.evaluate_simple(&(k, v), false)?);
