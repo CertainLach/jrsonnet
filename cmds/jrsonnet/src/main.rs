@@ -186,8 +186,12 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 	};
 
 	let tla = opts.tla.tla_opts()?;
-	#[allow(unused_mut)]
-	let mut val = apply_tla(s, &tla, val)?;
+	#[allow(
+		// It is not redundant/unused in exp-apply
+		unused_mut,
+		clippy::redundant_clone,
+	)]
+	let mut val = apply_tla(s.clone(), &tla, val)?;
 
 	#[cfg(feature = "exp-apply")]
 	for apply in opts.input.exp_apply {

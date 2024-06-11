@@ -147,7 +147,14 @@ pub fn builtin_assert_equal(a: Val, b: Val) -> Result<bool> {
 	if equals(&a, &b)? {
 		return Ok(true);
 	}
-	let format = JsonFormat::std_to_json("  ".to_owned(), "\n", ": ");
+	// TODO: Use debug output format
+	let format = JsonFormat::std_to_json(
+		"  ".to_owned(),
+		"\n",
+		": ",
+		#[cfg(feature = "exp-preserve-order")]
+		true,
+	);
 	let a = a.manifest(&format).description("<a> manifestification")?;
 	let b = b.manifest(&format).description("<b> manifestification")?;
 	bail!("assertion failed: A != B\nA: {a}\nB: {b}")
@@ -161,8 +168,30 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 	let Some(target) = target.as_obj() else {
 		return Ok(Val::Obj(patch));
 	};
-	let target_fields = target.fields().into_iter().collect::<BTreeSet<IStr>>();
-	let patch_fields = patch.fields().into_iter().collect::<BTreeSet<IStr>>();
+	let target_fields = target
+		.fields(
+			// FIXME: Makes no sense to preserve order for BTreeSet, it would be better to use IndexSet here?
+			// But IndexSet won't allow fast ordered union...
+			// // Makes sense to preserve source ordering where possible.
+			// // May affect evaluation order, but it is not specified by jsonnet spec.
+			// #[cfg(feature = "exp-preserve-order")]
+			// true,
+			#[cfg(feature = "exp-preserve-order")]
+			false,
+		)
+		.into_iter()
+		.collect::<BTreeSet<IStr>>();
+	let patch_fields = patch
+		.fields(
+			// No need to look at the patch field order, I think?
+			// New fields (that will be appended at the end) will be alphabeticaly-ordered,
+			// but it is fine for jsonpatch, I don't think people write jsonpatch in jsonnet,
+			// when they can use mixins.
+			#[cfg(feature = "exp-preserve-order")]
+			false,
+		)
+		.into_iter()
+		.collect::<BTreeSet<IStr>>();
 
 	let mut out = ObjValueBuilder::new();
 	for field in target_fields.union(&patch_fields) {
