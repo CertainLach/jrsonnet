@@ -2,28 +2,42 @@
   description = "Jrsonnet";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
-    flake-utils.url = "github:numtide/flake-utils";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
-      inputs = {
-        nixpkgs.follows = "nixpkgs";
-        flake-utils.follows = "flake-utils";
-      };
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
+    flake-parts = {
+      url = "github:hercules-ci/flake-parts";
+      inputs.nixpkgs-lib.follows = "nixpkgs";
     };
     crane = {
       url = "github:ipetkov/crane";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+    shelly = {
+      url = "github:CertainLach/shelly";
+      inputs = {
+        flake-parts.follows = "flake-parts";
+        nixpkgs.follows = "nixpkgs";
+      };
+    };
   };
-  outputs = {
+  outputs = inputs @ {
     nixpkgs,
-    flake-utils,
+    flake-parts,
     rust-overlay,
     crane,
+    shelly,
     ...
   }:
-    flake-utils.lib.eachDefaultSystem (
-      system: let
+    flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [shelly.flakeModule];
+      systems = ["x86_64-linux" "aarch64-linux" "armv7l-linux" "armv6l-linux" "mingw-w64"];
+      perSystem = {
+        config,
+        system,
+        ...
+      }: let
         pkgs = import nixpkgs {
           inherit system;
           overlays = [rust-overlay.overlays.default];
@@ -32,14 +46,18 @@
         rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
         craneLib = (crane.mkLib pkgs).overrideToolchain rust;
       in {
+        legacyPackages = {
+          jsonnetImpls = {
+            go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
+            sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
+            jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
+            # I didn't managed to build it, and nixpkgs version is marked as broken
+            # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
+            rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix {};
+          };
+        };
         packages = rec {
           default = jrsonnet;
-          go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
-          sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
-          jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
-          # I didn't managed to build it, and nixpkgs version is marked as broken
-          # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
-          rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix {};
 
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
             inherit craneLib;
@@ -61,7 +79,7 @@
           };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -70,7 +88,7 @@
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {
@@ -80,7 +98,7 @@
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -97,7 +115,7 @@
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
             jrsonnetVariants = [
               {
@@ -115,22 +133,25 @@
             ];
           };
         };
-        devShells.default = craneLib.devShell {
-          packages = with pkgs; [
-            alejandra
-            cargo-edit
-            cargo-asm
-            cargo-outdated
-            cargo-watch
-            cargo-insta
-            lld
-            hyperfine
-            graphviz
-          ] ++ lib.optionals (!stdenv.isDarwin) [
-            valgrind
-            kcachegrind
-          ];
+        shelly.shells.default = {
+          factory = craneLib.devShell;
+          packages = with pkgs;
+            [
+              alejandra
+              cargo-edit
+              cargo-asm
+              cargo-outdated
+              cargo-watch
+              cargo-insta
+              lld
+              hyperfine
+              graphviz
+            ]
+            ++ lib.optionals (!stdenv.isDarwin) [
+              valgrind
+              kcachegrind
+            ];
         };
-      }
-    );
+      };
+    };
 }
