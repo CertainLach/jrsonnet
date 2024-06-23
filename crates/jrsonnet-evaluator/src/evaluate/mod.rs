@@ -25,6 +25,25 @@ use crate::{
 pub mod destructure;
 pub mod operator;
 
+// This is the amount of bytes that need to be left on the stack before increasing the size.
+// It must be at least as large as the stack required by any code that does not call
+// `ensure_sufficient_stack`.
+const RED_ZONE: usize = 100 * 1024; // 100k
+
+// Only the first stack that is pushed, grows exponentially (2^n * STACK_PER_RECURSION) from then
+// on. This flag has performance relevant characteristics. Don't set it too high.
+const STACK_PER_RECURSION: usize = 1024 * 1024; // 1MB
+
+/// Grows the stack on demand to prevent stack overflow. Call this in strategic locations
+/// to "break up" recursive calls. E.g. almost any call to `visit_expr` or equivalent can benefit
+/// from this.
+///
+/// Should not be sprinkled around carelessly, as it causes a little bit of overhead.
+#[inline]
+pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
+	stacker::maybe_grow(RED_ZONE, STACK_PER_RECURSION, f)
+}
+
 pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 	fn is_trivial(expr: &LocExpr) -> bool {
 		match expr.expr() {
@@ -463,7 +482,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			|| format!("variable <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
-		Index { indexable, parts } => {
+		Index { indexable, parts } => ensure_sufficient_stack(|| {
 			let mut parts = parts.iter();
 			let mut indexable = if matches!(indexable.expr(), Expr::Literal(LiteralType::Super)) {
 				let part = parts.next().expect("at least part should exist");
@@ -574,8 +593,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					(v, _) => bail!(CantIndexInto(v.value_type())),
 				};
 			}
-			indexable
-		}
+			Ok(indexable)
+		})?,
 		LocalExpr(bindings, returned) => {
 			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
 				GcHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
@@ -636,9 +655,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			&evaluate(ctx.clone(), a)?,
 			&Val::Obj(evaluate_object(ctx, b)?),
 		)?,
-		Apply(value, args, tailstrict) => {
-			evaluate_apply(ctx, value, args, CallLocation::new(&loc), *tailstrict)?
-		}
+		Apply(value, args, tailstrict) => ensure_sufficient_stack(|| {
+			evaluate_apply(ctx, value, args, CallLocation::new(&loc), *tailstrict)
+		})?,
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
 		}
