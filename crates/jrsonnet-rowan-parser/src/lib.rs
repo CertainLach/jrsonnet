@@ -14,7 +14,7 @@ mod lex;
 mod marker;
 mod parser;
 mod precedence;
-mod string_block;
+// mod string_block;
 mod tests;
 mod token_set;
 

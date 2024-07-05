@@ -1,6 +1,9 @@
+// #![cfg(feature = "nightly", feature(unix_sigpipe))]
+
 use std::{
 	fs::{create_dir_all, File},
 	io::{Read, Write},
+	path::PathBuf,
 };
 
 use clap::{CommandFactory, Parser};
@@ -11,6 +14,7 @@ use jrsonnet_evaluator::{
 	error::{Error as JrError, ErrorKind},
 	ResultExt, State, Val,
 };
+use jrsonnet_parser::Source;
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -22,6 +26,11 @@ enum SubOpts {
 	Generate {
 		/// Target shell name
 		shell: Shell,
+	},
+	Analyze {
+		#[command(flatten)]
+		stdlib: StdOpts,
+		file: PathBuf,
 	},
 }
 
@@ -87,7 +96,9 @@ struct Opts {
 	debug: DebugOpts,
 }
 
-// TODO: Add unix_sigpipe = "sig_dfl"
+// // Do not panic on pipe failure: https://github.com/rust-lang/rust/issues/97889
+// #[cfg(feature = "nightly", unix_sigpipe = "sig_dfl")]
+// Feature was replaced with compiler flag, which can't be feature-gated, thus recommended, but only enabled in nix flake based builds.
 fn main() {
 	let opts: Opts = Opts::parse();
 
@@ -103,6 +114,16 @@ fn main() {
 				let app = &mut Opts::command();
 				let buf = &mut std::io::stdout();
 				generate(shell, app, "jrsonnet", buf);
+				std::process::exit(0)
+			}
+			SubOpts::Analyze { file, stdlib } => {
+				let content = std::fs::read_to_string(file).expect("read file failed");
+				let source = Source::new_virtual("name".into(), (&content).into());
+				let ast =
+					jrsonnet_parser::parse(&content, &jrsonnet_parser::ParserSettings { source })
+						.expect("parsed");
+				let ctx = stdlib.context_initializer().expect("ctx");
+				jrsonnet_evaluator::analyze_root(State::default(), &ast, ctx);
 				std::process::exit(0)
 			}
 		}

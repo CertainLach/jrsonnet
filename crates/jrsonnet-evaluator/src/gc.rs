@@ -8,7 +8,7 @@ use std::{
 
 use hashbrown::HashMap;
 use jrsonnet_gcmodule::{Trace, Tracer};
-use rustc_hash::{FxHashSet, FxHasher};
+use rustc_hash::{FxBuildHasher, FxHasher};
 
 /// Replacement for box, which assumes that the underlying type is [`Trace`]
 /// Used in places, where `Cc<dyn Trait>` should be used instead, but it can't, because `CoerceUnsiced` is not stable
@@ -76,16 +76,13 @@ impl<T: ?Sized> AsMut<T> for TraceBox<T> {
 }
 
 #[derive(Clone)]
-pub struct GcHashSet<V>(pub FxHashSet<V>);
+pub struct GcHashSet<V>(pub HashSet<V, FxBuildHasher>);
 impl<V> GcHashSet<V> {
 	pub fn new() -> Self {
 		Self(HashSet::default())
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
-		Self(FxHashSet::with_capacity_and_hasher(
-			capacity,
-			BuildHasherDefault::default(),
-		))
+		Self(HashSet::with_capacity_and_hasher(capacity, FxBuildHasher))
 	}
 }
 impl<V> Trace for GcHashSet<V>
@@ -99,7 +96,7 @@ where
 	}
 }
 impl<V> Deref for GcHashSet<V> {
-	type Target = FxHashSet<V>;
+	type Target = HashSet<V, FxBuildHasher>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0
@@ -117,16 +114,13 @@ impl<V> Default for GcHashSet<V> {
 }
 
 #[derive(Debug)]
-pub struct GcHashMap<K, V>(pub HashMap<K, V, BuildHasherDefault<FxHasher>>);
+pub struct GcHashMap<K, V>(pub HashMap<K, V, FxBuildHasher>);
 impl<K, V> GcHashMap<K, V> {
 	pub fn new() -> Self {
 		Self(HashMap::default())
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
-		Self(HashMap::with_capacity_and_hasher(
-			capacity,
-			BuildHasherDefault::default(),
-		))
+		Self(HashMap::with_capacity_and_hasher(capacity, FxBuildHasher))
 	}
 }
 impl<K, V> Trace for GcHashMap<K, V>
@@ -142,7 +136,7 @@ where
 	}
 }
 impl<K, V> Deref for GcHashMap<K, V> {
-	type Target = HashMap<K, V, BuildHasherDefault<FxHasher>>;
+	type Target = HashMap<K, V, FxBuildHasher>;
 
 	fn deref(&self) -> &Self::Target {
 		&self.0

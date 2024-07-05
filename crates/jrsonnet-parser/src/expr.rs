@@ -1,11 +1,13 @@
 use std::{
+	cell::RefCell,
 	fmt::{self, Debug, Display},
-	ops::Deref,
+	ops::{Deref, RangeInclusive},
 	rc::Rc,
 };
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
+use jrsonnet_macros::AssociatedData;
 
 use crate::source::Source;
 
@@ -53,95 +55,88 @@ pub enum Member {
 	AssertStmt(AssertStmt),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, AssociatedData)]
+#[associated(fields(pub name: &'static str, pub binding_power: ((), u8)))]
 pub enum UnaryOpType {
+	#[associated("+", ((), 20))]
 	Plus,
+	#[associated("-", ((), 20))]
 	Minus,
+	#[associated("~", ((), 20))]
 	BitNot,
+	#[associated("!", ((), 20))]
 	Not,
 }
 
 impl Display for UnaryOpType {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		use UnaryOpType::*;
-		write!(
-			f,
-			"{}",
-			match self {
-				Plus => "+",
-				Minus => "-",
-				BitNot => "~",
-				Not => "!",
-			}
-		)
+		write!(f, "{}", self.name(),)
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace, AssociatedData)]
+#[associated(fields(pub name: &'static str, pub binding_power: (u8, u8)))]
 pub enum BinaryOpType {
-	Mul,
-	Div,
+	// Fake: inserted when `ident {objinside}` is detected, does not have an actual operator,
+	// but works as +
+	#[associated("<apply>", (20, 21))]
+	ObjectApply,
 
-	/// Implemented as intrinsic, put here for completeness
+	#[associated("*", (18, 19))]
+	Mul,
+	#[associated("/", (18, 19))]
+	Div,
+	#[associated("%", (18, 19))]
 	Mod,
 
+	#[associated("+", (16, 17))]
 	Add,
+	#[associated("-", (16, 17))]
 	Sub,
 
+	#[associated("<<", (14, 15))]
 	Lhs,
+	#[associated(">>", (14, 15))]
 	Rhs,
 
+	#[associated("<", (12, 13))]
 	Lt,
+	#[associated(">", (12, 13))]
 	Gt,
+	#[associated("<=", (12, 13))]
 	Lte,
+	#[associated(">=", (12, 13))]
 	Gte,
+	#[associated("in", (12, 13))]
+	In,
 
-	BitAnd,
-	BitOr,
-	BitXor,
-
+	#[associated("==", (10, 11))]
 	Eq,
+	#[associated("!=", (10, 11))]
 	Neq,
 
+	#[associated("&", (8, 9))]
+	BitAnd,
+
+	#[associated("^", (6, 7))]
+	BitXor,
+
+	#[associated("|", (4, 5))]
+	BitOr,
+
+	#[associated("&&", (2, 3))]
 	And,
+
+	#[associated("||", (0, 1))]
 	Or,
 	#[cfg(feature = "exp-null-coaelse")]
+	#[associated("??", (0, 1))]
 	NullCoaelse,
-
-	// Equialent to std.objectHasEx(a, b, true)
-	In,
 }
 
 impl Display for BinaryOpType {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		use BinaryOpType::*;
-		write!(
-			f,
-			"{}",
-			match self {
-				Mul => "*",
-				Div => "/",
-				Mod => "%",
-				Add => "+",
-				Sub => "-",
-				Lhs => "<<",
-				Rhs => ">>",
-				Lt => "<",
-				Gt => ">",
-				Lte => "<=",
-				Gte => ">=",
-				BitAnd => "&",
-				BitOr => "|",
-				BitXor => "^",
-				Eq => "==",
-				Neq => "!=",
-				And => "&&",
-				Or => "||",
-				In => "in",
-				#[cfg(feature = "exp-null-coaelse")]
-				NullCoaelse => "??",
-			}
-		)
+		write!(f, "{}", self.name())
 	}
 }
 
@@ -181,7 +176,7 @@ pub enum DestructRest {
 
 #[derive(Debug, Clone, PartialEq, Trace)]
 pub enum Destruct {
-	Full(IStr),
+	Full(Spanned<IStr>),
 	#[cfg(feature = "exp-destruct")]
 	Skip,
 	#[cfg(feature = "exp-destruct")]
@@ -200,7 +195,7 @@ impl Destruct {
 	/// Name of destructure, used for function parameter names
 	pub fn name(&self) -> Option<IStr> {
 		match self {
-			Self::Full(name) => Some(name.clone()),
+			Self::Full(name) => Some(name.0.clone()),
 			#[cfg(feature = "exp-destruct")]
 			_ => None,
 		}
@@ -247,7 +242,8 @@ pub enum BindSpec {
 		value: LocExpr,
 	},
 	Function {
-		name: IStr,
+		// Always Destruct::Full
+		name: Destruct,
 		params: ParamsDesc,
 		value: LocExpr,
 	},
@@ -333,11 +329,6 @@ pub enum Expr {
 
 	/// Object: {a: 2}
 	Obj(ObjBody),
-	/// Object extension: var1 {b: 2}
-	ObjExtend(LocExpr, ObjBody),
-
-	/// (obj)
-	Parened(LocExpr),
 
 	/// -2
 	UnaryOp(UnaryOpType, LocExpr),
@@ -386,9 +377,32 @@ pub struct IndexPart {
 #[trace(skip)]
 #[repr(C)]
 pub struct Span(pub Source, pub u32, pub u32);
+
+thread_local! {
+	static CURRENT_SOURCE: RefCell<Option<Source>> = const { RefCell::new(None) };
+}
+// Only available during parsing
+pub(crate) fn current_source() -> Source {
+	CURRENT_SOURCE
+		.with_borrow(|v| v.clone())
+		.expect("no parsing happening right now!")
+}
+pub(crate) fn with_current_source<T>(current: Source, v: impl FnOnce() -> T) -> T {
+	CURRENT_SOURCE.set(Some(current));
+	let result = v();
+	// TODO: Handle panics?
+	CURRENT_SOURCE.set(None);
+	result
+}
 impl Span {
 	pub fn belongs_to(&self, other: &Span) -> bool {
 		other.0 == self.0 && other.1 <= self.1 && other.2 >= self.2
+	}
+	pub fn range(&self) -> RangeInclusive<usize> {
+		self.1 as usize..=self.2.saturating_sub(1).max(self.1) as usize
+	}
+	pub(crate) fn dummy() -> Self {
+		Self(current_source(), 0, 0)
 	}
 }
 
@@ -397,6 +411,26 @@ static_assertions::assert_eq_size!(Span, (usize, usize));
 impl Debug for Span {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{:?}:{:?}-{:?}", self.0, self.1, self.2)
+	}
+}
+
+#[derive(Clone, PartialEq, Trace)]
+pub struct Spanned<T: Trace>(pub T, pub Span);
+impl<T: Trace> Spanned<T> {
+	pub(crate) fn dummy(t: T) -> Self {
+		Self(t, Span::dummy())
+	}
+}
+impl<T: Debug + Trace> Debug for Spanned<T> {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		let expr = &self.0;
+		if f.alternate() {
+			write!(f, "{:#?}", expr)?;
+		} else {
+			write!(f, "{:?}", expr)?;
+		}
+		write!(f, " from {:?}", self.1)?;
+		Ok(())
 	}
 }
 

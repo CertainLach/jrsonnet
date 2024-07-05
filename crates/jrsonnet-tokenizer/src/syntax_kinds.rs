@@ -12,7 +12,7 @@ use logos::Logos;
 #[doc = r" The kind of syntax node, e.g. `IDENT`, `USE_KW`, or `STRUCT`."]
 #[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Logos)]
 #[repr(u16)]
-pub enum SyntaxKind {
+pub enum TokenKind {
 	#[doc(hidden)]
 	TOMBSTONE,
 	#[doc(hidden)]
@@ -159,8 +159,6 @@ pub enum SyntaxKind {
 	ERROR_KW,
 	#[token("in")]
 	IN_KW,
-	META_OBJECT_APPLY,
-	ERROR_NO_OPERATOR,
 	#[token("null")]
 	NULL_KW,
 	#[token("true")]
@@ -175,90 +173,11 @@ pub enum SyntaxKind {
 	FOR_KW,
 	#[token("assert")]
 	ASSERT_KW,
-	ERROR_MISSING_TOKEN,
-	ERROR_UNEXPECTED_TOKEN,
-	ERROR_CUSTOM,
 	LEXING_ERROR,
 	__LAST_TOKEN,
-	SOURCE_FILE,
-	EXPR,
-	SUFFIX_INDEX,
-	NAME,
-	SUFFIX_INDEX_EXPR,
-	SUFFIX_SLICE,
-	SLICE_DESC,
-	SUFFIX_APPLY,
-	ARGS_DESC,
-	STMT_LOCAL,
-	STMT_ASSERT,
-	ASSERTION,
-	EXPR_BINARY,
-	EXPR_UNARY,
-	EXPR_OBJ_EXTEND,
-	EXPR_PARENED,
-	EXPR_LITERAL,
-	EXPR_STRING,
-	EXPR_NUMBER,
-	EXPR_ARRAY,
-	EXPR_OBJECT,
-	EXPR_ARRAY_COMP,
-	EXPR_IMPORT,
-	EXPR_VAR,
-	EXPR_IF_THEN_ELSE,
-	TRUE_EXPR,
-	FALSE_EXPR,
-	EXPR_FUNCTION,
-	PARAMS_DESC,
-	EXPR_ERROR,
-	SLICE_DESC_END,
-	SLICE_DESC_STEP,
-	ARG,
-	OBJ_BODY_COMP,
-	OBJ_BODY_MEMBER_LIST,
-	MEMBER_BIND_STMT,
-	OBJ_LOCAL,
-	MEMBER_ASSERT_STMT,
-	MEMBER_FIELD_NORMAL,
-	MEMBER_FIELD_METHOD,
-	FIELD_NAME_FIXED,
-	FIELD_NAME_DYNAMIC,
-	FOR_SPEC,
-	IF_SPEC,
-	BIND_DESTRUCT,
-	BIND_FUNCTION,
-	PARAM,
-	DESTRUCT_FULL,
-	DESTRUCT_SKIP,
-	DESTRUCT_ARRAY,
-	DESTRUCT_OBJECT,
-	DESTRUCT_OBJECT_FIELD,
-	DESTRUCT_REST,
-	DESTRUCT_ARRAY_ELEMENT,
-	SUFFIX,
-	BIND,
-	STMT,
-	OBJ_BODY,
-	COMP_SPEC,
-	EXPR_BASE,
-	MEMBER_COMP,
-	MEMBER,
-	FIELD_NAME,
-	DESTRUCT,
-	DESTRUCT_ARRAY_PART,
-	BINARY_OPERATOR,
-	UNARY_OPERATOR,
-	LITERAL,
-	TEXT,
-	NUMBER,
-	IMPORT_KIND,
-	VISIBILITY,
-	TRIVIA,
-	CUSTOM_ERROR,
-	#[doc(hidden)]
-	__LAST,
 }
-use self::SyntaxKind::*;
-impl SyntaxKind {
+use self::TokenKind::*;
+impl TokenKind {
 	pub fn is_keyword(self) -> bool {
 		match self {
 			OR | NULL_COAELSE | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE
@@ -271,16 +190,8 @@ impl SyntaxKind {
 			_ => false,
 		}
 	}
-	pub fn is_enum(self) -> bool {
-		match self {
-			SUFFIX | BIND | STMT | OBJ_BODY | COMP_SPEC | EXPR_BASE | MEMBER_COMP | MEMBER
-			| FIELD_NAME | DESTRUCT | DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR
-			| LITERAL | TEXT | NUMBER | IMPORT_KIND | VISIBILITY | TRIVIA | CUSTOM_ERROR => true,
-			_ => false,
-		}
-	}
 	pub fn from_raw(r: u16) -> Self {
-		assert!(r < Self::__LAST as u16);
+		assert!(r < Self::__LAST_TOKEN as u16);
 		unsafe { std::mem::transmute(r) }
 	}
 	pub fn into_raw(self) -> u16 {

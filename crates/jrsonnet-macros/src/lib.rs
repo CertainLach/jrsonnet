@@ -9,8 +9,8 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{self, Comma},
-	Attribute, DeriveInput, Error, Expr, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
-	PathArguments, Result, ReturnType, Token, Type,
+	Attribute, Data, DeriveInput, Error, Expr, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat,
+	Path, PathArguments, Result, ReturnType, Token, Type, Visibility,
 };
 
 fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
@@ -78,6 +78,7 @@ fn extract_type_from_option(ty: &Type) -> Result<Option<&Type>> {
 
 struct Field {
 	attrs: Vec<Attribute>,
+	vis: Visibility,
 	name: Ident,
 	_colon: Token![:],
 	ty: Type,
@@ -86,6 +87,7 @@ impl Parse for Field {
 	fn parse(input: ParseStream) -> syn::Result<Self> {
 		Ok(Self {
 			attrs: input.call(Attribute::parse_outer)?,
+			vis: input.parse()?,
 			name: input.parse()?,
 			_colon: input.parse()?,
 			ty: input.parse()?,
@@ -798,4 +800,88 @@ impl FormatInput {
 pub fn format_istr(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as FormatInput);
 	input.expand().into()
+}
+
+#[proc_macro_derive(AssociatedData, attributes(associated))]
+pub fn associated_data(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(input as DeriveInput);
+
+	match associated_data_inner(input) {
+		Ok(v) => v.into(),
+		Err(e) => e.into_compile_error().into(),
+	}
+}
+
+#[derive(Default)]
+struct AssociatedValues {
+	values: Vec<Expr>,
+}
+impl Parse for AssociatedValues {
+	fn parse(input: ParseStream) -> Result<Self> {
+		if input.is_empty() {
+			return Ok(Self::default());
+		}
+		let p = Punctuated::<Expr, Comma>::parse_terminated(&input)?;
+		Ok(Self {
+			values: p.into_iter().collect(),
+		})
+	}
+}
+
+fn associated_data_inner(input: DeriveInput) -> Result<TokenStream> {
+	let attr: BuiltinAttrs = parse_attr(&input.attrs, "associated")?
+		.ok_or_else(|| Error::new(input.ident.span(), "missing #[associated] attribute"))?;
+	let field_count = attr.fields.len();
+
+	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+	let id = &input.ident;
+
+	let Data::Enum(en) = input.data else {
+		return Err(Error::new(
+			input.span(),
+			"only enums can have associated data",
+		));
+	};
+
+	let mut var_with_tys = vec![];
+	for ele in en.variants {
+		let attr: AssociatedValues = parse_attr(&ele.attrs, "associated")?.unwrap_or_default();
+		if attr.values.len() != field_count {
+			return Err(Error::new(ele.span(), "mismatched number of values"));
+		}
+		// TODO: Ensure no unknown values
+		// TODO: fill undefined with Default::default or give error.
+		var_with_tys.push((ele, attr));
+	}
+
+	let items = attr.fields.into_iter().enumerate().map(|(fid, field)| {
+		let attrs = &field.attrs;
+		let id = &field.name;
+		let ty = &field.ty;
+		let vis = &field.vis;
+		let vars = var_with_tys.iter().map(|(var, ty)| {
+			let vid = &var.ident;
+			// TODO: Allow referencing enum fields
+			// let vals = &var.fields;
+
+			let value = &ty.values[fid];
+			quote! {
+				Self::#vid {..} => #value
+			}
+		});
+		quote! {
+			#(#attrs)*
+			#vis fn #id(&self) -> #ty {
+				match self {
+					#(#vars,)*
+				}
+			}
+		}
+	});
+
+	Ok(quote! {
+		impl #impl_generics #id #ty_generics #where_clause {
+			#(#items)*
+		}
+	})
 }

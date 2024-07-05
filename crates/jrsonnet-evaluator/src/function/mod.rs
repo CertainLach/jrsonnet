@@ -225,7 +225,7 @@ impl FuncVal {
 					#[cfg(feature = "exp-destruct")]
 					_ => return false,
 				};
-				desc.body.expr() == &Expr::Var(id.clone())
+				desc.body.expr() == &Expr::Var(id.0.clone())
 			}
 			_ => false,
 		}

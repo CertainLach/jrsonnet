@@ -11,14 +11,14 @@ use std::ops::Range;
 use logos::Lexer;
 use StringBlockError::*;
 
-use crate::SyntaxKind;
+use crate::TokenKind;
 
-pub fn lex_str_block_test(lex: &mut Lexer<SyntaxKind>) {
+pub fn lex_str_block_test(lex: &mut Lexer<TokenKind>) {
 	let _ = lex_str_block(lex);
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError> {
+pub fn lex_str_block(lex: &mut Lexer<TokenKind>) -> Result<(), StringBlockError> {
 	struct Context<'a> {
 		source: &'a str,
 		index: usize,
@@ -118,7 +118,7 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 		a.len()
 	}
 
-	fn guess_token_end_and_bump<'a>(lex: &mut Lexer<'a, SyntaxKind>, ctx: &Context<'a>) {
+	fn guess_token_end_and_bump<'a>(lex: &mut Lexer<'a, TokenKind>, ctx: &Context<'a>) {
 		let end_index = ctx
 			.rest()
 			.find("|||")

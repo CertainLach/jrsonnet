@@ -273,7 +273,7 @@ dependencies = [
  "anyhow",
  "bumpalo",
  "indexmap 2.2.6",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "serde",
  "unicode-width",
 ]
@@ -475,6 +475,7 @@ dependencies = [
  "annotate-snippets",
  "anyhow",
  "derivative",
+ "drop_bomb",
  "hashbrown 0.14.5",
  "hi-doc",
  "jrsonnet-gcmodule",
@@ -484,8 +485,9 @@ dependencies = [
  "jrsonnet-types",
  "num-bigint",
  "pathdiff",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "serde",
+ "smallvec",
  "stacker",
  "static_assertions",
  "strsim",
@@ -533,7 +535,7 @@ version = "0.5.0-pre96"
 dependencies = [
  "hashbrown 0.14.5",
  "jrsonnet-gcmodule",
- "rustc-hash",
+ "rustc-hash 2.0.0",
 ]
 
 [[package]]
@@ -551,9 +553,15 @@ version = "0.5.0-pre96"
 dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
- "peg",
+ "jrsonnet-macros",
+ "jrsonnet-tokenizer",
+ "nom",
  "static_assertions",
 ]
+
+[[package]]
+name = "jrsonnet-pkg"
+version = "0.5.0-pre96"
 
 [[package]]
 name = "jrsonnet-rowan-parser"
@@ -581,7 +589,7 @@ dependencies = [
  "md5",
  "num-bigint",
  "regex",
- "rustc-hash",
+ "rustc-hash 2.0.0",
  "serde",
  "serde_json",
  "serde_yaml_with_quirks",
@@ -591,11 +599,18 @@ dependencies = [
 ]
 
 [[package]]
+name = "jrsonnet-tokenizer"
+version = "0.5.0-pre96"
+dependencies = [
+ "logos",
+ "nom",
+]
+
+[[package]]
 name = "jrsonnet-types"
 version = "0.5.0-pre96"
 dependencies = [
  "jrsonnet-gcmodule",
- "peg",
 ]
 
 [[package]]
@@ -746,6 +761,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "minimal-lexical"
+version = "0.2.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68354c5c6bd36d73ff3feceb05efa59b6acb7626617f4962be322a825e61f79a"
+
+[[package]]
+name = "nom"
+version = "7.1.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "d273983c5a657a70a3e8f2a01329822f3b8c8172b73826411a55751e404a0a4a"
+dependencies = [
+ "memchr",
+ "minimal-lexical",
+]
+
+[[package]]
 name = "num-bigint"
 version = "0.4.5"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -808,33 +839,6 @@ name = "pathdiff"
 version = "0.2.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "8835116a5c179084a830efb3adc117ab007512b535bc1a21c991d3b32a6b44dd"
-
-[[package]]
-name = "peg"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "8a625d12ad770914cbf7eff6f9314c3ef803bfe364a1b20bc36ddf56673e71e5"
-dependencies = [
- "peg-macros",
- "peg-runtime",
-]
-
-[[package]]
-name = "peg-macros"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "f241d42067ed3ab6a4fece1db720838e1418f36d868585a27931f95d6bc03582"
-dependencies = [
- "peg-runtime",
- "proc-macro2",
- "quote",
-]
-
-[[package]]
-name = "peg-runtime"
-version = "0.8.3"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "e3aeb8f54c078314c2065ee649a7241f46b9d8e418e1a9581ba0546657d7aa3a"
 
 [[package]]
 name = "ppv-lite86"
@@ -964,7 +968,7 @@ dependencies = [
  "countme",
  "hashbrown 0.14.5",
  "memoffset",
- "rustc-hash",
+ "rustc-hash 1.1.0",
  "text-size",
 ]
 
@@ -973,6 +977,12 @@ name = "rustc-hash"
 version = "1.1.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "08d43f7aa6b08d49f382cde6a7982047c3426db949b1424bc4b7ec9ae12c6ce2"
+
+[[package]]
+name = "rustc-hash"
+version = "2.0.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "583034fd73374156e66797ed8e5b0d5690409c9226b22d87cb7f19821c05d152"
 
 [[package]]
 name = "rustix"

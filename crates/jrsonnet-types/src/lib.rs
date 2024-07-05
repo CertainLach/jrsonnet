@@ -216,68 +216,6 @@ impl Display for ComplexValType {
 	}
 }
 
-peg::parser! {
-pub grammar parser() for str {
-	rule number() -> f64
-		= n:$(['0'..='9']+) { n.parse().unwrap() }
-
-	rule any_ty() -> ComplexValType = "any" { ComplexValType::Any }
-	rule char_ty() -> ComplexValType = "character" { ComplexValType::Char }
-	rule bool_ty() -> ComplexValType = "boolean" { ComplexValType::Simple(ValType::Bool) }
-	rule null_ty() -> ComplexValType = "null" { ComplexValType::Simple(ValType::Null) }
-	rule str_ty() -> ComplexValType = "string" { ComplexValType::Simple(ValType::Str) }
-	rule num_ty() -> ComplexValType = "number" { ComplexValType::Simple(ValType::Num) }
-	rule simple_array_ty() -> ComplexValType = "array" { ComplexValType::Simple(ValType::Arr) }
-	rule simple_object_ty() -> ComplexValType = "object" { ComplexValType::Simple(ValType::Obj) }
-	rule simple_function_ty() -> ComplexValType = "function" { ComplexValType::Simple(ValType::Func) }
-
-	rule array_ty() -> ComplexValType
-		= "Array<" t:ty() ">" { ComplexValType::Array(Box::new(t)) }
-
-	rule bounded_number_ty() -> ComplexValType
-		= "BoundedNumber<" a:number() ", " b:number() ">" { ComplexValType::BoundedNumber(Some(a), Some(b)) }
-
-	rule ty_basic() -> ComplexValType
-		= any_ty()
-		/ char_ty()
-		/ bool_ty()
-		/ null_ty()
-		/ str_ty()
-		/ num_ty()
-		/ simple_array_ty()
-		/ simple_object_ty()
-		/ simple_function_ty()
-		/ array_ty()
-		/ bounded_number_ty()
-
-	pub rule ty() -> ComplexValType
-		= precedence! {
-			a:(@) " | " b:@ {
-				match a {
-					ComplexValType::Union(mut a) => {
-						a.push(b);
-						ComplexValType::Union(a)
-					}
-					_ => ComplexValType::Union(vec![a, b]),
-				}
-			}
-			--
-			a:(@) " & " b:@ {
-				match a {
-					ComplexValType::Sum(mut a) => {
-						a.push(b);
-						ComplexValType::Sum(a)
-					}
-					_ => ComplexValType::Sum(vec![a, b]),
-				}
-			}
-			--
-			"(" t:ty() ")" { t }
-			t:ty_basic() { t }
-		}
-}
-}
-
 #[cfg(test)]
 pub mod tests {
 	use super::parser;

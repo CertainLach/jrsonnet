@@ -51,7 +51,6 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 			| Expr::Num(_)
 			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
 			Expr::Arr(a) => a.iter().all(is_trivial),
-			Expr::Parened(e) => is_trivial(e),
 			_ => false,
 		}
 	}
@@ -74,7 +73,6 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 					.collect(),
 			))
 		}
-		Expr::Parened(e) => evaluate_trivial(e)?,
 		_ => return None,
 	})
 }
@@ -457,7 +455,6 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
-		Parened(e) => evaluate(ctx, e)?,
 		Str(v) => Val::string(v.clone()),
 		Num(v) => Val::try_num(*v)?,
 		// I have tried to remove special behavior from super by implementing standalone-super
@@ -651,10 +648,6 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			Val::Arr(ArrValue::lazy(out))
 		}
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
-		ObjExtend(a, b) => evaluate_add_op(
-			&evaluate(ctx.clone(), a)?,
-			&Val::Obj(evaluate_object(ctx, b)?),
-		)?,
 		Apply(value, args, tailstrict) => ensure_sufficient_stack(|| {
 			evaluate_apply(ctx, value, args, CallLocation::new(&loc), *tailstrict)
 		})?,
