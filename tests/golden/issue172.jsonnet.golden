@@ -1,0 +1,4 @@
+variable is not defined: b
+    issue172.jsonnet:1:45-47: variable <b> access
+    issue172.jsonnet:1:4-10:  field <value> access
+    elem <0> evaluation
