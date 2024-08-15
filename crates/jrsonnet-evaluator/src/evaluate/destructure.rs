@@ -170,7 +170,7 @@ pub fn destruct(
 			#[derive(Trace)]
 			struct DataThunk {
 				parent: Thunk<Val>,
-				field_names: Vec<IStr>,
+				field_names: Vec<(IStr, bool)>,
 				has_rest: bool,
 			}
 			impl ThunkValue for DataThunk {
@@ -181,14 +181,14 @@ pub fn destruct(
 					let Val::Obj(obj) = v else {
 						bail!("expected object");
 					};
-					for field in &self.field_names {
-						if !obj.has_field_ex(field.clone(), true) {
+					for (field, has_default) in &self.field_names {
+						if !has_default && !obj.has_field_ex(field.clone(), true) {
 							bail!("missing field: {field}");
 						}
 					}
 					if !self.has_rest {
 						let len = obj.len();
-						if len != self.field_names.len() {
+						if len > self.field_names.len() {
 							bail!("too many fields, and rest not found");
 						}
 					}
@@ -197,8 +197,7 @@ pub fn destruct(
 			}
 			let field_names: Vec<_> = fields
 				.iter()
-				.filter(|f| f.2.is_none())
-				.map(|f| f.0.clone())
+				.map(|f| (f.0.clone(), f.2.is_some()))
 				.collect();
 			let full = Thunk::new(DataThunk {
 				parent,
