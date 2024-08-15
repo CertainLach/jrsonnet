@@ -21,9 +21,9 @@ pub fn destruct(
 ) -> Result<()> {
 	match d {
 		Destruct::Full(v) => {
-			let old = new_bindings.insert(v.clone(), parent);
+			let old = new_bindings.insert(v.0.clone(), parent);
 			if old.is_some() {
-				bail!(DuplicateLocalVar(v.clone()))
+				bail!(DuplicateLocalVar(v.0.clone()))
 			}
 		}
 		#[cfg(feature = "exp-destruct")]
@@ -300,17 +300,23 @@ pub fn evaluate_dest(
 				}
 			}
 
+			#[allow(irrefutable_let_patterns)]
+			let Destruct::Full(name) = name
+			else {
+				panic!("parser will not allow destruct other than Full for function");
+			};
+
 			let old = new_bindings.insert(
-				name.clone(),
+				name.0.clone(),
 				Thunk::new(MethodThunk {
 					fctx,
-					name: name.clone(),
+					name: name.0.clone(),
 					params: params.clone(),
 					value: value.clone(),
 				}),
 			);
 			if old.is_some() {
-				bail!(DuplicateLocalVar(name.clone()))
+				bail!(DuplicateLocalVar(name.0.clone()))
 			}
 		}
 	}

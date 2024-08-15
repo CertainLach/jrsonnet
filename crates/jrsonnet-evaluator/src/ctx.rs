@@ -180,4 +180,7 @@ impl ContextBuilder {
 			}))
 		}
 	}
+	pub(crate) fn binding_list_for_analysis(self) -> impl Iterator<Item = IStr> {
+		self.bindings.0.into_keys()
+	}
 }

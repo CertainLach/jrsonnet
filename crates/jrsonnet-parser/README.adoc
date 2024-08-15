@@ -1,3 +1,5 @@
 = jrsonnet-parser
 
-Parser for jsonnet language
+Nom (previously peg) based parser for jsonnet language and AST of jrsonnet.
+
+For CST parser see `jrsonnet-rowan-parser`.

@@ -25,6 +25,7 @@ pub mod trace;
 pub mod typed;
 pub mod val;
 
+mod analyze;
 use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
@@ -32,6 +33,7 @@ use std::{
 	path::Path,
 };
 
+pub use analyze::analyze_root;
 pub use ctx::*;
 pub use dynamic::*;
 pub use error::{Error, ErrorKind::*, Result, ResultExt};
@@ -100,8 +102,7 @@ pub trait ContextInitializer: Trace {
 		self.populate(for_file, &mut builder);
 		builder.build()
 	}
-	/// For composability: extend builder. May panic if this initialization is not supported,
-	/// and the context may only be created via `initialize`.
+	/// For composability: extend builder.
 	fn populate(&self, for_file: Source, builder: &mut ContextBuilder);
 	/// Allows upcasting from abstract to concrete context initializer.
 	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.

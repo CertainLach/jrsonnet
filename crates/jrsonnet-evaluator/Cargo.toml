@@ -61,3 +61,5 @@ hi-doc = { workspace = true, optional = true }
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 derivative.workspace = true
 stacker = "0.1.15"
+smallvec = "1.13.2"
+drop_bomb.workspace = true

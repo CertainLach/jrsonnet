@@ -79,8 +79,13 @@ any_ext!(SourcePathT);
 /// search location is applicable
 ///
 /// Resolver may also return custom implementations of this trait, for example it may return http url in case of remotely loaded files
-#[derive(Eq, Debug, Clone)]
+#[derive(Eq, Clone)]
 pub struct SourcePath(Rc<dyn SourcePathT>);
+impl Debug for SourcePath {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self.0)
+	}
+}
 impl SourcePath {
 	pub fn new(inner: impl SourcePathT) -> Self {
 		Self(Rc::new(inner))
@@ -208,8 +213,14 @@ impl SourcePathT for SourceDirectory {
 ///
 /// It is used for --ext-code=.../--tla-code=.../standard library source code by default,
 /// and user can construct arbitrary values by hand, without asking import resolver
-#[derive(Trace, Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Trace, Hash, PartialEq, Eq, Clone)]
 pub struct SourceVirtual(pub IStr);
+
+impl Debug for SourceVirtual {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.0)
+	}
+}
 impl Display for SourceVirtual {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.0)
@@ -258,8 +269,14 @@ impl SourcePathT for SourceFifo {
 
 /// Either real file, or virtual
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
+
+impl Debug for Source {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self.0 .0)
+	}
+}
 
 impl Trace for Source {
 	fn trace(&self, _tracer: &mut Tracer) {}

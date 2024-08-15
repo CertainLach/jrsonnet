@@ -121,7 +121,7 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
-		(a, Add, b) => evaluate_add_op(a, b)?,
+		(a, Add | ObjectApply, b) => evaluate_add_op(a, b)?,
 
 		(a, Eq, b) => Bool(equals(a, b)?),
 		(a, Neq, b) => Bool(!equals(a, b)?),

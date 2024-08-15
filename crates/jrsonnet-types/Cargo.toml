@@ -13,7 +13,5 @@ workspace = true
 [dependencies]
 jrsonnet-gcmodule.workspace = true
 
-peg.workspace = true
-
 [features]
 exp-bigint = []
