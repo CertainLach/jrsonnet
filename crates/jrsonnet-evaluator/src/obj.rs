@@ -957,9 +957,9 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 
 	/// Tries to insert value, returns an error if it was already defined
 	pub fn try_value(self, value: impl Into<Val>) -> Result<()> {
-		self.thunk(Thunk::evaluated(value.into()))
+		self.try_thunk(Thunk::evaluated(value.into()))
 	}
-	pub fn thunk(self, value: impl Into<Thunk<Val>>) -> Result<()> {
+	pub fn try_thunk(self, value: impl Into<Thunk<Val>>) -> Result<()> {
 		self.binding(MaybeUnbound::Bound(value.into()))
 	}
 	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {

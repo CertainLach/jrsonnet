@@ -477,6 +477,7 @@ struct TypedField {
 	ident: Ident,
 	ty: Type,
 	is_option: bool,
+	is_lazy: bool,
 }
 impl TypedField {
 	fn parse(field: &syn::Field) -> Result<Self> {
@@ -503,11 +504,14 @@ impl TypedField {
 			));
 		}
 
+		let is_lazy = type_is_path(&ty, "Thunk").is_some();
+
 		Ok(Self {
 			attr,
 			ident,
 			ty,
 			is_option,
+			is_lazy,
 		})
 	}
 	/// None if this field is flattened in jsonnet output
@@ -596,21 +600,33 @@ impl TypedField {
 				} else {
 					quote! {}
 				};
-				if self.is_option {
+				let value = if self.is_lazy {
 					quote! {
-						if let Some(value) = self.#ident {
-							out.field(#name)
-								#hide
-								#add
-								.try_value(<#ty as Typed>::into_untyped(value)?)?;
-						}
+						out.field(#name)
+							#hide
+							#add
+							.try_thunk(<#ty as Typed>::into_lazy_untyped(value))?;
 					}
 				} else {
 					quote! {
 						out.field(#name)
 							#hide
 							#add
-							.try_value(<#ty as Typed>::into_untyped(self.#ident)?)?;
+							.try_value(<#ty as Typed>::into_untyped(value)?)?;
+					}
+				};
+				if self.is_option {
+					quote! {
+						if let Some(value) = self.#ident {
+							#value
+						}
+					}
+				} else {
+					quote! {
+						{
+							let value = self.#ident;
+							#value
+						}
 					}
 				}
 			},
