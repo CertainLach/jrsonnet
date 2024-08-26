@@ -1,13 +1,11 @@
-use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BindSpec, Destruct, LocExpr, ParamsDesc};
+use jrsonnet_parser::{BindSpec, Destruct};
 
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
 	evaluate, evaluate_method, evaluate_named,
 	gc::GcHashMap,
-	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
 
@@ -32,64 +30,33 @@ pub fn destruct(
 		Destruct::Array { start, rest, end } => {
 			use jrsonnet_parser::DestructRest;
 
-			use crate::arr::ArrValue;
-
-			#[derive(Trace)]
-			struct DataThunk {
-				parent: Thunk<Val>,
-				min_len: usize,
-				has_rest: bool,
-			}
-			impl ThunkValue for DataThunk {
-				type Output = ArrValue;
-
-				fn get(self: Box<Self>) -> Result<Self::Output> {
-					let v = self.parent.evaluate()?;
-					let Val::Arr(arr) = v else {
-						bail!("expected array");
-					};
-					if !self.has_rest {
-						if arr.len() != self.min_len {
-							bail!("expected {} elements, got {}", self.min_len, arr.len())
-						}
-					} else if arr.len() < self.min_len {
-						bail!(
-							"expected at least {} elements, but array was only {}",
-							self.min_len,
-							arr.len()
-						)
+			let min_len = start.len() + end.len();
+			let has_rest = rest.is_some();
+			let full = Thunk!(move || {
+				let v = parent.evaluate()?;
+				let Val::Arr(arr) = v else {
+					bail!("expected array");
+				};
+				if !has_rest {
+					if arr.len() != min_len {
+						bail!("expected {} elements, got {}", min_len, arr.len())
 					}
-					Ok(arr)
+				} else if arr.len() < min_len {
+					bail!(
+						"expected at least {} elements, but array was only {}",
+						min_len,
+						arr.len()
+					)
 				}
-			}
-
-			let full = Thunk::new(DataThunk {
-				min_len: start.len() + end.len(),
-				has_rest: rest.is_some(),
-				parent,
+				Ok(arr)
 			});
 
 			{
-				#[derive(Trace)]
-				struct BaseThunk {
-					full: Thunk<ArrValue>,
-					index: usize,
-				}
-				impl ThunkValue for BaseThunk {
-					type Output = Val;
-
-					fn get(self: Box<Self>) -> Result<Self::Output> {
-						let full = self.full.evaluate()?;
-						Ok(full.get(self.index)?.expect("length is checked"))
-					}
-				}
 				for (i, d) in start.iter().enumerate() {
+					let full = full.clone();
 					destruct(
 						d,
-						Thunk::new(BaseThunk {
-							full: full.clone(),
-							index: i,
-						}),
+						Thunk!(move || Ok(full.evaluate()?.get(i)?.expect("length is checked"))),
 						fctx.clone(),
 						new_bindings,
 					)?;
@@ -98,32 +65,19 @@ pub fn destruct(
 
 			match rest {
 				Some(DestructRest::Keep(v)) => {
-					#[derive(Trace)]
-					struct RestThunk {
-						full: Thunk<ArrValue>,
-						start: usize,
-						end: usize,
-					}
-					impl ThunkValue for RestThunk {
-						type Output = Val;
-
-						fn get(self: Box<Self>) -> Result<Self::Output> {
-							let full = self.full.evaluate()?;
-							let to = full.len() - self.end;
+					let start = start.len();
+					let end = end.len();
+					let full = full.clone();
+					destruct(
+						&Destruct::Full(v.clone()),
+						Thunk!(move || {
+							let full = full.evaluate()?;
+							let to = full.len() - end;
 							Ok(Val::Arr(full.slice(
-								Some(self.start as i32),
+								Some(start as i32),
 								Some(to as i32),
 								None,
 							)))
-						}
-					}
-
-					destruct(
-						&Destruct::Full(v.clone()),
-						Thunk::new(RestThunk {
-							full: full.clone(),
-							start: start.len(),
-							end: end.len(),
 						}),
 						fctx.clone(),
 						new_bindings,
@@ -133,29 +87,14 @@ pub fn destruct(
 			}
 
 			{
-				#[derive(Trace)]
-				struct EndThunk {
-					full: Thunk<ArrValue>,
-					index: usize,
-					end: usize,
-				}
-				impl ThunkValue for EndThunk {
-					type Output = Val;
-
-					fn get(self: Box<Self>) -> Result<Self::Output> {
-						let full = self.full.evaluate()?;
-						Ok(full
-							.get(full.len() - self.end + self.index)?
-							.expect("length is checked"))
-					}
-				}
 				for (i, d) in end.iter().enumerate() {
+					let full = full.clone();
+					let end = end.len();
 					destruct(
 						d,
-						Thunk::new(EndThunk {
-							full: full.clone(),
-							index: i,
-							end: end.len(),
+						Thunk!(move || {
+							let full = full.evaluate()?;
+							Ok(full.get(full.len() - end + i)?.expect("length is checked"))
 						}),
 						fctx.clone(),
 						new_bindings,
@@ -165,71 +104,46 @@ pub fn destruct(
 		}
 		#[cfg(feature = "exp-destruct")]
 		Destruct::Object { fields, rest } => {
-			use crate::obj::ObjValue;
-
-			#[derive(Trace)]
-			struct DataThunk {
-				parent: Thunk<Val>,
-				field_names: Vec<(IStr, bool)>,
-				has_rest: bool,
-			}
-			impl ThunkValue for DataThunk {
-				type Output = ObjValue;
-
-				fn get(self: Box<Self>) -> Result<Self::Output> {
-					let v = self.parent.evaluate()?;
-					let Val::Obj(obj) = v else {
-						bail!("expected object");
-					};
-					for (field, has_default) in &self.field_names {
-						if !has_default && !obj.has_field_ex(field.clone(), true) {
-							bail!("missing field: {field}");
-						}
-					}
-					if !self.has_rest {
-						let len = obj.len();
-						if len > self.field_names.len() {
-							bail!("too many fields, and rest not found");
-						}
-					}
-					Ok(obj)
-				}
-			}
 			let field_names: Vec<_> = fields
 				.iter()
 				.map(|f| (f.0.clone(), f.2.is_some()))
 				.collect();
-			let full = Thunk::new(DataThunk {
-				parent,
-				field_names,
-				has_rest: rest.is_some(),
+			let has_rest = rest.is_some();
+			let full = Thunk!(move || {
+				let v = parent.evaluate()?;
+				let Val::Obj(obj) = v else {
+					bail!("expected object");
+				};
+				for (field, has_default) in &field_names {
+					if !has_default && !obj.has_field_ex(field.clone(), true) {
+						bail!("missing field: {field}");
+					}
+				}
+				if !has_rest {
+					let len = obj.len();
+					if len > field_names.len() {
+						bail!("too many fields, and rest not found");
+					}
+				}
+				Ok(obj)
 			});
 
 			for (field, d, default) in fields {
-				#[derive(Trace)]
-				struct FieldThunk {
-					full: Thunk<ObjValue>,
-					field: IStr,
-					default: Option<(Pending<Context>, LocExpr)>,
-				}
-				impl ThunkValue for FieldThunk {
-					type Output = Val;
-
-					fn get(self: Box<Self>) -> Result<Self::Output> {
-						let full = self.full.evaluate()?;
-						if let Some(field) = full.get(self.field)? {
+				let default = default.clone().map(|e| (fctx.clone(), e));
+				let value = {
+					let field = field.clone();
+					let full = full.clone();
+					Thunk!(move || {
+						let full = full.evaluate()?;
+						if let Some(field) = full.get(field)? {
 							Ok(field)
 						} else {
-							let (fctx, expr) = self.default.as_ref().expect("shape is checked");
+							let (fctx, expr) = default.as_ref().expect("shape is checked");
 							Ok(evaluate(fctx.clone().unwrap(), expr)?)
 						}
-					}
-				}
-				let value = Thunk::new(FieldThunk {
-					full: full.clone(),
-					field: field.clone(),
-					default: default.clone().map(|e| (fctx.clone(), e)),
-				});
+					})
+				};
+
 				if let Some(d) = d {
 					destruct(d, value, fctx.clone(), new_bindings)?;
 				} else {
@@ -253,26 +167,15 @@ pub fn evaluate_dest(
 ) -> Result<()> {
 	match d {
 		BindSpec::Field { into, value } => {
-			#[derive(Trace)]
-			struct EvaluateThunkValue {
-				name: Option<IStr>,
-				fctx: Pending<Context>,
-				expr: LocExpr,
-			}
-			impl ThunkValue for EvaluateThunkValue {
-				type Output = Val;
-				fn get(self: Box<Self>) -> Result<Self::Output> {
-					self.name.map_or_else(
-						|| evaluate(self.fctx.unwrap(), &self.expr),
-						|name| evaluate_named(self.fctx.unwrap(), &self.expr, name),
-					)
-				}
-			}
-			let data = Thunk::new(EvaluateThunkValue {
-				name: into.name(),
-				fctx: fctx.clone(),
-				expr: value.clone(),
-			});
+			let name = into.name();
+			let value = value.clone();
+			let data = {
+				let fctx = fctx.clone();
+				Thunk!(move || name.map_or_else(
+					|| evaluate(fctx.unwrap(), &value),
+					|name| evaluate_named(fctx.unwrap(), &value, name),
+				))
+			};
 			destruct(into, data, fctx, new_bindings)?;
 		}
 		BindSpec::Function {
@@ -280,37 +183,15 @@ pub fn evaluate_dest(
 			params,
 			value,
 		} => {
-			#[derive(Trace)]
-			struct MethodThunk {
-				fctx: Pending<Context>,
-				name: IStr,
-				params: ParamsDesc,
-				value: LocExpr,
-			}
-			impl ThunkValue for MethodThunk {
-				type Output = Val;
-
-				fn get(self: Box<Self>) -> Result<Self::Output> {
-					Ok(evaluate_method(
-						self.fctx.unwrap(),
-						self.name,
-						self.params,
-						self.value,
-					))
-				}
-			}
-
-			let old = new_bindings.insert(
-				name.clone(),
-				Thunk::new(MethodThunk {
-					fctx,
-					name: name.clone(),
-					params: params.clone(),
-					value: value.clone(),
-				}),
-			);
+			let params = params.clone();
+			let name = name.clone();
+			let value = value.clone();
+			let old = new_bindings.insert(name.clone(), {
+				let name = name.clone();
+				Thunk!(move || Ok(evaluate_method(fctx.unwrap(), name, params, value)))
+			});
 			if old.is_some() {
-				bail!(DuplicateLocalVar(name.clone()))
+				bail!(DuplicateLocalVar(name))
 			}
 		}
 	}

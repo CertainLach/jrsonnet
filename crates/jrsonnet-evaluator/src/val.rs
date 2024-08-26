@@ -11,6 +11,7 @@ use std::{
 use derivative::Derivative;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
+pub use jrsonnet_macros::Thunk;
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -29,6 +30,27 @@ use crate::{
 pub trait ThunkValue: Trace {
 	type Output;
 	fn get(self: Box<Self>) -> Result<Self::Output>;
+}
+
+#[derive(Trace)]
+pub struct ThunkValueClosure<D: Trace, O: 'static> {
+	env: D,
+	// Carries no data, as it is not a real closure, all the
+	// captured environment is stored in `env` field.
+	#[trace(skip)]
+	closure: fn(D) -> Result<O>,
+}
+impl<D: Trace, O: 'static> ThunkValueClosure<D, O> {
+	pub fn new(env: D, closure: fn(D) -> Result<O>) -> Self {
+		Self { env, closure }
+	}
+}
+impl<D: Trace, O: 'static> ThunkValue for ThunkValueClosure<D, O> {
+	type Output = O;
+
+	fn get(self: Box<Self>) -> Result<Self::Output> {
+		(self.closure)(self.env)
+	}
 }
 
 #[derive(Trace)]
@@ -113,28 +135,11 @@ where
 		M: ThunkMapper<Input>,
 		M::Output: Trace,
 	{
-		#[derive(Trace)]
-		struct Mapped<Input: Trace, Mapper: Trace> {
-			inner: Thunk<Input>,
-			mapper: Mapper,
-		}
-		impl<Input, Mapper> ThunkValue for Mapped<Input, Mapper>
-		where
-			Input: Trace + Clone,
-			Mapper: ThunkMapper<Input>,
-		{
-			type Output = Mapper::Output;
-
-			fn get(self: Box<Self>) -> Result<Self::Output> {
-				let value = self.inner.evaluate()?;
-				let mapped = self.mapper.map(value)?;
-				Ok(mapped)
-			}
-		}
-
-		Thunk::new(Mapped::<Input, M> {
-			inner: self,
-			mapper,
+		let inner = self;
+		Thunk!(move || {
+			let value = inner.evaluate()?;
+			let mapped = mapper.map(value)?;
+			Ok(mapped)
 		})
 	}
 }

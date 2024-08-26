@@ -1,7 +1,7 @@
 use std::string::String;
 
 use proc_macro2::TokenStream;
-use quote::quote;
+use quote::{quote, quote_spanned};
 use syn::{
 	parenthesized,
 	parse::{Parse, ParseStream},
@@ -9,8 +9,8 @@ use syn::{
 	punctuated::Punctuated,
 	spanned::Spanned,
 	token::{self, Comma},
-	Attribute, DeriveInput, Error, Expr, FnArg, GenericArgument, Ident, ItemFn, LitStr, Pat, Path,
-	PathArguments, Result, ReturnType, Token, Type,
+	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn,
+	LitStr, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
 };
 
 fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
@@ -814,4 +814,31 @@ impl FormatInput {
 pub fn format_istr(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(input as FormatInput);
 	input.expand().into()
+}
+
+/// Create Thunk using closure syntax
+#[proc_macro]
+#[allow(non_snake_case)]
+pub fn Thunk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(input as ExprClosure);
+
+	let span = input.inputs.span();
+	let move_check = input.capture.is_none().then(|| {
+		quote_spanned! {span => {
+			compile_error!("Thunk! needs to be called with move closure");
+		}}
+	});
+
+	let (env, closure, args) = syn_dissect_closure::split_env(input);
+
+	let trace_check = args.iter().map(|el| {
+		let span = el.span();
+		quote_spanned! {span => ::jrsonnet_evaluator::gc::assert_trace(&#el);}
+	});
+
+	quote! {{
+		#move_check
+		#(#trace_check)*
+		::jrsonnet_evaluator::Thunk::new(::jrsonnet_evaluator::val::ThunkValueClosure::new(#env, #closure))
+	}}.into()
 }

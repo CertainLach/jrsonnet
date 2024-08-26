@@ -18,7 +18,7 @@ use crate::{
 	function::{CallLocation, FuncDesc, FuncVal},
 	in_frame,
 	typed::Typed,
-	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk, ThunkValue},
+	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
 	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
 	ResultExt, Unbound, Val,
 };
@@ -139,29 +139,14 @@ pub fn evaluate_comp(
 					#[cfg(feature = "exp-preserve-order")]
 					false,
 				) {
-					#[derive(Trace)]
-					struct ObjectFieldThunk {
-						obj: ObjValue,
-						field: IStr,
-					}
-					impl ThunkValue for ObjectFieldThunk {
-						type Output = Val;
-
-						fn get(self: Box<Self>) -> Result<Self::Output> {
-							self.obj.get(self.field).transpose().expect(
-								"field exists, as field name was obtained from object.fields()",
-							)
-						}
-					}
-
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
+					let obj = obj.clone();
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
 						Thunk::evaluated(Val::string(field.clone())),
-						Thunk::new(ObjectFieldThunk {
-							field: field.clone(),
-							obj: obj.clone(),
-						}),
+						Thunk!(move || obj.get(field).transpose().expect(
+							"field exists, as field name was obtained from object.fields()",
+						)),
 					])));
 					destruct(var, value, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx
@@ -609,21 +594,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			if items.is_empty() {
 				Val::Arr(ArrValue::empty())
 			} else if items.len() == 1 {
-				#[derive(Trace)]
-				struct ArrayElement {
-					ctx: Context,
-					item: LocExpr,
-				}
-				impl ThunkValue for ArrayElement {
-					type Output = Val;
-					fn get(self: Box<Self>) -> Result<Val> {
-						evaluate(self.ctx, &self.item)
-					}
-				}
-				Val::Arr(ArrValue::lazy(vec![Thunk::new(ArrayElement {
-					ctx,
-					item: items[0].clone(),
-				})]))
+				let item = items[0].clone();
+				Val::Arr(ArrValue::lazy(vec![Thunk!(move || evaluate(ctx, &item))]))
 			} else {
 				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
 			}
@@ -631,21 +603,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		ArrComp(expr, comp_specs) => {
 			let mut out = Vec::new();
 			evaluate_comp(ctx, comp_specs, &mut |ctx| {
-				#[derive(Trace)]
-				struct EvaluateThunk {
-					ctx: Context,
-					expr: LocExpr,
-				}
-				impl ThunkValue for EvaluateThunk {
-					type Output = Val;
-					fn get(self: Box<Self>) -> Result<Val> {
-						evaluate(self.ctx, &self.expr)
-					}
-				}
-				out.push(Thunk::new(EvaluateThunk {
-					ctx,
-					expr: expr.clone(),
-				}));
+				let expr = expr.clone();
+				out.push(Thunk!(move || evaluate(ctx, &expr)));
 				Ok(())
 			})?;
 			Val::Arr(ArrValue::lazy(out))

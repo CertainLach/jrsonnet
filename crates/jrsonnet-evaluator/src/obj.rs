@@ -20,7 +20,7 @@ use crate::{
 	in_frame,
 	operator::evaluate_add_op,
 	tb,
-	val::{ArrValue, ThunkValue},
+	val::ArrValue,
 	MaybeUnbound, Result, Thunk, Unbound, Val,
 };
 
@@ -444,45 +444,16 @@ impl ObjValue {
 		})
 	}
 	pub fn get_lazy(&self, key: IStr) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
-		struct ThunkGet {
-			obj: ObjValue,
-			key: IStr,
-		}
-		impl ThunkValue for ThunkGet {
-			type Output = Val;
-
-			fn get(self: Box<Self>) -> Result<Self::Output> {
-				Ok(self.obj.get(self.key)?.expect("field exists"))
-			}
-		}
-
 		if !self.has_field_ex(key.clone(), true) {
 			return None;
 		}
-		Some(Thunk::new(ThunkGet {
-			obj: self.clone(),
-			key,
-		}))
+		let obj = self.clone();
+
+		Some(Thunk!(move || Ok(obj.get(key)?.expect("field exists"))))
 	}
 	pub fn get_lazy_or_bail(&self, key: IStr) -> Thunk<Val> {
-		#[derive(Trace)]
-		struct ThunkGet {
-			obj: ObjValue,
-			key: IStr,
-		}
-		impl ThunkValue for ThunkGet {
-			type Output = Val;
-
-			fn get(self: Box<Self>) -> Result<Self::Output> {
-				self.obj.get_or_bail(self.key)
-			}
-		}
-
-		Thunk::new(ThunkGet {
-			obj: self.clone(),
-			key,
-		})
+		let obj = self.clone();
+		Thunk!(move || obj.get_or_bail(key))
 	}
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		Cc::ptr_eq(&a.0, &b.0)
@@ -733,11 +704,10 @@ impl ObjectLike for OopObject {
 		self.value_cache
 			.borrow_mut()
 			.insert(cache_key.clone(), CacheValue::Pending);
-		let value = self.get_for_uncached(key, this).map_err(|e| {
+		let value = self.get_for_uncached(key, this).inspect_err(|e| {
 			self.value_cache
 				.borrow_mut()
 				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
-			e
 		})?;
 		self.value_cache.borrow_mut().insert(
 			cache_key,

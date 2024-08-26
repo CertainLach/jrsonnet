@@ -7,7 +7,7 @@ use jrsonnet_parser::LocExpr;
 use super::ArrValue;
 use crate::{
 	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
-	val::ThunkValue, Context, Error, ObjValue, Result, Thunk, Val,
+	Context, Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -182,23 +182,6 @@ impl ArrayLike for ExprArray {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
-		struct ArrayElement {
-			arr_thunk: ExprArray,
-			index: usize,
-		}
-
-		impl ThunkValue for ArrayElement {
-			type Output = Val;
-
-			fn get(self: Box<Self>) -> Result<Self::Output> {
-				self.arr_thunk
-					.get(self.index)
-					.transpose()
-					.expect("index checked")
-			}
-		}
-
 		if index >= self.len() {
 			return None;
 		}
@@ -208,9 +191,9 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
 		};
 
-		Some(Thunk::new(ArrayElement {
-			arr_thunk: self.clone(),
-			index,
+		let arr_thunk = self.clone();
+		Some(Thunk!(move || {
+			arr_thunk.get(index).transpose().expect("index checked")
 		}))
 	}
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
@@ -492,23 +475,6 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		#[derive(Trace)]
-		struct ArrayElement<const WITH_INDEX: bool> {
-			arr_thunk: MappedArray<WITH_INDEX>,
-			index: usize,
-		}
-
-		impl<const WITH_INDEX: bool> ThunkValue for ArrayElement<WITH_INDEX> {
-			type Output = Val;
-
-			fn get(self: Box<Self>) -> Result<Self::Output> {
-				self.arr_thunk
-					.get(self.index)
-					.transpose()
-					.expect("index checked")
-			}
-		}
-
 		if index >= self.len() {
 			return None;
 		}
@@ -518,9 +484,9 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			ArrayThunk::Waiting(()) | ArrayThunk::Pending => {}
 		};
 
-		Some(Thunk::new(ArrayElement {
-			arr_thunk: self.clone(),
-			index,
+		let arr_thunk = self.clone();
+		Some(Thunk!(move || {
+			arr_thunk.get(index).transpose().expect("index checked")
 		}))
 	}
 

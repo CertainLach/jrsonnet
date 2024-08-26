@@ -90,7 +90,8 @@ pub fn parse_function_call(
 		let fctx = Context::new_future();
 		let mut defaults = GcHashMap::with_capacity(
 			params.iter().map(|p| p.0.capacity_hint()).sum::<usize>()
-				- filled_named - filled_positionals,
+				- filled_named
+				- filled_positionals,
 		);
 
 		for (idx, param) in params.iter().enumerate().filter(|p| p.1 .1.is_some()) {
@@ -232,22 +233,6 @@ pub fn parse_builtin_call(
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
-	#[derive(Trace)]
-	struct DependsOnUnbound(IStr, ParamsDesc);
-	impl ThunkValue for DependsOnUnbound {
-		type Output = Val;
-		fn get(self: Box<Self>) -> Result<Val> {
-			Err(FunctionParameterNotBoundInCall(
-				Some(self.0.clone()),
-				self.1
-					.iter()
-					.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
-					.collect(),
-			)
-			.into())
-		}
-	}
-
 	let fctx = Context::new_future();
 
 	let mut bindings = GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
@@ -267,10 +252,18 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		} else {
 			destruct(
 				&param.0,
-				Thunk::new(DependsOnUnbound(
-					param.0.name().unwrap_or_else(|| "<destruct>".into()),
-					params.clone(),
-				)),
+				{
+					let param_name = param.0.name().unwrap_or_else(|| "<destruct>".into());
+					let params = params.clone();
+					Thunk!(move || Err(FunctionParameterNotBoundInCall(
+						Some(param_name),
+						params
+							.iter()
+							.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
+							.collect(),
+					)
+					.into()))
+				},
 				fctx.clone(),
 				&mut bindings,
 			)?;

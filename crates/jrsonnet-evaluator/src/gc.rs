@@ -158,3 +158,5 @@ impl<K, V> Default for GcHashMap<K, V> {
 		Self::new()
 	}
 }
+
+pub fn assert_trace<T: Trace>(_v: &T) {}
