@@ -26,7 +26,7 @@ pub enum Event {
 	// VirtualToken { kind: SyntaxKind },
 	/// Position of finished node
 	Finish {
-		/// Same as forward_parent of Start, but for wrapping
+		/// Same as `forward_parent` of Start, but for wrapping
 		wrapper: Option<NonZeroUsize>,
 		error: Option<Box<SyntaxError>>,
 	},
@@ -57,13 +57,14 @@ impl<'i> Sink<'i> {
 		if self.offset == 0 {
 			return 0.into();
 		};
-		if let Some(lex) = self.lexemes.get(self.offset) {
-			lex.range.start()
-		} else if let Some(lex) = self.lexemes.get(self.offset - 1) {
-			lex.range.end()
-		} else {
-			panic!("hard oob")
-		}
+		self.lexemes.get(self.offset).map_or_else(
+			|| {
+				self.lexemes
+					.get(self.offset - 1)
+					.map_or_else(|| panic!("hard oob"), |lex| lex.range.end())
+			},
+			|lex| lex.range.start(),
+		)
 	}
 
 	pub(super) fn finish(mut self) -> Parse {
@@ -139,7 +140,7 @@ impl<'i> Sink<'i> {
 						self.errors.push(LocatedSyntaxError {
 							error: *error,
 							range: TextRange::new(range.0, range.1),
-						})
+						});
 					}
 					self.builder.finish_node();
 					depth -= 1;
@@ -158,7 +159,7 @@ impl<'i> Sink<'i> {
 								self.errors.push(LocatedSyntaxError {
 									error: *error,
 									range: TextRange::new(range.0, range.1),
-								})
+								});
 							}
 
 							if depth == 1 {

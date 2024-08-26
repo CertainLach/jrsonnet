@@ -16,12 +16,14 @@ pub trait AstNode {
 		Self: Sized;
 
 	fn syntax(&self) -> &SyntaxNode;
+	#[must_use]
 	fn clone_for_update(&self) -> Self
 	where
 		Self: Sized,
 	{
 		Self::cast(self.syntax().clone_for_update()).unwrap()
 	}
+	#[must_use]
 	fn clone_subtree(&self) -> Self
 	where
 		Self: Sized,
@@ -70,6 +72,8 @@ impl<N: AstNode> Iterator for AstChildren<N> {
 }
 
 pub mod support {
+	use rowan::NodeOrToken;
+
 	use super::{AstChildren, AstNode, AstToken, SyntaxKind, SyntaxNode, SyntaxToken};
 
 	pub fn child<N: AstNode>(parent: &SyntaxNode) -> Option<N> {
@@ -89,7 +93,7 @@ pub mod support {
 	pub fn token(parent: &SyntaxNode, kind: SyntaxKind) -> Option<SyntaxToken> {
 		parent
 			.children_with_tokens()
-			.filter_map(|it| it.into_token())
+			.filter_map(NodeOrToken::into_token)
 			.find(|it| it.kind() == kind)
 	}
 }

@@ -20,6 +20,7 @@ use crate::VM;
 /// - `ctx` User pointer, given in `jsonnet_native_callback`.
 /// - `argv` Array of arguments from Jsonnet code.
 /// - `param` success Set this byref param to 1 to indicate success and 0 for failure.
+///
 /// Returns the content of the imported file, or an error message.
 type JsonnetNativeCallback = unsafe extern "C" fn(
 	ctx: *const c_void,

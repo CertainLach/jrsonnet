@@ -98,6 +98,7 @@ pub fn builtin_manifest_yaml_doc(
 }
 
 #[builtin]
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn builtin_manifest_yaml_stream(
 	value: Val,
 	#[default(false)] indent_array_in_object: bool,

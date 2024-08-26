@@ -11,8 +11,8 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_stdlib::ContextInitializer as StdContextInitializer;
 
 #[builtin]
-fn a() -> Result<u32> {
-	Ok(1)
+fn a() -> u32 {
+	1
 }
 
 #[test]
@@ -29,8 +29,8 @@ fn basic_function() -> Result<()> {
 }
 
 #[builtin]
-fn native_add(a: u32, b: u32) -> Result<u32> {
-	Ok(a + b)
+fn native_add(a: u32, b: u32) -> u32 {
+	a + b
 }
 #[derive(Trace)]
 struct NativeAddContextInitializer;
@@ -72,13 +72,13 @@ fn call_from_code() -> Result<()> {
 #[builtin(fields(
     a: u32
 ))]
-fn curried_add(this: &curried_add, b: u32) -> Result<u32> {
-	Ok(this.a + b)
+fn curried_add(this: &curried_add, b: u32) -> u32 {
+	this.a + b
 }
 
 #[builtin]
-fn curry_add(a: u32) -> Result<FuncVal> {
-	Ok(FuncVal::builtin(curried_add { a }))
+fn curry_add(a: u32) -> FuncVal {
+	FuncVal::builtin(curried_add { a })
 }
 #[derive(Trace)]
 struct CurryAddContextInitializer;

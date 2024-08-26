@@ -20,7 +20,7 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 		let Ok(c) = c else {
 			let mut text = c.as_ref().unwrap_err() as &str;
 			while !text.is_empty() {
-				let pos = text.find(|c| c == '\n' || c == '\t').unwrap_or(text.len());
+				let pos = text.find(['\n', '\t']).unwrap_or(text.len());
 				let sliced = &text[..pos];
 				p!(out, string(sliced.to_string()));
 				text = &text[pos..];

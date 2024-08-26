@@ -12,7 +12,10 @@ use self::{
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
-use crate::{evaluate, evaluate_trivial, gc::TraceBox, tb, Context, ContextBuilder, Result, Val};
+use crate::{
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context,
+	ContextBuilder, Result, Thunk, Val,
+};
 
 pub mod arglike;
 pub mod builtin;
@@ -94,6 +97,8 @@ pub enum FuncVal {
 	Id,
 	/// Plain function implemented in jsonnet.
 	Normal(Cc<FuncDesc>),
+	/// Function without arguments works just as a fancy thunk value.
+	Thunk(Thunk<Val>),
 	/// Standard library function.
 	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
 	/// User-provided function.
@@ -104,6 +109,7 @@ impl Debug for FuncVal {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		match self {
 			Self::Id => f.debug_tuple("Id").finish(),
+			Self::Thunk(arg0) => f.debug_tuple("Thunk").field(arg0).finish(),
 			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
 			Self::StaticBuiltin(arg0) => {
 				f.debug_tuple("StaticBuiltin").field(&arg0.name()).finish()
@@ -146,6 +152,7 @@ impl FuncVal {
 					)
 				})
 				.collect(),
+			Self::Thunk(_) => vec![],
 		}
 	}
 	/// Amount of non-default required arguments
@@ -155,6 +162,7 @@ impl FuncVal {
 			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
 			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
 			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
+			Self::Thunk(_) => 0,
 		}
 	}
 	/// Function name, as defined in code.
@@ -164,6 +172,7 @@ impl FuncVal {
 			Self::Normal(normal) => normal.name.clone(),
 			Self::StaticBuiltin(builtin) => builtin.name().into(),
 			Self::Builtin(builtin) => builtin.name().into(),
+			Self::Thunk(_) => "thunk".into(),
 		}
 	}
 	/// Call function using arguments evaluated in specified `call_ctx` [`Context`].
@@ -181,6 +190,12 @@ impl FuncVal {
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
 				evaluate(body_ctx, &func.body)
+			}
+			Self::Thunk(thunk) => {
+				if args.is_empty() {
+					bail!(TooManyArgsFunctionHas(0, vec![],))
+				}
+				thunk.evaluate()
 			}
 			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
 			Self::Builtin(b) => b.call(call_ctx, loc, args),

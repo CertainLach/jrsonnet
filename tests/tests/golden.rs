@@ -32,7 +32,7 @@ fn run(file: &Path) -> String {
 		Err(e) => return trace_format.format(&e).unwrap(),
 	};
 	match v.manifest(JsonFormat::default()) {
-		Ok(v) => v.to_string(),
+		Ok(v) => v,
 		Err(e) => trace_format.format(&e).unwrap(),
 	}
 }
@@ -57,45 +57,46 @@ fn test() -> io::Result<()> {
 
 		if !golden_path.exists() {
 			fs::write(golden_path, &result)?;
-		} else {
-			let golden = fs::read_to_string(golden_path)?;
+			continue;
+		}
 
-			match (serde_json::from_str(&result), serde_json::from_str(&golden)) {
-				(Err(_), Ok(_)) => assert_eq!(
-					result,
-					golden,
-					"unexpected error for golden {}",
-					entry.path().display()
-				),
-				(Ok(_), Err(_)) => assert_eq!(
-					result,
-					golden,
-					"expected error for golden {}",
-					entry.path().display()
-				),
-				(Ok(result), Ok(golden)) => {
-					// Show diff relative to golden`.
-					let diff = JsonDiff::diff_string(&golden, &result, false);
-					if let Some(diff) = diff {
-						panic!(
-							"Result \n{result:#}\n\
-								and golden \n{golden:#}\n\
-								did not match structurally:\n{diff:#}\n\
-								for golden {}",
-							entry.path().display()
-						);
-					}
-				}
-				(Err(_), Err(_)) => {}
-			};
+		let golden = fs::read_to_string(golden_path)?;
 
-			assert_eq!(
+		match (serde_json::from_str(&result), serde_json::from_str(&golden)) {
+			(Err(_), Ok(_)) => assert_eq!(
 				result,
 				golden,
-				"golden didn't match for {}",
+				"unexpected error for golden {}",
 				entry.path().display()
-			)
-		}
+			),
+			(Ok(_), Err(_)) => assert_eq!(
+				result,
+				golden,
+				"expected error for golden {}",
+				entry.path().display()
+			),
+			(Ok(result), Ok(golden)) => {
+				// Show diff relative to golden`.
+				let diff = JsonDiff::diff_string(&golden, &result, false);
+				if let Some(diff) = diff {
+					panic!(
+						"Result \n{result:#}\n\
+							and golden \n{golden:#}\n\
+							did not match structurally:\n{diff:#}\n\
+							for golden {}",
+						entry.path().display()
+					);
+				}
+			}
+			(Err(_), Err(_)) => {}
+		};
+
+		assert_eq!(
+			result,
+			golden,
+			"golden didn't match for {}",
+			entry.path().display()
+		);
 	}
 
 	Ok(())

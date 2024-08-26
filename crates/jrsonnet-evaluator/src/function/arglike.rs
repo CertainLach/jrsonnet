@@ -91,6 +91,7 @@ pub trait ArgsLike {
 		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()>;
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
+	fn is_empty(&self) -> bool;
 }
 
 impl ArgsLike for Vec<Val> {
@@ -117,6 +118,9 @@ impl ArgsLike for Vec<Val> {
 		Ok(())
 	}
 	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+	fn is_empty(&self) -> bool {
+		self.is_empty()
+	}
 }
 
 impl ArgsLike for ArgsDesc {
@@ -173,6 +177,10 @@ impl ArgsLike for ArgsDesc {
 			handler(name);
 		}
 	}
+
+	fn is_empty(&self) -> bool {
+		self.unnamed.is_empty() && self.named.is_empty()
+	}
 }
 
 impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
@@ -206,6 +214,10 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 			handler(name);
 		}
 	}
+
+	fn is_empty(&self) -> bool {
+		self.is_empty()
+	}
 }
 impl<V, S> OptionalContext for HashMap<IStr, V, S> where V: ArgLike + OptionalContext {}
 
@@ -234,6 +246,10 @@ impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
 		self.0.named_names(handler);
+	}
+
+	fn is_empty(&self) -> bool {
+		self.0.is_empty()
 	}
 }
 
@@ -267,43 +283,13 @@ macro_rules! impl_args_like {
 				Ok(())
 			}
 			fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+
+			fn is_empty(&self) -> bool {
+				// impl_args_like only implements non-empty tuples.
+				false
+			}
 		}
 		impl<$($gen: ArgLike,)*> OptionalContext for ($($gen,)*) where $($gen: OptionalContext),* {}
-
-		impl<$($gen: ArgLike,)*> ArgsLike for ($((IStr, $gen),)*) {
-			fn unnamed_len(&self) -> usize {
-				0
-			}
-			fn unnamed_iter(
-				&self,
-				_ctx: Context,
-				_tailstrict: bool,
-				_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
-			) -> Result<()> {
-				Ok(())
-			}
-			#[allow(non_snake_case)]
-			fn named_iter(
-				&self,
-				ctx: Context,
-				tailstrict: bool,
-				handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
-			) -> Result<()> {
-				let ($($gen,)*) = self;
-				$(
-					handler(&$gen.0, $gen.1.evaluate_arg(ctx.clone(), tailstrict)?)?;
-				)*
-				Ok(())
-			}
-			#[allow(non_snake_case)]
-			fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-				let ($($gen,)*) = self;
-				$(
-					handler(&$gen.0);
-				)*
-			}
-		}
-		impl<$($gen: ArgLike,)*> OptionalContext for ($((IStr, $gen),)*) where $($gen: OptionalContext),* {}
 	};
 	($count:expr; $($cur:ident)* @ $c:ident $($rest:ident)*) => {
 		impl_args_like!($count; $($cur)*);
@@ -342,5 +328,8 @@ impl ArgsLike for () {
 	}
 
 	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+	fn is_empty(&self) -> bool {
+		true
+	}
 }
 impl OptionalContext for () {}

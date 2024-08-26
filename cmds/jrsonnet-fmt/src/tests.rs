@@ -75,5 +75,5 @@ fn complex_comments_snapshot() {
             b: '',
           },
         }"
-	)))
+	)));
 }

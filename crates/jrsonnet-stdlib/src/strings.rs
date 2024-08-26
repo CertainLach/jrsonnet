@@ -267,6 +267,7 @@ fn new_trim_pattern(chars: IndexableVal) -> Result<impl Fn(char) -> bool> {
 }
 
 #[cfg(test)]
+#[allow(clippy::float_cmp)]
 mod tests {
 	use super::*;
 
@@ -274,8 +275,8 @@ mod tests {
 	fn parse_nat_base_8() {
 		assert_eq!(parse_nat::<8>("0").unwrap(), 0.);
 		assert_eq!(parse_nat::<8>("5").unwrap(), 5.);
-		assert_eq!(parse_nat::<8>("32").unwrap(), 0o32 as f64);
-		assert_eq!(parse_nat::<8>("761").unwrap(), 0o761 as f64);
+		assert_eq!(parse_nat::<8>("32").unwrap(), f64::from(0o32));
+		assert_eq!(parse_nat::<8>("761").unwrap(), f64::from(0o761));
 	}
 
 	#[test]
@@ -290,7 +291,7 @@ mod tests {
 	fn parse_nat_base_16() {
 		assert_eq!(parse_nat::<16>("0").unwrap(), 0.);
 		assert_eq!(parse_nat::<16>("A").unwrap(), 10.);
-		assert_eq!(parse_nat::<16>("a9").unwrap(), 0xA9 as f64);
-		assert_eq!(parse_nat::<16>("BbC").unwrap(), 0xBBC as f64);
+		assert_eq!(parse_nat::<16>("a9").unwrap(), f64::from(0xA9));
+		assert_eq!(parse_nat::<16>("BbC").unwrap(), f64::from(0xBBC));
 	}
 }

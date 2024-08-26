@@ -308,22 +308,21 @@ pub fn render_integer(
 	prefix: &str,
 	caps: bool,
 ) {
-	let radix = radix as f64;
-	let iv = iv.floor();
+	let iv = iv.floor() as i64;
 	// Digit char indexes in reverse order, i.e
 	// for radix = 16 and n = 12f: [15, 2, 1]
-	let digits = if iv == 0.0 {
+	let digits = if iv == 0 {
 		vec![0u8]
 	} else {
 		let mut v = iv.abs();
 		let mut nums = Vec::with_capacity(1);
-		while v != 0.0 {
+		while v != 0 {
 			nums.push((v % radix) as u8);
-			v = (v / radix).floor();
+			v /= radix;
 		}
 		nums
 	};
-	let neg = iv < 0.0;
+	let neg = iv < 0;
 	#[allow(clippy::bool_to_int_with_if)]
 	let zp = padding.saturating_sub(if neg || blank || sign { 1 } else { 0 });
 	let zp2 = zp
