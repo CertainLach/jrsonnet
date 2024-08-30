@@ -40,7 +40,7 @@ parser! {
 		/// Standard C-like comments
 		rule comment()
 			= "//" (!eol()[_])* eol()
-			/ "/*" ("\\*/" / "\\\\" / (!("*/")[_]))* "*/"
+			/ "/*" (!("*/")[_])* "*/"
 			/ "#" (!eol()[_])* eol()
 
 		rule single_whitespace() = quiet!{([' ' | '\r' | '\n' | '\t'] / comment())} / expected!("<whitespace>")
@@ -593,19 +593,6 @@ pub mod tests {
 				),
 				0,
 				41
-			)
-		);
-	}
-
-	/// Comments should be able to be escaped
-	#[test]
-	fn comment_escaping() {
-		assert_eq!(
-			parse!("2/*\\*/+*/ - 22"),
-			el!(
-				Expr::BinaryOp(el!(Expr::Num(2.0), 0, 1), Sub, el!(Expr::Num(22.0), 12, 14)),
-				0,
-				14
 			)
 		);
 	}
