@@ -368,12 +368,12 @@ impl ExplainingFormat {
 
 #[cfg(feature = "explaining-traces")]
 #[derive(Trace)]
-pub struct AssStrokeFormat {
+pub struct HiDocFormat {
 	pub resolver: PathResolver,
 	pub max_trace: usize,
 }
 #[cfg(feature = "explaining-traces")]
-impl TraceFormat for AssStrokeFormat {
+impl TraceFormat for HiDocFormat {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
@@ -420,7 +420,7 @@ impl TraceFormat for AssStrokeFormat {
 					let rendered = builder.build();
 					let ansi = source_to_ansi(&rendered);
 					if let Some(loc) = &last_location {
-						let _ = writeln!(out, "...because of {}", loc.0.source_path());
+						let _ = writeln!(out, "...at {}", loc.0.source_path());
 					}
 					let _ = write!(out, "{}", ansi.trim_end());
 				}
@@ -456,7 +456,8 @@ impl TraceFormat for AssStrokeFormat {
 					writeln!(out)?;
 					write!(out, "{flushed}")?;
 				}
-				write!(out, "{desc}")?;
+				writeln!(out)?;
+				write!(out, "   {desc}")?;
 			}
 		}
 

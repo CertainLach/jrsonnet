@@ -1,6 +1,6 @@
 use clap::{Parser, ValueEnum};
 use jrsonnet_evaluator::trace::{
-	AssStrokeFormat, CompactFormat, ExplainingFormat, PathResolver, TraceFormat,
+	CompactFormat, ExplainingFormat, HiDocFormat, PathResolver, TraceFormat,
 };
 
 #[derive(PartialEq, Eq, ValueEnum, Clone)]
@@ -42,7 +42,7 @@ impl TraceOpts {
 				resolver,
 				max_trace,
 			}),
-			TraceFormatName::HiDoc => Box::new(AssStrokeFormat {
+			TraceFormatName::HiDoc => Box::new(HiDocFormat {
 				resolver,
 				max_trace,
 			}),
