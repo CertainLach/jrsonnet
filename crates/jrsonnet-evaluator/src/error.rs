@@ -24,7 +24,12 @@ pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 		return String::new();
 	}
 	let mut out = String::new();
-	out.push_str("\nThere is ");
+	out.push_str("\nThere ");
+	if list.len() > 1 {
+		out.push_str("are ");
+	} else {
+		out.push_str("is a ");
+	}
 	out.push_str(what);
 	if list.len() > 1 {
 		out.push('s');
@@ -133,7 +138,7 @@ pub enum ErrorKind {
 	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
-	#[error("variable is not defined: {0}{}", format_found(.1, "variable"))]
+	#[error("local is not defined: {0}{}", format_found(.1, "local"))]
 	VariableIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),

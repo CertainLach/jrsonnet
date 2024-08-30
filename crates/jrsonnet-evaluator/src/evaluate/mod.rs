@@ -464,7 +464,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => in_frame(
 			CallLocation::new(&loc),
-			|| format!("variable <{name}> access"),
+			|| format!("local <{name}> access"),
 			|| ctx.binding(name.clone())?.evaluate(),
 		)?,
 		Index { indexable, parts } => ensure_sufficient_stack(|| {
