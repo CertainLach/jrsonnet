@@ -52,6 +52,7 @@ with lib; let
       mkdir -p $out
       cp -r ${src}/* $out/
       cd $out
+      chmod u+w jsonnetfile.lock.json
       mkdir vendor
       ${jsonnet-bundler}/bin/jb install
     '';
@@ -125,7 +126,7 @@ in
           go-jsonnet $path > generated.jsonnet
           path=generated.jsonnet
         ''}
-        hyperfine -N -w4 -m20 --output=pipe --style=basic --export-markdown result.md \
+        hyperfine -N -w4 -m20 --output=pipe --style=basic --export-asciidoc result.adoc \
           ${concatStringsSep " " (forEach jrsonnetVariants (
           variant: "\"${variant.drv}/bin/jrsonnet $path${optionalString (vendor != "") " -J${vendor}"}\" -n \"Rust${
             if variant.name != ""
@@ -137,7 +138,7 @@ in
           ${optionalString (skipGo == "") "\"go-jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Go\""} \
           ${optionalString (skipScala == "") "\"sjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Scala\""} \
           ${optionalString (skipCpp == "") "\"jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"C++\""}
-        cat result.md >> $out
+        cat result.adoc >> $out
       '';
     in ''
       set -oux

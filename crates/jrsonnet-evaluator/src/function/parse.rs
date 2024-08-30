@@ -12,23 +12,8 @@ use crate::{
 	evaluate_named,
 	function::builtin::ParamDefault,
 	gc::GcHashMap,
-	val::ThunkValue,
 	Context, Pending, Thunk, Val,
 };
-
-#[derive(Trace)]
-struct EvaluateNamedThunk {
-	ctx: Pending<Context>,
-	name: IStr,
-	value: LocExpr,
-}
-
-impl ThunkValue for EvaluateNamedThunk {
-	type Output = Val;
-	fn get(self: Box<Self>) -> Result<Val> {
-		evaluate_named(self.ctx.unwrap(), &self.value, self.name)
-	}
-}
 
 /// Creates correct [context](Context) for function body evaluation returning error on invalid call.
 ///
@@ -105,11 +90,12 @@ pub fn parse_function_call(
 
 			destruct(
 				&param.0,
-				Thunk::new(EvaluateNamedThunk {
-					ctx: fctx.clone(),
-					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
-					value: param.1.clone().expect("default exists"),
-				}),
+				{
+					let ctx = fctx.clone();
+					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
+					let value = param.1.clone().expect("default exists");
+					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+				},
 				fctx.clone(),
 				&mut defaults,
 			)?;
@@ -241,11 +227,12 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		if let Some(v) = &param.1 {
 			destruct(
 				&param.0.clone(),
-				Thunk::new(EvaluateNamedThunk {
-					ctx: fctx.clone(),
-					name: param.0.name().unwrap_or_else(|| "<destruct>".into()),
-					value: v.clone(),
-				}),
+				{
+					let ctx = fctx.clone();
+					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
+					let value = v.clone();
+					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+				},
 				fctx.clone(),
 				&mut bindings,
 			)?;

@@ -3,22 +3,10 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
-use crate::{evaluate, gc::GcHashMap, typed::Typed, val::ThunkValue, Context, Result, Thunk, Val};
+use crate::{evaluate, gc::GcHashMap, typed::Typed, Context, Result, Thunk, Val};
 
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}
-
-#[derive(Trace)]
-struct EvaluateThunk {
-	ctx: Context,
-	expr: LocExpr,
-}
-impl ThunkValue for EvaluateThunk {
-	type Output = Val;
-	fn get(self: Box<Self>) -> Result<Val> {
-		evaluate(self.ctx, &self.expr)
-	}
-}
 
 pub trait ArgLike {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
@@ -29,10 +17,8 @@ impl ArgLike for &LocExpr {
 		Ok(if tailstrict {
 			Thunk::evaluated(evaluate(ctx, self)?)
 		} else {
-			Thunk::new(EvaluateThunk {
-				ctx,
-				expr: (*self).clone(),
-			})
+			let expr = (*self).clone();
+			Thunk!(move || evaluate(ctx, &expr))
 		})
 	}
 }
@@ -65,10 +51,8 @@ impl ArgLike for TlaArg {
 			Self::Code(code) => Ok(if tailstrict {
 				Thunk::evaluated(evaluate(ctx, code)?)
 			} else {
-				Thunk::new(EvaluateThunk {
-					ctx,
-					expr: code.clone(),
-				})
+				let code = code.clone();
+				Thunk!(move || evaluate(ctx, &code))
 			}),
 			Self::Val(val) => Ok(Thunk::evaluated(val.clone())),
 			Self::Lazy(lazy) => Ok(lazy.clone()),
@@ -140,10 +124,10 @@ impl ArgsLike for ArgsDesc {
 				if tailstrict {
 					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
-					Thunk::new(EvaluateThunk {
-						ctx: ctx.clone(),
-						expr: arg.clone(),
-					})
+					let ctx = ctx.clone();
+					let arg = arg.clone();
+
+					Thunk!(move || evaluate(ctx, &arg))
 				},
 			)?;
 		}
@@ -162,10 +146,10 @@ impl ArgsLike for ArgsDesc {
 				if tailstrict {
 					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
 				} else {
-					Thunk::new(EvaluateThunk {
-						ctx: ctx.clone(),
-						expr: arg.clone(),
-					})
+					let ctx = ctx.clone();
+					let arg = arg.clone();
+
+					Thunk!(move || evaluate(ctx, &arg))
 				},
 			)?;
 		}
