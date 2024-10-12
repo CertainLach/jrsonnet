@@ -143,12 +143,21 @@ parser! {
 		pub rule whole_line() -> &'input str
 			= str:$((!['\n'][_])* "\n") {str}
 		pub rule string_block() -> String
-			= "|||" (!['\n']single_whitespace())* "\n"
-			  empty_lines:$(['\n']*)
-			  prefix:[' ' | '\t']+ first_line:whole_line()
-			  lines:("\n" {"\n"} / [' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
-			  [' ' | '\t']*<, {prefix.len() - 1}> "|||"
-			  {let mut l = empty_lines.to_owned(); l.push_str(first_line); l.extend(lines); l}
+			= "|||" chomped:"-"? (!['\n']single_whitespace())* "\n"
+			empty_lines:$(['\n']*)
+			prefix:[' ' | '\t']+ first_line:whole_line()
+			lines:("\n" {"\n"} / [' ' | '\t']*<{prefix.len()}> s:whole_line() {s})*
+			[' ' | '\t']*<, {prefix.len() - 1}> "|||"
+			{
+				let mut l = empty_lines.to_owned();
+				l.push_str(first_line);
+				l.extend(lines);
+				if chomped.is_some() {
+					debug_assert!(l.ends_with('\n'));
+					l.truncate(l.len() - 1);
+				}
+				l
+			}
 
 		rule hex_char()
 			= quiet! { ['0'..='9' | 'a'..='f' | 'A'..='F'] } / expected!("<hex char>")
