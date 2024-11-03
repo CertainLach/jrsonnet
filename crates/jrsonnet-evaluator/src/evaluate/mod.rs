@@ -655,11 +655,11 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
-					Ok(Some(in_frame(
+					Ok(in_frame(
 						loc,
 						|| format!("slice {desc}"),
-						|| T::from_untyped(evaluate(ctx.clone(), value)?),
-					)?))
+						|| <Option<T>>::from_untyped(evaluate(ctx.clone(), value)?),
+					)?)
 				} else {
 					Ok(None)
 				}

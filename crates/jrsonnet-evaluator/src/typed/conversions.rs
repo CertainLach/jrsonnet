@@ -655,6 +655,26 @@ impl Typed for Null {
 	}
 }
 
+impl<T> Typed for Option<T>
+where
+	T: Typed,
+{
+	const TYPE: &'static ComplexValType =
+		&ComplexValType::UnionRef(&[&ComplexValType::Simple(ValType::Null), T::TYPE]);
+
+	fn into_untyped(typed: Self) -> Result<Val> {
+		typed.map_or_else(|| Ok(Val::Null), |v| T::into_untyped(v))
+	}
+
+	fn from_untyped(untyped: Val) -> Result<Self> {
+		if matches!(untyped, Val::Null) {
+			Ok(None)
+		} else {
+			T::from_untyped(untyped).map(Some)
+		}
+	}
+}
+
 pub struct NativeFn<D: NativeDesc>(D::Value);
 impl<D: NativeDesc> Deref for NativeFn<D> {
 	type Target = D::Value;

@@ -48,11 +48,13 @@ pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Val
 #[builtin]
 pub fn builtin_slice(
 	indexable: IndexableVal,
-	index: Option<i32>,
-	end: Option<i32>,
-	step: Option<BoundedUsize<1, { i32::MAX as usize }>>,
+	index: Option<Option<i32>>,
+	end: Option<Option<i32>>,
+	step: Option<Option<BoundedUsize<1, { i32::MAX as usize }>>>,
 ) -> Result<Val> {
-	indexable.slice(index, end, step).map(Val::from)
+	indexable
+		.slice(index.flatten(), end.flatten(), step.flatten())
+		.map(Val::from)
 }
 
 #[builtin]
