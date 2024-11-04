@@ -96,6 +96,7 @@ impl Parse for Field {
 mod kw {
 	syn::custom_keyword!(fields);
 	syn::custom_keyword!(rename);
+	syn::custom_keyword!(alias);
 	syn::custom_keyword!(flatten);
 	syn::custom_keyword!(add);
 	syn::custom_keyword!(hide);
@@ -412,6 +413,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 #[allow(clippy::struct_excessive_bools)]
 struct TypedAttr {
 	rename: Option<String>,
+	aliases: Vec<String>,
 	flatten: bool,
 	/// flatten(ok) strategy for flattened optionals
 	/// field would be None in case of any parsing error (as in serde)
@@ -437,6 +439,11 @@ impl Parse for TypedAttr {
 					));
 				}
 				out.rename = Some(name.value());
+			} else if lookahead.peek(kw::alias) {
+				input.parse::<kw::alias>()?;
+				input.parse::<Token![=]>()?;
+				let alias = input.parse::<LitStr>()?;
+				out.aliases.push(alias.value());
 			} else if lookahead.peek(kw::flatten) {
 				input.parse::<kw::flatten>()?;
 				out.flatten = true;
@@ -537,41 +544,81 @@ impl TypedField {
 			(#name, <#ty as Typed>::TYPE)
 		})
 	}
+
 	fn expand_parse(&self) -> TokenStream {
+		if self.is_option {
+			self.expand_parse_optional()
+		} else {
+			self.expand_parse_mandatory()
+		}
+	}
+
+	fn expand_parse_optional(&self) -> TokenStream {
 		let ident = &self.ident;
 		let ty = &self.ty;
+
+		// optional flatten is handled in same way as serde
 		if self.attr.flatten {
-			// optional flatten is handled in same way as serde
-			return if self.is_option {
-				quote! {
-					#ident: <#ty as TypedObj>::parse(&obj).ok(),
-				}
-			} else {
-				quote! {
-					#ident: <#ty as TypedObj>::parse(&obj)?,
-				}
+			return quote! {
+				#ident: <#ty as TypedObj>::parse(&obj).ok(),
 			};
-		};
+		}
 
 		let name = self.name().unwrap();
-		let value = if self.is_option {
-			quote! {
-				if let Some(value) = obj.get(#name.into())? {
-					Some(<#ty as Typed>::from_untyped(value)?)
-				} else {
+		let aliases = &self.attr.aliases;
+
+		quote! {
+			#ident: {
+				let __value = if let Some(__v) = obj.get(#name.into())? {
+					Some(__v)
+				} #(else if let Some(__v) = obj.get(#aliases.into())? {
+					Some(__v)
+				})* else {
 					None
-				}
-			}
+				};
+
+				__value.map(<#ty as Typed>::from_untyped).transpose()?
+			},
+		}
+	}
+
+	fn expand_parse_mandatory(&self) -> TokenStream {
+		let ident = &self.ident;
+		let ty = &self.ty;
+
+		// optional flatten is handled in same way as serde
+		if self.attr.flatten {
+			return quote! {
+				#ident: <#ty as TypedObj>::parse(&obj)?,
+			};
+		}
+
+		let name = self.name().unwrap();
+		let aliases = &self.attr.aliases;
+
+		let error_text = if aliases.is_empty() {
+			// clippy does not understand name variable usage in quote! macro
+			#[allow(clippy::redundant_clone)]
+			name.clone()
 		} else {
-			quote! {
-				<#ty as Typed>::from_untyped(obj.get(#name.into())?.ok_or_else(|| ErrorKind::NoSuchField(#name.into(), vec![]))?)?
-			}
+			format!("{name} (alias {})", aliases.join(", "))
 		};
 
 		quote! {
-			#ident: #value,
+			#ident: {
+				let __value = if let Some(__v) = obj.get(#name.into())? {
+					__v
+				} #(else if let Some(__v) = obj.get(#aliases.into())? {
+					__v
+				})* else {
+					return Err(ErrorKind::NoSuchField(#error_text.into(), vec![]).into());
+				};
+
+				<#ty as Typed>::from_untyped(__value)?
+			},
 		}
 	}
+
 	fn expand_serialize(&self) -> TokenStream {
 		let ident = &self.ident;
 		let ty = &self.ty;
