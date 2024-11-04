@@ -544,6 +544,7 @@ impl TypedField {
 			(#name, <#ty as Typed>::TYPE)
 		})
 	}
+
 	fn expand_parse(&self) -> TokenStream {
 		if self.is_option {
 			self.expand_parse_optional()
@@ -566,18 +567,18 @@ impl TypedField {
 		let name = self.name().unwrap();
 		let aliases = &self.attr.aliases;
 
-		let value = quote! {
-			if let Some(__value) = obj.get(#name.into())? {
-				Some(<#ty as Typed>::from_untyped(__value)?)
-			} #(else if let Some(__value) = obj.get(#aliases) {
-				Some(<#ty as Typed>::from_untyped(__value)?)
-			})* else {
-				None
-			}
-		};
-
 		quote! {
-			#ident: #value,
+			#ident: {
+				let __value = if let Some(__v) = obj.get(#name.into())? {
+					Some(__v)
+				} #(else if let Some(__v) = obj.get(#aliases.into())? {
+					Some(__v)
+				})* else {
+					None
+				};
+
+				__value.map(<#ty as Typed>::from_untyped).transpose()?
+			},
 		}
 	}
 
@@ -603,18 +604,18 @@ impl TypedField {
 			format!("{name} (alias {})", aliases.join(", "))
 		};
 
-		let value = quote! {
-			if let Some(__value) = obj.get(#name.into())? {
-				<#ty as Typed>::from_untyped(__value)?
-			} #(else if let Some(__value) = obj.get(#aliases.into())? {
-				<#ty as Typed>::from_untyped(__value)?
-			})* else {
-				return Err(ErrorKind::NoSuchField(#error_text.into(), vec![]).into());
-			}
-		};
-
 		quote! {
-			#ident: #value,
+			#ident: {
+				let __value = if let Some(__v) = obj.get(#name.into())? {
+					__v
+				} #(else if let Some(__v) = obj.get(#aliases.into())? {
+					__v
+				})* else {
+					return Err(ErrorKind::NoSuchField(#error_text.into(), vec![]).into());
+				};
+
+				<#ty as Typed>::from_untyped(__value)?
+			},
 		}
 	}
 
