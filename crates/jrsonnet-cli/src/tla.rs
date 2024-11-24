@@ -47,10 +47,7 @@ impl TlaOpts {
 			);
 		}
 		for ext in &self.tla_code_file {
-			out.insert(
-				ext.name.as_str().into(),
-				TlaArg::Import(ext.path.clone()),
-			);
+			out.insert(ext.name.as_str().into(), TlaArg::Import(ext.path.clone()));
 		}
 		Ok(out)
 	}
