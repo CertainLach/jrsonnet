@@ -1,11 +1,5 @@
 use clap::Parser;
-use jrsonnet_evaluator::{
-	error::{ErrorKind, Result},
-	function::TlaArg,
-	gc::GcHashMap,
-	IStr,
-};
-use jrsonnet_parser::{ParserSettings, Source};
+use jrsonnet_evaluator::{error::Result, function::TlaArg, gc::GcHashMap, IStr};
 
 use crate::{ExtFile, ExtStr};
 
@@ -34,35 +28,28 @@ pub struct TlaOpts {
 impl TlaOpts {
 	pub fn tla_opts(&self) -> Result<GcHashMap<IStr, TlaArg>> {
 		let mut out = GcHashMap::new();
-		for (name, value) in self
-			.tla_str
-			.iter()
-			.map(|c| (&c.name, &c.value))
-			.chain(self.tla_str_file.iter().map(|c| (&c.name, &c.value)))
-		{
-			out.insert(name.into(), TlaArg::String(value.into()));
-		}
-		for (name, code) in self
-			.tla_code
-			.iter()
-			.map(|c| (&c.name, &c.value))
-			.chain(self.tla_code_file.iter().map(|c| (&c.name, &c.value)))
-		{
-			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
+		for ext in &self.tla_str {
 			out.insert(
-				(name as &str).into(),
-				TlaArg::Code(
-					jrsonnet_parser::parse(
-						code,
-						&ParserSettings {
-							source: source.clone(),
-						},
-					)
-					.map_err(|e| ErrorKind::ImportSyntaxError {
-						path: source,
-						error: Box::new(e),
-					})?,
-				),
+				ext.name.as_str().into(),
+				TlaArg::String(ext.value.as_str().into()),
+			);
+		}
+		for ext in &self.tla_str_file {
+			out.insert(
+				ext.name.as_str().into(),
+				TlaArg::ImportStr(ext.name.as_str().into()),
+			);
+		}
+		for ext in &self.tla_code {
+			out.insert(
+				ext.name.as_str().into(),
+				TlaArg::InlineCode(ext.value.clone()),
+			);
+		}
+		for ext in &self.tla_code_file {
+			out.insert(
+				ext.name.as_str().into(),
+				TlaArg::Import(ext.path.clone()),
 			);
 		}
 		Ok(out)

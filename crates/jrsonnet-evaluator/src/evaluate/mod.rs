@@ -680,7 +680,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			};
 			let tmp = loc.clone().0;
 			let s = ctx.state();
-			let resolved_path = s.resolve_from(tmp.source_path(), path as &str)?;
+			let resolved_path = s.resolve_from(tmp.source_path(), path)?;
 			match i {
 				Import(_) => in_frame(
 					CallLocation::new(&loc),

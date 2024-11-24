@@ -27,7 +27,7 @@ use jrsonnet_evaluator::{
 	stack::set_stack_depth_limit,
 	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, IStr, ImportResolver, Result, State, Val,
+	AsPathLike, FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::SourcePath;
@@ -61,18 +61,18 @@ unsafe fn parse_path(input: &CStr) -> Cow<Path> {
 	}
 }
 
-unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
+unsafe fn unparse_path(input: &Path) -> CString {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
 		let str = CString::new(input.as_os_str().as_bytes()).expect("input has zero byte in it");
-		Cow::Owned(str)
+		str
 	}
 	#[cfg(not(target_family = "unix"))]
 	{
 		let str = input.as_os_str().to_str().expect("bad utf-8");
 		let cstr = CString::new(str).expect("input has NUL inside");
-		Cow::Owned(cstr)
+		cstr
 	}
 }
 
@@ -93,16 +93,12 @@ impl ImportResolver for VMImportResolver {
 		self.inner.borrow().load_file_contents(resolved)
 	}
 
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.inner.borrow().resolve_from(from, path)
 	}
 
-	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
+	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.inner.borrow().resolve_from_default(path)
-	}
-
-	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		self.inner.borrow().resolve(path)
 	}
 
 	fn as_any(&self) -> &dyn Any {

@@ -29,7 +29,6 @@ use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
 	fmt::{self, Debug},
-	path::Path,
 };
 
 pub use ctx::*;
@@ -347,12 +346,12 @@ impl State {
 	}
 
 	/// Has same semantics as `import 'path'` called from `from` file
-	pub fn import_from(&self, from: &SourcePath, path: &str) -> Result<Val> {
-		let resolved = self.resolve_from(from, path)?;
+	pub fn import_from(&self, from: &SourcePath, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from(from, &path)?;
 		self.import_resolved(resolved)
 	}
-	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
-		let resolved = self.resolve(path)?;
+	pub fn import(&self, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from_default(&path)?;
 		self.import_resolved(resolved)
 	}
 
@@ -466,14 +465,12 @@ impl State {
 impl State {
 	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		self.import_resolver().resolve_from(from, path.as_ref())
+	pub fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from(from, path)
 	}
-
-	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
-		self.import_resolver().resolve(path.as_ref())
+	pub fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from_default(path)
 	}
 	pub fn import_resolver(&self) -> &dyn ImportResolver {
 		&*self.0.import_resolver

@@ -182,7 +182,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		let input_str = std::str::from_utf8(&input)?;
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(&input)?
+		s.import(input.as_str())?
 	};
 
 	let tla = opts.tla.tla_opts()?;
