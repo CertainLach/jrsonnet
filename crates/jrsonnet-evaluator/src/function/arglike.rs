@@ -1,7 +1,7 @@
 use hashbrown::HashMap;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, LocExpr};
+use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
 
 use crate::{evaluate, gc::GcHashMap, typed::Typed, Context, Result, Thunk, Val};
 
@@ -40,22 +40,34 @@ impl<T> OptionalContext for T where T: Typed + Clone {}
 #[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
-	Code(LocExpr),
 	Val(Val),
 	Lazy(Thunk<Val>),
+	Import(String),
+	ImportStr(String),
+	InlineCode(String),
 }
 impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, ctx: Context, _tailstrict: bool) -> Result<Thunk<Val>> {
 		match self {
 			Self::String(s) => Ok(Thunk::evaluated(Val::string(s.clone()))),
-			Self::Code(code) => Ok(if tailstrict {
-				Thunk::evaluated(evaluate(ctx, code)?)
-			} else {
-				let code = code.clone();
-				Thunk!(move || evaluate(ctx, &code))
-			}),
 			Self::Val(val) => Ok(Thunk::evaluated(val.clone())),
 			Self::Lazy(lazy) => Ok(lazy.clone()),
+			Self::Import(p) => {
+				let resolved = ctx.state().resolve_from_default(&p.as_str())?;
+				Ok(Thunk!(move || ctx.state().import_resolved(resolved)))
+			}
+			Self::ImportStr(p) => {
+				let resolved = ctx.state().resolve_from_default(&p.as_str())?;
+				Ok(Thunk!(move || ctx
+					.state()
+					.import_resolved_str(resolved)
+					.map(Val::string)))
+			}
+			Self::InlineCode(p) => {
+				let resolved =
+					SourcePath::new(SourceFifo("<inline code>".to_owned(), p.as_bytes().into()));
+				Ok(Thunk!(move || ctx.state().import_resolved(resolved)))
+			}
 		}
 	}
 }
