@@ -144,7 +144,7 @@ enum ArgInfo {
 		is_option: bool,
 		name: Option<String>,
 	},
-	Context,
+	State,
 	Location,
 	This,
 }
@@ -159,8 +159,8 @@ impl ArgInfo {
 			_ => None,
 		};
 		let ty = &arg.ty;
-		if type_is_path(ty, "Context").is_some() {
-			return Ok(Self::Context);
+		if type_is_path(ty, "State").is_some() {
+			return Ok(Self::State);
 		} else if type_is_path(ty, "CallLocation").is_some() {
 			return Ok(Self::Location);
 		} else if type_is_path(ty, "Thunk").is_some() {
@@ -266,7 +266,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				BuiltinParam::new(#name, ParamDefault::exists(#is_option)),
 			})
 		}
-		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
+		ArgInfo::State | ArgInfo::Location | ArgInfo::This => None,
 	});
 
 	let mut id = 0usize;
@@ -278,7 +278,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				id += 1;
 				(quote! {#cid}, a)
 			}
-			ArgInfo::Context | ArgInfo::Location | ArgInfo::This => {
+			ArgInfo::State | ArgInfo::Location | ArgInfo::This => {
 				(quote! {compile_error!("should not use id")}, a)
 			}
 		})
@@ -329,7 +329,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 					}
 				}
 			}
-			ArgInfo::Context => quote! {ctx.clone(),},
+			ArgInfo::State => quote! {state.clone(),},
 			ArgInfo::Location => quote! {location,},
 			ArgInfo::This => quote! {self,},
 		});
@@ -373,7 +373,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
-				State, Val,
+				State, Val, Thunk,
 				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				Result, Context, typed::Typed,
 				parser::Span,
@@ -394,9 +394,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 					PARAMS
 				}
 				#[allow(unused_variables)]
-				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
-
+				fn call(&self, location: CallLocation, state: State, parsed: &[Option<Thunk<Val>>]) -> Result<Val> {
 					let result: #result = #name(#(#pass)*);
 					<_ as Typed>::into_result(result)
 				}

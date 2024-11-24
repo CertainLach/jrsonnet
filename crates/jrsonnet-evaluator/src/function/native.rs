@@ -2,7 +2,7 @@ use super::{
 	arglike::{ArgLike, OptionalContext},
 	FuncVal,
 };
-use crate::{typed::Typed, Result};
+use crate::{function::builtin::Builtin, typed::Typed, Result, State};
 
 pub trait NativeDesc {
 	type Value;
@@ -15,12 +15,13 @@ macro_rules! impl_native_desc {
 			$($gen: ArgLike + OptionalContext,)*
 			O: Typed,
 		{
-			type Value = Box<dyn Fn($($gen,)*) -> Result<O>>;
+			type Value = Box<dyn Fn(State, $($gen,)*) -> Result<O>>;
 
 			#[allow(non_snake_case)]
 			fn into_native(val: FuncVal) -> Self::Value {
-				Box::new(move |$($gen),*| {
-					let val = val.evaluate_simple(
+				Box::new(move |state, $($gen),*| {
+					let val = val.call(
+						state,
 						&($($gen,)*),
 						false,
 					)?;

@@ -4,10 +4,10 @@ use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
 	bail,
-	function::{builtin, FuncVal},
+	function::{builtin, CallLocation, FuncVal, PreparedFuncVal},
 	operator::evaluate_compare_op,
 	val::{equals, ArrValue},
-	Result, Thunk, Val,
+	Error, Result, Thunk, Val,
 };
 use jrsonnet_parser::BinaryOpType;
 
@@ -69,14 +69,11 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(values)
 }
 
-fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn sort_keyf(values: ArrValue, keyf: KeyF) -> Result<Vec<Thunk<Val>>> {
 	// Slow path, user provided key getter
 	let mut vk = Vec::with_capacity(values.len());
 	for value in values.iter_lazy() {
-		vk.push((
-			value.clone(),
-			keyf.evaluate_simple(&(value.clone(),), false)?,
-		));
+		vk.push((value.clone(), keyf.eval(value.clone())?));
 	}
 	let sort_type = get_sort_type(&vk, |v| &v.1)?;
 	match sort_type {
@@ -111,7 +108,7 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 }
 
 /// * `key_getter` - None, if identity sort required
-pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
+pub fn sort(values: ArrValue, key_getter: KeyF) -> Result<ArrValue> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
@@ -130,7 +127,7 @@ pub fn builtin_sort(
 
 	#[default(FuncVal::identity())] keyF: FuncVal,
 ) -> Result<ArrValue> {
-	super::sort::sort(arr, keyF)
+	super::sort::sort(arr, KeyF::new(Some(keyF)))
 }
 
 fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
@@ -146,14 +143,14 @@ fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(out)
 }
 
-fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn uniq_keyf(arr: ArrValue, keyf: KeyF) -> Result<Vec<Thunk<Val>>> {
 	let mut out = Vec::new();
 	let last_value = arr.get_lazy(0).unwrap();
-	let mut last_key = keyf.evaluate_simple(&(last_value.clone(),), false)?;
+	let mut last_key = keyf.eval(last_value.clone())?;
 	out.push(last_value);
 
 	for next in arr.iter_lazy().skip(1) {
-		let next_key = keyf.evaluate_simple(&(next.clone(),), false)?;
+		let next_key = keyf.eval(next.clone())?;
 		if !equals(&last_key, &next_key)? {
 			out.push(next.clone());
 		}
@@ -172,6 +169,7 @@ pub fn builtin_uniq(
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
+	let keyF = KeyF::new(Some(keyF));
 	if keyF.is_identity() {
 		Ok(ArrValue::eager(uniq_identity(
 			arr.iter().collect::<Result<Vec<Val>>>()?,
@@ -191,33 +189,53 @@ pub fn builtin_set(
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
+	let keyF = KeyF::new(Some(keyF));
 	if keyF.is_identity() {
 		let arr = arr.iter().collect::<Result<Vec<Val>>>()?;
 		let arr = sort_identity(arr)?;
 		let arr = uniq_identity(arr)?;
 		Ok(ArrValue::eager(arr))
 	} else {
-		let arr = sort_keyf(arr, keyF.clone())?;
+		let arr = sort_keyf(arr, keyF)?;
 		let arr = uniq_keyf(ArrValue::lazy(arr), keyF)?;
 		Ok(ArrValue::lazy(arr))
 	}
 }
 
-fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
-	if let Some(key_f) = key_f {
-		key_f.evaluate_simple(&(val,), false)
-	} else {
-		Ok(val)
+enum KeyF {
+	Identity,
+	Prepared(PreparedFuncVal),
+	PrepareFailure(Error),
+}
+impl KeyF {
+	fn is_identity(&self) -> bool {
+		matches!(self, Self::Identity)
+	}
+	fn new(val: Option<FuncVal>) -> Self {
+		match val {
+			Some(v) if v.is_identity() => Self::Identity,
+			Some(v) => {
+				PreparedFuncVal::new(v, 1, &[]).map_or_else(Self::PrepareFailure, Self::Prepared)
+			}
+			None => Self::Identity,
+		}
+	}
+	fn eval(&self, val: Thunk<Val>) -> Result<Val> {
+		match self {
+			KeyF::Identity => val.evaluate(),
+			KeyF::Prepared(p) => p.call(CallLocation::native(), &[val], &[]),
+			KeyF::PrepareFailure(e) => Err(e.clone()),
+		}
 	}
 }
 
-fn array_top1(arr: ArrValue, key_f: Option<FuncVal>, ordering: Ordering) -> Result<Val> {
+fn array_top1(arr: ArrValue, key_f: KeyF, ordering: Ordering) -> Result<Val> {
 	let mut iter = arr.iter();
 	let mut min = iter.next().expect("not empty")?;
-	let mut min_key = eval_keyf(min.clone(), &key_f)?;
+	let mut min_key = key_f.eval(Thunk::evaluated(min.clone()))?;
 	for item in iter {
 		let cur = item?;
-		let cur_key = eval_keyf(cur.clone(), &key_f)?;
+		let cur_key = key_f.eval(Thunk::evaluated(cur.clone()))?;
 		if evaluate_compare_op(&cur_key, &min_key, BinaryOpType::Lt)? == ordering {
 			min = cur;
 			min_key = cur_key;
@@ -235,7 +253,7 @@ pub fn builtin_min_array(
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	array_top1(arr, keyF, Ordering::Less)
+	array_top1(arr, KeyF::new(keyF), Ordering::Less)
 }
 #[builtin]
 pub fn builtin_max_array(
@@ -246,5 +264,5 @@ pub fn builtin_max_array(
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	array_top1(arr, keyF, Ordering::Greater)
+	array_top1(arr, KeyF::new(keyF), Ordering::Greater)
 }

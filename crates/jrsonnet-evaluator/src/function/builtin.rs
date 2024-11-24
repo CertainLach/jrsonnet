@@ -3,8 +3,8 @@ use std::{any::Any, borrow::Cow};
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 
-use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{gc::TraceBox, tb, Context, Result, Val};
+use super::CallLocation;
+use crate::{gc::TraceBox, tb, Result, State, Thunk, Val};
 
 /// Can't have `str` | `IStr`, because constant `BuiltinParam` causes
 /// `E0492: constant functions cannot refer to interior mutable data`
@@ -23,6 +23,9 @@ impl ParamName {
 	}
 	pub fn is_anonymous(&self) -> bool {
 		self.0.is_none()
+	}
+	pub fn opt_istr(&self) -> Option<IStr> {
+		self.0.as_ref().map(|v| v.as_ref().into())
 	}
 }
 impl PartialEq<IStr> for ParamName {
@@ -79,7 +82,8 @@ pub trait Builtin: Trace {
 	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
 	/// Call the builtin
-	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(&self, loc: CallLocation<'_>, state: State, args: &[Option<Thunk<Val>>])
+		-> Result<Val>;
 
 	fn as_any(&self) -> &dyn Any;
 }
@@ -124,11 +128,15 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, ctx: Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
-		let args = parse_builtin_call(ctx, &self.params, args, true)?;
+	fn call(
+		&self,
+		_loc: CallLocation<'_>,
+		_state: State,
+		args: &[Option<Thunk<Val>>],
+	) -> Result<Val> {
 		let args = args
-			.into_iter()
-			.map(|a| a.expect("legacy natives have no default params"))
+			.iter()
+			.map(|a| a.clone().expect("legacy natives have no default params"))
 			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;
 		self.handler.call(&args)

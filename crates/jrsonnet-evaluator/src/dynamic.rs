@@ -2,7 +2,7 @@ use std::cell::OnceCell;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 
-use crate::{bail, error::ErrorKind::InfiniteRecursionDetected, val::ThunkValue, Result};
+use crate::{bail, error::ErrorKind::InfiniteRecursionDetected, val::LazyValue, Result};
 
 // TODO: Replace with OnceCell once in std
 #[derive(Clone, Trace)]
@@ -36,14 +36,18 @@ impl<T: Clone + Trace + 'static> Pending<T> {
 	}
 }
 
-impl<T: Trace + Clone> ThunkValue for Pending<T> {
+impl<T: Trace + Clone> LazyValue for Pending<T> {
 	type Output = T;
 
-	fn get(self: Box<Self>) -> Result<Self::Output> {
+	fn get(&self) -> Result<Self::Output> {
 		let Some(value) = self.0.get() else {
 			bail!(InfiniteRecursionDetected);
 		};
 		Ok(value.clone())
+	}
+
+	fn self_caching(&self) -> bool {
+		true
 	}
 }
 

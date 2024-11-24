@@ -1,13 +1,16 @@
-use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace};
+use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace, rc::Rc};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
-use jrsonnet_parser::LocExpr;
+use jrsonnet_parser::Expr;
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
-	Context, Error, ObjValue, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected,
+	evaluate,
+	function::{CallLocation, FuncVal, PreparedFuncVal},
+	typed::Typed,
+	Context, Error, ObjValue, Result, State, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -15,8 +18,8 @@ pub trait ArrayLike: Any + Trace + Debug {
 	fn is_empty(&self) -> bool {
 		self.len() == 0
 	}
-	fn get(&self, index: usize) -> Result<Option<Val>>;
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>>;
+	fn get(&self, state: &State, index: usize) -> Result<Option<Val>>;
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>>;
 	fn get_cheap(&self, index: usize) -> Option<Val>;
 
 	fn is_cheap(&self) -> bool;
@@ -65,11 +68,11 @@ impl ArrayLike for SliceArray {
 			.count()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		self.iter().nth(index).transpose()
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.iter_lazy().nth(index)
 	}
 
@@ -88,11 +91,11 @@ impl ArrayLike for CharArray {
 		self.0.len()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		Ok(self.get_cheap(index))
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.get_cheap(index).map(Thunk::evaluated)
 	}
 
@@ -111,11 +114,11 @@ impl ArrayLike for BytesArray {
 		self.0.len()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		Ok(self.get_cheap(index))
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.get_cheap(index).map(Thunk::evaluated)
 	}
 
@@ -128,25 +131,25 @@ impl ArrayLike for BytesArray {
 }
 
 #[derive(Debug, Trace, Clone)]
-enum ArrayThunk<T: 'static + Trace> {
+enum ArrayThunk {
 	Computed(Val),
 	Errored(Error),
-	Waiting(T),
+	Waiting,
 	Pending,
 }
 
 #[derive(Debug, Trace, Clone)]
 pub struct ExprArray {
 	ctx: Context,
-	cached: Cc<RefCell<Vec<ArrayThunk<LocExpr>>>>,
+	exprs: Rc<Vec<Expr>>,
+	cached: Cc<RefCell<Vec<ArrayThunk>>>,
 }
 impl ExprArray {
-	pub fn new(ctx: Context, items: impl IntoIterator<Item = LocExpr>) -> Self {
+	pub fn new(ctx: Context, exprs: Rc<Vec<Expr>>) -> Self {
 		Self {
 			ctx,
-			cached: Cc::new(RefCell::new(
-				items.into_iter().map(ArrayThunk::Waiting).collect(),
-			)),
+			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting; exprs.len()])),
+			exprs,
 		}
 	}
 }
@@ -154,7 +157,7 @@ impl ArrayLike for ExprArray {
 	fn len(&self) -> usize {
 		self.cached.borrow().len()
 	}
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		if index >= self.len() {
 			return Ok(None);
 		}
@@ -162,14 +165,15 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
-			ArrayThunk::Waiting(..) => {}
+			ArrayThunk::Waiting => {}
 		};
 
-		let ArrayThunk::Waiting(expr) =
+		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
 		};
+		let expr = &self.exprs[index];
 
 		let new_value = match evaluate(self.ctx.clone(), &expr) {
 			Ok(v) => v,
@@ -181,19 +185,23 @@ impl ArrayLike for ExprArray {
 		self.cached.borrow_mut()[index] = ArrayThunk::Computed(new_value.clone());
 		Ok(Some(new_value))
 	}
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		if index >= self.len() {
 			return None;
 		}
 		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		};
 
 		let arr_thunk = self.clone();
+		let state = state.clone();
 		Some(Thunk!(move || {
-			arr_thunk.get(index).transpose().expect("index checked")
+			arr_thunk
+				.get(&state, index)
+				.transpose()
+				.expect("index checked")
 		}))
 	}
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
@@ -261,14 +269,14 @@ where
 	}
 }
 impl ArrayLike for ExtendedArray {
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		if self.split > index {
 			self.a.get(index)
 		} else {
 			self.b.get(index - self.split)
 		}
 	}
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, _state: &State, index: usize) -> Option<Thunk<Val>> {
 		if self.split > index {
 			self.a.get_lazy(index)
 		} else {
@@ -298,7 +306,7 @@ impl ArrayLike for LazyArray {
 	fn len(&self) -> usize {
 		self.0.len()
 	}
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, _state: &State, index: usize) -> Result<Option<Val>> {
 		let Some(v) = self.0.get(index) else {
 			return Ok(None);
 		};
@@ -307,7 +315,7 @@ impl ArrayLike for LazyArray {
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
 		None
 	}
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.0.get(index).cloned()
 	}
 	fn is_cheap(&self) -> bool {
@@ -322,11 +330,11 @@ impl ArrayLike for EagerArray {
 		self.0.len()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, state: &State, index: usize) -> Result<Option<Val>> {
 		Ok(self.0.get(index).cloned())
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.0.get(index).cloned().map(Thunk::evaluated)
 	}
 
@@ -373,11 +381,11 @@ impl ArrayLike for RangeArray {
 		self.range().len() == 0
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, state: &State, index: usize) -> Result<Option<Val>> {
 		Ok(self.get_cheap(index))
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.get_cheap(index).map(Thunk::evaluated)
 	}
 
@@ -396,11 +404,11 @@ impl ArrayLike for ReverseArray {
 		self.0.len()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, state: &State, index: usize) -> Result<Option<Val>> {
 		self.0.get(self.0.len() - index - 1)
 	}
 
-	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+	fn get_lazy(&self, state: &State, index: usize) -> Option<Thunk<Val>> {
 		self.0.get_lazy(self.0.len() - index - 1)
 	}
 
@@ -415,23 +423,37 @@ impl ArrayLike for ReverseArray {
 #[derive(Trace, Debug, Clone)]
 pub struct MappedArray<const WITH_INDEX: bool> {
 	inner: ArrValue,
-	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
-	mapper: FuncVal,
+	cached: Cc<RefCell<Vec<ArrayThunk>>>,
+	mapper: PreparedFuncVal,
 }
 impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
-	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
+	pub fn new(inner: ArrValue, mapper: FuncVal) -> Result<Self> {
 		let len = inner.len();
-		Self {
+		let mapper = PreparedFuncVal::new(mapper, if WITH_INDEX { 2 } else { 1 }, &[])?;
+		Ok(Self {
 			inner,
-			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting(()); len])),
+			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting; len])),
 			mapper,
-		}
+		})
 	}
-	fn evaluate(&self, index: usize, value: Val) -> Result<Val> {
+	fn evaluate(&self, state: State, index: usize, value: Val) -> Result<Val> {
 		if WITH_INDEX {
-			self.mapper.evaluate_simple(&(index, value), false)
+			self.mapper.call(
+				CallLocation::native(),
+				state,
+				&[
+					Thunk::evaluated(Val::num(index as u32)),
+					Thunk::evaluated(value),
+				],
+				&[],
+			)
 		} else {
-			self.mapper.evaluate_simple(&(value,), false)
+			self.mapper.call(
+				CallLocation::native(),
+				state,
+				&[Thunk::evaluated(value)],
+				&[],
+			)
 		}
 	}
 }
@@ -440,7 +462,7 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 		self.cached.borrow().len()
 	}
 
-	fn get(&self, index: usize) -> Result<Option<Val>> {
+	fn get(&self, state: State, index: usize) -> Result<Option<Val>> {
 		if index >= self.len() {
 			return Ok(None);
 		}
@@ -448,10 +470,10 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
-			ArrayThunk::Waiting(..) => {}
+			ArrayThunk::Waiting => {}
 		};
 
-		let ArrayThunk::Waiting(()) =
+		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
@@ -462,7 +484,7 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			.get(index)
 			.transpose()
 			.expect("index checked")
-			.and_then(|r| self.evaluate(index, r));
+			.and_then(|r| self.evaluate(state, index, r));
 
 		let new_value = match val {
 			Ok(v) => v,
@@ -481,7 +503,7 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting(()) | ArrayThunk::Pending => {}
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		};
 
 		let arr_thunk = self.clone();
@@ -539,6 +561,46 @@ impl ArrayLike for RepeatedArray {
 			return None;
 		}
 		self.data.get_cheap(index % self.data.len())
+	}
+	fn is_cheap(&self) -> bool {
+		self.data.is_cheap()
+	}
+}
+#[derive(Trace, Debug)]
+pub struct RepeatedElement {
+	data: Thunk<Val>,
+	repeats: usize,
+}
+impl RepeatedElement {
+	pub fn new(data: Thunk<Val>, repeats: usize) -> Self {
+		Self { data, repeats }
+	}
+}
+
+impl ArrayLike for RepeatedElement {
+	fn len(&self) -> usize {
+		self.repeats
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		if index > self.repeats {
+			return Ok(None);
+		}
+		self.data.evaluate().map(Some)
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		if index > self.repeats {
+			return None;
+		}
+		Some(self.data.clone())
+	}
+
+	fn get_cheap(&self, index: usize) -> Option<Val> {
+		if index > self.repeats {
+			return None;
+		}
+		self.data.get_cheap()
 	}
 	fn is_cheap(&self) -> bool {
 		self.data.is_cheap()

@@ -26,15 +26,6 @@ enum SubOpts {
 }
 
 #[derive(Parser)]
-#[clap(next_help_heading = "DEBUG")]
-struct DebugOpts {
-	/// Required OS stack size.
-	/// This shouldn't be changed unless jrsonnet is failing with stack overflow error.
-	#[clap(long, name = "size")]
-	pub os_stack: Option<usize>,
-}
-
-#[derive(Parser)]
 #[clap(next_help_heading = "INPUT")]
 struct InputOpts {
 	/// Treat input as code, evaluate it instead of reading file.
@@ -83,8 +74,6 @@ struct Opts {
 	manifest: ManifestOpts,
 	#[clap(flatten)]
 	output: OutputOpts,
-	#[clap(flatten)]
-	debug: DebugOpts,
 }
 
 // TODO: Add unix_sigpipe = "sig_dfl"
@@ -108,17 +97,15 @@ fn main() {
 		}
 	}
 
-	let success = if let Some(size) = opts.debug.os_stack {
-		std::thread::Builder::new()
-			.stack_size(size * 1024 * 1024)
-			.spawn(|| main_catch(opts))
-			.expect("new thread spawned")
-			.join()
-			.expect("thread finished successfully")
-	} else {
-		main_catch(opts)
-	};
-	if !success {
+	let trace = opts.trace.trace_format();
+	if let Err(e) = main_real(opts) {
+		if let Error::Evaluation(e) = e {
+			let mut out = String::new();
+			trace.write_trace(&mut out, &e).expect("format error");
+			eprintln!("{out}");
+		} else {
+			eprintln!("{e}");
+		}
 		std::process::exit(1);
 	}
 }
@@ -144,21 +131,6 @@ impl From<ErrorKind> for Error {
 	fn from(e: ErrorKind) -> Self {
 		Self::from(JrError::from(e))
 	}
-}
-
-fn main_catch(opts: Opts) -> bool {
-	let trace = opts.trace.trace_format();
-	if let Err(e) = main_real(opts) {
-		if let Error::Evaluation(e) = e {
-			let mut out = String::new();
-			trace.write_trace(&mut out, &e).expect("format error");
-			eprintln!("{out}");
-		} else {
-			eprintln!("{e}");
-		}
-		return false;
-	}
-	true
 }
 
 fn main_real(opts: Opts) -> Result<(), Error> {

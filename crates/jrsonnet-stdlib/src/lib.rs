@@ -14,7 +14,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
-	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
+	ContextBuilder, IStr, ObjValue, ObjValueBuilder, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
@@ -365,20 +365,15 @@ impl ContextInitializer {
 	pub fn add_ext_code(&self, name: &str, code: impl Into<IStr>) -> Result<()> {
 		let code = code.into();
 		let source = extvar_source(name, code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			error: Box::new(e),
-		})?;
+		let parsed =
+			jrsonnet_parser::parse(&code, source.clone()).map_err(|e| ImportSyntaxError {
+				path: source.clone(),
+				error: Box::new(e),
+			})?;
 		// self.data_mut().volatile_files.insert(source_name, code);
 		self.settings_mut()
 			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
+			.insert(name.into(), TlaArg::Code(source, Rc::new(parsed)));
 		Ok(())
 	}
 	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {

@@ -13,17 +13,17 @@ rustPlatform.buildRustPackage rec {
   src = fetchFromGitHub {
     owner = "CertainLach";
     repo = pname;
-    rev = "ad68a2495da324ce7a893992a6b32851849c64eb";
-    hash = "sha256-N2z0JcJG6iQ+eAE1GGF+c1+T7Pti8oCgx+QWdhT+33M=";
+    rev = "a31a8ef0c0189f88ed32d84cb2dcae3b7d7861af";
+    hash = "sha256-SJIJG+a+g1QcZIsaXwWXONufKETQZLBSBxE13Mbprus=";
   };
-  cargoHash = "sha256-A/sdqI51kD7Tfo9R95ep2CecaSEzSz3suhZXdND6/nQ=";
+  cargoHash = "sha256-lLT3ihnq5akUZt2iWLFs4pJDNrd18fXxZMZ91MXF0jU=";
 
-  cargoTestFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
-  cargoBuildFlags = ["--package=jrsonnet --features=mimalloc,legacy-this-file"];
+  cargoTestFlags = ["--package=jrsonnet --features=mimalloc"];
+  cargoBuildFlags = ["--package=jrsonnet --features=mimalloc"];
 
   buildInputs = [makeWrapper];
 
   postInstall = ''
-    wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000 --os-stack=200000"
+    wrapProgram $out/bin/jrsonnet --add-flags "--max-stack=200000"
   '';
 }

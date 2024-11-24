@@ -15,19 +15,15 @@ pub use source::{
 	Source, SourceDirectory, SourceFifo, SourceFile, SourcePath, SourcePathT, SourceVirtual,
 };
 
-pub struct ParserSettings {
-	pub source: Source,
+fn expr_bin(a: Expr, op: BinaryOpType, b: Expr) -> Expr {
+	Expr::BinaryOp {
+		op,
+		ab: Box::new((a, b)),
+	}
 }
 
-macro_rules! expr_bin {
-	($a:ident $op:ident $b:ident) => {
-		Expr::BinaryOp($a, $op, $b)
-	};
-}
-macro_rules! expr_un {
-	($op:ident $a:ident) => {
-		Expr::UnaryOp($op, $a)
-	};
+fn expr_un(op: UnaryOpType, v: Expr) -> Expr {
+	Expr::UnaryOp(op, Box::new(v))
 }
 
 parser! {
@@ -54,7 +50,7 @@ parser! {
 		/// Sequence of digits
 		rule uint_str() -> &'input str = a:$(digit()+) { a }
 		/// Number in scientific notation format
-		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.parse().map_err(|_| "<number>") }} / expected!("<number>")
+		rule number() -> f64 = quiet!{a:$(("-" / "+")? uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.parse().map_err(|_| "<number>") }} / expected!("<number>")
 
 		/// Reserved word followed by any non-alphanumberic
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "importbin" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
@@ -63,16 +59,16 @@ parser! {
 		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
 
-		pub rule param(s: &ParserSettings) -> expr::Param = name:destruct(s) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr) }
-		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
-			= params:param(s) ** comma() comma()? { expr::ParamsDesc(Rc::new(params)) }
-			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
+		pub rule param() -> expr::Param = name:destruct() expr:(_ "=" _ expr:spanned(<expr()>){expr})? { expr::Param(name, expr) }
+		pub rule params() -> expr::ParamsDesc
+			= params:param() ** comma() comma()? { expr::ParamsDesc(rc_vec(params)) }
+			/ { expr::ParamsDesc(rc_vec(Vec::new())) }
 
-		pub rule arg(s: &ParserSettings) -> (Option<IStr>, LocExpr)
-			= name:(quiet! { (s:id() _ "=" !['='] _ {s})? } / expected!("<argument name>")) expr:expr(s) {(name, expr)}
+		pub rule arg() -> (Option<IStr>, SpannedExpr)
+			= name:(quiet! { (s:id() _ "=" !['='] _ {s})? } / expected!("<argument name>")) expr:spanned(<expr()>) {(name, expr)}
 
-		pub rule args(s: &ParserSettings) -> expr::ArgsDesc
-			= args:arg(s)**comma() comma()? {?
+		pub rule args() -> expr::ArgsDesc
+			= args:arg()**comma() comma()? {?
 				let unnamed_count = args.iter().take_while(|(n, _)| n.is_none()).count();
 				let mut unnamed = Vec::with_capacity(unnamed_count);
 				let mut named = Vec::with_capacity(args.len() - unnamed_count);
@@ -95,10 +91,10 @@ parser! {
 			= "..." into:(_ into:id() {into})? {if let Some(into) = into {
 				expr::DestructRest::Keep(into)
 			} else {expr::DestructRest::Drop}}
-		pub rule destruct_array(s: &ParserSettings) -> expr::Destruct
-			= "[" _ start:destruct(s)**comma() rest:(
+		pub rule destruct_array() -> expr::Destruct
+			= "[" _ start:destruct()**comma() rest:(
 				comma() _ rest:destruct_rest()? end:(
-					comma() end:destruct(s)**comma() (_ comma())? {end}
+					comma() end:destruct()**comma() (_ comma())? {end}
 					/ comma()? {Vec::new()}
 				) {(rest, end)}
 				/ comma()? {(None, Vec::new())}
@@ -110,9 +106,9 @@ parser! {
 				});
 				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
-		pub rule destruct_object(s: &ParserSettings) -> expr::Destruct
+		pub rule destruct_object() -> expr::Destruct
 			= "{" _
-				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:expr(s) {v})? {(name, into, default)})**comma()
+				fields:(name:id() into:(_ ":" _ into:destruct() {into})? default:(_ "=" _ v:expr() {v})? {(name, into, default)})**comma()
 				rest:(
 					comma() rest:destruct_rest()? {rest}
 					/ comma()? {None}
@@ -124,21 +120,25 @@ parser! {
 				});
 				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
-		pub rule destruct(s: &ParserSettings) -> expr::Destruct
+		pub rule destruct() -> expr::Destruct
 			= v:id() {expr::Destruct::Full(v)}
 			/ "?" {?
 				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Skip);
 				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
-			/ arr:destruct_array(s) {arr}
-			/ obj:destruct_object(s) {obj}
+			/ arr:destruct_array() {arr}
+			/ obj:destruct_object() {obj}
 
-		pub rule bind(s: &ParserSettings) -> expr::BindSpec
-			= into:destruct(s) _ "=" _ expr:expr(s) {expr::BindSpec::Field{into, value: expr}}
-			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec::Function{name, params, value: expr}}
+		pub rule bind() -> expr::BindSpec
+			= into:destruct() _ params:(beg:spanned(<"(">) _ params:params() _ ")" _ {(beg, params)})? "=" _ value:spanned(<expr()>) {if let Some((beg, params)) = params {
+				let fn_span = Span::encompassing(beg.span(), value.span());
+				expr::BindSpec { into, value: Spanned(Expr::Function(params, Rc::new(value)), fn_span) }
+			} else {
+				expr::BindSpec { into, value }
+			}}
 
-		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
-			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
+		pub rule assertion() -> expr::AssertStmt
+			= keyword("assert") _ cond:spanned(<expr()>) msg:(_ ":" _ e:expr() {e})? { expr::AssertStmt(cond, msg) }
 
 		pub rule whole_line() -> &'input str
 			= str:$((!['\n'][_])* "\n") {str}
@@ -166,81 +166,76 @@ parser! {
 			/ "@\"" str:$(("\"\"" / (!['"'][_]))*) "\"" {str.replace("\"\"", "\"")}
 			/ string_block() } / expected!("<string>")
 
-		pub rule field_name(s: &ParserSettings) -> expr::FieldName
+		pub rule field_name() -> expr::FieldName
 			= name:id() {expr::FieldName::Fixed(name)}
 			/ name:string() {expr::FieldName::Fixed(name.into())}
-			/ "[" _ expr:expr(s) _ "]" {expr::FieldName::Dyn(expr)}
+			/ "[" _ expr:spanned(<expr()>) _ "]" {expr::FieldName::Dyn(expr)}
 		pub rule visibility() -> expr::Visibility
 			= ":::" {expr::Visibility::Unhide}
 			/ "::" {expr::Visibility::Hidden}
 			/ ":" {expr::Visibility::Normal}
-		pub rule field(s: &ParserSettings) -> expr::FieldMember
-			= name:field_name(s) _ plus:"+"? _ visibility:visibility() _ value:expr(s) {expr::FieldMember{
+		pub rule field() -> expr::FieldMember
+			= name:field_name() _ plus:"+"? _ visibility:visibility() _ value:spanned(<expr()>) {expr::FieldMember{
 				name,
 				plus: plus.is_some(),
 				params: None,
 				visibility,
-				value,
+				value: Rc::new(value),
 			}}
-			/ name:field_name(s) _ "(" _ params:params(s) _ ")" _ visibility:visibility() _ value:expr(s) {expr::FieldMember{
+			/ name:field_name() _ "(" _ params:params() _ ")" _ visibility:visibility() _ value:spanned(<expr()>) {expr::FieldMember{
 				name,
 				plus: false,
 				params: Some(params),
 				visibility,
-				value,
+				value: Rc::new(value),
 			}}
-		pub rule obj_local(s: &ParserSettings) -> BindSpec
-			= keyword("local") _ bind:bind(s) {bind}
-		pub rule member(s: &ParserSettings) -> expr::Member
-			= bind:obj_local(s) {expr::Member::BindStmt(bind)}
-			/ assertion:assertion(s) {expr::Member::AssertStmt(assertion)}
-			/ field:field(s) {expr::Member::Field(field)}
-		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
-			= pre_locals:(b: obj_local(s) comma() {b})* &"[" field:field(s) post_locals:(comma() b:obj_local(s) {b})* _ ("," _)? forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
-				let mut compspecs = vec![CompSpec::ForSpec(forspec)];
-				compspecs.extend(others.unwrap_or_default());
-				expr::ObjBody::ObjComp(expr::ObjComp{
-					pre_locals,
-					field,
-					post_locals,
-					compspecs,
-				})
-			}
-			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}
-		pub rule ifspec(s: &ParserSettings) -> IfSpecData
-			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
-		pub rule forspec(s: &ParserSettings) -> ForSpecData
-			= keyword("for") _ id:destruct(s) _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
-		pub rule compspec(s: &ParserSettings) -> Vec<expr::CompSpec>
-			= s:(i:ifspec(s) { expr::CompSpec::IfSpec(i) } / f:forspec(s) {expr::CompSpec::ForSpec(f)} ) ** _ {s}
-		pub rule local_expr(s: &ParserSettings) -> Expr
-			= keyword("local") _ binds:bind(s) ** comma() (_ ",")? _ ";" _ expr:expr(s) { Expr::LocalExpr(binds, expr) }
-		pub rule string_expr(s: &ParserSettings) -> Expr
-			= s:string() {Expr::Str(s.into())}
-		pub rule obj_expr(s: &ParserSettings) -> Expr
-			= "{" _ body:objinside(s) _ "}" {Expr::Obj(body)}
-		pub rule array_expr(s: &ParserSettings) -> Expr
-			= "[" _ elems:(expr(s) ** comma()) _ comma()? "]" {Expr::Arr(elems)}
-		pub rule array_comp_expr(s: &ParserSettings) -> Expr
-			= "[" _ expr:expr(s) _ comma()? _ forspec:forspec(s) _ others:(others: compspec(s) _ {others})? "]" {
-				let mut specs = vec![CompSpec::ForSpec(forspec)];
-				specs.extend(others.unwrap_or_default());
-				Expr::ArrComp(expr, specs)
-			}
-		pub rule number_expr(s: &ParserSettings) -> Expr
-			= n:number() { expr::Expr::Num(n) }
-		pub rule var_expr(s: &ParserSettings) -> Expr
-			= n:id() { expr::Expr::Var(n) }
-		pub rule id_loc(s: &ParserSettings) -> LocExpr
-			= a:position!() n:id() b:position!() { LocExpr::new(expr::Expr::Str(n), Span(s.source.clone(), a as u32,b as u32)) }
-		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
-			= cond:ifspec(s) _ keyword("then") _ cond_then:expr(s) cond_else:(_ keyword("else") _ e:expr(s) {e})? {Expr::IfElse{
-				cond,
-				cond_then,
-				cond_else,
-			}}
+		pub rule obj_local() -> BindSpec
+			= keyword("local") _ bind:bind() {bind}
+		pub rule member() -> expr::Member
+			= bind:obj_local() {expr::Member::BindStmt(bind)}
+			/ assertion:assertion() {expr::Member::AssertStmt(assertion)}
+			/ field:field() {expr::Member::Field(field)}
 
-		pub rule literal(s: &ParserSettings) -> Expr
+		pub rule objinside() -> expr::ObjInner
+			= members:(member() ** comma()) comma()? _ specs:compspec()? {?
+				ObjUnknown::new(members, specs).classify()
+			}
+		pub rule ifspec() -> IfSpecData
+			= keyword("if") _ expr:spanned(<expr()>) {IfSpecData(expr)}
+		pub rule forspec() -> ForSpecData
+			= keyword("for") _ id:destruct() _ keyword("in") _ cond:spanned(<expr()>) {ForSpecData(id, cond)}
+		pub rule compspec() -> Vec<expr::CompSpec>
+			= &keyword("for") s:(i:ifspec() { expr::CompSpec::IfSpec(i) } / f:forspec() {expr::CompSpec::ForSpec(f)} ) ** _ {s}
+
+		pub rule local_expr() -> Expr
+			= keyword("local") _ binds:bind() ** comma() (_ ",")? _ ";" _ expr:expr() {
+				// TODO: Non-Rc based BindSpecs?
+				Expr::LocalExpr(rc_vec(binds), Box::new(expr))
+			}
+		pub rule string_expr() -> Expr
+			= s:string() {Expr::Str(s.into())}
+		pub rule obj_expr() -> Expr
+			= "{" _ body:objinside() _ "}" {match body {
+				ObjInner::Members(members) => Expr::ObjMembers(Box::new(members)),
+				ObjInner::Comp(members) => Expr::ObjComp(Box::new(members)),
+			}}
+		pub rule array_expr() -> Expr
+			= "[" _ elems:(expr() ** comma()) comma()? _ specs:compspec()? _ "]" {? ArrUnknown::new(elems, specs).classify()}
+		pub rule number_expr() -> Expr
+			= n:number() { expr::Expr::Num(n) }
+		pub rule var_expr() -> Expr
+			= n:spanned(<id()>) { expr::Expr::Var(n) }
+		pub rule if_then_else_expr() -> Expr
+			= condition:ifspec() _
+				keyword("then") _ then:spanned(<expr()>)
+				else_:(_ keyword("else") _ e:spanned(<expr()>) {e})?
+			{Expr::IfElse(Box::new(IfElseBody{
+				condition,
+				then,
+				else_,
+			}))}
+
+		pub rule literal() -> Expr
 			= v:(
 				keyword("null") {LiteralType::Null}
 				/ keyword("true") {LiteralType::True}
@@ -250,32 +245,34 @@ parser! {
 				/ keyword("super") {LiteralType::Super}
 			) {Expr::Literal(v)}
 
-		pub rule expr_basic(s: &ParserSettings) -> Expr
-			= literal(s)
+		pub rule import_kind() -> ImportKind
+			= keyword("importstr") {ImportKind::String}
+			/ keyword("importbin") {ImportKind::Binary}
+			/ keyword("import") {ImportKind::Normal}
 
-			/ string_expr(s) / number_expr(s)
-			/ array_expr(s)
-			/ obj_expr(s)
-			/ array_expr(s)
-			/ array_comp_expr(s)
+		pub rule expr_basic() -> Expr
+			= literal()
 
-			/ keyword("importstr") _ path:expr(s) {Expr::ImportStr(path)}
-			/ keyword("importbin") _ path:expr(s) {Expr::ImportBin(path)}
-			/ keyword("import") _ path:expr(s) {Expr::Import(path)}
+			/ string_expr() / number_expr()
+			/ array_expr()
+			/ obj_expr()
+			/ array_expr()
 
-			/ var_expr(s)
-			/ local_expr(s)
-			/ if_then_else_expr(s)
+			/ v:spanned(<k:import_kind() _ path:expr() {(k, path)}>) {Expr::Import(Box::new(v))}
 
-			/ keyword("function") _ "(" _ params:params(s) _ ")" _ expr:expr(s) {Expr::Function(params, expr)}
-			/ assertion:assertion(s) _ ";" _ expr:expr(s) { Expr::AssertExpr(assertion, expr) }
+			/ var_expr()
+			/ local_expr()
+			/ if_then_else_expr()
 
-			/ keyword("error") _ expr:expr(s) { Expr::ErrorStmt(expr) }
+			/ keyword("function") _ "(" _ params:params() _ ")" _ expr:spanned(<expr()>) {Expr::Function(params, Rc::new(expr))}
+			/ assertion:assertion() _ ";" _ expr:expr() { Expr::AssertExpr(Box::new((assertion, expr))) }
 
-		rule slice_part(s: &ParserSettings) -> Option<LocExpr>
-			= _ e:(e:expr(s) _{e})? {e}
-		pub rule slice_desc(s: &ParserSettings) -> SliceDesc
-			= start:slice_part(s) ":" pair:(end:slice_part(s) step:(":" e:slice_part(s){e})? {(end, step.flatten())})? {
+			/ keyword("error") _ expr:spanned(<expr()>) { Expr::ErrorStmt(Box::new(expr)) }
+
+		rule slice_part() -> Option<SpannedExpr>
+			= _ e:(e:spanned(<expr()>) _{e})? {e}
+		pub rule slice_desc() -> SliceDesc
+			= start:slice_part() ":" pair:(end:slice_part() step:(":" e:slice_part(){e})? {(end, step.flatten())})? {
 				let (end, step) = if let Some((end, step)) = pair {
 					(end, step)
 				}else{
@@ -289,88 +286,87 @@ parser! {
 			= quiet!{ x() } / expected!("<binary op>")
 		rule unaryop(x: rule<()>) -> ()
 			= quiet!{ x() } / expected!("<unary op>")
+		rule spanned<T: jrsonnet_gcmodule::Trace>(x: rule<T>) -> Spanned<T>
+			= start:position!() v:x() end:position!() { Spanned(v, Span(current_source(), start as u32, end as u32)) }
 
 		rule ensure_null_coaelse()
 			= "" {?
 				#[cfg(not(feature = "exp-null-coaelse"))] return Err("!!!experimental null coaelscing was not enabled");
 				#[cfg(feature = "exp-null-coaelse")] Ok(())
 			}
+
 		use BinaryOpType::*;
 		use UnaryOpType::*;
-		rule expr(s: &ParserSettings) -> LocExpr
+		rule expr() -> Expr
 			= precedence! {
-				start:position!() v:@ end:position!() { LocExpr::new(v, Span(s.source.clone(), start as u32, end as u32)) }
-				--
-				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
+				a:(@) _ binop(<"||">) _ b:@ {expr_bin(a, Or, b)}
 				a:(@) _ binop(<"??">) _ ensure_null_coaelse() b:@ {
 					#[cfg(feature = "exp-null-coaelse")] return expr_bin!(a NullCoaelse b);
 					unreachable!("ensure_null_coaelse will fail if feature is not enabled")
 				}
 				--
-				a:(@) _ binop(<"&&">) _ b:@ {expr_bin!(a And b)}
+				a:(@) _ binop(<"&&">) _ b:@ {expr_bin(a, And, b)}
 				--
-				a:(@) _ binop(<"|">) _ b:@ {expr_bin!(a BitOr b)}
+				a:(@) _ binop(<"|">) _ b:@ {expr_bin(a, BitOr, b)}
 				--
-				a:@ _ binop(<"^">) _ b:(@) {expr_bin!(a BitXor b)}
+				a:@ _ binop(<"^">) _ b:(@) {expr_bin(a, BitXor, b)}
 				--
-				a:(@) _ binop(<"&">) _ b:@ {expr_bin!(a BitAnd b)}
+				a:(@) _ binop(<"&">) _ b:@ {expr_bin(a, BitAnd, b)}
 				--
-				a:(@) _ binop(<"==">) _ b:@ {expr_bin!(a Eq b)}
-				a:(@) _ binop(<"!=">) _ b:@ {expr_bin!(a Neq b)}
+				a:(@) _ binop(<"==">) _ b:@ {expr_bin(a, Eq, b)}
+				a:(@) _ binop(<"!=">) _ b:@ {expr_bin(a, Neq, b)}
 				--
-				a:(@) _ binop(<"<">) _ b:@ {expr_bin!(a Lt b)}
-				a:(@) _ binop(<">">) _ b:@ {expr_bin!(a Gt b)}
-				a:(@) _ binop(<"<=">) _ b:@ {expr_bin!(a Lte b)}
-				a:(@) _ binop(<">=">) _ b:@ {expr_bin!(a Gte b)}
-				a:(@) _ binop(<keyword("in")>) _ b:@ {expr_bin!(a In b)}
+				a:(@) _ binop(<"<">) _ b:@ {expr_bin(a, Lt, b)}
+				a:(@) _ binop(<">">) _ b:@ {expr_bin(a, Gt, b)}
+				a:(@) _ binop(<"<=">) _ b:@ {expr_bin(a, Lte, b)}
+				a:(@) _ binop(<">=">) _ b:@ {expr_bin(a, Gte, b)}
+				a:(@) _ binop(<keyword("in")>) _ b:@ {expr_bin(a, In, b)}
 				--
-				a:(@) _ binop(<"<<">) _ b:@ {expr_bin!(a Lhs b)}
-				a:(@) _ binop(<">>">) _ b:@ {expr_bin!(a Rhs b)}
+				a:(@) _ binop(<"<<">) _ b:@ {expr_bin(a, Lhs, b)}
+				a:(@) _ binop(<">>">) _ b:@ {expr_bin(a, Rhs, b)}
 				--
-				a:(@) _ binop(<"+">) _ b:@ {expr_bin!(a Add b)}
-				a:(@) _ binop(<"-">) _ b:@ {expr_bin!(a Sub b)}
+				a:(@) _ binop(<"+">) _ b:@ {expr_bin(a, Add, b)}
+				a:(@) _ binop(<"-">) _ b:@ {expr_bin(a, Sub, b)}
 				--
-				a:(@) _ binop(<"*">) _ b:@ {expr_bin!(a Mul b)}
-				a:(@) _ binop(<"/">) _ b:@ {expr_bin!(a Div b)}
-				a:(@) _ binop(<"%">) _ b:@ {expr_bin!(a Mod b)}
+				a:(@) _ binop(<"*">) _ b:@ {expr_bin(a, Mul, b)}
+				a:(@) _ binop(<"/">) _ b:@ {expr_bin(a, Div, b)}
+				a:(@) _ binop(<"%">) _ b:@ {expr_bin(a, Mod, b)}
 				--
-						unaryop(<"+">) _ b:@ {expr_un!(Plus b)}
-						unaryop(<"-">) _ b:@ {expr_un!(Minus b)}
-						unaryop(<"!">) _ b:@ {expr_un!(Not b)}
-						unaryop(<"~">) _ b:@ {expr_un!(BitNot b)}
+						unaryop(<"+">) _ b:@ {expr_un(Plus, b)}
+						unaryop(<"-">) _ b:@ {expr_un(Minus, b)}
+						unaryop(<"!">) _ b:@ {expr_un(Not, b)}
+						unaryop(<"~">) _ b:@ {expr_un(BitNot, b)}
 				--
-				a:(@) _ "[" _ e:slice_desc(s) _ "]" {Expr::Slice(a, e)}
-				indexable:(@) _ parts:index_part(s)+ {Expr::Index{indexable, parts}}
-				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(a, args, ts.is_some())}
-				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
+				a:(@) _ "[" _ e:slice_desc() _ "]" {Expr::Slice(Box::new((a, e)))}
+				indexable:(@) _ parts:index_part()+ {Expr::Index{indexable: Box::new(indexable), parts}}
+				a:(@) _ "(" _ args:spanned(<args()>) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(Box::new(ApplyBody {lhs: a, args, tailstrict: ts.is_some()}))}
+				a:(@) _ "{" _ body:objinside() _ "}" {match body {
+					ObjInner::Members(body) => Expr::ObjExtendMembers(Box::new((a, body))),
+					ObjInner::Comp(body) => Expr::ObjExtendComp(Box::new((a, body))),
+				}}
 				--
-				e:expr_basic(s) {e}
-				"(" _ e:expr(s) _ ")" {Expr::Parened(e)}
+				e:expr_basic() {e}
+				"(" _ e:expr() _ ")" {e}
 			}
-		pub rule index_part(s: &ParserSettings) -> IndexPart
-		= n:("?" _ ensure_null_coaelse())? "." _ value:id_loc(s) {IndexPart {
+		pub rule index_part() -> IndexPart
+		= n:("?" _ ensure_null_coaelse())? "." _ value:spanned(<v:id() {Expr::Str(v)}>) {IndexPart {
 			value,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
-		/ n:("?" _ "." _ ensure_null_coaelse())? "[" _ value:expr(s) _ "]" {IndexPart {
+		/ n:("?" _ "." _ ensure_null_coaelse())? "[" _ value:spanned(<expr()>) _ "]" {IndexPart {
 			value,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
 
-		pub rule jsonnet(s: &ParserSettings) -> LocExpr = _ e:expr(s) _ {e}
+		pub rule jsonnet() -> Expr = _ e:expr() _ {e}
 	}
 }
 
 pub type ParseError = peg::error::ParseError<peg::str::LineCol>;
-pub fn parse(str: &str, settings: &ParserSettings) -> Result<LocExpr, ParseError> {
-	jsonnet_parser::jsonnet(str, settings)
-}
-/// Used for importstr values
-pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> LocExpr {
-	let len = str.len();
-	LocExpr::new(Expr::Str(str), Span(settings.source.clone(), 0, len as u32))
+pub fn parse(str: &str, source: Source) -> Result<Expr, ParseError> {
+	with_current_source(source, || jsonnet_parser::jsonnet(str))
 }
 
 #[cfg(test)]
@@ -379,23 +375,17 @@ pub mod tests {
 	use BinaryOpType::*;
 
 	use super::{expr::*, parse};
-	use crate::{source::Source, ParserSettings};
+	use crate::source::Source;
 
 	macro_rules! parse {
 		($s:expr) => {
-			parse(
-				$s,
-				&ParserSettings {
-					source: Source::new_virtual("<test>".into(), IStr::empty()),
-				},
-			)
-			.unwrap()
+			parse($s, Source::new_virtual("<test>".into(), IStr::empty())).unwrap()
 		};
 	}
 
 	macro_rules! el {
 		($expr:expr, $from:expr, $to:expr$(,)?) => {
-			LocExpr::new(
+			Spanned(
 				$expr,
 				Span(
 					Source::new_virtual("<test>".into(), IStr::empty()),
@@ -545,25 +535,21 @@ pub mod tests {
 					el!(Expr::Num(2.0), 0, 1),
 					Add,
 					el!(
-						Expr::Parened(el!(
-							Expr::BinaryOp(
-								el!(Expr::Num(2.0), 3, 4),
-								Add,
-								el!(
-									Expr::BinaryOp(
-										el!(Expr::Num(2.0), 5, 6),
-										Mul,
-										el!(Expr::Num(2.0), 7, 8),
-									),
-									5,
-									8
+						Expr::BinaryOp(
+							el!(Expr::Num(2.0), 3, 4),
+							Add,
+							el!(
+								Expr::BinaryOp(
+									el!(Expr::Num(2.0), 5, 6),
+									Mul,
+									el!(Expr::Num(2.0), 7, 8),
 								),
+								5,
+								8
 							),
-							3,
-							8
-						)),
-						2,
-						9
+						),
+						3,
+						8
 					),
 				),
 				0,
@@ -578,7 +564,7 @@ pub mod tests {
 		assert_eq!(
 			parse!("2//comment\n+//comment\n3/*test*/*/*test*/4"),
 			el!(
-				Expr::BinaryOp(
+				expr_bin!(
 					el!(Expr::Num(2.0), 0, 1),
 					Add,
 					el!(
@@ -734,11 +720,7 @@ pub mod tests {
 		use Expr::*;
 
 		let file_name = Source::new_virtual("<test>".into(), IStr::empty());
-		let expr = parse(
-			"{} { local x = 1, x: x } + {}",
-			&ParserSettings { source: file_name },
-		)
-		.unwrap();
+		let expr = parse("{} { local x = 1, x: x } + {}", file_name).unwrap();
 		assert_eq!(
 			expr,
 			el!(

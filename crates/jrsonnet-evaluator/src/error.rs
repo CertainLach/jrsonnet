@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, LocExpr, Source, SourcePath, Span, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, LocExpr, Source, SourcePath, Span, Spanned, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -339,6 +339,11 @@ impl ErrorSource for &LocExpr {
 impl ErrorSource for &Span {
 	fn to_location(self) -> Option<Span> {
 		Some(self.clone())
+	}
+}
+impl<T: Trace> ErrorSource for &Spanned<T> {
+	fn to_location(self) -> Option<Span> {
+		Some(self.span())
 	}
 }
 impl ErrorSource for CallLocation<'_> {

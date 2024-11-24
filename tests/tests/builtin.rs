@@ -15,19 +15,6 @@ fn a() -> u32 {
 	1
 }
 
-#[test]
-fn basic_function() -> Result<()> {
-	let a: a = a {};
-	let v = u32::from_untyped(a.call(
-		ContextBuilder::dangerous_empty_state().build(),
-		CallLocation::native(),
-		&(),
-	)?)?;
-
-	ensure_eq!(v, 1);
-	Ok(())
-}
-
 #[builtin]
 fn native_add(a: u32, b: u32) -> u32 {
 	a + b

@@ -792,6 +792,7 @@ impl Hash for ObjValue {
 pub struct ObjValueBuilder {
 	sup: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
+	// FIXME: Make it single ObjectAssertion, & impl ObjectAssertion for Vec<T>
 	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
 	next_field_index: FieldIndex,
 }

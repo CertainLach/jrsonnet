@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 pub use arglike::{ArgLike, ArgsLike, TlaArg};
 use jrsonnet_gcmodule::{Cc, Trace};
@@ -7,14 +7,16 @@ pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, LocExpr, ParamsDesc, Span};
 
 use self::{
-	arglike::OptionalContext,
 	builtin::{Builtin, BuiltinParam, ParamDefault, ParamName, StaticBuiltin},
 	native::NativeDesc,
-	parse::{parse_default_function_call, parse_function_call},
+	parse::{
+		parse_builtin_call, parse_default_function_call, parse_function_call,
+		parse_prepared_builtin_call, parse_prepared_function_call, prepare_call, PreparedCall,
+	},
 };
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context,
-	ContextBuilder, Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context, Result,
+	State, Thunk, Val,
 };
 
 pub mod arglike;
@@ -72,16 +74,6 @@ impl FuncDesc {
 	/// Create body context, but fill arguments without defaults with lazy error
 	pub fn default_body_context(&self) -> Result<Context> {
 		parse_default_function_call(self.ctx.clone(), &self.params)
-	}
-
-	/// Create context, with which body code will run
-	pub fn call_body_context(
-		&self,
-		call_ctx: Context,
-		args: &dyn ArgsLike,
-		tailstrict: bool,
-	) -> Result<Context> {
-		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
 	}
 
 	pub fn evaluate_trivial(&self) -> Option<Val> {
@@ -186,32 +178,73 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			Self::Id => ID.call(call_ctx, loc, args),
+			Self::Id => {
+				let state = call_ctx.state();
+				let args = parse_builtin_call(call_ctx, ID.params(), args, true)?;
+				ID.call(loc, state, &args)
+			}
 			Self::Normal(func) => {
-				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
+				let body_ctx = parse_function_call(
+					call_ctx,
+					func.ctx.clone(),
+					&func.params,
+					args,
+					tailstrict,
+				)?;
 				evaluate(body_ctx, &func.body)
 			}
 			Self::Thunk(thunk) => {
 				if args.is_empty() {
-					bail!(TooManyArgsFunctionHas(0, vec![],))
+					bail!(TooManyArgsFunctionHas(0, vec![]))
 				}
 				thunk.evaluate()
 			}
-			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.call(call_ctx, loc, args),
+			Self::StaticBuiltin(b) => {
+				let state = call_ctx.state();
+				let args = parse_builtin_call(call_ctx, b.params(), args, tailstrict)?;
+				b.call(loc, state, &args)
+			}
+			Self::Builtin(b) => {
+				let state = call_ctx.state();
+				let args = parse_builtin_call(call_ctx, b.params(), args, tailstrict)?;
+				b.call(loc, state, &args)
+			}
 		}
 	}
-	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
+	pub(crate) fn evaluate_prepared(
 		&self,
-		args: &A,
-		tailstrict: bool,
+		state: State,
+		prepared: &PreparedCall,
+		loc: CallLocation<'_>,
+		unnamed: &[Thunk<Val>],
+		named: &[Thunk<Val>],
+		_tailstrict: bool,
 	) -> Result<Val> {
-		self.evaluate(
-			ContextBuilder::dangerous_empty_state().build(),
-			CallLocation::native(),
-			args,
-			tailstrict,
-		)
+		match self {
+			FuncVal::Id => {
+				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named)?;
+				ID.call(loc, state, &args)
+			}
+			FuncVal::Normal(func) => {
+				let body_ctx = parse_prepared_function_call(
+					func.ctx.clone(),
+					prepared,
+					&func.params,
+					unnamed,
+					named,
+				)?;
+				evaluate(body_ctx, &func.body)
+			}
+			FuncVal::Thunk(t) => t.evaluate(),
+			FuncVal::StaticBuiltin(b) => {
+				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named)?;
+				b.call(loc, state, &args)
+			}
+			FuncVal::Builtin(b) => {
+				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named)?;
+				b.call(loc, state, &args)
+			}
+		}
 	}
 	/// Convert jsonnet function to plain `Fn` value.
 	pub fn into_native<D: NativeDesc>(self) -> D::Value {
@@ -240,7 +273,8 @@ impl FuncVal {
 					#[cfg(feature = "exp-destruct")]
 					_ => return false,
 				};
-				desc.body.expr() == &Expr::Var(id.clone())
+				matches!(&**desc.body, Expr::Var(i) if **i == *id)
+				// &**desc.body == &Expr::Var(id.clone())
 			}
 			_ => false,
 		}
@@ -269,5 +303,31 @@ where
 impl From<&'static dyn StaticBuiltin> for FuncVal {
 	fn from(value: &'static dyn StaticBuiltin) -> Self {
 		Self::static_builtin(value)
+	}
+}
+
+#[derive(Debug, Trace, Clone)]
+pub struct PreparedFuncVal {
+	fun: FuncVal,
+	prepared: Rc<PreparedCall>,
+}
+
+impl PreparedFuncVal {
+	pub fn new(fun: FuncVal, unnamed: usize, named: &[IStr]) -> Result<Self> {
+		let prepared = prepare_call(&fun.params(), unnamed, named)?;
+		Ok(Self {
+			fun,
+			prepared: Rc::new(prepared),
+		})
+	}
+	pub fn call(
+		&self,
+		loc: CallLocation<'_>,
+		state: State,
+		unnamed: &[Thunk<Val>],
+		named: &[Thunk<Val>],
+	) -> Result<Val> {
+		self.fun
+			.evaluate_prepared(state, &self.prepared, loc, unnamed, named, false)
 	}
 }

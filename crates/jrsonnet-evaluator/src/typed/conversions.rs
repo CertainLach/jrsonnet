@@ -10,7 +10,7 @@ use crate::{
 	bail,
 	function::{native::NativeDesc, FuncDesc, FuncVal},
 	typed::CheckType,
-	val::{IndexableVal, NumValue, StrValue, ThunkMapper},
+	val::{EagerValue, IndexableVal, NumValue, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
@@ -22,7 +22,7 @@ where
 {
 	type Output = K;
 
-	fn map(self, from: Val) -> Result<Self::Output> {
+	fn map(&self, from: Val) -> Result<Self::Output> {
 		K::from_untyped(from)
 	}
 }
@@ -45,8 +45,11 @@ pub trait TypedObj: Typed {
 pub trait Typed: Sized {
 	const TYPE: &'static ComplexValType;
 	fn into_untyped(typed: Self) -> Result<Val>;
-	fn into_lazy_untyped(typed: Self) -> Thunk<Val> {
-		Thunk::from(Self::into_untyped(typed))
+	fn into_lazy_untyped(typed: Self) -> Thunk<Val>
+	where
+		Self: Clone,
+	{
+		Thunk!(move || Self::into_untyped(typed.clone()))
 	}
 	fn from_untyped(untyped: Val) -> Result<Self>;
 	fn from_lazy_untyped(lazy: Thunk<Val>) -> Result<Self> {
@@ -83,7 +86,8 @@ where
 	}
 
 	fn from_untyped(untyped: Val) -> Result<Self> {
-		Self::from_lazy_untyped(Thunk::evaluated(untyped))
+		unimplemented!()
+		// Self::from_lazy_untyped(EagerValue::evaluated(untyped))
 	}
 
 	fn provides_lazy() -> bool {
@@ -99,7 +103,7 @@ where
 		{
 			type Output = Val;
 
-			fn map(self, from: K) -> Result<Self::Output> {
+			fn map(&self, from: K) -> Result<Self::Output> {
 				K::into_untyped(from)
 			}
 		}

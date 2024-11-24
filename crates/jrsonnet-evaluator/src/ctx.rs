@@ -4,13 +4,11 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	error::ErrorKind::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, State,
-	Thunk, Val,
+	error::ErrorKind::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, Thunk, Val,
 };
 
 #[derive(Trace)]
 struct ContextInternals {
-	state: Option<State>,
 	dollar: Option<ObjValue>,
 	sup: Option<ObjValue>,
 	this: Option<ObjValue>,
@@ -32,23 +30,16 @@ impl Context {
 		Pending::new()
 	}
 
-	pub fn state(&self) -> &State {
-		self.0
-			.state
-			.as_ref()
-			.expect("used state from dummy context")
+	pub fn dollar(&self) -> Option<ObjValue> {
+		self.0.dollar.clone()
 	}
 
-	pub fn dollar(&self) -> Option<&ObjValue> {
-		self.0.dollar.as_ref()
+	pub fn this(&self) -> Option<ObjValue> {
+		self.0.this.clone()
 	}
 
-	pub fn this(&self) -> Option<&ObjValue> {
-		self.0.this.as_ref()
-	}
-
-	pub fn super_obj(&self) -> Option<&ObjValue> {
-		self.0.sup.as_ref()
+	pub fn super_obj(&self) -> Option<ObjValue> {
+		self.0.sup.clone()
 	}
 
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
@@ -111,11 +102,10 @@ impl Context {
 			ctx.bindings.clone().extend(new_bindings)
 		};
 		Self(Cc::new(ContextInternals {
-			state: ctx.state.clone(),
-			dollar,
-			sup,
-			this,
 			bindings,
+			dollar,
+			this,
+			sup,
 		}))
 	}
 }
@@ -127,34 +117,22 @@ impl PartialEq for Context {
 }
 
 pub struct ContextBuilder {
-	state: Option<State>,
 	bindings: GcHashMap<IStr, Thunk<Val>>,
 	extend: Option<Context>,
 }
 
 impl ContextBuilder {
-	/// # Panics
-	/// Panics aren't directly caused by this function, but if state from resulting context is used
-	pub fn dangerous_empty_state() -> Self {
-		Self {
-			state: None,
-			bindings: GcHashMap::new(),
-			extend: None,
-		}
+	pub fn new() -> Self {
+		Self::with_capacity(0)
 	}
-	pub fn new(state: State) -> Self {
-		Self::with_capacity(state, 0)
-	}
-	pub fn with_capacity(state: State, capacity: usize) -> Self {
+	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
-			state: Some(state),
 			bindings: GcHashMap::with_capacity(capacity),
 			extend: None,
 		}
 	}
 	pub fn extend(parent: Context) -> Self {
 		Self {
-			state: parent.0.state.clone(),
 			bindings: GcHashMap::new(),
 			extend: Some(parent),
 		}
@@ -172,7 +150,6 @@ impl ContextBuilder {
 			parent.extend(self.bindings, None, None, None)
 		} else {
 			Context(Cc::new(ContextInternals {
-				state: self.state,
 				bindings: LayeredHashMap::new(self.bindings),
 				dollar: None,
 				sup: None,

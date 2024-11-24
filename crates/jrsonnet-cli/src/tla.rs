@@ -1,3 +1,5 @@
+use std::rc::Rc;
+
 use clap::Parser;
 use jrsonnet_evaluator::{
 	error::{ErrorKind, Result},
@@ -5,7 +7,7 @@ use jrsonnet_evaluator::{
 	gc::GcHashMap,
 	IStr,
 };
-use jrsonnet_parser::{ParserSettings, Source};
+use jrsonnet_parser::Source;
 
 use crate::{ExtFile, ExtStr};
 
@@ -51,18 +53,14 @@ impl TlaOpts {
 			let source = Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.into());
 			out.insert(
 				(name as &str).into(),
-				TlaArg::Code(
-					jrsonnet_parser::parse(
-						code,
-						&ParserSettings {
-							source: source.clone(),
-						},
-					)
-					.map_err(|e| ErrorKind::ImportSyntaxError {
-						path: source,
-						error: Box::new(e),
+				TlaArg::Code(Rc::new(
+					jrsonnet_parser::parse(code, source.clone()).map_err(|e| {
+						ErrorKind::ImportSyntaxError {
+							path: source,
+							error: Box::new(e),
+						}
 					})?,
-				),
+				)),
 			);
 		}
 		Ok(out)

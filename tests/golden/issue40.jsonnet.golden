@@ -1,3 +1,3 @@
 assert failed: is number
     issue40.jsonnet:6:10-31: assertion failure
-    issue40.jsonnet:9:1-32:  function <builtin_manifest_json_ex> call
+    issue40.jsonnet:9:20-31: function <builtin_manifest_json_ex> call

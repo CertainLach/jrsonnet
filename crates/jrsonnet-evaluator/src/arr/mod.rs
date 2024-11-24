@@ -1,8 +1,8 @@
-use std::{any::Any, num::NonZeroU32};
+use std::{any::Any, num::NonZeroU32, rc::Rc};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::LocExpr;
+use jrsonnet_parser::Expr;
 
 use crate::{function::FuncVal, gc::TraceBox, tb, Context, Result, Thunk, Val};
 
@@ -29,7 +29,7 @@ impl ArrValue {
 		Self::new(RangeArray::empty())
 	}
 
-	pub fn expr(ctx: Context, exprs: impl IntoIterator<Item = LocExpr>) -> Self {
+	pub(crate) fn expr(ctx: Context, exprs: Rc<Vec<Expr>>) -> Self {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
 
@@ -44,6 +44,9 @@ impl ArrValue {
 	pub fn repeated(data: Self, repeats: usize) -> Option<Self> {
 		Some(Self::new(RepeatedArray::new(data, repeats)?))
 	}
+	pub fn repeated_element(data: Thunk<Val>, repeats: usize) -> Self {
+		Self::new(RepeatedElement::new(data, repeats))
+	}
 
 	pub fn bytes(bytes: IBytes) -> Self {
 		Self::new(BytesArray(bytes))
@@ -53,13 +56,21 @@ impl ArrValue {
 	}
 
 	#[must_use]
+	fn map_inner<const WITH_INDEX: bool>(self, mapper: FuncVal) -> Self {
+		let len = self.len();
+		match <MappedArray<WITH_INDEX>>::new(self, mapper) {
+			Ok(v) => Self::new(v),
+			Err(e) => Self::repeated_element(Thunk::errored(e), len),
+		}
+	}
+	#[must_use]
 	pub fn map(self, mapper: FuncVal) -> Self {
-		Self::new(<MappedArray<false>>::new(self, mapper))
+		self.map_inner::<false>(mapper)
 	}
 
 	#[must_use]
 	pub fn map_with_index(self, mapper: FuncVal) -> Self {
-		Self::new(<MappedArray<true>>::new(self, mapper))
+		self.map_inner::<true>(mapper)
 	}
 
 	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {

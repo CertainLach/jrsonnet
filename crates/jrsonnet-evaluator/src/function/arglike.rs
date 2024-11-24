@@ -1,24 +1,32 @@
+use std::rc::Rc;
+
 use hashbrown::HashMap;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, LocExpr};
+use jrsonnet_parser::{ArgsDesc, Expr, LocExpr, RcVecExt, Source};
 
-use crate::{evaluate, gc::GcHashMap, typed::Typed, Context, Result, Thunk, Val};
+use crate::{
+	evaluate,
+	gc::GcHashMap,
+	typed::Typed,
+	val::{EagerValue, LazyValue, ThunkOrEager},
+	Context, Result, State, Thunk, Val,
+};
 
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}
 
 pub trait ArgLike {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<ThunkOrEager<Val>>;
 }
 
 impl ArgLike for &LocExpr {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<ThunkOrEager<Val>> {
 		Ok(if tailstrict {
-			Thunk::evaluated(evaluate(ctx, self)?)
+			ThunkOrEager::Eager(evaluate(ctx, self)?)
 		} else {
 			let expr = (*self).clone();
-			Thunk!(move || evaluate(ctx, &expr))
+			ThunkOrEager::Thunk(Thunk!(move || evaluate(ctx.clone(), &expr)))
 		})
 	}
 }
@@ -27,12 +35,16 @@ impl<T> ArgLike for T
 where
 	T: Typed + Clone,
 {
-	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(
+		&self,
+		_ctx: Context,
+		tailstrict: bool,
+	) -> Result<impl LazyValue<Output = Val>> {
 		if T::provides_lazy() && !tailstrict {
-			return Ok(T::into_lazy_untyped(self.clone()));
+			return Ok(ThunkOrEager::Thunk(T::into_lazy_untyped(self.clone())));
 		}
 		let val = T::into_untyped(self.clone())?;
-		Ok(Thunk::evaluated(val))
+		Ok(ThunkOrEager::Eager(val))
 	}
 }
 impl<T> OptionalContext for T where T: Typed + Clone {}
@@ -40,41 +52,42 @@ impl<T> OptionalContext for T where T: Typed + Clone {}
 #[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
-	Code(LocExpr),
+	Code(Source, Rc<Expr>),
 	Val(Val),
 	Lazy(Thunk<Val>),
 }
-impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+impl TlaArg {
+	pub fn value(&self, state: State, tailstrict: bool) -> Result<impl LazyValue<Output = Val>> {
 		match self {
-			Self::String(s) => Ok(Thunk::evaluated(Val::string(s.clone()))),
-			Self::Code(code) => Ok(if tailstrict {
-				Thunk::evaluated(evaluate(ctx, code)?)
+			Self::String(s) => Ok(ThunkOrEager::Eager(Val::string(s.clone()))),
+			Self::Code(source, code) => Ok(if tailstrict {
+				ThunkOrEager::Eager(state.evaluate_expr(source.clone(), code)?)
 			} else {
 				let code = code.clone();
-				Thunk!(move || evaluate(ctx, &code))
+				let source = source.clone();
+				ThunkOrEager::Thunk(Thunk!(move || state.evaluate_expr(source.clone(), &code)))
 			}),
-			Self::Val(val) => Ok(Thunk::evaluated(val.clone())),
-			Self::Lazy(lazy) => Ok(lazy.clone()),
+			Self::Val(val) => Ok(ThunkOrEager::Eager(val.clone())),
+			Self::Lazy(lazy) => Ok(ThunkOrEager::Thunk(lazy.clone())),
 		}
 	}
 }
 
 pub trait ArgsLike {
 	fn unnamed_len(&self) -> usize;
-	fn unnamed_iter(
+	fn unnamed_iter<H: FnMut(usize, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()>;
-	fn named_iter(
+	fn named_iter<H: FnMut(IStr, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()>;
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
+	fn named_names(&self, handler: &mut dyn FnMut(IStr));
 	fn is_empty(&self) -> bool;
 }
 
@@ -82,26 +95,26 @@ impl ArgsLike for Vec<Val> {
 	fn unnamed_len(&self) -> usize {
 		self.len()
 	}
-	fn unnamed_iter(
+	fn unnamed_iter<H: FnMut(usize, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		_ctx: Context,
 		_tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()> {
 		for (idx, el) in self.iter().enumerate() {
-			handler(idx, Thunk::evaluated(el.clone()))?;
+			handler(idx, ThunkOrEager::Eager(el.clone()))?;
 		}
 		Ok(())
 	}
-	fn named_iter(
+	fn named_iter<H: FnMut(IStr, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		_handler: &mut H,
 	) -> Result<()> {
 		Ok(())
 	}
-	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+	fn named_names(&self, _handler: &mut dyn FnMut(IStr)) {}
 	fn is_empty(&self) -> bool {
 		self.is_empty()
 	}
@@ -112,53 +125,53 @@ impl ArgsLike for ArgsDesc {
 		self.unnamed.len()
 	}
 
-	fn unnamed_iter(
+	fn unnamed_iter<H: FnMut(usize, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()> {
-		for (id, arg) in self.unnamed.iter().enumerate() {
+		for (id, arg) in self.unnamed.rc_iter().enumerate() {
 			handler(
 				id,
 				if tailstrict {
-					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
+					ThunkOrEager::Eager(evaluate(ctx.clone(), &arg)?)
 				} else {
 					let ctx = ctx.clone();
 					let arg = arg.clone();
 
-					Thunk!(move || evaluate(ctx, &arg))
+					ThunkOrEager::Thunk(Thunk!(move || evaluate(ctx.clone(), &arg)))
 				},
 			)?;
 		}
 		Ok(())
 	}
 
-	fn named_iter(
+	fn named_iter<H: FnMut(IStr, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()> {
-		for (name, arg) in &self.named {
+		for named in self.named.rc_iter() {
 			handler(
-				name,
+				named.0.clone(),
 				if tailstrict {
-					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
+					ThunkOrEager::Eager(evaluate(ctx.clone(), &named.1)?)
 				} else {
 					let ctx = ctx.clone();
-					let arg = arg.clone();
+					let named = named.clone();
 
-					Thunk!(move || evaluate(ctx, &arg))
+					ThunkOrEager::Thunk(Thunk!(move || evaluate(ctx.clone(), &named.1)))
 				},
 			)?;
 		}
 		Ok(())
 	}
 
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		for (name, _) in &self.named {
-			handler(name);
+	fn named_names(&self, handler: &mut dyn FnMut(IStr)) {
+		for (name, _) in self.named.iter() {
+			handler(name.clone());
 		}
 	}
 
@@ -172,30 +185,30 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 		0
 	}
 
-	fn unnamed_iter(
+	fn unnamed_iter<H: FnMut(usize, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		_handler: &mut H,
 	) -> Result<()> {
 		Ok(())
 	}
 
-	fn named_iter(
+	fn named_iter<H: FnMut(IStr, ThunkOrEager<Val>) -> Result<()>>(
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut H,
 	) -> Result<()> {
 		for (name, value) in self {
-			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
+			handler(name.clone(), value.evaluate_arg(ctx.clone(), tailstrict)?)?;
 		}
 		Ok(())
 	}
 
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+	fn named_names(&self, handler: &mut dyn FnMut(IStr)) {
 		for (name, _) in self {
-			handler(name);
+			handler(name.clone());
 		}
 	}
 
@@ -223,12 +236,12 @@ impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 		&self,
 		ctx: Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		self.0.named_iter(ctx, tailstrict, handler)
 	}
 
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
+	fn named_names(&self, handler: &mut dyn FnMut(IStr)) {
 		self.0.named_names(handler);
 	}
 
@@ -262,11 +275,11 @@ macro_rules! impl_args_like {
 				&self,
 				_ctx: Context,
 				_tailstrict: bool,
-				_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+				_handler: &mut dyn FnMut(IStr, Thunk<Val>) -> Result<()>,
 			) -> Result<()> {
 				Ok(())
 			}
-			fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+			fn named_names(&self, _handler: &mut dyn FnMut(IStr)) {}
 
 			fn is_empty(&self) -> bool {
 				// impl_args_like only implements non-empty tuples.
@@ -306,12 +319,12 @@ impl ArgsLike for () {
 		&self,
 		_ctx: Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		_handler: &mut dyn FnMut(IStr, Thunk<Val>) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
 
-	fn named_names(&self, _handler: &mut dyn FnMut(&IStr)) {}
+	fn named_names(&self, _handler: &mut dyn FnMut(IStr)) {}
 	fn is_empty(&self) -> bool {
 		true
 	}

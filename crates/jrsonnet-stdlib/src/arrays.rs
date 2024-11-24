@@ -2,7 +2,7 @@
 
 use jrsonnet_evaluator::{
 	bail,
-	function::{builtin, FuncVal},
+	function::{builtin, CallLocation, FuncVal, PreparedFuncVal},
 	runtime_error,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
 	val::{equals, ArrValue, IndexableVal},
@@ -22,16 +22,10 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 	if *sz == 0 {
 		return Ok(ArrValue::empty());
 	}
-	func.evaluate_trivial().map_or_else(
-		|| Ok(ArrValue::range_exclusive(0, *sz).map(func)),
-		|trivial| {
-			let mut out = Vec::with_capacity(*sz as usize);
-			for _ in 0..*sz {
-				out.push(trivial.clone());
-			}
-			Ok(ArrValue::eager(out))
-		},
-	)
+	Ok(func.evaluate_trivial().map_or_else(
+		|| ArrValue::range_exclusive(0, *sz).map(func),
+		|trivial| ArrValue::repeated_element(Thunk::evaluated(trivial), *sz as usize),
+	))
 }
 
 #[builtin]
@@ -70,6 +64,7 @@ pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
 #[builtin]
 pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 	let mut out = ObjValueBuilder::new();
+	let func = PreparedFuncVal::new(func, 2, &[]);
 	for (k, v) in obj.iter(
 		// Makes sense mapped object should be ordered the same way, should not break anything when the output is not ordered (the default).
 		// The thrown error might be different, but jsonnet
@@ -78,8 +73,11 @@ pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 		true,
 	) {
 		let v = v?;
-		out.field(k.clone())
-			.value(func.evaluate_simple(&(k, v), false)?);
+		out.field(k.clone()).value(func?.call(
+			CallLocation::native(),
+			&[Thunk::evaluated(Val::string(k)), Thunk::evaluated(v)],
+			&[],
+		)?);
 	}
 	Ok(out.build())
 }
@@ -123,7 +121,17 @@ pub fn builtin_flatmap(
 
 #[builtin]
 pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),), false)?))
+	if arr.is_empty() {
+		return Ok(ArrValue::empty());
+	}
+	let func = PreparedFuncVal::new(func, 1, &[])?;
+	arr.filter(|val| {
+		bool::from_untyped(func.call(
+			CallLocation::native(),
+			&[Thunk::evaluated(val.clone())],
+			&[],
+		)?)
+	})
 }
 
 #[builtin]
@@ -137,18 +145,35 @@ pub fn builtin_filter_map(
 
 #[builtin]
 pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+	if arr.is_empty() {
+		return Ok(init);
+	}
+	let func = PreparedFuncVal::new(func, 2, &[])?;
 	let mut acc = init;
+	// TODO: Iter cheap if cheap
 	for i in arr.iter() {
-		acc = func.evaluate_simple(&(acc, i?), false)?;
+		acc = func.call(
+			CallLocation::native(),
+			&[Thunk::evaluated(acc), Thunk::evaluated(i?)],
+			&[],
+		)?;
 	}
 	Ok(acc)
 }
 
 #[builtin]
 pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+	if arr.is_empty() {
+		return Ok(init);
+	}
+	let func = PreparedFuncVal::new(func, 2, &[])?;
 	let mut acc = init;
 	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&(i?, acc), false)?;
+		acc = func.call(
+			CallLocation::native(),
+			&[Thunk::evaluated(i?), Thunk::evaluated(acc)],
+			&[],
+		)?;
 	}
 	Ok(acc)
 }

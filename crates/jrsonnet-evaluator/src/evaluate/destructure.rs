@@ -1,10 +1,12 @@
+use std::rc::Rc;
+
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BindSpec, Destruct};
+use jrsonnet_parser::{BindSpec, Destruct, RcVecExt};
 
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
-	evaluate, evaluate_method, evaluate_named,
+	evaluate, evaluate_named,
 	gc::GcHashMap,
 	Context, Pending, Thunk, Val,
 };
@@ -161,39 +163,20 @@ pub fn destruct(
 }
 
 pub fn evaluate_dest(
-	d: &BindSpec,
+	bindings: Rc<Vec<BindSpec>>,
 	fctx: Pending<Context>,
 	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
 ) -> Result<()> {
-	match d {
-		BindSpec::Field { into, value } => {
-			let name = into.name();
-			let value = value.clone();
-			let data = {
-				let fctx = fctx.clone();
-				Thunk!(move || name.map_or_else(
-					|| evaluate(fctx.unwrap(), &value),
-					|name| evaluate_named(fctx.unwrap(), &value, name),
-				))
-			};
-			destruct(into, data, fctx, new_bindings)?;
-		}
-		BindSpec::Function {
-			name,
-			params,
-			value,
-		} => {
-			let params = params.clone();
-			let name = name.clone();
-			let value = value.clone();
-			let old = new_bindings.insert(name.clone(), {
-				let name = name.clone();
-				Thunk!(move || Ok(evaluate_method(fctx.unwrap(), name, params, value)))
-			});
-			if old.is_some() {
-				bail!(DuplicateLocalVar(name))
-			}
-		}
+	for ele in bindings.rc_iter() {
+		let data = {
+			let fctx = fctx.clone();
+			let ele = ele.clone();
+			Thunk!(move || ele.into.name().map_or_else(
+				|| evaluate(fctx.unwrap(), &ele.value),
+				|name| evaluate_named(fctx.unwrap(), &ele.value, name),
+			))
+		};
+		destruct(&ele.into, data, fctx.clone(), new_bindings)?;
 	}
 	Ok(())
 }

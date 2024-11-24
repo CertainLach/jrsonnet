@@ -30,6 +30,7 @@ use std::{
 	cell::{RefCell, RefMut},
 	fmt::{self, Debug},
 	path::Path,
+	rc::Rc,
 };
 
 pub use ctx::*;
@@ -45,11 +46,13 @@ pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
-use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
+use jrsonnet_parser::{Expr, Source, SourcePath};
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;
 pub use val::{Thunk, Val};
+
+use self::val::WeakThunk;
 
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read
@@ -58,6 +61,16 @@ pub trait Unbound: Trace {
 	type Bound;
 	/// Create value bound to specified object context
 	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
+}
+
+#[macro_export]
+macro_rules! static_istr {
+	($v:literal) => {{
+		thread_local! {
+			static STR: IStr = ::jrsonnet_interner::intern_str($v);
+		}
+		STR.with(|s| s.clone())
+	}};
 }
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
@@ -174,7 +187,7 @@ impl_context_initializer! {
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
-	parsed: Option<LocExpr>,
+	parsed: Option<Rc<Expr>>,
 	evaluated: Option<Val>,
 
 	evaluating: bool,
@@ -307,18 +320,14 @@ impl State {
 			.ok_or_else(|| ImportBadFileUtf8(path.clone()))?;
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
-			file.parsed = Some(
-				jrsonnet_parser::parse(
-					&code,
-					&ParserSettings {
-						source: file_name.clone(),
-					},
-				)
-				.map_err(|e| ImportSyntaxError {
-					path: file_name.clone(),
-					error: Box::new(e),
+			file.parsed = Some(Rc::new(
+				jrsonnet_parser::parse(&code, file_name.clone()).map_err(|e| {
+					ImportSyntaxError {
+						path: file_name.clone(),
+						error: Box::new(e),
+					}
 				})?,
-			);
+			));
 		}
 		let parsed = file.parsed.as_ref().expect("just set").clone();
 		if file.evaluating {
@@ -424,16 +433,11 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source.clone(),
-			error: Box::new(e),
-		})?;
+		let parsed =
+			jrsonnet_parser::parse(&code, source.clone()).map_err(|e| ImportSyntaxError {
+				path: source.clone(),
+				error: Box::new(e),
+			})?;
 		evaluate(self.create_default_context(source), &parsed)
 	}
 	/// Parses and evaluates the given snippet with custom context modifier
@@ -445,20 +449,18 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source.clone(),
-			error: Box::new(e),
-		})?;
+		let parsed =
+			jrsonnet_parser::parse(&code, source.clone()).map_err(|e| ImportSyntaxError {
+				path: source.clone(),
+				error: Box::new(e),
+			})?;
 		evaluate(
 			self.create_default_context_with(source, context_initializer),
 			&parsed,
 		)
+	}
+	pub fn evaluate_expr(&self, source: Source, code: &Expr) -> Result<Val> {
+		evaluate(self.create_default_context(source), code)
 	}
 }
 

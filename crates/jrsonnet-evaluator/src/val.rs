@@ -9,7 +9,7 @@ use std::{
 };
 
 use derivative::Derivative;
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::Thunk;
 use jrsonnet_types::ValType;
@@ -27,9 +27,10 @@ use crate::{
 	ObjValue, Result, Unbound, WeakObjValue,
 };
 
-pub trait ThunkValue: Trace {
+pub trait LazyValue: Trace {
 	type Output;
-	fn get(self: Box<Self>) -> Result<Self::Output>;
+	fn get(&self) -> Result<Self::Output>;
+	fn self_caching(&self) -> bool;
 }
 
 #[derive(Trace)]
@@ -38,49 +39,114 @@ pub struct ThunkValueClosure<D: Trace, O: 'static> {
 	// Carries no data, as it is not a real closure, all the
 	// captured environment is stored in `env` field.
 	#[trace(skip)]
-	closure: fn(D) -> Result<O>,
+	closure: fn(&D) -> Result<O>,
 }
 impl<D: Trace, O: 'static> ThunkValueClosure<D, O> {
-	pub fn new(env: D, closure: fn(D) -> Result<O>) -> Self {
+	pub fn new(env: D, closure: fn(&D) -> Result<O>) -> Self {
 		Self { env, closure }
 	}
 }
-impl<D: Trace, O: 'static> ThunkValue for ThunkValueClosure<D, O> {
+impl<D: Trace, O: 'static> LazyValue for ThunkValueClosure<D, O> {
 	type Output = O;
 
-	fn get(self: Box<Self>) -> Result<Self::Output> {
-		(self.closure)(self.env)
+	fn get(&self) -> Result<Self::Output> {
+		(self.closure)(&self.env)
+	}
+	fn self_caching(&self) -> bool {
+		false
 	}
 }
 
 #[derive(Trace)]
-enum ThunkInner<T: Trace> {
-	Computed(T),
+pub struct EagerValue<T: Trace>(T);
+impl<T: Trace> EagerValue<T> {
+	pub fn evaluated(val: T) -> Self {
+		Self(val)
+	}
+}
+impl<T: Trace + Clone> LazyValue for EagerValue<T> {
+	type Output = T;
+
+	fn get(&self) -> Result<Self::Output> {
+		Ok(self.0.clone())
+	}
+
+	fn self_caching(&self) -> bool {
+		true
+	}
+}
+
+#[derive(Trace)]
+pub enum ThunkOrEager<T: Trace> {
+	Thunk(Thunk<T>),
+	Eager(T),
+}
+impl<T: Trace + Clone> LazyValue for ThunkOrEager<T> {
+	type Output = T;
+
+	fn get(&self) -> Result<Self::Output> {
+		match self {
+			ThunkOrEager::Thunk(t) => t.get(),
+			ThunkOrEager::Eager(e) => Ok(e.clone()),
+		}
+	}
+
+	fn self_caching(&self) -> bool {
+		true
+	}
+}
+
+#[derive(Trace)]
+enum ThunkComputeState<T: Trace> {
 	Errored(Error),
-	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
+	Computed(T),
+	Blackhole,
 	Pending,
 }
 
+#[derive(Trace)]
+struct ThunkInner<W: Trace, T: Trace> {
+	waiting: W,
+	state: ThunkComputeState<T>,
+}
+
 /// Lazily evaluated value
-#[allow(clippy::module_name_repetitions)]
+#[allow(clippy::module_name_repetitions, clippy::type_complexity)]
 #[derive(Clone, Trace)]
-pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<T>>>);
+pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<TraceBox<dyn LazyValue<Output = T>>, T>>>);
+#[derive(Trace)]
+pub struct WeakThunk<T: Trace>(
+	#[trace(skip)] Weak<RefCell<ThunkInner<TraceBox<dyn LazyValue<Output = T>>, T>>>,
+);
+
+impl<T: Trace + Clone> LazyValue for Thunk<T> {
+	type Output = T;
+
+	fn get(&self) -> Result<Self::Output> {
+		self.evaluate()
+	}
+
+	fn self_caching(&self) -> bool {
+		true
+	}
+}
 
 impl<T: Trace> Thunk<T> {
-	pub fn evaluated(val: T) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
+	pub fn new(f: impl LazyValue<Output = T> + 'static) -> Self {
+		// TODO: Allow for type unification, but implement fast-path for not caching in thunk itself?
+		// Probably only makes sense with shared cache implementation.
+		debug_assert!(
+			!f.self_caching(),
+			"you shouldn't wrap self-caching lazy values into thunk"
+		);
+		Self(Cc::new(RefCell::new(ThunkInner {
+			waiting: tb!(f),
+			state: ThunkComputeState::Pending,
+		})))
 	}
-	pub fn new(f: impl ThunkValue<Output = T> + 'static) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Waiting(tb!(f)))))
-	}
-	pub fn errored(e: Error) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Errored(e))))
-	}
-	pub fn result(res: Result<T, Error>) -> Self {
-		match res {
-			Ok(o) => Self::evaluated(o),
-			Err(e) => Self::errored(e),
-		}
+
+	pub fn downgrade(&self) -> WeakThunk<T> {
+		WeakThunk(self.0.downgrade())
 	}
 }
 
@@ -100,31 +166,46 @@ where
 	/// - Lazy value evaluation returned error
 	/// - This method was called during inner value evaluation
 	pub fn evaluate(&self) -> Result<T> {
-		match &*self.0.borrow() {
-			ThunkInner::Computed(v) => return Ok(v.clone()),
-			ThunkInner::Errored(e) => return Err(e.clone()),
-			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
-			ThunkInner::Waiting(..) => (),
-		};
-		let ThunkInner::Waiting(value) = replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)
-		else {
-			unreachable!();
-		};
-		let new_value = match value.0.get() {
-			Ok(v) => v,
-			Err(e) => {
-				*self.0.borrow_mut() = ThunkInner::Errored(e.clone());
-				return Err(e);
+		{
+			let state = &*self.0.borrow();
+			match &state.state {
+				ThunkComputeState::Errored(e) => return Err(e.clone()),
+				ThunkComputeState::Computed(c) => return Ok(c.clone()),
+				ThunkComputeState::Blackhole => bail!(InfiniteRecursionDetected),
+				ThunkComputeState::Pending => {}
 			}
+		}
+		{
+			let state = &mut *self.0.borrow_mut();
+			let _ = replace(&mut state.state, ThunkComputeState::Blackhole);
+		}
+		let v = {
+			let state = &*self.0.borrow();
+			state.waiting.get()
 		};
-		*self.0.borrow_mut() = ThunkInner::Computed(new_value.clone());
-		Ok(new_value)
+		{
+			let state = &mut *self.0.borrow_mut();
+			match &v {
+				Ok(v) => state.state = ThunkComputeState::Computed(v.clone()),
+				Err(e) => state.state = ThunkComputeState::Errored(e.clone()),
+			}
+			v
+		}
+	}
+	pub fn get_cheap(&self) -> Option<T> {
+		match (&*self.0.borrow()).state {
+			ThunkInner::Computed(t) => Some(t.clone()),
+			_ => None,
+		}
+	}
+	pub fn is_cheap(&self) -> bool {
+		matches!(&*self.0.borrow(), ThunkInner::Computed(_))
 	}
 }
 
 pub trait ThunkMapper<Input>: Trace {
 	type Output;
-	fn map(self, from: Input) -> Result<Self::Output>;
+	fn map(&self, from: Input) -> Result<Self::Output>;
 }
 impl<Input> Thunk<Input>
 where
@@ -144,7 +225,7 @@ where
 	}
 }
 
-impl<T: Trace> From<Result<T>> for Thunk<T> {
+impl<T: Trace> From<Result<T>> for EagerValue<T> {
 	fn from(value: Result<T>) -> Self {
 		match value {
 			Ok(o) => Self::evaluated(o),
@@ -152,16 +233,7 @@ impl<T: Trace> From<Result<T>> for Thunk<T> {
 		}
 	}
 }
-impl<T, V: Trace> From<T> for Thunk<V>
-where
-	T: ThunkValue<Output = V>,
-{
-	fn from(value: T) -> Self {
-		Self::new(value)
-	}
-}
-
-impl<T: Trace + Default> Default for Thunk<T> {
+impl<T: Trace + Default> Default for EagerValue<T> {
 	fn default() -> Self {
 		Self::evaluated(T::default())
 	}

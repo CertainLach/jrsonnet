@@ -5,6 +5,9 @@
 )]
 #![warn(clippy::pedantic, clippy::nursery)]
 #![allow(clippy::missing_const_for_fn)]
+
+extern crate self as jrsonnet_interner;
+
 use std::{
 	borrow::Cow,
 	cell::RefCell,
@@ -286,10 +289,27 @@ pub fn intern_str(str: &str) -> IStr {
 mod tests {
 	use crate::IStr;
 
+	macro_rules! static_istr {
+		($v:literal) => {{
+			thread_local! {
+				static STR: IStr = ::jrsonnet_interner::intern_str($v);
+			}
+			STR.with(|s| s.clone())
+		}};
+	}
+
 	#[test]
 	fn simple() {
 		let a = IStr::from("a");
 		let b = IStr::from("a");
+
+		assert_eq!(a.as_ptr(), b.as_ptr());
+	}
+
+	#[test]
+	fn static_istr() {
+		let a = IStr::from("hello");
+		let b = static_istr!("hello");
 
 		assert_eq!(a.as_ptr(), b.as_ptr());
 	}
