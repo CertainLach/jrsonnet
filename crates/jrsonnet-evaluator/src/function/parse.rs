@@ -1,8 +1,7 @@
 use std::mem::replace;
 
-use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{LocExpr, ParamsDesc};
+use jrsonnet_parser::ParamsDesc;
 
 use super::{arglike::ArgsLike, builtin::BuiltinParam};
 use crate::{

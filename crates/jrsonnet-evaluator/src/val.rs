@@ -8,7 +8,6 @@ use std::{
 	rc::Rc,
 };
 
-use derivative::Derivative;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::Thunk;
@@ -402,8 +401,7 @@ impl Ord for StrValue {
 
 /// Represents jsonnet number
 /// Jsonnet numbers are finite f64, with NaNs disallowed
-#[derive(Trace, Clone, Copy, Derivative)]
-#[derivative(Debug = "transparent")]
+#[derive(Trace, Clone, Copy)]
 #[repr(transparent)]
 pub struct NumValue(f64);
 impl NumValue {
@@ -437,6 +435,11 @@ impl PartialOrd for NumValue {
 	#[inline]
 	fn partial_cmp(&self, other: &Self) -> Option<Ordering> {
 		Some(self.cmp(other))
+	}
+}
+impl Debug for NumValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		Debug::fmt(&self.0, f)
 	}
 }
 impl Display for NumValue {

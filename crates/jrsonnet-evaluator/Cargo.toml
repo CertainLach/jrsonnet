@@ -59,5 +59,4 @@ annotate-snippets = { workspace = true, optional = true }
 hi-doc = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
-derivative.workspace = true
 stacker = "0.1.15"
