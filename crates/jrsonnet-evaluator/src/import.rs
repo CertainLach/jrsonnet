@@ -71,6 +71,11 @@ impl AsPathLike for IStr {
 		ResolvePath::Str(self)
 	}
 }
+impl AsPathLike for Path {
+	fn as_path(&self) -> ResolvePath<'_> {
+		ResolvePath::Path(self)
+	}
+}
 impl AsPathLike for Cow<'_, Path> {
 	fn as_path(&self) -> ResolvePath<'_> {
 		ResolvePath::Path(self.as_ref())
