@@ -207,7 +207,7 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		self.evaluate(
-			ContextBuilder::dangerous_empty_state().build(),
+			ContextBuilder::new().build(),
 			CallLocation::native(),
 			args,
 			tailstrict,

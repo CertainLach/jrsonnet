@@ -19,7 +19,7 @@ fn a() -> u32 {
 fn basic_function() -> Result<()> {
 	let a: a = a {};
 	let v = u32::from_untyped(a.call(
-		ContextBuilder::dangerous_empty_state().build(),
+		ContextBuilder::new().build(),
 		CallLocation::native(),
 		&(),
 	)?)?;

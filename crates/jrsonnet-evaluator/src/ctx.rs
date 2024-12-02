@@ -32,13 +32,6 @@ impl Context {
 		Pending::new()
 	}
 
-	pub fn state(&self) -> &State {
-		self.0
-			.state
-			.as_ref()
-			.expect("used state from dummy context")
-	}
-
 	pub fn dollar(&self) -> Option<&ObjValue> {
 		self.0.dollar.as_ref()
 	}
@@ -127,7 +120,6 @@ impl PartialEq for Context {
 }
 
 pub struct ContextBuilder {
-	state: Option<State>,
 	bindings: GcHashMap<IStr, Thunk<Val>>,
 	extend: Option<Context>,
 }
@@ -147,14 +139,12 @@ impl ContextBuilder {
 	}
 	pub fn with_capacity(state: State, capacity: usize) -> Self {
 		Self {
-			state: Some(state),
 			bindings: GcHashMap::with_capacity(capacity),
 			extend: None,
 		}
 	}
 	pub fn extend(parent: Context) -> Self {
 		Self {
-			state: parent.0.state.clone(),
 			bindings: GcHashMap::new(),
 			extend: Some(parent),
 		}

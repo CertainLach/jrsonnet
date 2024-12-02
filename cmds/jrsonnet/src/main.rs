@@ -173,6 +173,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 	let mut s = State::builder();
 	s.import_resolver(import_resolver).context_initializer(std);
 	let s = s.build();
+	let _s = s.enter();
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
@@ -192,7 +193,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		unused_mut,
 		clippy::redundant_clone,
 	)]
-	let mut val = apply_tla(s.clone(), &tla, val)?;
+	let mut val = apply_tla(&tla, val)?;
 
 	#[cfg(feature = "exp-apply")]
 	for apply in opts.input.exp_apply {

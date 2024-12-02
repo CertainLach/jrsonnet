@@ -320,11 +320,6 @@ pub struct Settings {
 	pub path_resolver: PathResolver,
 }
 
-fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
-	let source_name = format!("<extvar:{name}>");
-	Source::new_virtual(source_name.into(), code.into())
-}
-
 #[derive(Trace, Clone)]
 pub struct ContextInitializer {
 	/// std without applied thisFile overlay

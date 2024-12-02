@@ -3,14 +3,14 @@ use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	function::{builtin, ArgLike, CallLocation, FuncVal},
+	function::{builtin, CallLocation, FuncVal},
 	manifest::JsonFormat,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
-	Context, Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
+	Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
 };
 
-use crate::{extvar_source, Settings};
+use crate::Settings;
 
 #[builtin]
 pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> usize {
@@ -49,16 +49,14 @@ pub fn builtin_get(
 #[builtin(fields(
 	settings: Rc<RefCell<Settings>>,
 ))]
-pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Val> {
-	let ctx = ctx.state().create_default_context(extvar_source(&x, ""));
+pub fn builtin_ext_var(this: &builtin_ext_var, x: IStr) -> Result<Val> {
 	this.settings
 		.borrow()
 		.ext_vars
 		.get(&x)
 		.cloned()
 		.ok_or_else(|| UndefinedExternalVariable(x))?
-		.evaluate_arg(ctx, true)?
-		.evaluate()
+		.evaluate_tailstrict()
 }
 
 #[builtin(fields(

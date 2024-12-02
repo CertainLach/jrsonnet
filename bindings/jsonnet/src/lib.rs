@@ -259,7 +259,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val.manifest(&vm.manifest_format))
 	{
 		Ok(v) => {
@@ -294,7 +294,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val.manifest(&vm.manifest_format))
 	{
 		Ok(v) => {
@@ -352,7 +352,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_multi(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -381,7 +381,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_multi(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -434,7 +434,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_stream(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -463,7 +463,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_stream(val, &vm.manifest_format))
 	{
 		Ok(v) => {
