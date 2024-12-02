@@ -146,6 +146,23 @@ impl SourcePathT for SourceDefault {
 	any_ext_impl!(SourcePathT);
 }
 
+#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+pub struct SourceDefaultIgnoreJpath;
+impl Display for SourceDefaultIgnoreJpath {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "<default (ignoring jpath)>")
+	}
+}
+impl SourcePathT for SourceDefaultIgnoreJpath {
+	fn is_default(&self) -> bool {
+		true
+	}
+	fn path(&self) -> Option<&Path> {
+		None
+	}
+	any_ext_impl!(SourcePathT);
+}
+
 /// Represents path to the file on the disk
 /// Directories shouldn't be put here, as resolution for files differs from resolution for directories:
 ///

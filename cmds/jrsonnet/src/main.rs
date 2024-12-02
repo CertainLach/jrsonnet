@@ -11,6 +11,7 @@ use jrsonnet_evaluator::{
 	error::{Error as JrError, ErrorKind},
 	ResultExt, State, Val,
 };
+use jrsonnet_parser::{SourceDefaultIgnoreJpath, SourcePath};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
@@ -182,7 +183,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		let input_str = std::str::from_utf8(&input)?;
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(input.as_str())?
+		s.import_from(&SourcePath::new(SourceDefaultIgnoreJpath), input.as_str())?
 	};
 
 	let tla = opts.tla.tla_opts()?;
