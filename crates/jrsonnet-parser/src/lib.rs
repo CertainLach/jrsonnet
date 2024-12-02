@@ -12,7 +12,8 @@ mod source;
 mod unescape;
 pub use location::CodeLocation;
 pub use source::{
-	Source, SourceDirectory, SourceFifo, SourceFile, SourcePath, SourcePathT, SourceVirtual,
+	Source, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
+	SourcePathT, SourceVirtual,
 };
 
 pub struct ParserSettings {

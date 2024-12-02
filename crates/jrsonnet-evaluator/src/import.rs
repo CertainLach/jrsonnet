@@ -10,7 +10,9 @@ use std::{
 use fs::File;
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::{IStr, SourceDirectory, SourceFifo, SourceFile, SourcePath};
+use jrsonnet_parser::{
+	IStr, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
+};
 
 use crate::{
 	bail,
@@ -183,6 +185,13 @@ impl ImportResolver for FileImportResolver {
 			o
 		} else if let Some(d) = from.downcast_ref::<SourceDirectory>() {
 			d.path().to_owned()
+		} else if from.downcast_ref::<SourceDefaultIgnoreJpath>().is_some() {
+			let mut direct = current_dir().map_err(|e| ImportIo(e.to_string()))?;
+			direct.push(path);
+			if let Some(direct) = check_path(&direct)? {
+				return Ok(direct);
+			}
+			bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 		} else if from.is_default() {
 			current_dir().map_err(|e| ImportIo(e.to_string()))?
 		} else {
