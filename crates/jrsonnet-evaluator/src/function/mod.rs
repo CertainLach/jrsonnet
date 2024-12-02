@@ -1,6 +1,7 @@
 use std::fmt::Debug;
 
 pub use arglike::{ArgLike, ArgsLike, TlaArg};
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
@@ -40,7 +41,7 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, Trace, PartialEq)]
 pub struct FuncDesc {
 	/// # Example
 	///
@@ -91,7 +92,8 @@ impl FuncDesc {
 
 /// Represents a Jsonnet function value, including plain functions and user-provided builtins.
 #[allow(clippy::module_name_repetitions)]
-#[derive(Trace, Clone)]
+#[derive(Trace, Clone, Educe)]
+#[educe(Debug)]
 pub enum FuncVal {
 	/// Identity function, kept this way for comparsions.
 	Id,
@@ -100,23 +102,13 @@ pub enum FuncVal {
 	/// Function without arguments works just as a fancy thunk value.
 	Thunk(Thunk<Val>),
 	/// Standard library function.
-	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
+	StaticBuiltin(
+		#[trace(skip)]
+		#[educe(Debug(ignore))]
+		&'static dyn StaticBuiltin,
+	),
 	/// User-provided function.
-	Builtin(Cc<TraceBox<dyn Builtin>>),
-}
-
-impl Debug for FuncVal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Id => f.debug_tuple("Id").finish(),
-			Self::Thunk(arg0) => f.debug_tuple("Thunk").field(arg0).finish(),
-			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
-			Self::StaticBuiltin(arg0) => {
-				f.debug_tuple("StaticBuiltin").field(&arg0.name()).finish()
-			}
-			Self::Builtin(arg0) => f.debug_tuple("Builtin").field(&arg0.name()).finish(),
-		}
-	}
+	Builtin(#[educe(Debug(ignore))] Cc<TraceBox<dyn Builtin>>),
 }
 
 #[allow(clippy::unnecessary_wraps)]

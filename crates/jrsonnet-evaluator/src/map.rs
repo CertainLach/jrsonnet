@@ -3,14 +3,14 @@ use jrsonnet_interner::IStr;
 
 use crate::{GcHashMap, Thunk, Val};
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 #[trace(tracking(force))]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
 	current: GcHashMap<IStr, Thunk<Val>>,
 }
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {

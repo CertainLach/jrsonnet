@@ -1,32 +1,27 @@
 use std::fmt::Debug;
 
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	error::ErrorKind::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, State,
-	Thunk, Val,
+	bail, error::ErrorKind::*, function::ArgsLike, gc::GcHashMap, map::LayeredHashMap, ObjValue,
+	Pending, Result, SupThis, Thunk, Val,
 };
-
-#[derive(Trace)]
-struct ContextInternals {
-	state: Option<State>,
-	dollar: Option<ObjValue>,
-	sup: Option<ObjValue>,
-	this: Option<ObjValue>,
-	bindings: LayeredHashMap,
-}
-impl Debug for ContextInternals {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("Context").finish()
-	}
-}
 
 /// Context keeps information about current lexical code location
 ///
 /// This information includes local variables, top-level object (`$`), current object (`this`), and super object (`super`)
-#[derive(Debug, Clone, Trace)]
-pub struct Context(Cc<ContextInternals>);
+#[derive(Debug, Trace, Clone, Educe)]
+#[educe(PartialEq)]
+pub struct Context(#[educe(PartialEq(method = Cc::ptr_eq))] Cc<ContextInternal>);
+
+#[derive(Debug, Trace)]
+struct ContextInternal {
+	dollar: Option<ObjValue>,
+	sup_this: Option<SupThis>,
+	bindings: LayeredHashMap,
+}
 impl Context {
 	pub fn new_future() -> Pending<Self> {
 		Pending::new()
@@ -36,12 +31,35 @@ impl Context {
 		self.0.dollar.as_ref()
 	}
 
-	pub fn this(&self) -> Option<&ObjValue> {
-		self.0.this.as_ref()
+	pub fn try_dollar(&self) -> Result<ObjValue> {
+		self.0
+			.dollar
+			.clone()
+			.ok_or_else(|| CantUseSelfSupOutsideOfObject.into())
 	}
 
-	pub fn super_obj(&self) -> Option<&ObjValue> {
-		self.0.sup.as_ref()
+	pub fn this(&self) -> Option<&ObjValue> {
+		self.0.sup_this.as_ref().map(SupThis::this)
+	}
+
+	pub fn try_this(&self) -> Result<ObjValue> {
+		self.0
+			.sup_this
+			.as_ref()
+			.ok_or_else(|| CantUseSelfSupOutsideOfObject.into())
+			.map(SupThis::this)
+			.cloned()
+	}
+
+	pub fn sup_this(&self) -> Option<&SupThis> {
+		self.0.sup_this.as_ref()
+	}
+
+	pub fn try_sup_this(&self) -> Result<SupThis> {
+		self.0
+			.sup_this
+			.clone()
+			.ok_or_else(|| CantUseSelfSupOutsideOfObject.into())
 	}
 
 	pub fn binding(&self, name: IStr) -> Result<Thunk<Val>> {
@@ -83,74 +101,80 @@ impl Context {
 	pub fn with_var(self, name: impl Into<IStr>, value: Val) -> Self {
 		let mut new_bindings = GcHashMap::with_capacity(1);
 		new_bindings.insert(name.into(), Thunk::evaluated(value));
-		self.extend(new_bindings, None, None, None)
+		self.extend_bindings(new_bindings)
 	}
 
 	#[must_use]
-	pub fn extend(
+	pub fn extend_bindings_sup_this(
 		self,
 		new_bindings: GcHashMap<IStr, Thunk<Val>>,
-		new_dollar: Option<ObjValue>,
-		new_sup: Option<ObjValue>,
-		new_this: Option<ObjValue>,
+		sup_this: SupThis,
 	) -> Self {
-		let ctx = &self.0;
-		let dollar = new_dollar.or_else(|| ctx.dollar.clone());
-		let this = new_this.or_else(|| ctx.this.clone());
-		let sup = new_sup.or_else(|| ctx.sup.clone());
+		let ctx = &self;
+		let dollar = ctx
+			.0
+			.dollar
+			.clone()
+			.or_else(|| Some(sup_this.this().clone()));
 		let bindings = if new_bindings.is_empty() {
-			ctx.bindings.clone()
+			ctx.0.bindings.clone()
 		} else {
-			ctx.bindings.clone().extend(new_bindings)
+			ctx.0.bindings.clone().extend(new_bindings)
 		};
-		Self(Cc::new(ContextInternals {
-			state: ctx.state.clone(),
+		Self(Cc::new(ContextInternal {
 			dollar,
-			sup,
-			this,
+			sup_this: Some(sup_this),
+			bindings,
+		}))
+	}
+	#[must_use]
+	pub fn extend_bindings(self, new_bindings: GcHashMap<IStr, Thunk<Val>>) -> Self {
+		if new_bindings.is_empty() {
+			return self;
+		}
+		let ctx = &self;
+		let bindings = if new_bindings.is_empty() {
+			ctx.0.bindings.clone()
+		} else {
+			ctx.0.bindings.clone().extend(new_bindings)
+		};
+		Self(Cc::new(ContextInternal {
+			dollar: ctx.0.dollar.clone(),
+			sup_this: ctx.0.sup_this.clone(),
 			bindings,
 		}))
 	}
 }
 
-impl PartialEq for Context {
-	fn eq(&self, other: &Self) -> bool {
-		Cc::ptr_eq(&self.0, &other.0)
-	}
-}
-
+#[derive(Default)]
 pub struct ContextBuilder {
 	bindings: GcHashMap<IStr, Thunk<Val>>,
 	extend: Option<Context>,
 }
 
 impl ContextBuilder {
-	/// # Panics
-	/// Panics aren't directly caused by this function, but if state from resulting context is used
-	pub fn dangerous_empty_state() -> Self {
-		Self {
-			state: None,
-			bindings: GcHashMap::new(),
-			extend: None,
-		}
+	pub fn new() -> Self {
+		Self::default()
 	}
-	pub fn new(state: State) -> Self {
-		Self::with_capacity(state, 0)
-	}
-	pub fn with_capacity(state: State, capacity: usize) -> Self {
+
+	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			bindings: GcHashMap::with_capacity(capacity),
 			extend: None,
 		}
 	}
+
 	pub fn extend(parent: Context) -> Self {
 		Self {
 			bindings: GcHashMap::new(),
 			extend: Some(parent),
 		}
 	}
+
 	/// # Panics
-	/// If `name` is already bound
+	///
+	/// If `name` is already bound. Makes no sense to bind same local multiple times,
+	/// unless it is separate context layers.
 	pub fn bind(&mut self, name: impl Into<IStr>, value: Thunk<Val>) -> &mut Self {
 		let old = self.bindings.insert(name.into(), value);
 		assert!(old.is_none(), "variable bound twice in single context call");
@@ -158,15 +182,12 @@ impl ContextBuilder {
 	}
 	pub fn build(self) -> Context {
 		if let Some(parent) = self.extend {
-			// TODO: replace self.extend with Result<Context, State>, and remove `state` field
-			parent.extend(self.bindings, None, None, None)
+			parent.extend_bindings(self.bindings)
 		} else {
-			Context(Cc::new(ContextInternals {
-				state: self.state,
+			Context(Cc::new(ContextInternal {
 				bindings: LayeredHashMap::new(self.bindings),
 				dollar: None,
-				sup: None,
-				this: None,
+				sup_this: None,
 			}))
 		}
 	}

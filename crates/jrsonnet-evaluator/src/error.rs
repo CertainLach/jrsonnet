@@ -119,10 +119,8 @@ pub enum ErrorKind {
 	#[error("binary operation {1} {0} {2} is not implemented")]
 	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
 
-	#[error("no top level object in this context")]
-	NoTopLevelObjectFound,
-	#[error("self is only usable inside objects")]
-	CantUseSelfOutsideOfObject,
+	#[error("self/super/$ are only usable inside objects")]
+	CantUseSelfSupOutsideOfObject,
 	#[error("no super found")]
 	NoSuperFound,
 

@@ -1,11 +1,13 @@
-use std::cell::OnceCell;
+use std::ptr::addr_of;
+use std::{cell::OnceCell, hash::Hasher};
 
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 
 use crate::{bail, error::ErrorKind::InfiniteRecursionDetected, val::ThunkValue, Result};
 
-// TODO: Replace with OnceCell once in std
-#[derive(Clone, Trace)]
+#[derive(Trace, Educe)]
+#[educe(Clone)]
 pub struct Pending<V: Trace + 'static>(pub Cc<OnceCell<V>>);
 impl<T: Trace + 'static> Pending<T> {
 	pub fn new() -> Self {
@@ -25,7 +27,7 @@ impl<T: Trace + 'static> Pending<T> {
 			.expect("wrapper is filled already");
 	}
 }
-impl<T: Clone + Trace + 'static> Pending<T> {
+impl<T: Trace + 'static + Clone> Pending<T> {
 	/// # Panics
 	/// If wrapper is not yet filled
 	pub fn unwrap(&self) -> T {
@@ -51,4 +53,8 @@ impl<T: Trace + 'static> Default for Pending<T> {
 	fn default() -> Self {
 		Self::new()
 	}
+}
+
+pub fn identity_hash<T, H: Hasher>(v: &Cc<T>, hasher: &mut H) {
+	hasher.write_usize(addr_of!(**v) as usize);
 }

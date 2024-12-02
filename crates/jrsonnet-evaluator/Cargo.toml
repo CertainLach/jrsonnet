@@ -60,3 +60,4 @@ hi-doc = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
 stacker = "0.1.15"
+educe = { version = "0.6.0", default-features = false, features = ["Clone", "Debug", "Eq", "Hash", "PartialEq"] }

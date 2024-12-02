@@ -19,8 +19,8 @@ use crate::{
 	in_frame,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
-	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, Unbound, Val,
+	with_state, Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending,
+	Result, ResultExt, SupThis, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -124,10 +124,7 @@ pub fn evaluate_comp(
 					let fctx = Pending::new();
 					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
 					destruct(var, item, fctx.clone(), &mut new_bindings)?;
-					let ctx = ctx
-						.clone()
-						.extend(new_bindings, None, None, None)
-						.into_future(fctx);
+					let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
 					evaluate_comp(ctx, &specs[1..], callback)?;
 				}
@@ -167,18 +164,18 @@ trait CloneableUnbound<T>: Unbound<Bound = T> + Clone {}
 impl<V, T> CloneableUnbound<T> for V where V: Unbound<Bound = T> + Clone {}
 
 fn evaluate_object_locals(
-	fctx: Pending<Context>,
+	fctx: Context,
 	locals: Rc<Vec<BindSpec>>,
 ) -> impl CloneableUnbound<Context> {
 	#[derive(Trace, Clone)]
 	struct UnboundLocals {
-		fctx: Pending<Context>,
+		fctx: Context,
 		locals: Rc<Vec<BindSpec>>,
 	}
 	impl Unbound for UnboundLocals {
 		type Bound = Context;
 
-		fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Context> {
+		fn bind(&self, sup_this: SupThis) -> Result<Context> {
 			let fctx = Context::new_future();
 			let mut new_bindings =
 				GcHashMap::with_capacity(self.locals.iter().map(BindSpec::capacity_hint).sum());
@@ -186,11 +183,10 @@ fn evaluate_object_locals(
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
 
-			let ctx = self.fctx.unwrap();
-			let new_dollar = ctx.dollar().cloned().or_else(|| this.clone());
+			let ctx = self.fctx.clone();
 
 			let ctx = ctx
-				.extend(new_bindings, new_dollar, sup, this)
+				.extend_bindings_sup_this(new_bindings, sup_this)
 				.into_future(fctx);
 
 			Ok(ctx)
@@ -227,8 +223,8 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			}
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
 				type Bound = Val;
-				fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
-					evaluate_named(self.uctx.bind(sup, this)?, &self.value, self.name.clone())
+				fn bind(&self, sup_this: SupThis) -> Result<Val> {
+					evaluate_named(self.uctx.bind(sup_this)?, &self.value, self.name.clone())
 				}
 			}
 
@@ -258,9 +254,9 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			}
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
 				type Bound = Val;
-				fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+				fn bind(&self, sup_this: SupThis) -> Result<Val> {
 					Ok(evaluate_method(
-						self.uctx.bind(sup, this)?,
+						self.uctx.bind(sup_this)?,
 						self.name.clone(),
 						self.params.clone(),
 						self.value.clone(),
@@ -296,10 +292,8 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 			.collect::<Vec<_>>(),
 	);
 
-	let fctx = Context::new_future();
-
 	// We have single context for all fields, so we can cache binds
-	let uctx = CachedUnbound::new(evaluate_object_locals(fctx.clone(), locals));
+	let uctx = CachedUnbound::new(evaluate_object_locals(ctx.clone(), locals));
 
 	for member in members {
 		match member {
@@ -313,8 +307,8 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 					assert: AssertStmt,
 				}
 				impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
-					fn run(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<()> {
-						let ctx = self.uctx.bind(sup, this)?;
+					fn run(&self, sup_this: SupThis) -> Result<()> {
+						let ctx = self.uctx.bind(sup_this)?;
 						evaluate_assert(ctx, &self.assert)
 					}
 				}
@@ -328,9 +322,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 			}
 		}
 	}
-	let this = builder.build();
-	fctx.fill(ctx.extend(GcHashMap::new(), None, None, Some(this.clone())));
-	Ok(this)
+	Ok(builder.build())
 }
 
 pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
@@ -345,22 +337,13 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 					.cloned()
 					.collect::<Vec<_>>(),
 			);
-			let mut ctxs = vec![];
 			evaluate_comp(ctx, &obj.compspecs, &mut |ctx| {
-				let fctx = Context::new_future();
-				ctxs.push((ctx.clone(), fctx.clone()));
-				let uctx = evaluate_object_locals(fctx, locals.clone());
+				let uctx = evaluate_object_locals(ctx.clone(), locals.clone());
 
 				evaluate_field_member(&mut builder, ctx, uctx, &obj.field)
 			})?;
 
-			let this = builder.build();
-			for (ctx, fctx) in ctxs {
-				let _ctx = ctx
-					.extend(GcHashMap::new(), None, None, Some(this.clone()))
-					.into_future(fctx);
-			}
-			this
+			builder.build()
 		}
 	})
 }
@@ -426,19 +409,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 	}
 	let loc = expr.span();
 	Ok(match expr.expr() {
-		Literal(LiteralType::This) => {
-			Val::Obj(ctx.this().ok_or(CantUseSelfOutsideOfObject)?.clone())
-		}
-		Literal(LiteralType::Super) => Val::Obj(
-			ctx.super_obj().ok_or(NoSuperFound)?.with_this(
-				ctx.this()
-					.expect("if super exists - then this should too")
-					.clone(),
-			),
-		),
-		Literal(LiteralType::Dollar) => {
-			Val::Obj(ctx.dollar().ok_or(NoTopLevelObjectFound)?.clone())
-		}
+		Literal(LiteralType::This) => Val::Obj(ctx.try_this()?),
+		Literal(LiteralType::Super) => Val::Obj(ctx.try_sup_this()?.standalone_super()?),
+		Literal(LiteralType::Dollar) => Val::Obj(ctx.try_dollar()?),
 		Literal(LiteralType::True) => Val::Bool(true),
 		Literal(LiteralType::False) => Val::Bool(false),
 		Literal(LiteralType::Null) => Val::Null,
@@ -450,15 +423,18 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		//
 		// Note that other jsonnet implementations will fail on `if value in (super)` expression,
 		// because the standalone super literal is not supported, that is because in other
-		// implementations `in super` treated differently from in `smth_else`.
+		// implementations `in super` treated differently from `in smth_else`.
 		BinaryOp(field, BinaryOpType::In, e)
 			if matches!(e.expr(), Expr::Literal(LiteralType::Super)) =>
 		{
-			let Some(super_obj) = ctx.super_obj() else {
+			let sup_this = ctx.try_sup_this()?;
+			// In jsonnet, "field" in e is eager, LHS expression is always executed regardless of super existence.
+			// In jrsonnet, however, this wasn't true, this was kept here for compatibility.
+			if !sup_this.has_super() {
 				return Ok(Val::Bool(false));
-			};
-			let field = evaluate(ctx.clone(), field)?;
-			Val::Bool(super_obj.has_field_ex(field.to_string()?, true))
+			}
+			let field = evaluate(ctx, field)?;
+			Val::Bool(sup_this.field_in_super(field.to_string()?))
 		}
 		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
@@ -471,13 +447,16 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let mut parts = parts.iter();
 			let mut indexable = if matches!(indexable.expr(), Expr::Literal(LiteralType::Super)) {
 				let part = parts.next().expect("at least part should exist");
-				let Some(super_obj) = ctx.super_obj() else {
+				// sup_this existence check might also be skipped here for null-coalesce...
+				// But I believe this might cause errors.
+				let sup_this = ctx.try_sup_this()?;
+				if !sup_this.has_super() {
 					#[cfg(feature = "exp-null-coaelse")]
 					if part.null_coaelse {
 						return Ok(Val::Null);
 					}
 					bail!(NoSuperFound)
-				};
+				}
 				let name = evaluate(ctx.clone(), &part.value)?;
 
 				let Val::Str(name) = name else {
@@ -488,19 +467,19 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					))
 				};
 
-				let this = ctx
-					.this()
-					.expect("no this found, while super present, should not happen");
 				let name = name.into_flat();
-				match super_obj
-					.get_for(name.clone(), this.clone())
+				match sup_this
+					.get_super(name.clone())
 					.with_description_src(&part.value, || format!("field <{name}> access"))?
 				{
 					Some(v) => v,
 					#[cfg(feature = "exp-null-coaelse")]
 					None if part.null_coaelse => return Ok(Val::Null),
 					None => {
-						let suggestions = suggest_object_fields(super_obj, name.clone());
+						let suggestions = suggest_object_fields(
+							&sup_this.standalone_super().expect("super exists"),
+							name.clone(),
+						);
 
 						bail!(NoSuchField(name, suggestions))
 					}
@@ -587,7 +566,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			for b in bindings {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
-			let ctx = ctx.extend(new_bindings, None, None, None).into_future(fctx);
+			let ctx = ctx.extend_bindings(new_bindings).into_future(fctx);
 			evaluate(ctx, &returned.clone())?
 		}
 		Arr(items) => {
@@ -650,7 +629,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Slice(value, desc) => {
 			fn parse_idx<T: Typed>(
 				loc: CallLocation<'_>,
-				ctx: &Context,
+				ctx: Context,
 				expr: Option<&LocExpr>,
 				desc: &'static str,
 			) -> Result<Option<T>> {
@@ -658,7 +637,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					Ok(in_frame(
 						loc,
 						|| format!("slice {desc}"),
-						|| <Option<T>>::from_untyped(evaluate(ctx.clone(), value)?),
+						|| <Option<T>>::from_untyped(evaluate(ctx, value)?),
 					)?)
 				} else {
 					Ok(None)
@@ -668,9 +647,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			let indexable = evaluate(ctx.clone(), value)?;
 			let loc = CallLocation::new(&loc);
 
-			let start = parse_idx(loc, &ctx, desc.start.as_ref(), "start")?;
-			let end = parse_idx(loc, &ctx, desc.end.as_ref(), "end")?;
-			let step = parse_idx(loc, &ctx, desc.step.as_ref(), "step")?;
+			let start = parse_idx(loc, ctx.clone(), desc.start.as_ref(), "start")?;
+			let end = parse_idx(loc, ctx.clone(), desc.end.as_ref(), "end")?;
+			let step = parse_idx(loc, ctx, desc.step.as_ref(), "step")?;
 
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
@@ -679,18 +658,21 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				bail!("computed imports are not supported")
 			};
 			let tmp = loc.clone().0;
-			let s = ctx.state();
-			let resolved_path = s.resolve_from(tmp.source_path(), path)?;
-			match i {
-				Import(_) => in_frame(
-					CallLocation::new(&loc),
-					|| format!("import {:?}", path.clone()),
-					|| s.import_resolved(resolved_path),
-				)?,
-				ImportStr(_) => Val::string(s.import_resolved_str(resolved_path)?),
-				ImportBin(_) => Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?)),
-				_ => unreachable!(),
-			}
+			with_state(|s| {
+				let resolved_path = s.resolve_from(tmp.source_path(), path)?;
+				Ok(match i {
+					Import(_) => in_frame(
+						CallLocation::new(&loc),
+						|| format!("import {:?}", path.clone()),
+						|| s.import_resolved(resolved_path),
+					)?,
+					ImportStr(_) => Val::string(s.import_resolved_str(resolved_path)?),
+					ImportBin(_) => {
+						Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?))
+					}
+					_ => unreachable!(),
+				}) as Result<Val>
+			})?
 		}
 	})
 }

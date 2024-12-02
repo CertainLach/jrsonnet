@@ -28,7 +28,9 @@ pub mod val;
 use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
+	clone::Clone,
 	fmt::{self, Debug},
+	marker::PhantomData,
 };
 
 pub use ctx::*;
@@ -56,7 +58,7 @@ pub trait Unbound: Trace {
 	/// Type of value after object context is bound
 	type Bound;
 	/// Create value bound to specified object context
-	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
+	fn bind(&self, sup_this: SupThis) -> Result<Self::Bound>;
 }
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
@@ -76,9 +78,9 @@ impl Debug for MaybeUnbound {
 }
 impl MaybeUnbound {
 	/// Attach object context to value, if required
-	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+	pub fn evaluate(&self, sup_this: SupThis) -> Result<Val> {
 		match self {
-			Self::Unbound(v) => v.bind(sup, this),
+			Self::Unbound(v) => v.bind(sup_this),
 			Self::Bound(v) => Ok(v.evaluate()?),
 		}
 	}
@@ -94,8 +96,8 @@ pub trait ContextInitializer: Trace {
 	/// Initialize default file context.
 	/// Has default implementation, which calls `populate`.
 	/// Prefer to always implement `populate` instead.
-	fn initialize(&self, state: State, for_file: Source) -> Context {
-		let mut builder = ContextBuilder::with_capacity(state, self.reserve_vars());
+	fn initialize(&self, for_file: Source) -> Context {
+		let mut builder = ContextBuilder::with_capacity(self.reserve_vars());
 		self.populate(for_file, &mut builder);
 		builder.build()
 	}
@@ -119,11 +121,11 @@ impl<T> ContextInitializer for Option<T>
 where
 	T: ContextInitializer,
 {
-	fn initialize(&self, state: State, for_file: Source) -> Context {
+	fn initialize(&self, for_file: Source) -> Context {
 		if let Some(ctx) = self {
-			ctx.initialize(state, for_file)
+			ctx.initialize(for_file)
 		} else {
-			().initialize(state, for_file)
+			().initialize(for_file)
 		}
 	}
 
@@ -226,7 +228,40 @@ pub struct EvaluationStateInternals {
 #[derive(Clone, Trace)]
 pub struct State(Cc<EvaluationStateInternals>);
 
+thread_local! {
+	pub static DEFAULT_STATE: State = State::builder().build();
+	pub static STATE: RefCell<Option<State>> = const {RefCell::new(None)};
+}
+pub struct StateEnterGuard(PhantomData<()>);
+impl Drop for StateEnterGuard {
+	fn drop(&mut self) {
+		STATE.with_borrow_mut(|v| *v = None);
+	}
+}
+
+pub fn with_state<V>(v: impl FnOnce(State) -> V) -> V {
+	if let Some(state) = STATE.with_borrow(Clone::clone) {
+		v(state)
+	} else {
+		let s = DEFAULT_STATE.with(Clone::clone);
+		v(s)
+	}
+}
+
 impl State {
+	pub fn enter(&self) -> StateEnterGuard {
+		self.try_enter().expect("entered state already exists")
+	}
+	pub fn try_enter(&self) -> Option<StateEnterGuard> {
+		STATE.with_borrow_mut(|v| {
+			if v.is_none() {
+				*v = Some(self.clone());
+				Some(StateEnterGuard(PhantomData))
+			} else {
+				None
+			}
+		})
+	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
 		let mut file_cache = self.file_cache();
@@ -357,7 +392,7 @@ impl State {
 
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self, source: Source) -> Context {
-		self.context_initializer().initialize(self.clone(), source)
+		self.context_initializer().initialize(source)
 	}
 
 	/// Creates context with all passed global variables, calling custom modifier
@@ -368,7 +403,6 @@ impl State {
 	) -> Context {
 		let default_initializer = self.context_initializer();
 		let mut builder = ContextBuilder::with_capacity(
-			self.clone(),
 			default_initializer.reserve_vars() + context_initializer.reserve_vars(),
 		);
 		default_initializer.populate(source.clone(), &mut builder);

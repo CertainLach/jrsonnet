@@ -1,11 +1,12 @@
 use std::{
 	any::Any,
-	cell::RefCell,
-	fmt::Debug,
+	cell::{Cell, RefCell},
+	fmt::{self, Debug},
 	hash::{Hash, Hasher},
-	ptr::addr_of,
 };
 
+use educe::Educe;
+use hashbrown::hash_map::Entry;
 use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
@@ -17,7 +18,7 @@ use crate::{
 	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::{CallLocation, FuncVal},
 	gc::{GcHashMap, GcHashSet, TraceBox},
-	in_frame,
+	identity_hash, in_frame,
 	operator::evaluate_add_op,
 	tb,
 	val::ArrValue,
@@ -44,9 +45,7 @@ mod ordering {
 	#[derive(Clone, Copy, Default, Debug, Trace)]
 	pub struct SuperDepth(());
 	impl SuperDepth {
-		pub const fn deeper(self) -> Self {
-			Self(())
-		}
+		pub(super) fn deepen(self) {}
 	}
 
 	#[derive(Clone, Copy)]
@@ -75,8 +74,8 @@ mod ordering {
 	#[derive(Clone, Copy, Default, PartialEq, Eq, PartialOrd, Ord, Debug)]
 	pub struct SuperDepth(u32);
 	impl SuperDepth {
-		pub fn deeper(self) -> Self {
-			Self(self.0 + 1)
+		pub(super) fn deepen(&mut self) {
+			*self.0 += 1
 		}
 	}
 
@@ -121,7 +120,7 @@ impl ObjFieldFlags {
 	}
 }
 impl Debug for ObjFieldFlags {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_struct("ObjFieldFlags")
 			.field("add", &self.add())
 			.field("visibility", &self.visibility())
@@ -140,70 +139,59 @@ pub struct ObjMember {
 }
 
 pub trait ObjectAssertion: Trace {
-	fn run(&self, super_obj: Option<ObjValue>, this: Option<ObjValue>) -> Result<()>;
+	fn run(&self, sup_this: SupThis) -> Result<()>;
 }
 
 // Field => This
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 enum CacheValue {
-	Cached(Val),
-	NotFound,
+	Cached(Result<Option<Val>>),
 	Pending,
-	Errored(Error),
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Trace)]
+#[derive(Trace, Educe)]
+#[educe(Debug)]
 #[trace(tracking(force))]
 pub struct OopObject {
-	sup: Option<ObjValue>,
-	// this: Option<ObjValue>,
-	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
-	assertions_ran: RefCell<GcHashSet<ObjValue>>,
 	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
-}
-impl Debug for OopObject {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("OopObject")
-			.field("sup", &self.sup)
-			// .field("assertions", &self.assertions)
-			// .field("assertions_ran", &self.assertions_ran)
-			.field("this_entries", &self.this_entries)
-			// .field("value_cache", &self.value_cache)
-			.finish_non_exhaustive()
-	}
+	#[educe(Debug(ignore))]
+	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 }
 
 type EnumFieldsHandler<'a> = dyn FnMut(SuperDepth, FieldIndex, IStr, Visibility) -> bool + 'a;
 
-pub trait ObjectLike: Trace + Any + Debug {
-	fn extend_from(&self, sup: ObjValue) -> ObjValue;
-	/// When using standalone super in object, `this.super_obj.with_this(this)` is executed
-	fn with_this(&self, me: ObjValue, this: ObjValue) -> ObjValue {
-		ObjValue::new(ThisOverride { inner: me, this })
-	}
-	fn this(&self) -> Option<ObjValue> {
-		None
-	}
-	fn len(&self) -> usize;
-	fn is_empty(&self) -> bool;
-	// If callback returns false, iteration stops
-	fn enum_fields(&self, depth: SuperDepth, handler: &mut EnumFieldsHandler<'_>) -> bool;
+#[derive(Trace, Clone)]
+pub enum ValueProcess {
+	None,
+	SuperPlus,
+}
+
+pub trait ObjectCore: Trace + Any + Debug {
+	// If callback returns false, iteration stops, and this call returns false.
+	fn enum_fields_core(
+		&self,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
+	) -> bool;
 
 	fn has_field_include_hidden(&self, name: IStr) -> bool;
-	fn has_field(&self, name: IStr) -> bool;
 
-	fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>>;
-	fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<Val>>;
+	fn get_for(&self, key: IStr, sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>>;
+	// fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<(Val, ValueProcess)>>;
 	fn field_visibility(&self, field: IStr) -> Option<Visibility>;
 
-	fn run_assertions_raw(&self, this: ObjValue) -> Result<()>;
+	fn run_assertions_raw(&self, sup_this: SupThis) -> Result<()>;
 }
 
 #[derive(Clone, Trace)]
-pub struct WeakObjValue(#[trace(skip)] pub(crate) Weak<TraceBox<dyn ObjectLike>>);
+pub struct WeakObjValue(#[trace(skip)] Weak<ObjValueInner>);
+impl Debug for WeakObjValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		f.debug_tuple("WeakObjValue").finish()
+	}
+}
 
 impl PartialEq for WeakObjValue {
 	fn eq(&self, other: &Self) -> bool {
@@ -220,50 +208,94 @@ impl Hash for WeakObjValue {
 	}
 }
 
+#[derive(Trace, Educe)]
+#[educe(Debug)]
+struct ObjValueInner {
+	cores: Vec<Cc<TraceBox<dyn ObjectCore>>>,
+	assertions_ran: Cell<bool>,
+	value_cache: RefCell<GcHashMap<(IStr, CoreIdx), CacheValue>>,
+}
+
+thread_local! {
+	static RUNNING_ASSERTIONS: RefCell<GcHashSet<ObjValue>> = RefCell::default();
+}
+fn is_asserting(obj: &ObjValue) -> bool {
+	RUNNING_ASSERTIONS.with_borrow(|v| v.contains(obj))
+}
+/// Returns false if already asserting
+fn start_asserting(obj: &ObjValue) -> bool {
+	RUNNING_ASSERTIONS.with_borrow_mut(|v| v.insert(obj.clone()))
+}
+fn finish_asserting(obj: &ObjValue) {
+	RUNNING_ASSERTIONS.with_borrow_mut(|v| {
+		let r = v.remove(obj);
+		debug_assert!(
+			r,
+			"finish_asserting was called before start_asserting or twice"
+		);
+	});
+}
+
 #[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Trace, Debug)]
-pub struct ObjValue(pub(crate) Cc<TraceBox<dyn ObjectLike>>);
+#[derive(Clone, Trace, Debug, Educe)]
+#[educe(PartialEq, Hash, Eq)]
+pub struct ObjValue(
+	#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))] Cc<ObjValueInner>,
+);
+
+#[derive(Trace, Debug)]
+struct StandaloneSuperCore {
+	sup: CoreIdx,
+	this: ObjValue,
+}
+impl ObjectCore for StandaloneSuperCore {
+	fn enum_fields_core(
+		&self,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
+	) -> bool {
+		self.this
+			.enum_fields_internal(super_depth, handler, self.sup)
+	}
+
+	fn has_field_include_hidden(&self, name: IStr) -> bool {
+		self.this.has_field_include_hidden_idx(name, self.sup)
+	}
+
+	fn get_for(&self, key: IStr, _sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
+		let v = self.this.get_idx(key, self.sup)?;
+		Ok(v.map(|v| (v, ValueProcess::None)))
+	}
+
+	fn field_visibility(&self, field: IStr) -> Option<Visibility> {
+		self.this.field_visibility_idx(field, self.sup)
+	}
+
+	fn run_assertions_raw(&self, _sup_this: SupThis) -> Result<()> {
+		self.this.run_assertions()
+	}
+}
 
 #[derive(Debug, Trace)]
 struct EmptyObject;
-impl ObjectLike for EmptyObject {
-	fn extend_from(&self, sup: ObjValue) -> ObjValue {
-		// obj + {} == obj
-		sup
-	}
-
-	fn this(&self) -> Option<ObjValue> {
-		None
-	}
-
-	fn len(&self) -> usize {
-		0
-	}
-
-	fn is_empty(&self) -> bool {
+impl ObjectCore for EmptyObject {
+	fn enum_fields_core(
+		&self,
+		_super_depth: &mut SuperDepth,
+		_handler: &mut EnumFieldsHandler<'_>,
+	) -> bool {
 		true
-	}
-
-	fn enum_fields(&self, _depth: SuperDepth, _handler: &mut EnumFieldsHandler<'_>) -> bool {
-		false
 	}
 
 	fn has_field_include_hidden(&self, _name: IStr) -> bool {
 		false
 	}
 
-	fn has_field(&self, _name: IStr) -> bool {
-		false
-	}
-
-	fn get_for(&self, _key: IStr, _this: ObjValue) -> Result<Option<Val>> {
-		Ok(None)
-	}
-	fn get_for_uncached(&self, _key: IStr, _this: ObjValue) -> Result<Option<Val>> {
+	fn get_for(&self, _key: IStr, _sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
 		Ok(None)
 	}
 
-	fn run_assertions_raw(&self, _this: ObjValue) -> Result<()> {
+	fn run_assertions_raw(&self, _sup_this: SupThis) -> Result<()> {
 		Ok(())
 	}
 
@@ -272,67 +304,78 @@ impl ObjectLike for EmptyObject {
 	}
 }
 
-#[derive(Trace, Debug)]
-struct ThisOverride {
-	inner: ObjValue,
+#[derive(Hash, PartialEq, Eq, Trace, Clone, Copy, Debug)]
+struct CoreIdx {
+	idx: usize,
+}
+impl CoreIdx {
+	fn super_exists(self) -> bool {
+		self.idx != 0
+	}
+}
+#[derive(Trace, Clone, PartialEq, Eq, Hash, Debug)]
+pub struct SupThis {
+	sup: CoreIdx,
 	this: ObjValue,
 }
-impl ObjectLike for ThisOverride {
-	fn with_this(&self, _me: ObjValue, this: ObjValue) -> ObjValue {
-		ObjValue::new(Self {
-			inner: self.inner.clone(),
-			this,
-		})
+impl SupThis {
+	pub fn has_super(&self) -> bool {
+		self.sup.super_exists()
 	}
-
-	fn extend_from(&self, sup: ObjValue) -> ObjValue {
-		self.inner.extend_from(sup).with_this(self.this.clone())
+	/// Implementation of `"field" in super` operation,
+	/// works faster than standalone super path.
+	///
+	/// In case of no `super` existence, returns false.
+	pub fn field_in_super(&self, field: IStr) -> bool {
+		self.this.has_field_include_hidden_idx(field, self.sup)
 	}
-
-	fn this(&self) -> Option<ObjValue> {
-		Some(self.this.clone())
+	/// Implementation of `super.field` operation,
+	/// works faster than standalone super path.
+	///
+	/// In case of no `super` existence, returns `NoSuperFound`
+	pub fn get_super(&self, field: IStr) -> Result<Option<Val>> {
+		if !self.sup.super_exists() {
+			bail!(NoSuperFound);
+		}
+		self.this.get_idx(field, self.sup)
 	}
-
-	fn len(&self) -> usize {
-		self.inner.len()
+	/// `super` with `self` overriden for top-level lookups.
+	/// Exists when super appears outside of `super.field`/`"field" in super` expressions
+	/// Exclusive to jrsonnet.
+	///
+	/// Might return `NoSuperFound` error.
+	pub fn standalone_super(&self) -> Result<ObjValue> {
+		if !self.sup.super_exists() {
+			bail!(NoSuperFound)
+		}
+		Ok(ObjValue::new(StandaloneSuperCore {
+			sup: self.sup,
+			this: self.this.clone(),
+		}))
 	}
-
-	fn is_empty(&self) -> bool {
-		self.inner.is_empty()
+	pub fn this(&self) -> &ObjValue {
+		&self.this
 	}
-
-	fn enum_fields(&self, depth: SuperDepth, handler: &mut EnumFieldsHandler<'_>) -> bool {
-		self.inner.enum_fields(depth, handler)
+	pub fn downgrade(self) -> WeakSupThis {
+		WeakSupThis {
+			sup: self.sup,
+			this: self.this.downgrade(),
+		}
 	}
-
-	fn has_field_include_hidden(&self, name: IStr) -> bool {
-		self.inner.has_field_include_hidden(name)
-	}
-
-	fn has_field(&self, name: IStr) -> bool {
-		self.inner.has_field(name)
-	}
-
-	fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
-		self.inner.get_for(key, this)
-	}
-
-	fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
-		self.inner.get_raw(key, this)
-	}
-
-	fn field_visibility(&self, field: IStr) -> Option<Visibility> {
-		self.inner.field_visibility(field)
-	}
-
-	fn run_assertions_raw(&self, this: ObjValue) -> Result<()> {
-		self.inner.run_assertions_raw(this)
-	}
+}
+#[derive(Trace, PartialEq, Eq, Hash, Debug)]
+pub struct WeakSupThis {
+	sup: CoreIdx,
+	this: WeakObjValue,
 }
 
 impl ObjValue {
-	pub fn new(v: impl ObjectLike) -> Self {
-		Self(Cc::new(tb!(v)))
+	pub fn new(v: impl ObjectCore) -> Self {
+		Self(Cc::new(ObjValueInner {
+			cores: vec![Cc::new(tb!(v))],
+			assertions_ran: Cell::new(false),
+			value_cache: RefCell::new(GcHashMap::new()),
+		}))
 	}
 	pub fn new_empty() -> Self {
 		Self::new(EmptyObject)
@@ -364,27 +407,77 @@ impl ObjValue {
 
 	#[must_use]
 	pub fn extend_from(&self, sup: Self) -> Self {
-		self.0.extend_from(sup)
+		let mut cores = sup.0.cores.clone();
+		cores.extend(self.0.cores.iter().cloned());
+		ObjValue(Cc::new(ObjValueInner {
+			cores,
+			value_cache: RefCell::default(),
+			assertions_ran: Cell::new(false),
+		}))
 	}
-	#[must_use]
-	pub fn with_this(&self, this: Self) -> Self {
-		self.0.with_this(self.clone(), this)
-	}
+	// #[must_use]
+	// pub fn with_this(&self, this: Self) -> Self {
+	// 	self.0.with_this(self.clone(), this)
+	// }
+	/// Returns amount of visible object fields
+	/// If object only contains hidden fields - may return zero.
 	pub fn len(&self) -> usize {
-		self.0.len()
+		self.fields_visibility()
+			.iter()
+			.filter(|(_, (visible, _))| *visible)
+			.count()
 	}
 	pub fn is_empty(&self) -> bool {
-		self.0.is_empty()
+		self.len() == 0
 	}
-	pub fn enum_fields(&self, depth: SuperDepth, handler: &mut EnumFieldsHandler<'_>) -> bool {
-		self.0.enum_fields(depth, handler)
+	/// For each field, calls callback.
+	/// If callback returns false - ends iteration prematurely.
+	///
+	/// Returns false if ended prematurely
+	pub fn enum_fields(&self, handler: &mut EnumFieldsHandler<'_>) -> bool {
+		let mut super_depth = SuperDepth::default();
+		self.enum_fields_internal(
+			&mut super_depth,
+			handler,
+			CoreIdx {
+				idx: self.0.cores.len(),
+			},
+		)
+	}
+	fn enum_fields_internal(
+		&self,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
+		idx: CoreIdx,
+	) -> bool {
+		for core in self.0.cores[..idx.idx].iter().rev() {
+			if !core.enum_fields_core(super_depth, handler) {
+				return false;
+			}
+			super_depth.deepen();
+		}
+		true
 	}
 
 	pub fn has_field_include_hidden(&self, name: IStr) -> bool {
-		self.0.has_field_include_hidden(name)
+		self.has_field_include_hidden_idx(
+			name,
+			CoreIdx {
+				idx: self.0.cores.len(),
+			},
+		)
+	}
+	fn has_field_include_hidden_idx(&self, name: IStr, core: CoreIdx) -> bool {
+		self.0.cores[..core.idx]
+			.iter()
+			.rev()
+			.any(|v| v.has_field_include_hidden(name.clone()))
 	}
 	pub fn has_field(&self, name: IStr) -> bool {
-		self.0.has_field(name)
+		match self.field_visibility(name) {
+			Some(Visibility::Unhide | Visibility::Normal) => true,
+			Some(Visibility::Hidden) | None => false,
+		}
 	}
 	pub fn has_field_ex(&self, name: IStr, include_hidden: bool) -> bool {
 		if include_hidden {
@@ -393,14 +486,78 @@ impl ObjValue {
 			self.has_field(name)
 		}
 	}
-
 	pub fn get(&self, key: IStr) -> Result<Option<Val>> {
-		self.run_assertions()?;
-		self.get_for(key, self.0.this().unwrap_or_else(|| self.clone()))
+		self.get_idx(
+			key,
+			CoreIdx {
+				idx: self.0.cores.len(),
+			},
+		)
 	}
 
-	pub fn get_for(&self, key: IStr, this: Self) -> Result<Option<Val>> {
-		self.0.get_for(key, this)
+	fn get_idx(&self, key: IStr, core: CoreIdx) -> Result<Option<Val>> {
+		let cache_key = (key.clone(), core);
+		{
+			let mut cache = self.0.value_cache.borrow_mut();
+			// entry_ref candidate?
+			match cache.entry(cache_key.clone()) {
+				Entry::Occupied(v) => match v.get() {
+					CacheValue::Cached(v) => return v.clone(),
+					CacheValue::Pending => {
+						if !is_asserting(self) {
+							bail!(InfiniteRecursionDetected);
+						}
+					}
+				},
+				Entry::Vacant(v) => {
+					v.insert(CacheValue::Pending);
+				}
+			};
+		}
+		let result = self.get_idx_uncached(key, core);
+		{
+			let mut cache = self.0.value_cache.borrow_mut();
+			cache.insert(cache_key, CacheValue::Cached(result.clone()));
+		}
+		result
+	}
+	fn get_idx_uncached(&self, key: IStr, core: CoreIdx) -> Result<Option<Val>> {
+		self.run_assertions()?;
+		let mut add_stack = Vec::with_capacity(2);
+		for (sup, core) in self.0.cores[..core.idx].iter().enumerate().rev() {
+			let sup_this = SupThis {
+				sup: CoreIdx { idx: sup },
+				this: self.clone(),
+			};
+			if let Some((val, proc)) = core.get_for(key.clone(), sup_this)? {
+				match proc {
+					ValueProcess::None if add_stack.is_empty() => return Ok(Some(val)),
+					ValueProcess::None => {
+						add_stack.push(val);
+						break;
+					}
+					ValueProcess::SuperPlus => {
+						add_stack.push(val);
+					}
+				}
+			}
+		}
+		if add_stack.is_empty() {
+			// None of layers had this field
+			return Ok(None);
+		} else if add_stack.len() == 1 {
+			// A layer had this field, but it wanted this field to be added with super.
+			// However, no super had this field, fail-safe
+			return Ok(Some(add_stack.pop().expect("single element on stack")));
+		}
+		let mut values = add_stack.into_iter().rev();
+		let init = values.next().expect("at least 2 elements");
+
+		values
+			.try_fold(init, |a, b| evaluate_add_op(&a, &b))
+			.map(Some)
+
+		// self.0.get_raw(key, this)
 	}
 
 	pub fn get_or_bail(&self, key: IStr) -> Result<Val> {
@@ -411,20 +568,46 @@ impl ObjValue {
 		Ok(value)
 	}
 
-	fn get_raw(&self, key: IStr, this: Self) -> Result<Option<Val>> {
-		self.0.get_for_uncached(key, this)
-	}
-
 	fn field_visibility(&self, field: IStr) -> Option<Visibility> {
-		self.0.field_visibility(field)
+		self.field_visibility_idx(
+			field,
+			CoreIdx {
+				idx: self.0.cores.len(),
+			},
+		)
+	}
+	fn field_visibility_idx(&self, field: IStr, core: CoreIdx) -> Option<Visibility> {
+		let mut exists = false;
+		for ele in self.0.cores[..core.idx].iter().rev() {
+			let vis = ele.field_visibility(field.clone());
+			match vis {
+				Some(Visibility::Unhide | Visibility::Hidden) => return vis,
+				Some(Visibility::Normal) => exists = true,
+				None => {}
+			}
+		}
+		exists.then_some(Visibility::Normal)
 	}
 
 	pub fn run_assertions(&self) -> Result<()> {
-		// FIXME: Should it use `self.0.this()` in case of standalone super?
-		self.run_assertions_raw(self.clone())
-	}
-	fn run_assertions_raw(&self, this: Self) -> Result<()> {
-		self.0.run_assertions_raw(this)
+		if self.0.assertions_ran.get() {
+			return Ok(());
+		}
+		if !start_asserting(self) {
+			return Ok(());
+		}
+		for (idx, ele) in self.0.cores.iter().enumerate() {
+			let sup_this = SupThis {
+				sup: CoreIdx { idx },
+				this: self.clone(),
+			};
+			ele.run_assertions_raw(sup_this).inspect_err(|_e| {
+				finish_asserting(self);
+			})?;
+		}
+		finish_asserting(self);
+		self.0.assertions_ran.set(true);
+		Ok(())
 	}
 
 	pub fn iter(
@@ -463,24 +646,21 @@ impl ObjValue {
 	}
 	fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
 		let mut out = FxHashMap::default();
-		self.enum_fields(
-			SuperDepth::default(),
-			&mut |depth, index, name, visibility| {
-				let new_sort_key = FieldSortKey::new(depth, index);
-				let entry = out.entry(name);
-				let (visible, _) = entry.or_insert((true, new_sort_key));
-				match visibility {
-					Visibility::Normal => {}
-					Visibility::Hidden => {
-						*visible = false;
-					}
-					Visibility::Unhide => {
-						*visible = true;
-					}
-				};
-				false
-			},
-		);
+		self.enum_fields(&mut |depth, index, name, visibility| {
+			let new_sort_key = FieldSortKey::new(depth, index);
+			let entry = out.entry(name);
+			let (visible, _) = entry.or_insert((true, new_sort_key));
+			match visibility {
+				Visibility::Normal => {}
+				Visibility::Hidden => {
+					*visible = false;
+				}
+				Visibility::Unhide => {
+					*visible = true;
+				}
+			};
+			false
+		});
 		out
 	}
 	pub fn fields_ex(
@@ -581,210 +761,64 @@ impl ObjValue {
 
 impl OopObject {
 	pub fn new(
-		sup: Option<ObjValue>,
 		this_entries: Cc<GcHashMap<IStr, ObjMember>>,
 		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
 	) -> Self {
 		Self {
-			sup,
-			// this: None,
-			assertions,
-			assertions_ran: RefCell::new(GcHashSet::new()),
 			this_entries,
-			value_cache: RefCell::new(GcHashMap::new()),
+			assertions,
 		}
-	}
-
-	fn evaluate_this(&self, v: &ObjMember, real_this: ObjValue) -> Result<Val> {
-		v.invoke.evaluate(self.sup.clone(), Some(real_this))
-	}
-
-	// FIXME: Duplication between ObjValue and OopObject
-	fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
-		let mut out = FxHashMap::default();
-		self.enum_fields(
-			SuperDepth::default(),
-			&mut |depth, index, name, visibility| {
-				let new_sort_key = FieldSortKey::new(depth, index);
-				let entry = out.entry(name);
-				let (visible, _) = entry.or_insert((true, new_sort_key));
-				match visibility {
-					Visibility::Normal => {}
-					Visibility::Hidden => {
-						*visible = false;
-					}
-					Visibility::Unhide => {
-						*visible = true;
-					}
-				};
-				false
-			},
-		);
-		out
 	}
 }
 
-impl ObjectLike for OopObject {
-	fn extend_from(&self, sup: ObjValue) -> ObjValue {
-		ObjValue::new(match &self.sup {
-			None => Self::new(
-				Some(sup),
-				self.this_entries.clone(),
-				self.assertions.clone(),
-			),
-			Some(v) => Self::new(
-				Some(v.extend_from(sup)),
-				self.this_entries.clone(),
-				self.assertions.clone(),
-			),
-		})
-	}
-
-	fn len(&self) -> usize {
-		// Maybe it will be better to not compute sort key here?
-		self.fields_visibility()
-			.into_iter()
-			.filter(|(_, (visible, _))| *visible)
-			.count()
-	}
-
-	/// Returns false only if there is any visible entry.
-	///
-	/// Note that object with hidden fields `{a:: 1}` will be reported as empty here.
-	fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
-
-	/// Run callback for every field found in object
-	///
-	/// Returns true if ended prematurely
-	fn enum_fields(&self, depth: SuperDepth, handler: &mut EnumFieldsHandler<'_>) -> bool {
-		if let Some(s) = &self.sup {
-			if s.enum_fields(depth.deeper(), handler) {
-				return true;
-			}
-		}
+impl ObjectCore for OopObject {
+	fn enum_fields_core(
+		&self,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
+	) -> bool {
 		for (name, member) in self.this_entries.iter() {
 			if handler(
-				depth,
+				*super_depth,
 				member.original_index,
 				name.clone(),
 				member.flags.visibility(),
 			) {
-				return true;
+				return false;
 			}
 		}
-		false
+		true
 	}
 
 	fn has_field_include_hidden(&self, name: IStr) -> bool {
-		if self.this_entries.contains_key(&name) {
-			true
-		} else if let Some(super_obj) = &self.sup {
-			super_obj.has_field_include_hidden(name)
-		} else {
-			false
-		}
-	}
-	fn has_field(&self, name: IStr) -> bool {
-		self.field_visibility(name)
-			.map_or(false, |v| v.is_visible())
+		self.this_entries.contains_key(&name)
 	}
 
-	fn get_for(&self, key: IStr, this: ObjValue) -> Result<Option<Val>> {
-		let cache_key = (key.clone(), Some(this.clone().downgrade()));
-		if let Some(v) = self.value_cache.borrow().get(&cache_key) {
-			return Ok(match v {
-				CacheValue::Cached(v) => Some(v.clone()),
-				CacheValue::NotFound => None,
-				CacheValue::Pending => bail!(InfiniteRecursionDetected),
-				CacheValue::Errored(e) => return Err(e.clone()),
-			});
-		}
-		self.value_cache
-			.borrow_mut()
-			.insert(cache_key.clone(), CacheValue::Pending);
-		let value = self.get_for_uncached(key, this).inspect_err(|e| {
-			self.value_cache
-				.borrow_mut()
-				.insert(cache_key.clone(), CacheValue::Errored(e.clone()));
-		})?;
-		self.value_cache.borrow_mut().insert(
-			cache_key,
-			value
-				.as_ref()
-				.map_or(CacheValue::NotFound, |v| CacheValue::Cached(v.clone())),
-		);
-		Ok(value)
-	}
-	fn get_for_uncached(&self, key: IStr, real_this: ObjValue) -> Result<Option<Val>> {
-		match (self.this_entries.get(&key), &self.sup) {
-			(Some(k), None) => Ok(Some(self.evaluate_this(k, real_this)?)),
-			(Some(k), Some(super_obj)) => {
-				let our = self.evaluate_this(k, real_this.clone())?;
+	fn get_for(&self, key: IStr, sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
+		match self.this_entries.get(&key) {
+			Some(k) => Ok(Some((
+				k.invoke.evaluate(sup_this)?,
 				if k.flags.add() {
-					super_obj
-						.get_raw(key, real_this)?
-						.map_or(Ok(Some(our.clone())), |v| {
-							Ok(Some(evaluate_add_op(&v, &our)?))
-						})
+					ValueProcess::SuperPlus
 				} else {
-					Ok(Some(our))
-				}
-			}
-			(None, Some(super_obj)) => super_obj.get_raw(key, real_this),
-			(None, None) => Ok(None),
+					ValueProcess::None
+				},
+			))),
+			None => Ok(None),
 		}
 	}
 	fn field_visibility(&self, name: IStr) -> Option<Visibility> {
-		if let Some(m) = self.this_entries.get(&name) {
-			Some(match &m.flags.visibility() {
-				Visibility::Normal => self
-					.sup
-					.as_ref()
-					.and_then(|super_obj| super_obj.field_visibility(name))
-					.unwrap_or(Visibility::Normal),
-				v => *v,
-			})
-		} else if let Some(super_obj) = &self.sup {
-			super_obj.field_visibility(name)
-		} else {
-			None
-		}
+		Some(self.this_entries.get(&name)?.flags.visibility())
 	}
 
-	fn run_assertions_raw(&self, real_this: ObjValue) -> Result<()> {
+	fn run_assertions_raw(&self, sup_this: SupThis) -> Result<()> {
 		if self.assertions.is_empty() {
-			if let Some(super_obj) = &self.sup {
-				super_obj.run_assertions_raw(real_this)?;
-			}
 			return Ok(());
 		}
-		if self.assertions_ran.borrow_mut().insert(real_this.clone()) {
-			for assertion in self.assertions.iter() {
-				if let Err(e) = assertion.run(self.sup.clone(), Some(real_this.clone())) {
-					self.assertions_ran.borrow_mut().remove(&real_this);
-					return Err(e);
-				}
-			}
-			if let Some(super_obj) = &self.sup {
-				super_obj.run_assertions_raw(real_this)?;
-			}
+		for assertion in self.assertions.iter() {
+			assertion.run(sup_this.clone())?;
 		}
 		Ok(())
-	}
-}
-
-impl PartialEq for ObjValue {
-	fn eq(&self, other: &Self) -> bool {
-		Cc::ptr_eq(&self.0, &other.0)
-	}
-}
-
-impl Eq for ObjValue {}
-impl Hash for ObjValue {
-	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(addr_of!(*self.0) as usize);
 	}
 }
 
@@ -846,11 +880,8 @@ impl ObjValueBuilder {
 		if self.sup.is_none() && self.map.is_empty() && self.assertions.is_empty() {
 			return ObjValue::new_empty();
 		}
-		ObjValue::new(OopObject::new(
-			self.sup,
-			Cc::new(self.map),
-			Cc::new(self.assertions),
-		))
+		let res = ObjValue::new(OopObject::new(Cc::new(self.map), Cc::new(self.assertions)));
+		self.sup.map(|sup| res.extend_from(sup)).unwrap_or(res)
 	}
 }
 impl Default for ObjValueBuilder {

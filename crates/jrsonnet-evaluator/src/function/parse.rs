@@ -128,11 +128,11 @@ pub fn parse_function_call(
 		}
 
 		Ok(body_ctx
-			.extend(passed_args, None, None, None)
-			.extend(defaults, None, None, None)
+			.extend_bindings(passed_args)
+			.extend_bindings(defaults)
 			.into_future(fctx))
 	} else {
-		let body_ctx = body_ctx.extend(passed_args, None, None, None);
+		let body_ctx = body_ctx.extend_bindings(passed_args);
 		Ok(body_ctx)
 	}
 }
@@ -256,7 +256,5 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		}
 	}
 
-	Ok(body_ctx
-		.extend(bindings, None, None, None)
-		.into_future(fctx))
+	Ok(body_ctx.extend_bindings(bindings).into_future(fctx))
 }
