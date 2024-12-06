@@ -16,9 +16,13 @@ exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
 # Bigint type
 exp-bigint = ["dep:num-bigint", "jrsonnet-evaluator/exp-bigint"]
 
-exp-null-coaelse = ["jrsonnet-parser/exp-null-coaelse", "jrsonnet-evaluator/exp-null-coaelse"]
+exp-null-coaelse = [
+    "jrsonnet-parser/exp-null-coaelse",
+    "jrsonnet-evaluator/exp-null-coaelse",
+]
 # std.regexMatch and other helpers
 exp-regex = ["dep:regex", "dep:lru", "dep:rustc-hash"]
+yaml = ["dep:serde_yaml_with_quirks"]
 
 [dependencies]
 jrsonnet-evaluator.workspace = true
@@ -42,7 +46,7 @@ base64.workspace = true
 # std.parseJson
 serde_json.workspace = true
 # std.parseYaml, custom library fork is used for C++/golang compatibility
-serde_yaml_with_quirks.workspace = true
+serde_yaml_with_quirks = { workspace = true, optional = true }
 
 num-bigint = { workspace = true, optional = true }
 
