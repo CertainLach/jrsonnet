@@ -176,6 +176,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("manifestIni", builtin_manifest_ini::INST),
 		// Parse
 		("parseJson", builtin_parse_json::INST),
+		#[cfg(feature = "yaml")]
 		("parseYaml", builtin_parse_yaml::INST),
 		// Strings
 		("codepoint", builtin_codepoint::INST),

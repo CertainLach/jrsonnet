@@ -1,5 +1,4 @@
 use jrsonnet_evaluator::{function::builtin, runtime_error, IStr, Result, Val};
-use serde::Deserialize;
 
 #[builtin]
 pub fn builtin_parse_json(str: IStr) -> Result<Val> {
@@ -9,8 +8,11 @@ pub fn builtin_parse_json(str: IStr) -> Result<Val> {
 }
 
 #[builtin]
+#[cfg(feature = "yaml")]
 pub fn builtin_parse_yaml(str: IStr) -> Result<Val> {
+	use serde::Deserialize;
 	use serde_yaml_with_quirks::DeserializingQuirks;
+
 	let value = serde_yaml_with_quirks::Deserializer::from_str_with_quirks(
 		&str,
 		DeserializingQuirks { old_octals: true },
