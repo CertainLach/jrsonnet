@@ -1,19 +1,21 @@
 use std::{any::Any, num::NonZeroU32};
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::Cc;
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
 
-use crate::{function::FuncVal, gc::TraceBox, tb, Context, Result, Thunk, Val};
+use crate::{function::FuncVal, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};
 
-/// Represents a Jsonnet array value.
-#[derive(Debug, Clone, Trace)]
-// may contain other ArrValue
-#[trace(tracking(force))]
-pub struct ArrValue(Cc<TraceBox<dyn ArrayLike>>);
+jrsonnet_gcmodule::cc_dyn!(
+	/// Represents a Jsonnet array value.
+	#[derive(Debug, Clone)]
+	ArrValue,
+	ArrayLike,
+	pub fn new() {...}
+);
 
 pub trait ArrayLikeIter<T>: Iterator<Item = T> + DoubleEndedIterator + ExactSizeIterator {}
 impl<I, T> ArrayLikeIter<T> for I where
@@ -22,13 +24,6 @@ impl<I, T> ArrayLikeIter<T> for I where
 }
 
 impl ArrValue {
-	pub fn new(v: impl ArrayLike) -> Self {
-		Self(Cc::new(tb!(v)))
-	}
-	pub fn empty() -> Self {
-		Self::new(RangeArray::empty())
-	}
-
 	pub fn expr(ctx: Context, exprs: impl IntoIterator<Item = LocExpr>) -> Self {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
@@ -37,8 +32,8 @@ impl ArrValue {
 		Self::new(LazyArray(thunks))
 	}
 
-	pub fn eager(values: Vec<Val>) -> Self {
-		Self::new(EagerArray(values))
+	pub fn repeated_single(elem: Val, len: usize) -> Self {
+		Self::new(RepeatedSingleArray { elem, len })
 	}
 
 	pub fn repeated(data: Self, repeats: usize) -> Option<Self> {
@@ -71,7 +66,7 @@ impl ArrValue {
 				out.push(i);
 			};
 		}
-		Ok(Self::eager(out))
+		Ok(Self::new(out))
 	}
 
 	pub fn extended(a: Self, b: Self) -> Self {
@@ -88,7 +83,7 @@ impl ArrValue {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a);
 			out.extend(b);
-			Self::eager(out)
+			Self::new(out)
 		} else {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a.iter_lazy());
@@ -116,7 +111,7 @@ impl ArrValue {
 		let step = step.unwrap_or_else(|| NonZeroU32::new(1).expect("1 != 0"));
 
 		if index >= end {
-			return Self::empty();
+			return Self::new(());
 		}
 
 		Self::new(SliceArray {
@@ -198,7 +193,7 @@ impl ArrValue {
 }
 impl From<Vec<Val>> for ArrValue {
 	fn from(value: Vec<Val>) -> Self {
-		Self::eager(value)
+		Self::new(value)
 	}
 }
 impl From<Vec<Thunk<Val>>> for ArrValue {
@@ -208,7 +203,8 @@ impl From<Vec<Thunk<Val>>> for ArrValue {
 }
 impl FromIterator<Val> for ArrValue {
 	fn from_iter<T: IntoIterator<Item = Val>>(iter: T) -> Self {
-		Self::eager(iter.into_iter().collect())
+		let v: Vec<Val> = iter.into_iter().collect();
+		v.into()
 	}
 }
 impl ArrayLike for ArrValue {
@@ -231,7 +227,11 @@ impl ArrayLike for ArrValue {
 	fn is_cheap(&self) -> bool {
 		self.0.is_cheap()
 	}
+
+	fn internal_owned(&self) -> Option<ArrValue> {
+		Some(self.clone())
+	}
 }
 
 #[cfg(target_pointer_width = "64")]
-static_assertions::assert_eq_size!(ArrValue, [u8; 8]);
+static_assertions::assert_eq_size!(ArrValue, [u8; 16]);

@@ -2,12 +2,13 @@ use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
-use jrsonnet_parser::LocExpr;
+use jrsonnet_parser::{LocExpr, Visibility};
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
-	Context, Error, ObjValue, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, strings, Context,
+	EnumFieldsHandler, Error, FieldIndex, ObjValue, ObjectLayer, Result, SuperDepth, Thunk, Val,
+	ValueProcess,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -20,6 +21,33 @@ pub trait ArrayLike: Any + Trace + Debug {
 	fn get_cheap(&self, index: usize) -> Option<Val>;
 
 	fn is_cheap(&self) -> bool;
+	#[doc(hidden)]
+	// Specialization for passing ArrayLike as ArrValue, to get ArrValue back
+	fn internal_owned(&self) -> Option<ArrValue> {
+		None
+	}
+}
+
+impl ArrayLike for () {
+	fn len(&self) -> usize {
+		0
+	}
+
+	fn get(&self, _index: usize) -> Result<Option<Val>> {
+		Ok(None)
+	}
+
+	fn get_lazy(&self, _index: usize) -> Option<Thunk<Val>> {
+		None
+	}
+
+	fn get_cheap(&self, _index: usize) -> Option<Val> {
+		None
+	}
+
+	fn is_cheap(&self) -> bool {
+		true
+	}
 }
 
 #[derive(Debug, Trace)]
@@ -171,7 +199,7 @@ impl ArrayLike for ExprArray {
 			unreachable!()
 		};
 
-		let new_value = match evaluate(self.ctx.clone(), &expr) {
+		let new_value = match evaluate(&self.ctx, &expr) {
 			Ok(v) => v,
 			Err(e) => {
 				self.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
@@ -205,14 +233,14 @@ impl ArrayLike for ExprArray {
 }
 
 #[derive(Trace, Debug)]
-pub struct ExtendedArray {
-	pub a: ArrValue,
-	pub b: ArrValue,
+pub struct ExtendedArray<A: ArrayLike, B: ArrayLike> {
+	pub a: A,
+	pub b: B,
 	split: usize,
 	len: usize,
 }
-impl ExtendedArray {
-	pub fn new(a: ArrValue, b: ArrValue) -> Self {
+impl<A: ArrayLike, B: ArrayLike> ExtendedArray<A, B> {
+	pub fn new(a: A, b: B) -> Self {
 		let a_len = a.len();
 		let b_len = b.len();
 		Self {
@@ -260,7 +288,7 @@ where
 		self.1
 	}
 }
-impl ArrayLike for ExtendedArray {
+impl<A: ArrayLike, B: ArrayLike> ArrayLike for ExtendedArray<A, B> {
 	fn get(&self, index: usize) -> Result<Option<Val>> {
 		if self.split > index {
 			self.a.get(index)
@@ -315,23 +343,21 @@ impl ArrayLike for LazyArray {
 	}
 }
 
-#[derive(Trace, Debug)]
-pub struct EagerArray(pub Vec<Val>);
-impl ArrayLike for EagerArray {
+impl ArrayLike for Vec<Val> {
 	fn len(&self) -> usize {
-		self.0.len()
+		self.len()
 	}
 
 	fn get(&self, index: usize) -> Result<Option<Val>> {
-		Ok(self.0.get(index).cloned())
+		Ok(self.as_slice().get(index).cloned())
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		self.0.get(index).cloned().map(Thunk::evaluated)
+		self.as_slice().get(index).cloned().map(Thunk::evaluated)
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		self.0.get(index).cloned()
+		self.as_slice().get(index).cloned()
 	}
 	fn is_cheap(&self) -> bool {
 		true
@@ -355,7 +381,7 @@ impl RangeArray {
 	pub fn new_inclusive(start: i32, end: i32) -> Self {
 		Self { start, end }
 	}
-	fn range(&self) -> impl ExactSizeIterator<Item = i32> + DoubleEndedIterator {
+	fn range(&self) -> impl ExactSizeIterator<Item = i32> + DoubleEndedIterator + use<> {
 		WithExactSize(
 			self.start..=self.end,
 			(self.end as usize)
@@ -499,6 +525,42 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 }
 
 #[derive(Trace, Debug)]
+pub struct RepeatedSingleArray {
+	pub elem: Val,
+	pub len: usize,
+}
+impl ArrayLike for RepeatedSingleArray {
+	fn len(&self) -> usize {
+		self.len
+	}
+
+	fn get(&self, index: usize) -> Result<Option<Val>> {
+		if index >= self.len {
+			return Ok(None);
+		}
+		Ok(Some(self.elem.clone()))
+	}
+
+	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
+		if index >= self.len {
+			return None;
+		}
+		Some(Thunk::evaluated(self.elem.clone()))
+	}
+
+	fn get_cheap(&self, index: usize) -> Option<Val> {
+		if index >= self.len {
+			return None;
+		}
+		Some(self.elem.clone())
+	}
+
+	fn is_cheap(&self) -> bool {
+		true
+	}
+}
+
+#[derive(Trace, Debug)]
 pub struct RepeatedArray {
 	data: ArrValue,
 	repeats: usize,
@@ -595,7 +657,12 @@ impl PickObjectKeyValues {
 	}
 }
 
-#[derive(Typed)]
+strings! {
+	s_key: "key",
+	s_value: "value",
+}
+
+#[derive(Debug, Trace)]
 pub struct KeyValue {
 	key: IStr,
 	value: Thunk<Val>,
@@ -610,26 +677,20 @@ impl ArrayLike for PickObjectKeyValues {
 		let Some(key) = self.keys.get(index) else {
 			return Ok(None);
 		};
-		Ok(Some(
-			KeyValue::into_untyped(KeyValue {
-				key: key.clone(),
-				value: Thunk::evaluated(self.obj.get_or_bail(key.clone())?),
-			})
-			.expect("convertible"),
-		))
+		Ok(Some(Val::object(KeyValue {
+			key: key.clone(),
+			value: Thunk::evaluated(self.obj.get_or_bail(key.clone())?),
+		})))
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		let key = self.keys.get(index)?;
 		// Nothing can fail in the key part, yet value is still
 		// lazy-evaluated
-		Some(Thunk::evaluated(
-			KeyValue::into_untyped(KeyValue {
-				key: key.clone(),
-				value: self.obj.get_lazy_or_bail(key.clone()),
-			})
-			.expect("convertible"),
-		))
+		Some(Thunk::evaluated(Val::object(KeyValue {
+			key: key.clone(),
+			value: self.obj.get_lazy_or_bail(key.clone()),
+		})))
 	}
 
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
