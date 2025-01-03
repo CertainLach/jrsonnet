@@ -29,7 +29,7 @@ impl PartialEq<IStr> for ParamName {
 	fn eq(&self, other: &IStr) -> bool {
 		self.0
 			.as_ref()
-			.map_or(false, |s| s.as_bytes() == other.as_bytes())
+			.is_some_and(|s| s.as_bytes() == other.as_bytes())
 	}
 }
 
@@ -114,7 +114,7 @@ impl NativeCallback {
 }
 
 impl Builtin for NativeCallback {
-	fn name(&self) -> &str {
+	fn name(&self) -> &'static str {
 		// TODO: standard natives gets their names from definition
 		// But builitins should already have them
 		"<native>"

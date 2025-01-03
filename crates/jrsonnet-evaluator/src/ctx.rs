@@ -5,8 +5,8 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 
 use crate::{
-	bail, error::ErrorKind::*, function::ArgsLike, gc::GcHashMap, map::LayeredHashMap, ObjValue,
-	Pending, Result, SupThis, Thunk, Val,
+	bail, error::ErrorKind::*, function::ArgsLike, gc::GcHashMap, ObjValue, Pending, Result,
+	SupThis, Thunk, Val,
 };
 
 /// Context keeps information about current lexical code location
@@ -20,7 +20,7 @@ pub struct Context(#[educe(PartialEq(method = Cc::ptr_eq))] Cc<ContextInternal>)
 struct ContextInternal {
 	dollar: Option<ObjValue>,
 	sup_this: Option<SupThis>,
-	bindings: LayeredHashMap,
+	bindings: GcHashMap<IStr, Thunk<Val>>,
 }
 impl Context {
 	pub fn new_future() -> Pending<Self> {
@@ -72,13 +72,13 @@ impl Context {
 		}
 
 		let mut heap = Vec::new();
-		self.0.bindings.clone().iter_keys(|k| {
-			let conf = strsim::jaro_winkler(&k as &str, &name as &str);
+		for k in self.0.bindings.keys() {
+			let conf = strsim::jaro_winkler(k as &str, &name as &str);
 			if conf < 0.8 {
-				return;
+				continue;
 			}
-			heap.push((conf, k));
-		});
+			heap.push((conf, k.clone()));
+		}
 		heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 
 		bail!(VariableIsNotDefined(
@@ -117,9 +117,11 @@ impl Context {
 			.clone()
 			.or_else(|| Some(sup_this.this().clone()));
 		let bindings = if new_bindings.is_empty() {
-			ctx.0.bindings.clone()
+			GcHashMap(ctx.0.bindings.clone())
 		} else {
-			ctx.0.bindings.clone().extend(new_bindings)
+			let mut v = ctx.0.bindings.clone();
+			v.extend(new_bindings.0);
+			GcHashMap(v)
 		};
 		Self(Cc::new(ContextInternal {
 			dollar,
@@ -134,9 +136,11 @@ impl Context {
 		}
 		let ctx = &self;
 		let bindings = if new_bindings.is_empty() {
-			ctx.0.bindings.clone()
+			GcHashMap(ctx.0.bindings.clone())
 		} else {
-			ctx.0.bindings.clone().extend(new_bindings)
+			let mut v = ctx.0.bindings.clone();
+			v.extend(new_bindings.0);
+			GcHashMap(v)
 		};
 		Self(Cc::new(ContextInternal {
 			dollar: ctx.0.dollar.clone(),
@@ -185,7 +189,7 @@ impl ContextBuilder {
 			parent.extend_bindings(self.bindings)
 		} else {
 			Context(Cc::new(ContextInternal {
-				bindings: LayeredHashMap::new(self.bindings),
+				bindings: self.bindings,
 				dollar: None,
 				sup_this: None,
 			}))

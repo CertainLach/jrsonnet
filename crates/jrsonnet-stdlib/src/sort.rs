@@ -203,7 +203,7 @@ pub fn builtin_set(
 	}
 }
 
-fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
+fn eval_keyf(val: Val, key_f: Option<&FuncVal>) -> Result<Val> {
 	if let Some(key_f) = key_f {
 		key_f.evaluate_simple(&(val,), false)
 	} else {
@@ -214,10 +214,10 @@ fn eval_keyf(val: Val, key_f: &Option<FuncVal>) -> Result<Val> {
 fn array_top1(arr: ArrValue, key_f: Option<FuncVal>, ordering: Ordering) -> Result<Val> {
 	let mut iter = arr.iter();
 	let mut min = iter.next().expect("not empty")?;
-	let mut min_key = eval_keyf(min.clone(), &key_f)?;
+	let mut min_key = eval_keyf(min.clone(), key_f.as_ref())?;
 	for item in iter {
 		let cur = item?;
-		let cur_key = eval_keyf(cur.clone(), &key_f)?;
+		let cur_key = eval_keyf(cur.clone(), key_f.as_ref())?;
 		if evaluate_compare_op(&cur_key, &min_key, BinaryOpType::Lt)? == ordering {
 			min = cur;
 			min_key = cur_key;

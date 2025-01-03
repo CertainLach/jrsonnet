@@ -50,7 +50,7 @@ pub fn builtin_is_empty(str: String) -> bool {
 
 #[builtin]
 pub fn builtin_equals_ignore_case(str1: String, str2: String) -> bool {
-	str1.to_ascii_lowercase() == str2.to_ascii_lowercase()
+	str1.eq_ignore_ascii_case(&str2)
 }
 
 #[builtin]

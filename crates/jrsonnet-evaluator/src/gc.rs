@@ -8,7 +8,7 @@ use std::{
 
 use hashbrown::HashMap;
 use jrsonnet_gcmodule::{Trace, Tracer};
-use rustc_hash::{FxHashSet, FxHasher};
+use rustc_hash::{FxHashSet, FxHasher, FxBuildHasher};
 
 /// Replacement for box, which assumes that the underlying type is [`Trace`]
 /// Used in places, where `Cc<dyn Trait>` should be used instead, but it can't, because `CoerceUnsiced` is not stable
@@ -84,7 +84,7 @@ impl<V> GcHashSet<V> {
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self(FxHashSet::with_capacity_and_hasher(
 			capacity,
-			BuildHasherDefault::default(),
+			FxBuildHasher,
 		))
 	}
 }

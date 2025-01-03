@@ -16,7 +16,6 @@ pub mod gc;
 mod import;
 mod integrations;
 pub mod manifest;
-mod map;
 mod obj;
 pub mod stack;
 pub mod stdlib;

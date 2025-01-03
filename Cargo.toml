@@ -43,7 +43,7 @@ serde_yaml_with_quirks = "0.8.24"
 
 # Error handling
 anyhow = "1.0.83"
-thiserror = "1.0.60"
+thiserror = "2.0.3"
 
 # Code formatting
 dprint-core = "0.65.0"
@@ -67,9 +67,9 @@ indoc = "2.0"
 insta = "1.39"
 tempfile = "3.10"
 pathdiff = "0.2.1"
-hashbrown = "0.14.5"
+hashbrown = "0.15.2"
 static_assertions = "1.1"
-rustc-hash = "1.1"
+rustc-hash = "2.1.0"
 num-bigint = "0.4.5"
 strsim = "0.11.0"
 proc-macro2 = "1.0"

@@ -20,9 +20,9 @@ pub enum TypeError {
 	#[error("every failed from {0}:\n{1}")]
 	UnionFailed(ComplexValType, TypeLocErrorList),
 	#[error(
-		"number out of bounds: {0} not in {}..{}",
-		.1.map(|v|v.to_string()).unwrap_or_default(),
-		.2.map(|v|v.to_string()).unwrap_or_default(),
+		"number out of bounds: {0} not in {from}..{to}",
+		from = .1.map(|v|v.to_string()).unwrap_or_default(),
+		to = .2.map(|v|v.to_string()).unwrap_or_default(),
 	)]
 	BoundsFailed(f64, Option<f64>, Option<f64>),
 }

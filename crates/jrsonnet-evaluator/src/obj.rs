@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
 	bail,
-	error::{suggest_object_fields, Error, ErrorKind::*},
+	error::{suggest_object_fields, ErrorKind::*},
 	function::{CallLocation, FuncVal},
 	gc::{GcHashMap, GcHashSet, TraceBox},
 	identity_hash, in_frame,

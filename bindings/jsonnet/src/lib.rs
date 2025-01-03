@@ -40,6 +40,7 @@ pub extern "C" fn _start() {}
 
 /// Return the version string of the Jsonnet interpreter.
 /// Conforms to [semantic versioning](http://semver.org/).
+///
 /// If this does not match `LIB_JSONNET_VERSION`
 /// then there is a mismatch between header and compiled library.
 #[no_mangle]

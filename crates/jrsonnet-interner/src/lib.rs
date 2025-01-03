@@ -227,7 +227,9 @@ thread_local! {
 
 /// Jrsonnet golang bindings require that it is possible to move jsonnet
 /// VM between OS threads, and this is not possible due to usage of
-/// `thread_local`. Instead, there is two methods added, one should be
+/// `thread_local`.
+///
+/// Instead, there is two methods added, one should be
 /// called at the end of current thread work, and one that should be
 /// used when using other thread.
 pub mod interop {

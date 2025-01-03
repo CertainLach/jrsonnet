@@ -12,7 +12,6 @@
     };
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
     shelly = {
       url = "github:CertainLach/shelly";

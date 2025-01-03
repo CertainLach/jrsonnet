@@ -473,7 +473,7 @@ pub enum ConvertNumValueError {
 }
 impl From<ConvertNumValueError> for Error {
 	fn from(e: ConvertNumValueError) -> Self {
-		Self::new(e.into())
+		Self::new(ConvertNumValue(e))
 	}
 }
 
