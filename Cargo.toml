@@ -28,7 +28,6 @@ jrsonnet-gcmodule = { version = "0.3.7" }
 #   and other libraries want to handle spans etc by itself, which is okay for compiler diagnostics, but is
 #   bad for interpreter, where interpreter and parser are paired much closer.
 hi-doc = "0.1.1"
-annotate-snippets = "0.10.1"
 
 # CLI
 clap = "4.5"
