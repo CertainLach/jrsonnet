@@ -67,12 +67,12 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 			if n.iter().any(|e| !is_trivial(e)) {
 				return None;
 			}
-			Val::Arr(ArrValue::eager(
+			Val::array(
 				n.iter()
 					.map(evaluate_trivial)
 					.map(|e| e.expect("checked trivial"))
-					.collect(),
-			))
+					.collect::<Vec<_>>(),
+			)
 		}
 		Expr::Parened(e) => evaluate_trivial(e)?,
 		_ => return None,

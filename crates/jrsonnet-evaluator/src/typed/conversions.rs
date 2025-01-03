@@ -622,7 +622,7 @@ impl Typed for bool {
 		}
 	}
 }
-impl Typed for IndexableVal {
+impl Typed for Indexable {
 	const TYPE: &'static ComplexValType = &ComplexValType::UnionRef(&[
 		&ComplexValType::Simple(ValType::Arr),
 		&ComplexValType::Simple(ValType::Str),

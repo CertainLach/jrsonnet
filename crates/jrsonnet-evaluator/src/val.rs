@@ -2,13 +2,15 @@ use std::{
 	cell::RefCell,
 	cmp::Ordering,
 	fmt::{self, Debug, Display},
+	marker::PhantomData,
 	mem::replace,
 	num::NonZeroU32,
 	ops::Deref,
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use educe::Educe;
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, Tracer};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::Thunk;
 use jrsonnet_types::ValType;
@@ -240,14 +242,20 @@ impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 }
 
 /// Represents a Jsonnet value, which can be sliced or indexed (string or array).
-#[allow(clippy::module_name_repetitions)]
-pub enum IndexableVal {
+#[derive(Debug)]
+pub enum Indexable {
 	/// String.
 	Str(IStr),
 	/// Array.
 	Arr(ArrValue),
 }
-impl IndexableVal {
+impl Indexable {
+	pub fn len(&self) -> usize {
+		match self {
+			Self::Str(s) => s.chars().count(),
+			Self::Arr(a) => a.len(),
+		}
+	}
 	pub fn is_empty(&self) -> bool {
 		match self {
 			Self::Str(s) => s.is_empty(),
@@ -260,6 +268,21 @@ impl IndexableVal {
 			Self::Str(s) => ArrValue::chars(s.chars()),
 			Self::Arr(arr) => arr,
 		}
+	}
+	pub fn index(&self, index: usize) -> Result<Option<Val>> {
+		match self {
+			Self::Str(s) => {
+				let Some(ch) = s.chars().skip(index).take(1).next() else {
+					return Ok(None);
+				};
+				Ok(Some(Val::string(ch)))
+			}
+			Self::Arr(a) => a.get(index),
+		}
+	}
+	pub fn try_index(self, index: usize) -> Result<Val> {
+		self.index(index)?
+			.ok_or_else(|| IndexBoundsError(index, self.len()).into())
 	}
 	/// Slice the value.
 	///
@@ -436,6 +459,19 @@ impl NumValue {
 	pub const fn get(&self) -> f64 {
 		self.0
 	}
+
+	pub fn get_index(&self) -> Result<usize> {
+		let n = self.get();
+		if n.fract() > f64::EPSILON {
+			bail!(FractionalIndex)
+		}
+		if n < 0.0 {
+			bail!(NegativeIndex);
+		}
+		#[expect(clippy::cast_sign_loss, reason = "value is not negative")]
+		let nu = n as usize;
+		Ok(nu)
+	}
 }
 impl PartialEq for NumValue {
 	fn eq(&self, other: &Self) -> bool {
@@ -568,11 +604,11 @@ pub enum Val {
 #[cfg(target_pointer_width = "64")]
 static_assertions::assert_eq_size!(Val, [u8; 24]);
 
-impl From<IndexableVal> for Val {
-	fn from(v: IndexableVal) -> Self {
+impl From<Indexable> for Val {
+	fn from(v: Indexable) -> Self {
 		match v {
-			IndexableVal::Str(s) => Self::string(s),
-			IndexableVal::Arr(a) => Self::Arr(a),
+			Indexable::Str(s) => Self::string(s),
+			Indexable::Arr(a) => Self::Arr(a),
 		}
 	}
 }
@@ -589,6 +625,9 @@ impl Val {
 			Self::Null => Some(()),
 			_ => None,
 		}
+	}
+	pub const fn is_null(&self) -> bool {
+		matches!(self, Self::Null)
 	}
 	pub fn as_str(&self) -> Option<IStr> {
 		match self {
@@ -652,10 +691,10 @@ impl Val {
 		})
 	}
 
-	pub fn into_indexable(self) -> Result<IndexableVal> {
+	pub fn into_indexable(self) -> Result<Indexable> {
 		Ok(match self {
-			Self::Str(s) => IndexableVal::Str(s.into_flat()),
-			Self::Arr(arr) => IndexableVal::Arr(arr),
+			Self::Str(s) => Indexable::Str(s.into_flat()),
+			Self::Arr(arr) => Indexable::Arr(arr),
 			_ => bail!(ValueIsNotIndexable(self.value_type())),
 		})
 	}
@@ -668,6 +707,12 @@ impl Val {
 	}
 	pub fn num(num: impl Into<NumValue>) -> Self {
 		Self::Num(num.into())
+	}
+	pub fn object(obj: impl ObjectLayer) -> Self {
+		Self::Obj(ObjValue::new(obj))
+	}
+	pub fn array(arr: impl ArrayLike) -> Self {
+		Self::Arr(ArrValue::new(arr))
 	}
 	pub fn try_num<V, E>(num: V) -> Result<Self, E>
 	where

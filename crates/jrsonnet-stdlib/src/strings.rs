@@ -5,7 +5,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::builtin,
 	typed::{Either2, Typed, M1},
-	val::{ArrValue, IndexableVal},
+	val::{ArrValue, Indexable},
 	Either, IStr, Val,
 };
 
@@ -100,7 +100,7 @@ pub fn builtin_ascii_lower(str: IStr) -> String {
 #[builtin]
 pub fn builtin_find_substr(pat: IStr, str: IStr) -> ArrValue {
 	if pat.is_empty() || str.is_empty() || pat.len() > str.len() {
-		return ArrValue::empty();
+		return ArrValue::new(());
 	}
 
 	let str = str.as_str();
@@ -225,7 +225,7 @@ pub fn builtin_string_chars(str: IStr) -> ArrValue {
 }
 
 #[builtin]
-pub fn builtin_lstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+pub fn builtin_lstrip_chars(str: IStr, chars: Indexable) -> Result<IStr> {
 	if str.is_empty() || chars.is_empty() {
 		return Ok(str);
 	}
@@ -235,7 +235,7 @@ pub fn builtin_lstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
 }
 
 #[builtin]
-pub fn builtin_rstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+pub fn builtin_rstrip_chars(str: IStr, chars: Indexable) -> Result<IStr> {
 	if str.is_empty() || chars.is_empty() {
 		return Ok(str);
 	}
@@ -245,7 +245,7 @@ pub fn builtin_rstrip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
 }
 
 #[builtin]
-pub fn builtin_strip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
+pub fn builtin_strip_chars(str: IStr, chars: Indexable) -> Result<IStr> {
 	if str.is_empty() || chars.is_empty() {
 		return Ok(str);
 	}
@@ -254,10 +254,10 @@ pub fn builtin_strip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
 	Ok(str.as_str().trim_matches(pattern).into())
 }
 
-fn new_trim_pattern(chars: IndexableVal) -> Result<impl Fn(char) -> bool> {
+fn new_trim_pattern(chars: Indexable) -> Result<impl Fn(char) -> bool> {
 	let chars: BTreeSet<char> = match chars {
-		IndexableVal::Str(chars) => chars.chars().collect(),
-		IndexableVal::Arr(chars) => chars
+		Indexable::Str(chars) => chars.chars().collect(),
+		Indexable::Arr(chars) => chars
 			.iter()
 			.filter_map(|it| it.map(|it| char::from_untyped(it).ok()).transpose())
 			.collect::<Result<_, _>>()?,

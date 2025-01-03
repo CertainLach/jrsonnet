@@ -116,7 +116,7 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 		return Ok(values);
 	}
 	if key_getter.is_identity() {
-		Ok(ArrValue::eager(sort_identity(
+		Ok(ArrValue::new(sort_identity(
 			values.iter().collect::<Result<Vec<Val>>>()?,
 		)?))
 	} else {

@@ -5,7 +5,7 @@ use jrsonnet_evaluator::{
 	function::{builtin, FuncVal},
 	runtime_error,
 	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
-	val::{equals, ArrValue, IndexableVal},
+	val::{equals, ArrValue, Indexable},
 	Either, IStr, ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
@@ -47,7 +47,7 @@ pub fn builtin_repeat(what: Either![IStr, ArrValue], count: usize) -> Result<Val
 
 #[builtin]
 pub fn builtin_slice(
-	indexable: IndexableVal,
+	indexable: Indexable,
 	index: Option<Option<i32>>,
 	end: Option<Option<i32>>,
 	step: Option<Option<BoundedUsize<1, { i32::MAX as usize }>>>,
@@ -58,13 +58,13 @@ pub fn builtin_slice(
 }
 
 #[builtin]
-pub fn builtin_map(func: FuncVal, arr: IndexableVal) -> ArrValue {
+pub fn builtin_map(func: FuncVal, arr: Indexable) -> ArrValue {
 	let arr = arr.to_array();
 	arr.map(func)
 }
 
 #[builtin]
-pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
+pub fn builtin_map_with_index(func: FuncVal, arr: Indexable) -> ArrValue {
 	let arr = arr.to_array();
 	arr.map_with_index(func)
 }
@@ -89,11 +89,11 @@ pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 #[builtin]
 pub fn builtin_flatmap(
 	func: NativeFn<((Either![String, Val],), Val)>,
-	arr: IndexableVal,
-) -> Result<IndexableVal> {
+	arr: Indexable,
+) -> Result<Indexable> {
 	use std::fmt::Write;
 	match arr {
-		IndexableVal::Str(str) => {
+		Indexable::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
 				match func(Either2::A(c.to_string()))? {
@@ -102,9 +102,9 @@ pub fn builtin_flatmap(
 					_ => bail!("in std.join all items should be strings"),
 				};
 			}
-			Ok(IndexableVal::Str(out.into()))
+			Ok(Indexable::Str(out.into()))
 		}
-		IndexableVal::Arr(a) => {
+		Indexable::Arr(a) => {
 			let mut out = Vec::new();
 			for el in a.iter() {
 				let el = el?;
@@ -118,7 +118,7 @@ pub fn builtin_flatmap(
 					_ => bail!("in std.join all items should be arrays"),
 				};
 			}
-			Ok(IndexableVal::Arr(out.into()))
+			Ok(Indexable::Arr(out.into()))
 		}
 	}
 }
@@ -158,16 +158,16 @@ pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
 #[builtin]
 pub fn builtin_range(from: i32, to: i32) -> Result<ArrValue> {
 	if to < from {
-		return Ok(ArrValue::empty());
+		return Ok(ArrValue::new(()));
 	}
 	Ok(ArrValue::range_inclusive(from, to))
 }
 
 #[builtin]
-pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
+pub fn builtin_join(sep: Indexable, arr: ArrValue) -> Result<Indexable> {
 	use std::fmt::Write;
 	Ok(match sep {
-		IndexableVal::Arr(joiner_items) => {
+		Indexable::Arr(joiner_items) => {
 			let mut out = Vec::new();
 
 			let mut first = true;
@@ -193,9 +193,9 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 				}
 			}
 
-			IndexableVal::Arr(out.into())
+			Indexable::Arr(out.into())
 		}
-		IndexableVal::Str(sep) => {
+		Indexable::Str(sep) => {
 			let mut out = String::new();
 
 			let mut first = true;
@@ -214,16 +214,16 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 				}
 			}
 
-			IndexableVal::Str(out.into())
+			Indexable::Str(out.into())
 		}
 	})
 }
 
 #[builtin]
-pub fn builtin_lines(arr: ArrValue) -> Result<IndexableVal> {
+pub fn builtin_lines(arr: ArrValue) -> Result<Indexable> {
 	builtin_join(
-		IndexableVal::Str("\n".into()),
-		ArrValue::extended(arr, ArrValue::eager(vec![Val::string("")])),
+		Indexable::Str("\n".into()),
+		ArrValue::extended(arr, ArrValue::new(vec![Val::string("")])),
 	)
 }
 
@@ -235,13 +235,13 @@ pub fn builtin_resolve_path(f: String, r: String) -> String {
 	format!("{}{}", &f[..=pos], r)
 }
 
-pub fn deep_join_inner(out: &mut String, arr: IndexableVal) -> Result<()> {
+pub fn deep_join_inner(out: &mut String, arr: Indexable) -> Result<()> {
 	use std::fmt::Write;
 	match arr {
-		IndexableVal::Str(s) => write!(out, "{s}").expect("no error"),
-		IndexableVal::Arr(arr) => {
+		Indexable::Str(s) => write!(out, "{s}").expect("no error"),
+		Indexable::Arr(arr) => {
 			for ele in arr.iter() {
-				let indexable = IndexableVal::from_untyped(ele?)?;
+				let indexable = Indexable::from_untyped(ele?)?;
 				deep_join_inner(out, indexable)?;
 			}
 		}
@@ -250,7 +250,7 @@ pub fn deep_join_inner(out: &mut String, arr: IndexableVal) -> Result<()> {
 }
 
 #[builtin]
-pub fn builtin_deep_join(arr: IndexableVal) -> Result<String> {
+pub fn builtin_deep_join(arr: Indexable) -> Result<String> {
 	let mut out = String::new();
 	deep_join_inner(&mut out, arr)?;
 	Ok(out)
@@ -284,13 +284,13 @@ pub fn builtin_all(arr: ArrValue) -> Result<bool> {
 }
 
 #[builtin]
-pub fn builtin_member(arr: IndexableVal, x: Val) -> Result<bool> {
+pub fn builtin_member(arr: Indexable, x: Val) -> Result<bool> {
 	match arr {
-		IndexableVal::Str(str) => {
+		Indexable::Str(str) => {
 			let x: IStr = IStr::from_untyped(x)?;
 			Ok(!x.is_empty() && str.contains(&*x))
 		}
-		IndexableVal::Arr(a) => {
+		Indexable::Arr(a) => {
 			for item in a.iter() {
 				let item = item?;
 				if equals(&item, &x)? {
@@ -315,7 +315,7 @@ pub fn builtin_find(value: Val, arr: ArrValue) -> Result<Vec<usize>> {
 }
 
 #[builtin]
-pub fn builtin_contains(arr: IndexableVal, elem: Val) -> Result<bool> {
+pub fn builtin_contains(arr: Indexable, elem: Val) -> Result<bool> {
 	builtin_member(arr, elem)
 }
 
@@ -368,7 +368,7 @@ pub fn builtin_flatten_arrays(arrs: Vec<ArrValue>) -> ArrValue {
 		ArrValue::extended(flatten_inner(a), flatten_inner(b))
 	}
 	if arrs.is_empty() {
-		return ArrValue::empty();
+		return ArrValue::new(());
 	} else if arrs.len() == 1 {
 		return arrs.into_iter().next().expect("single");
 	}
@@ -426,7 +426,7 @@ pub fn builtin_prune(
 					out.push(ele);
 				}
 			}
-			Val::Arr(ArrValue::eager(out))
+			Val::array(out)
 		}
 		Val::Obj(o) => {
 			let mut out = ObjValueBuilder::new();
