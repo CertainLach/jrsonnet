@@ -72,14 +72,14 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 }
 
 pub fn evaluate_binary_op_special(
-	ctx: Context,
+	ctx: &Context,
 	a: &LocExpr,
 	op: BinaryOpType,
 	b: &LocExpr,
 ) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
-	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
+	Ok(match (evaluate(ctx, a)?, op, b) {
 		(Bool(true), Or, _o) => Val::Bool(true),
 		(Bool(false), And, _o) => Val::Bool(false),
 		#[cfg(feature = "exp-null-coaelse")]

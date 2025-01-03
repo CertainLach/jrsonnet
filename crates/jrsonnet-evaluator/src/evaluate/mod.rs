@@ -88,7 +88,7 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocEx
 	})))
 }
 
-pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
+pub fn evaluate_field_name(ctx: &Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		FieldName::Fixed(n) => Some(n.clone()),
 		FieldName::Dyn(expr) => in_frame(
@@ -106,10 +106,10 @@ pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Optio
 	})
 }
 
-pub fn evaluate_comp(
-	ctx: Context,
+pub fn evaluate_comp_strict(
+	ctx: &mut Context,
 	specs: &[CompSpec],
-	callback: &mut impl FnMut(Context) -> Result<()>,
+	callback: &mut impl FnMut(&Context) -> Result<()>,
 ) -> Result<()> {
 	match specs.first() {
 		None => callback(ctx)?,
@@ -280,8 +280,8 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<ObjValue> {
-	let mut builder = ObjValueBuilder::new();
+pub fn evaluate_member_list_object(ctx: &Context, members: &[Member]) -> Result<ObjValue> {
+	let mut builder = ObjValueBuilder::with_capacity(count_members);
 	let locals = Rc::new(
 		members
 			.iter()
@@ -325,7 +325,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 	Ok(builder.build())
 }
 
-pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
+pub fn evaluate_object(ctx: &Context, object: &ObjBody) -> Result<ObjValue> {
 	Ok(match object {
 		ObjBody::MemberList(members) => evaluate_member_list_object(ctx, members)?,
 		ObjBody::ObjComp(obj) => {
@@ -349,13 +349,13 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 }
 
 pub fn evaluate_apply(
-	ctx: Context,
+	ctx: &Context,
 	value: &LocExpr,
 	args: &ArgsDesc,
 	loc: CallLocation<'_>,
 	tailstrict: bool,
 ) -> Result<Val> {
-	let value = evaluate(ctx.clone(), value)?;
+	let value = evaluate(ctx, value)?;
 	Ok(match value {
 		Val::Func(f) => {
 			let body = || f.evaluate(ctx, loc, args, tailstrict);
@@ -369,13 +369,13 @@ pub fn evaluate_apply(
 	})
 }
 
-pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
+pub fn evaluate_assert(ctx: &Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = in_frame(
 		CallLocation::new(&value.span()),
 		|| "assertion condition".to_owned(),
-		|| bool::from_untyped(evaluate(ctx.clone(), value)?),
+		|| bool::from_untyped(evaluate(ctx, value)?),
 	)?;
 	if !assertion_result {
 		in_frame(
@@ -392,16 +392,16 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	Ok(())
 }
 
-pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
+pub fn evaluate_named(ctx: &Context, expr: &LocExpr, name: IStr) -> Result<Val> {
 	use Expr::*;
 	Ok(match expr.expr() {
-		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
+		Function(params, body) => evaluate_method(ctx.clone(), name, params.clone(), body.clone()),
 		_ => evaluate(ctx, expr)?,
 	})
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
+pub fn evaluate(ctx: &Context, expr: &LocExpr) -> Result<Val> {
 	use Expr::*;
 
 	if let Some(trivial) = evaluate_trivial(expr) {
@@ -441,7 +441,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Var(name) => in_frame(
 			CallLocation::new(&loc),
 			|| format!("local <{name}> access"),
-			|| ctx.binding(name.clone())?.evaluate(),
+			|| ctx.binding(name.clone()),
 		)?,
 		Index { indexable, parts } => ensure_sufficient_stack(|| {
 			let mut parts = parts.iter();

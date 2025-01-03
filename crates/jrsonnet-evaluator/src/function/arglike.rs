@@ -9,16 +9,17 @@ use crate::{evaluate, gc::GcHashMap, typed::Typed, with_state, Context, Result, 
 pub trait OptionalContext {}
 
 pub trait ArgLike {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
+	fn evaluate_arg(&self, ctx: &Context, tailstrict: bool) -> Result<BindingValue>;
 }
 
 impl ArgLike for &LocExpr {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, ctx: &Context, tailstrict: bool) -> Result<BindingValue> {
 		Ok(if tailstrict {
-			Thunk::evaluated(evaluate(ctx, self)?)
+			BindingValue::from(evaluate(ctx, self)?)
 		} else {
+			let ctx = ctx.clone();
 			let expr = (*self).clone();
-			Thunk!(move || evaluate(ctx, &expr))
+			BindingValue::from(Thunk!(move || evaluate(&ctx, &expr)))
 		})
 	}
 }
@@ -27,12 +28,12 @@ impl<T> ArgLike for T
 where
 	T: Typed + Clone,
 {
-	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, _ctx: &Context, tailstrict: bool) -> Result<BindingValue> {
 		if T::provides_lazy() && !tailstrict {
-			return Ok(T::into_lazy_untyped(self.clone()));
+			return Ok(BindingValue::Thunk(T::into_lazy_untyped(self.clone())));
 		}
 		let val = T::into_untyped(self.clone())?;
-		Ok(Thunk::evaluated(val))
+		Ok(BindingValue::from(val))
 	}
 }
 impl<T> OptionalContext for T where T: Typed + Clone {}
@@ -94,11 +95,11 @@ impl TlaArg {
 // TODO: Is this implementation really required, as there is no Context to use?
 // Maybe something a bit stricter is possible to add, especially with precompiled calls?
 impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+	fn evaluate_arg(&self, _ctx: &Context, tailstrict: bool) -> Result<BindingValue> {
 		if tailstrict {
-			self.evaluate_tailstrict().map(Thunk::evaluated)
+			self.evaluate_tailstrict().map(BindingValue::from)
 		} else {
-			self.evaluate()
+			self.evaluate().map(BindingValue::from)
 		}
 	}
 }
@@ -107,15 +108,15 @@ pub trait ArgsLike {
 	fn unnamed_len(&self) -> usize;
 	fn unnamed_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()>;
 	fn named_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()>;
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr));
 	fn is_empty(&self) -> bool;
@@ -127,20 +128,20 @@ impl ArgsLike for Vec<Val> {
 	}
 	fn unnamed_iter(
 		&self,
-		_ctx: Context,
+		_ctx: &Context,
 		_tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		for (idx, el) in self.iter().enumerate() {
-			handler(idx, Thunk::evaluated(el.clone()))?;
+			handler(idx, BindingValue::from(el.clone()))?;
 		}
 		Ok(())
 	}
 	fn named_iter(
 		&self,
-		_ctx: Context,
+		_ctx: &Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		_handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
@@ -157,42 +158,43 @@ impl ArgsLike for ArgsDesc {
 
 	fn unnamed_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()> {
-		for (id, arg) in self.unnamed.iter().enumerate() {
-			handler(
-				id,
-				if tailstrict {
-					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
-				} else {
+		if tailstrict {
+			for (id, arg) in self.unnamed.iter().enumerate() {
+				handler(id, BindingValue::from(evaluate(ctx, arg)?))?;
+			}
+		} else {
+			for (id, arg) in self.unnamed.iter().enumerate() {
+				handler(id, {
 					let ctx = ctx.clone();
 					let arg = arg.clone();
 
-					Thunk!(move || evaluate(ctx, &arg))
-				},
-			)?;
+					BindingValue::Thunk(Thunk!(move || evaluate(&ctx, &arg)))
+				})?;
+			}
 		}
 		Ok(())
 	}
 
 	fn named_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		for (name, arg) in &self.named {
 			handler(
 				name,
 				if tailstrict {
-					Thunk::evaluated(evaluate(ctx.clone(), arg)?)
+					BindingValue::from(evaluate(ctx, arg)?)
 				} else {
 					let ctx = ctx.clone();
 					let arg = arg.clone();
 
-					Thunk!(move || evaluate(ctx, &arg))
+					BindingValue::Thunk(Thunk!(move || evaluate(&ctx, &arg)))
 				},
 			)?;
 		}
@@ -217,21 +219,21 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 
 	fn unnamed_iter(
 		&self,
-		_ctx: Context,
+		_ctx: &Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		_handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
 
 	fn named_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		for (name, value) in self {
-			handler(name, value.evaluate_arg(ctx.clone(), tailstrict)?)?;
+			handler(name, value.evaluate_arg(ctx, tailstrict)?)?;
 		}
 		Ok(())
 	}
@@ -255,18 +257,18 @@ impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 
 	fn unnamed_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		self.0.unnamed_iter(ctx, tailstrict, handler)
 	}
 
 	fn named_iter(
 		&self,
-		ctx: Context,
+		ctx: &Context,
 		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		self.0.named_iter(ctx, tailstrict, handler)
 	}
@@ -289,23 +291,23 @@ macro_rules! impl_args_like {
 			#[allow(non_snake_case, unused_assignments)]
 			fn unnamed_iter(
 				&self,
-				ctx: Context,
+				ctx: &Context,
 				tailstrict: bool,
-				handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+				handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 			) -> Result<()> {
 				let mut i = 0usize;
 				let ($($gen,)*) = self;
 				$(
-					handler(i, $gen.evaluate_arg(ctx.clone(), tailstrict)?)?;
+					handler(i, $gen.evaluate_arg(ctx, tailstrict)?)?;
 					i+=1;
 				)*
 				Ok(())
 			}
 			fn named_iter(
 				&self,
-				_ctx: Context,
+				_ctx: &Context,
 				_tailstrict: bool,
-				_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+				_handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 			) -> Result<()> {
 				Ok(())
 			}
@@ -338,18 +340,18 @@ impl ArgsLike for () {
 
 	fn unnamed_iter(
 		&self,
-		_ctx: Context,
+		_ctx: &Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
+		_handler: &mut dyn FnMut(usize, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}
 
 	fn named_iter(
 		&self,
-		_ctx: Context,
+		_ctx: &Context,
 		_tailstrict: bool,
-		_handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
+		_handler: &mut dyn FnMut(&IStr, BindingValue) -> Result<()>,
 	) -> Result<()> {
 		Ok(())
 	}

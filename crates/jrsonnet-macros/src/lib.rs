@@ -395,8 +395,8 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 					PARAMS
 				}
 				#[allow(unused_variables)]
-				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
+				fn call(&self, ctx: &Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
+					let parsed = parse_builtin_call(ctx, &PARAMS, args, false)?;
 
 					let result: #result = #name(#(#pass)*);
 					<_ as Typed>::into_result(result)

@@ -78,8 +78,8 @@ impl FuncDesc {
 	/// Create context, with which body code will run
 	pub fn call_body_context(
 		&self,
-		call_ctx: Context,
-		args: &dyn ArgsLike,
+		call_ctx: &Context,
+		args: &impl ArgsLike,
 		tailstrict: bool,
 	) -> Result<Context> {
 		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
@@ -172,16 +172,16 @@ impl FuncVal {
 	/// If `tailstrict` is specified - then arguments will be evaluated before being passed to function body.
 	pub fn evaluate(
 		&self,
-		call_ctx: Context,
+		call_ctx: &Context,
 		loc: CallLocation<'_>,
-		args: &dyn ArgsLike,
+		args: &impl ArgsLike,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
 			Self::Id => ID.call(call_ctx, loc, args),
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
-				evaluate(body_ctx, &func.body)
+				evaluate(&body_ctx, &func.body)
 			}
 			Self::Thunk(thunk) => {
 				if args.is_empty() {
@@ -190,7 +190,7 @@ impl FuncVal {
 				thunk.evaluate()
 			}
 			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.call(call_ctx, loc, args),
+			Self::Builtin(b) => b.as_ref().call(call_ctx, loc, args),
 		}
 	}
 	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
@@ -198,12 +198,8 @@ impl FuncVal {
 		args: &A,
 		tailstrict: bool,
 	) -> Result<Val> {
-		self.evaluate(
-			ContextBuilder::new().build(),
-			CallLocation::native(),
-			args,
-			tailstrict,
-		)
+		let ctx = ContextBuilder::new().build();
+		self.evaluate(&ctx, CallLocation::native(), args, tailstrict)
 	}
 	/// Convert jsonnet function to plain `Fn` value.
 	pub fn into_native<D: NativeDesc>(self) -> D::Value {

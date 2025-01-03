@@ -23,10 +23,10 @@ use crate::{
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_function_call(
-	ctx: Context,
+	ctx: &Context,
 	body_ctx: Context,
 	params: &ParamsDesc,
-	args: &dyn ArgsLike,
+	args: &impl ArgsLike,
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut passed_args =
@@ -44,7 +44,7 @@ pub fn parse_function_call(
 	let mut filled_named = 0;
 	let mut filled_positionals = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(ctx, tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
 		destruct(
 			&name,
@@ -61,7 +61,7 @@ pub fn parse_function_call(
 		if !params.iter().any(|p| p.0.name().as_ref() == Some(name)) {
 			bail!(UnknownFunctionParameter((name as &str).to_owned()));
 		}
-		if passed_args.insert(name.clone(), value).is_some() {
+		if !passed_args.insert(name.clone(), value) {
 			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_named += 1;
@@ -72,7 +72,7 @@ pub fn parse_function_call(
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let fctx = Context::new_future();
-		let mut defaults = GcHashMap::with_capacity(
+		let mut defaults = BindingsMap::with_capacity(
 			params.iter().map(|p| p.0.capacity_hint()).sum::<usize>()
 				- filled_named
 				- filled_positionals,
@@ -93,7 +93,7 @@ pub fn parse_function_call(
 					let ctx = fctx.clone();
 					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
 					let value = param.1.clone().expect("default exists");
-					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+					Thunk!(move || evaluate_named(ctx.get(), &value, name))
 				},
 				fctx.clone(),
 				&mut defaults,
@@ -127,13 +127,13 @@ pub fn parse_function_call(
 			unreachable!();
 		}
 
-		Ok(body_ctx
-			.extend_bindings(passed_args)
-			.extend_bindings(defaults)
-			.into_future(fctx))
+		let mut ctx = ContextBuilder::extend(body_ctx);
+		ctx.binds(passed_args).binds(defaults);
+		Ok(ctx.build().into_future(fctx))
 	} else {
-		let body_ctx = body_ctx.extend_bindings(passed_args);
-		Ok(body_ctx)
+		let mut ctx = ContextBuilder::extend(body_ctx);
+		ctx.binds(passed_args);
+		Ok(ctx.build())
 	}
 }
 
@@ -145,12 +145,12 @@ pub fn parse_function_call(
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_builtin_call(
-	ctx: Context,
-	params: &[BuiltinParam],
+	ctx: &Context,
+	params: &[Param],
 	args: &dyn ArgsLike,
 	tailstrict: bool,
-) -> Result<Vec<Option<Thunk<Val>>>> {
-	let mut passed_args: Vec<Option<Thunk<Val>>> = vec![None; params.len()];
+) -> Result<Vec<Option<BindingValue>>> {
+	let mut passed_args: Vec<Option<BindingValue>> = vec![None; params.len()];
 	if args.unnamed_len() > params.len() {
 		bail!(TooManyArgsFunctionHas(
 			params.len(),
@@ -163,7 +163,7 @@ pub fn parse_builtin_call(
 
 	let mut filled_args = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+	args.unnamed_iter(ctx, tailstrict, &mut |id, arg| {
 		passed_args[id] = Some(arg);
 		filled_args += 1;
 		Ok(())
@@ -220,7 +220,7 @@ pub fn parse_builtin_call(
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
 	let fctx = Context::new_future();
 
-	let mut bindings = GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
+	let mut bindings = BindingsMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {
@@ -230,7 +230,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 					let ctx = fctx.clone();
 					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
 					let value = v.clone();
-					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+					BindingValue::Thunk(Thunk!(move || evaluate_named(ctx.get(), &value, name)))
 				},
 				fctx.clone(),
 				&mut bindings,
@@ -241,14 +241,14 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 				{
 					let param_name = param.0.name().unwrap_or_else(|| "<destruct>".into());
 					let params = params.clone();
-					Thunk!(move || Err(FunctionParameterNotBoundInCall(
+					BindingValue::Thunk(Thunk!(move || Err(FunctionParameterNotBoundInCall(
 						Some(param_name),
 						params
 							.iter()
 							.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
 							.collect(),
 					)
-					.into()))
+					.into())))
 				},
 				fctx.clone(),
 				&mut bindings,
@@ -256,5 +256,5 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		}
 	}
 
-	Ok(body_ctx.extend_bindings(bindings).into_future(fctx))
+	Ok(body_ctx.with_bindings(bindings).into_future(fctx))
 }

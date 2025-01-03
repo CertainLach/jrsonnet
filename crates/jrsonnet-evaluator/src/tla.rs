@@ -13,7 +13,7 @@ pub fn apply_tla(args: &GcHashMap<IStr, TlaArg>, val: Val) -> Result<Val> {
 			|| "during TLA call".to_owned(),
 			|| {
 				func.evaluate(
-					with_state(|s| {
+					&with_state(|s| {
 						s.create_default_context(Source::new_virtual(
 							"<top-level-arg>".into(),
 							IStr::empty(),

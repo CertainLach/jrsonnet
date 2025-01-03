@@ -386,7 +386,7 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 		});
 		let stdlib_with_this_file = std.build();
 
-		builder.bind("std", Thunk::evaluated(Val::Obj(stdlib_with_this_file)));
+		builder.bind("std", Val::Obj(stdlib_with_this_file));
 	}
 	fn as_any(&self) -> &dyn std::any::Any {
 		self

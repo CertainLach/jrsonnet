@@ -360,7 +360,7 @@ impl State {
 		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too
 		drop(file_cache);
-		let res = evaluate(self.create_default_context(file_name), &parsed);
+		let res = evaluate(&self.create_default_context(file_name), &parsed);
 
 		let mut file_cache = self.file_cache();
 		let mut file = file_cache.raw_entry_mut().from_key(&path);
@@ -466,7 +466,7 @@ impl State {
 			path: source.clone(),
 			error: Box::new(e),
 		})?;
-		evaluate(self.create_default_context(source), &parsed)
+		evaluate(&self.create_default_context(source), &parsed)
 	}
 	/// Parses and evaluates the given snippet with custom context modifier
 	pub fn evaluate_snippet_with(
@@ -488,7 +488,7 @@ impl State {
 			error: Box::new(e),
 		})?;
 		evaluate(
-			self.create_default_context_with(source, context_initializer),
+			&self.create_default_context_with(source, context_initializer),
 			&parsed,
 		)
 	}

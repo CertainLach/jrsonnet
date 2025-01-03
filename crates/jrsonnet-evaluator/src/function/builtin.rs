@@ -79,7 +79,7 @@ pub trait Builtin: Trace {
 	/// Parameter names for named calls
 	fn params(&self) -> &[BuiltinParam];
 	/// Call the builtin
-	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(&self, ctx: &Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
 
 	fn as_any(&self) -> &dyn Any;
 }
@@ -124,7 +124,7 @@ impl Builtin for NativeCallback {
 		&self.params
 	}
 
-	fn call(&self, ctx: Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
+	fn call(&self, ctx: &Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
 		let args = parse_builtin_call(ctx, &self.params, args, true)?;
 		let args = args
 			.into_iter()
