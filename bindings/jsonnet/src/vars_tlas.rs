@@ -13,7 +13,7 @@ use crate::VM;
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let value = unsafe { CStr::from_ptr(value) };
@@ -36,7 +36,7 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *c
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let code = unsafe { CStr::from_ptr(code) };
@@ -60,7 +60,7 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *c
 /// # Safety
 ///
 /// `name`, `value` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let value = unsafe { CStr::from_ptr(value) };
@@ -77,7 +77,7 @@ pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_tla_code(vm: &mut VM, name: *const c_char, code: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let code = unsafe { CStr::from_ptr(code) };

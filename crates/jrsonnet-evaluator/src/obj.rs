@@ -65,7 +65,7 @@ mod ordering {
 	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
 	pub struct FieldIndex(u32);
 	impl FieldIndex {
-		pub fn next(&mut self) -> Self {
+		pub fn next(&mut self) {
 			self.0 += 1;
 		}
 	}
@@ -74,7 +74,7 @@ mod ordering {
 	pub struct SuperDepth(u32);
 	impl SuperDepth {
 		pub(super) fn deepen(&mut self) {
-			*self.0 += 1
+			self.0 += 1
 		}
 	}
 

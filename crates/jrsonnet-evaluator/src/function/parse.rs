@@ -6,7 +6,7 @@ use jrsonnet_parser::ParamsDesc;
 use super::{ArgsLike, Param};
 use crate::{
 	bail,
-	destructure::destruct,
+	destructure::destruct_lazy,
 	error::{ErrorKind::*, Result},
 	evaluate_named,
 	function::ParamDefault,
@@ -29,7 +29,7 @@ pub fn parse_function_call(
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut passed_args =
-		GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
+		BindingsMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 	if args.unnamed_len() > params.len() {
 		bail!(TooManyArgsFunctionHas(
 			params.len(),
@@ -45,7 +45,7 @@ pub fn parse_function_call(
 
 	args.unnamed_iter(ctx, tailstrict, &mut |id, arg| {
 		let name = params[id].0.clone();
-		destruct(
+		destruct_lazy(
 			&name,
 			arg,
 			Pending::new_filled(ctx.clone()),
@@ -86,7 +86,7 @@ pub fn parse_function_call(
 				continue;
 			}
 
-			destruct(
+			destruct_lazy(
 				&param.0,
 				{
 					let ctx = fctx.clone();
@@ -223,7 +223,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {
-			destruct(
+			destruct_lazy(
 				&param.0.clone(),
 				{
 					let ctx = fctx.clone();
@@ -235,7 +235,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 				&mut bindings,
 			)?;
 		} else {
-			destruct(
+			destruct_lazy(
 				&param.0,
 				{
 					let param_name = param.0.name().unwrap_or_else(|| "<destruct>".into());

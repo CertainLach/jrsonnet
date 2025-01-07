@@ -80,10 +80,13 @@ impl CcBuiltin {
 	pub(crate) fn make(builtin: impl Builtin) -> Self {
 		Self::new(builtin)
 	}
-	pub(crate) fn as_ref(&self) -> &dyn Builtin {
+}
+impl AsRef<dyn Builtin> for CcBuiltin {
+	fn as_ref(&self) -> &dyn Builtin {
 		&*self.0
 	}
 }
+
 /// Description of function defined by native code
 ///
 /// Prefer to use #[builtin] macro, instead of manual implementation of this trait

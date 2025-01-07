@@ -1,27 +1,40 @@
-use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct};
 
+use super::evaluate;
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
-	evaluate, evaluate_method, evaluate_named,
-	gc::GcHashMap,
-	Context, Pending, Thunk, Val,
+	evaluate_method, evaluate_named, BindingValue, BindingsMap, Context, Pending, Thunk,
 };
 
 #[allow(clippy::too_many_lines)]
 #[allow(unused_variables)]
-pub fn destruct(
+pub fn destruct_strict(
 	d: &Destruct,
-	parent: Thunk<Val>,
-	fctx: Pending<Context>,
-	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
+	parent: impl Into<BindingValue>,
+	new_bindings: &mut BindingsMap,
 ) -> Result<()> {
 	match d {
 		Destruct::Full(v) => {
-			let old = new_bindings.insert(v.clone(), parent);
-			if old.is_some() {
-				bail!(DuplicateLocalVar(v.clone()))
+			if !new_bindings.insert(v.clone(), parent) {
+				bail!(DuplicateLocal(v.clone()))
+			}
+		}
+	}
+	Ok(())
+}
+#[allow(clippy::too_many_lines)]
+#[allow(unused_variables)]
+pub fn destruct_lazy(
+	d: &Destruct,
+	parent: impl Into<BindingValue>,
+	fctx: Pending<Context>,
+	new_bindings: &mut BindingsMap,
+) -> Result<()> {
+	match d {
+		Destruct::Full(v) => {
+			if !new_bindings.insert(v.clone(), parent) {
+				bail!(DuplicateLocal(v.clone()))
 			}
 		}
 		#[cfg(feature = "exp-destruct")]
@@ -54,7 +67,7 @@ pub fn destruct(
 			{
 				for (i, d) in start.iter().enumerate() {
 					let full = full.clone();
-					destruct(
+					destruct_lazy(
 						d,
 						Thunk!(move || Ok(full.evaluate()?.get(i)?.expect("length is checked"))),
 						fctx.clone(),
@@ -68,7 +81,7 @@ pub fn destruct(
 					let start = start.len();
 					let end = end.len();
 					let full = full.clone();
-					destruct(
+					destruct_lazy(
 						&Destruct::Full(v.clone()),
 						Thunk!(move || {
 							let full = full.evaluate()?;
@@ -90,7 +103,7 @@ pub fn destruct(
 				for (i, d) in end.iter().enumerate() {
 					let full = full.clone();
 					let end = end.len();
-					destruct(
+					destruct_lazy(
 						d,
 						Thunk!(move || {
 							let full = full.evaluate()?;
@@ -139,15 +152,15 @@ pub fn destruct(
 							Ok(field)
 						} else {
 							let (fctx, expr) = default.as_ref().expect("shape is checked");
-							Ok(evaluate(fctx.clone().unwrap(), expr)?)
+							Ok(evaluate_owned(fctx.clone().unwrap(), expr)?)
 						}
 					})
 				};
 
 				if let Some(d) = d {
-					destruct(d, value, fctx.clone(), new_bindings)?;
+					destruct_lazy(d, value, fctx.clone(), new_bindings)?;
 				} else {
-					destruct(
+					destruct_lazy(
 						&Destruct::Full(field.clone()),
 						value,
 						fctx.clone(),
@@ -163,7 +176,7 @@ pub fn destruct(
 pub fn evaluate_dest(
 	d: &BindSpec,
 	fctx: Pending<Context>,
-	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
+	new_bindings: &mut BindingsMap,
 ) -> Result<()> {
 	match d {
 		BindSpec::Field { into, value } => {
@@ -172,11 +185,11 @@ pub fn evaluate_dest(
 			let data = {
 				let fctx = fctx.clone();
 				Thunk!(move || name.map_or_else(
-					|| evaluate(fctx.unwrap(), &value),
-					|name| evaluate_named(fctx.unwrap(), &value, name),
+					|| evaluate(fctx.get(), &value),
+					|name| evaluate_named(fctx.get(), &value, name),
 				))
 			};
-			destruct(into, data, fctx, new_bindings)?;
+			destruct_lazy(into, data, fctx, new_bindings)?;
 		}
 		BindSpec::Function {
 			name,
@@ -186,12 +199,13 @@ pub fn evaluate_dest(
 			let params = params.clone();
 			let name = name.clone();
 			let value = value.clone();
-			let old = new_bindings.insert(name.clone(), {
+
+			let v = {
 				let name = name.clone();
-				Thunk!(move || Ok(evaluate_method(fctx.unwrap(), name, params, value)))
-			});
-			if old.is_some() {
-				bail!(DuplicateLocalVar(name))
+				Thunk!(move || Ok(evaluate_method(fctx.get().clone(), name, params, value)))
+			};
+			if !new_bindings.insert(name.clone(), v) {
+				bail!(DuplicateLocal(name))
 			}
 		}
 	}

@@ -22,17 +22,6 @@ impl<'de> Deserialize<'de> for Val {
 	{
 		struct ValVisitor;
 
-		// macro_rules! visit_num {
-		// 	($($method:ident => $ty:ty),* $(,)?) => {$(
-		// 		fn $method<E>(self, v: $ty) -> Result<Self::Value, E>
-		// 		where
-		// 			E: serde::de::Error,
-		// 		{
-		// 			Ok(Val::Num(f64::from(v)))
-		// 		}
-		// 	)*};
-		// }
-
 		impl<'de> Visitor<'de> for ValVisitor {
 			type Value = Val;
 
@@ -57,14 +46,6 @@ impl<'de> Deserialize<'de> for Val {
 				Ok(Val::string(v))
 			}
 
-			// visit_num! {
-			// 	visit_i8 => i8,
-			// 	visit_i16 => i16,
-			// 	visit_i32 => i32,
-			// 	visit_u8 => u8,
-			// 	visit_u16 => u16,
-			// 	visit_u32 => u32,
-			// }
 			fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
 			where
 				E: de::Error,

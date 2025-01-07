@@ -5,7 +5,7 @@ use std::{
 
 use jrsonnet_evaluator::{
 	error::{Error, ErrorKind},
-	function::builtin::{NativeCallback, NativeCallbackHandler},
+	function::{NativeCallback, NativeCallbackHandler},
 	typed::Typed,
 	IStr, Val,
 };
@@ -62,7 +62,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// `name` should be a NUL-terminated string
 /// `cb` should be a function pointer
 /// `raw_params` should point to a NULL-terminated array of NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_native_callback(
 	vm: &VM,
 	name: *const c_char,

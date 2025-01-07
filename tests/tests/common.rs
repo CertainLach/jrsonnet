@@ -68,7 +68,7 @@ fn param_names(fun: FuncVal) -> Vec<String> {
 			.iter()
 			.map(|p| p.name().as_str().unwrap_or("<unnamed>").to_string())
 			.collect(),
-		FuncVal::Builtin(b) => b
+		FuncVal::Builtin(b) => b.as_ref()
 			.params()
 			.iter()
 			.map(|p| p.name().as_str().unwrap_or("<unnamed>").to_string())
