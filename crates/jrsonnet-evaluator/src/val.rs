@@ -24,7 +24,7 @@ use crate::{
 	gc::GcHashMap,
 	manifest::{ManifestFormat, ToStringFormat},
 	typed::BoundedUsize,
-	ObjValue, Result, SupThis, Unbound, WeakSupThis,
+	ObjValue, ObjectLayer, Result, SupThis, Unbound, WeakSupThis,
 };
 
 pub trait ThunkValueOnce: Trace + Debug {

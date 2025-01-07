@@ -51,6 +51,13 @@ use stack::check_depth;
 pub use tla::apply_tla;
 pub use val::{Thunk, Val};
 
+jrsonnet_gcmodule::cc_dyn!(CcUnbound, Unbound<Bound = Val>);
+impl Clone for CcUnbound {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
+
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read
 pub trait Unbound: Trace {
@@ -65,7 +72,7 @@ pub trait Unbound: Trace {
 #[derive(Clone, Trace)]
 pub enum MaybeUnbound {
 	/// Value needs to be bound to `this`/`super`
-	Unbound(Cc<TraceBox<dyn Unbound<Bound = Val>>>),
+	Unbound(CcUnbound),
 	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
@@ -79,7 +86,7 @@ impl MaybeUnbound {
 	/// Attach object context to value, if required
 	pub fn evaluate(&self, sup_this: SupThis) -> Result<Val> {
 		match self {
-			Self::Unbound(v) => v.bind(sup_this),
+			Self::Unbound(v) => v.0.bind(sup_this),
 			Self::Bound(v) => Ok(v.evaluate()?),
 		}
 	}

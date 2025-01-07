@@ -667,6 +667,54 @@ pub struct KeyValue {
 	key: IStr,
 	value: Thunk<Val>,
 }
+impl ObjectLayer for KeyValue {
+	fn enum_fields_core(
+		&self,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
+	) -> bool {
+		let mut i = FieldIndex::default();
+		if !handler(*super_depth, i, s_key(), Visibility::Normal) {
+			return false;
+		}
+		i.next();
+		if !handler(*super_depth, i, s_value(), Visibility::Normal) {
+			return false;
+		}
+		true
+	}
+
+	fn has_field_include_hidden(&self, name: IStr) -> bool {
+		name == s_key() || name == s_value()
+	}
+
+	fn get_for(
+		&self,
+		key: IStr,
+		_sup_this: crate::SupThis,
+		_do_cache: &mut bool,
+	) -> Result<Option<(Val, crate::ValueProcess)>> {
+		Ok(if key == s_key() {
+			Some((Val::string(self.key.clone()), ValueProcess { add: false }))
+		} else if key == s_value() {
+			Some((self.value.evaluate()?, ValueProcess { add: false }))
+		} else {
+			None
+		})
+	}
+
+	fn field_visibility(&self, field: IStr) -> Option<Visibility> {
+		if field == s_key() || field == s_value() {
+			Some(Visibility::Normal)
+		} else {
+			None
+		}
+	}
+
+	fn run_assertions_raw(&self, _sup_this: crate::SupThis) -> Result<()> {
+		Ok(())
+	}
+}
 
 impl ArrayLike for PickObjectKeyValues {
 	fn len(&self) -> usize {
