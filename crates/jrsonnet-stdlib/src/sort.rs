@@ -69,13 +69,54 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(values)
 }
 
-fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn sort_keyf_lazy(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 	// Slow path, user provided key getter
 	let mut vk = Vec::with_capacity(values.len());
 	for value in values.iter_lazy() {
 		vk.push((
 			value.clone(),
 			keyf.evaluate_simple(&(value.clone(),), false)?,
+		));
+	}
+	let sort_type = get_sort_type(&vk, |v| &v.1)?;
+	match sort_type {
+		SortKeyType::Number => vk.sort_by_key(|v| match v.1 {
+			Val::Num(n) => n,
+			_ => unreachable!(),
+		}),
+		SortKeyType::String => vk.sort_by_key(|v| match &v.1 {
+			Val::Str(s) => s.clone(),
+			_ => unreachable!(),
+		}),
+		SortKeyType::Unknown => {
+			let mut err = None;
+			// evaluate_compare_op will never return equal on types, which are different from
+			// jsonnet perspective
+			vk.sort_by(
+				|(_a, ak), (_b, bk)| match evaluate_compare_op(ak, bk, BinaryOpType::Lt) {
+					Ok(ord) => ord,
+					Err(e) if err.is_none() => {
+						let _ = err.insert(e);
+						Ordering::Equal
+					}
+					Err(_) => Ordering::Equal,
+				},
+			);
+			if let Some(err) = err {
+				return Err(err);
+			}
+		}
+	};
+	Ok(vk.into_iter().map(|v| v.0).collect())
+}
+fn sort_keyf_strict(values: ArrValue, keyf: FuncVal) -> Result<Vec<Val>> {
+	// Slow path, user provided key getter
+	let mut vk = Vec::with_capacity(values.len());
+	for value in values.iter() {
+		let value = value?;
+		vk.push((
+			value.clone(),
+			keyf.evaluate_simple(&(value.clone(),), true)?,
 		));
 	}
 	let sort_type = get_sort_type(&vk, |v| &v.1)?;
@@ -120,7 +161,15 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 			values.iter().collect::<Result<Vec<Val>>>()?,
 		)?))
 	} else {
-		Ok(ArrValue::lazy(sort_keyf(values, key_getter)?))
+		// In theory, keyF is allowed to not access array values at all, returning unsorted array
+		// (due to no ability to produce key depending on input (maybe possible to do that with hypothetical try-catch operator?).
+		// In most cases, however, keyF will access the array element, throwing an error.
+		//
+		// Try to handle most cases first (keyF accessing array element), fallback to lazy, original implementation, in case of error.
+		Ok(match sort_keyf_strict(values.clone(), key_getter.clone()) {
+			Ok(v) => ArrValue::new(v),
+			Err(_) => ArrValue::lazy(sort_keyf_lazy(values, key_getter)?),
+		})
 	}
 }
 
@@ -146,7 +195,7 @@ fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(out)
 }
 
-fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn uniq_keyf_lazy(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 	let mut out = Vec::new();
 	let last_value = arr.get_lazy(0).unwrap();
 	let mut last_key = keyf.evaluate_simple(&(last_value.clone(),), false)?;
@@ -161,6 +210,38 @@ fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 	}
 	Ok(out)
 }
+fn uniq_keyf_strict(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Val>> {
+	let mut out = Vec::new();
+	let last_value = arr.get(0)?.unwrap();
+	let mut last_key = keyf.evaluate_simple(&(last_value.clone(),), true)?;
+	out.push(last_value);
+
+	for next in arr.iter().skip(1) {
+		let next = next?;
+		let next_key = keyf.evaluate_simple(&(next.clone(),), false)?;
+		if !equals(&last_key, &next_key)? {
+			out.push(next.clone());
+		}
+		last_key = next_key;
+	}
+	Ok(out)
+}
+pub fn uniq(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
+	if values.len() <= 1 {
+		return Ok(values);
+	}
+	if key_getter.is_identity() {
+		Ok(ArrValue::new(uniq_identity(
+			values.iter().collect::<Result<Vec<Val>>>()?,
+		)?))
+	} else {
+		// See comment on strict/lazy handling in [`sort`]
+		Ok(match uniq_keyf_strict(values.clone(), key_getter.clone()) {
+			Ok(v) => ArrValue::new(v),
+			Err(_) => ArrValue::lazy(uniq_keyf_lazy(values, key_getter)?),
+		})
+	}
+}
 
 #[builtin]
 #[allow(non_snake_case)]
@@ -169,16 +250,7 @@ pub fn builtin_uniq(
 
 	#[default(FuncVal::identity())] keyF: FuncVal,
 ) -> Result<ArrValue> {
-	if arr.len() <= 1 {
-		return Ok(arr);
-	}
-	if keyF.is_identity() {
-		Ok(ArrValue::eager(uniq_identity(
-			arr.iter().collect::<Result<Vec<Val>>>()?,
-		)?))
-	} else {
-		Ok(ArrValue::lazy(uniq_keyf(arr, keyF)?))
-	}
+	uniq(arr, keyF)
 }
 
 #[builtin]
@@ -195,11 +267,11 @@ pub fn builtin_set(
 		let arr = arr.iter().collect::<Result<Vec<Val>>>()?;
 		let arr = sort_identity(arr)?;
 		let arr = uniq_identity(arr)?;
-		Ok(ArrValue::eager(arr))
+		Ok(ArrValue::new(arr))
 	} else {
-		let arr = sort_keyf(arr, keyF.clone())?;
-		let arr = uniq_keyf(ArrValue::lazy(arr), keyF)?;
-		Ok(ArrValue::lazy(arr))
+		let arr = sort(arr, keyF.clone())?;
+		let arr = uniq(arr, keyF)?;
+		Ok(arr)
 	}
 }
 
