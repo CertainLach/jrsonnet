@@ -345,7 +345,9 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	Ok(Val::try_num(arr.iter().sum::<f64>() / (arr.len() as f64))?)
+	#[allow(clippy::cast_precision_loss, reason = "arrays aren't that large in practice")]
+	let items = arr.len() as f64;
+	Ok(Val::try_num(arr.iter().sum::<f64>() / items)?)
 }
 
 #[builtin]
@@ -360,6 +362,7 @@ pub fn builtin_remove_at(arr: ArrValue, at: i32) -> Result<ArrValue> {
 pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
 	for (index, item) in arr.iter().enumerate() {
 		if equals(&item?, &elem)? {
+			#[allow(clippy::cast_possible_wrap, reason = "index is bounded to array length")]
 			return builtin_remove_at(arr.clone(), index as i32);
 		}
 	}
