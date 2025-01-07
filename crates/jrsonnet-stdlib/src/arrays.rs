@@ -17,21 +17,31 @@ pub fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
 	}
 }
 
+pub fn make_array_strict(size: usize, func: FuncVal) -> Result<ArrValue> {
+	let mut out = Vec::with_capacity(size);
+	for v in 0..size {
+		let v = func.evaluate_simple(&(v,), true)?;
+		out.push(v);
+	}
+	Ok(ArrValue::new(out))
+}
+
 #[builtin]
 pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
-	if *sz == 0 {
-		return Ok(ArrValue::empty());
+	#[expect(clippy::cast_sign_loss, reason = "this function accepts negative numbers, but returns empty array on negatives")]
+	let sz = *sz as usize;
+	if sz == 0 {
+		return Ok(ArrValue::new(()));
 	}
-	func.evaluate_trivial().map_or_else(
-		|| Ok(ArrValue::range_exclusive(0, *sz).map(func)),
-		|trivial| {
-			let mut out = Vec::with_capacity(*sz as usize);
-			for _ in 0..*sz {
-				out.push(trivial.clone());
-			}
-			Ok(ArrValue::eager(out))
-		},
-	)
+
+	if let Some(trivial) = func.evaluate_trivial() {
+		return Ok(ArrValue::repeated_single(trivial, sz));
+	}
+
+	// Most of the time, all elements of make_array are used, assume this holds true
+	#[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation, reason = "sz is bounded to i32 range")]
+	Ok(make_array_strict(sz, func.clone())
+		.unwrap_or_else(|_| ArrValue::range_exclusive(0, sz as i32).map(func)))
 }
 
 #[builtin]
