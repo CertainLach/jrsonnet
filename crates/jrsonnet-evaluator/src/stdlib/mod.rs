@@ -2,10 +2,11 @@
 #![allow(clippy::unnecessary_wraps)]
 
 use format::{format_arr, format_obj};
+pub use format::FormatError;
 
 use crate::{function::CallLocation, in_frame, Result, Val};
 
-pub mod format;
+mod format;
 
 pub fn std_format(str: &str, vals: Val) -> Result<String> {
 	in_frame(

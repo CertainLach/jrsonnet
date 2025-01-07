@@ -6,22 +6,23 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, LocExpr, ParamsDesc, Span};
+pub use native::Desc as NativeDesc;
+use parse::{parse_default_function_call, parse_function_call};
 
-use self::{
-	arglike::OptionalContext,
-	builtin::{Builtin, BuiltinParam, ParamDefault, ParamName, StaticBuiltin},
-	native::NativeDesc,
-	parse::{parse_default_function_call, parse_function_call},
-};
+#[doc(hidden)]
+pub mod macro_internal {
+	pub use super::{arglike::ArgsLike, parse::parse_builtin_call};
+}
+
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context,
-	ContextBuilder, Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, Context, ContextBuilder, Result, Thunk,
+	Val,
 };
 
-pub mod arglike;
-pub mod builtin;
-pub mod native;
-pub mod parse;
+mod arglike;
+mod builtin;
+mod native;
+mod parse;
 
 /// Function callsite location.
 /// Either from other jsonnet code, specified by expression location, or from native (without location).
@@ -41,7 +42,7 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, Trace, PartialEq)]
+#[derive(Debug, Trace)]
 pub struct FuncDesc {
 	/// # Example
 	///
@@ -91,7 +92,6 @@ impl FuncDesc {
 }
 
 /// Represents a Jsonnet function value, including plain functions and user-provided builtins.
-#[allow(clippy::module_name_repetitions)]
 #[derive(Trace, Clone, Educe)]
 #[educe(Debug)]
 pub enum FuncVal {
@@ -126,16 +126,16 @@ impl FuncVal {
 		Self::StaticBuiltin(static_builtin)
 	}
 
-	pub fn params(&self) -> Vec<BuiltinParam> {
+	pub fn params(&self) -> Vec<Param> {
 		match self {
 			Self::Id => ID.params().to_vec(),
 			Self::StaticBuiltin(i) => i.params().to_vec(),
-			Self::Builtin(i) => i.params().to_vec(),
+			Self::Builtin(i) => i.as_ref().params().to_vec(),
 			Self::Normal(p) => p
 				.params
 				.iter()
 				.map(|p| {
-					BuiltinParam::new(
+					Param::new(
 						p.0.name()
 							.as_ref()
 							.map(IStr::to_string)
@@ -153,7 +153,12 @@ impl FuncVal {
 			Self::Id => 1,
 			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
 			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
-			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
+			Self::Builtin(i) => i
+				.as_ref()
+				.params()
+				.iter()
+				.filter(|p| !p.has_default())
+				.count(),
 			Self::Thunk(_) => 0,
 		}
 	}
@@ -163,7 +168,7 @@ impl FuncVal {
 			Self::Id => "id".into(),
 			Self::Normal(normal) => normal.name.clone(),
 			Self::StaticBuiltin(builtin) => builtin.name().into(),
-			Self::Builtin(builtin) => builtin.name().into(),
+			Self::Builtin(builtin) => builtin.as_ref().name().into(),
 			Self::Thunk(_) => "thunk".into(),
 		}
 	}

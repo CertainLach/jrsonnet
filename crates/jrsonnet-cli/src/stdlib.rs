@@ -23,7 +23,8 @@ pub struct ExtStr {
 /// assert_eq!(ext.name, "name");
 /// assert_eq!(ext.value, "value");
 ///
-/// std::env::set_var("name", "value");
+/// // FIXME: Pass some env vars from the build script, do not use set_var during tests
+/// unsafe { std::env::set_var("name", "value") };
 ///
 /// let ext = ExtStr::from_str("name").unwrap();
 /// assert_eq!(ext.name, "name");

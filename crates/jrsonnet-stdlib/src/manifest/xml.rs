@@ -22,6 +22,7 @@ impl XmlJsonmlFormat {
 	}
 }
 
+#[derive(Debug)]
 enum JSONMLValue {
 	Tag {
 		tag: String,

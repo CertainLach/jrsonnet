@@ -5,7 +5,7 @@ use std::{
 };
 
 use jrsonnet_gcmodule::Trace;
-use jrsonnet_parser::{CodeLocation, Source, Span};
+use jrsonnet_parser::{CodeLocation, Span};
 
 use crate::{error::ErrorKind, Error};
 
@@ -47,7 +47,7 @@ impl PathResolver {
 }
 
 /// Implements pretty-printing of traces
-#[allow(clippy::module_name_repetitions)]
+#[expect(clippy::module_name_repetitions)]
 pub trait TraceFormat: Trace {
 	fn write_trace(
 		&self,

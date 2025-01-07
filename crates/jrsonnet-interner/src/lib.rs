@@ -32,6 +32,12 @@ impl Trace for IStr {
 	}
 }
 
+impl From<&Self> for IStr {
+	fn from(value: &Self) -> Self {
+		value.to_owned()
+	}
+}
+
 impl IStr {
 	#[must_use]
 	pub fn empty() -> Self {
@@ -61,12 +67,6 @@ impl PartialEq for IStr {
 	fn eq(&self, other: &Self) -> bool {
 		// all IStr should be inlined into same pool
 		Inner::ptr_eq(&self.0, &other.0)
-	}
-}
-
-impl PartialEq<str> for IStr {
-	fn eq(&self, other: &str) -> bool {
-		self as &str == other
 	}
 }
 
@@ -168,10 +168,7 @@ fn maybe_unpool(inner: &Inner) {
 				// destructor is called, but instead re-initialize the TLS with the empty pool.
 				// Allow non-pooled Drop in this case.
 				// https://github.com/CertainLach/jrsonnet/issues/98#issuecomment-1591624016
-				//
-				// However, if pool is not empty, most likely this is issue #113, and then I don't
-				// have any explainations for now.
-				assert!(pool.is_empty(), "received an unpooled string not during the program termination, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
+				debug_assert!(pool.is_empty());
 			}
 		});
 	}
@@ -258,7 +255,7 @@ pub mod interop {
 		let ptr: Box<PoolMap> = unsafe { Box::from_raw(ptr) };
 		let ptr: PoolMap = *ptr;
 		POOL.with_borrow_mut(|pool| {
-			let _ = mem::replace(pool, ptr);
+			drop(mem::replace(pool, ptr));
 		});
 	}
 }

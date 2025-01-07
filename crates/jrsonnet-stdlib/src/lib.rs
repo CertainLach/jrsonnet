@@ -14,7 +14,7 @@ use jrsonnet_evaluator::{
 	error::Result,
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
-	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
+	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
@@ -280,7 +280,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 }
 
 pub trait TracePrinter {
-	fn print_trace(&self, loc: CallLocation, value: IStr);
+	fn print_trace(&self, loc: CallLocation<'_>, value: IStr);
 }
 
 pub struct StdTracePrinter {
@@ -292,7 +292,7 @@ impl StdTracePrinter {
 	}
 }
 impl TracePrinter for StdTracePrinter {
-	fn print_trace(&self, loc: CallLocation, value: IStr) {
+	fn print_trace(&self, loc: CallLocation<'_>, value: IStr) {
 		eprint!("TRACE:");
 		if let Some(loc) = loc.0 {
 			let locs = loc.0.map_source_locations(&[loc.1]);
@@ -341,10 +341,10 @@ impl ContextInitializer {
 			settings,
 		}
 	}
-	pub fn settings(&self) -> Ref<Settings> {
+	pub fn settings(&self) -> Ref<'_, Settings> {
 		self.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<Settings> {
+	pub fn settings_mut(&self) -> RefMut<'_, Settings> {
 		self.settings.borrow_mut()
 	}
 	pub fn add_ext_var(&self, name: IStr, value: Val) {

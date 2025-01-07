@@ -4,13 +4,13 @@ use super::{
 };
 use crate::{typed::Typed, Result};
 
-pub trait NativeDesc {
+pub trait Desc {
 	type Value;
 	fn into_native(val: FuncVal) -> Self::Value;
 }
 macro_rules! impl_native_desc {
 	($($gen:ident)*) => {
-		impl<$($gen,)* O> NativeDesc for (($($gen,)*), O)
+		impl<$($gen,)* O> Desc for (($($gen,)*), O)
 		where
 			$($gen: ArgLike + OptionalContext,)*
 			O: Typed,

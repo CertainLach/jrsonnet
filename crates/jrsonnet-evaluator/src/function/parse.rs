@@ -3,15 +3,14 @@ use std::mem::replace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::ParamsDesc;
 
-use super::{arglike::ArgsLike, builtin::BuiltinParam};
+use super::{ArgsLike, Param};
 use crate::{
 	bail,
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
 	evaluate_named,
-	function::builtin::ParamDefault,
-	gc::GcHashMap,
-	Context, Pending, Thunk, Val,
+	function::ParamDefault,
+	BindingValue, BindingsMap, Context, ContextBuilder, Pending, Thunk,
 };
 
 /// Creates correct [context](Context) for function body evaluation returning error on invalid call.

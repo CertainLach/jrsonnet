@@ -1,5 +1,4 @@
 use std::{
-	cmp::Ordering,
 	convert::Infallible,
 	fmt::{Debug, Display},
 };
@@ -11,11 +10,11 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{builtin::ParamDefault, CallLocation},
-	stdlib::format::FormatError,
+	function::{ParamDefault, CallLocation},
+	stdlib::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
-	ObjValue, ResolvePathOwned,
+	ResolvePathOwned,
 };
 
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
@@ -85,31 +84,13 @@ const fn format_empty_str(str: &str) -> &str {
 	}
 }
 
-pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
-	let mut heap = Vec::new();
-	for field in v.fields_ex(
-		true,
-		#[cfg(feature = "exp-preserve-order")]
-		false,
-	) {
-		let conf = strsim::jaro_winkler(field.as_str(), key.as_str());
-		if conf < 0.8 {
-			continue;
-		}
-		assert!(field.as_str() != key.as_str(), "looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
-
-		heap.push((conf, field));
-	}
-	heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-	heap.into_iter().map(|v| v.1).collect()
-}
-
 type FunctionSignature = Vec<(Option<IStr>, ParamDefault)>;
 
 /// Possible errors
 #[allow(missing_docs)]
 #[derive(Error, Debug, Clone, Trace)]
 #[non_exhaustive]
+#[expect(clippy::module_name_repetitions)]
 pub enum ErrorKind {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -127,18 +108,16 @@ pub enum ErrorKind {
 	#[error("for loop can only iterate over arrays")]
 	InComprehensionCanOnlyIterateOverArray,
 
-	#[error("array out of bounds: {0} is not within [0,{1})")]
-	ArrayBoundsError(isize, usize),
-	#[error("string out of bounds: {0} is not within [0,{1})")]
-	StringBoundsError(usize, usize),
+	#[error("index is out of bounds: {0} is not within [0,{1})")]
+	IndexBoundsError(usize, usize),
 
 	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
 	#[error("local is not defined: {0}{found}", found = format_found(.1, "local"))]
-	VariableIsNotDefined(IStr, Vec<IStr>),
+	LocalIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
-	DuplicateLocalVar(IStr),
+	DuplicateLocal(IStr),
 
 	#[error("type mismatch: expected {expected}, got {2} {0}", expected = .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
@@ -216,6 +195,8 @@ pub enum ErrorKind {
 	InfiniteRecursionDetected,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
+	#[error("tried to index by negative value")]
+	NegativeIndex,
 	#[error("attempted to divide by zero")]
 	DivisionByZero,
 
@@ -321,6 +302,7 @@ impl Debug for Error {
 }
 impl std::error::Error for Error {}
 
+#[expect(clippy::module_name_repetitions)]
 pub trait ErrorSource {
 	fn to_location(self) -> Option<Span>;
 }
@@ -402,6 +384,7 @@ macro_rules! bail {
 }
 
 #[macro_export]
+#[expect(clippy::module_name_repetitions)]
 macro_rules! runtime_error {
 	($l:literal$(, $($tt:tt)*)?) => {
 		$crate::error::Error::from($crate::error::ErrorKind::RuntimeError($crate::jrsonnet_macros::format_istr!($l$(, $($tt)*)?)))

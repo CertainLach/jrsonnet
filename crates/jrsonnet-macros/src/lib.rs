@@ -83,7 +83,7 @@ struct Field {
 	ty: Type,
 }
 impl Parse for Field {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
+	fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
 		Ok(Self {
 			attrs: input.call(Attribute::parse_outer)?,
 			name: input.parse()?,
@@ -105,7 +105,7 @@ mod kw {
 
 struct EmptyAttr;
 impl Parse for EmptyAttr {
-	fn parse(_input: ParseStream) -> Result<Self> {
+	fn parse(_input: ParseStream<'_>) -> Result<Self> {
 		Ok(Self)
 	}
 }
@@ -114,7 +114,7 @@ struct BuiltinAttrs {
 	fields: Vec<Field>,
 }
 impl Parse for BuiltinAttrs {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
+	fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
 		if input.is_empty() {
 			return Ok(Self { fields: Vec::new() });
 		}
@@ -176,7 +176,9 @@ impl ArgInfo {
 			_ => {}
 		}
 
-		let (optionality, ty) = if let Some(default) = parse_attr::<_, _>(&arg.attrs, "default")? {
+		let default_attr = parse_attr::<_, _>(&arg.attrs, "default")?;
+		#[allow(if_let_rescope, reason = "false-positive, this code is already fixed")]
+		let (optionality, ty) = if let Some(default) = default_attr {
 			remove_attr(&mut arg.attrs, "default");
 			(Optionality::Default(default), ty.clone())
 		} else if let Some(ty) = extract_type_from_option(ty)? {
@@ -256,7 +258,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			};
 			Some(quote! {
 				#(#cfg_attrs)*
-				BuiltinParam::new(#name, #default),
+				Param::new(#name, #default),
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
@@ -264,7 +266,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				.as_ref()
 				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
 			Some(quote! {
-				BuiltinParam::new(#name, ParamDefault::exists(#is_option)),
+				Param::new(#name, ParamDefault::exists(#is_option)),
 			})
 		}
 		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
@@ -320,13 +322,13 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			ArgInfo::Lazy { is_option, .. } => {
 				if *is_option {
 					quote! {if let Some(value) = &parsed[#id] {
-						Some(value.clone())
+						Some(value.as_thunk())
 					} else {
 						None
 					},}
 				} else {
 					quote! {
-						parsed[#id].as_ref().expect("args shape is correct").clone(),
+						parsed[#id].as_ref().expect("args shape is correct").as_thunk(),
 					}
 				}
 			}
@@ -375,11 +377,11 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				State, Val,
-				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
+				function::{Param, Builtin, StaticBuiltin, ParamName, ParamDefault, CallLocation, macro_internal::{ArgsLike, parse_builtin_call}},
 				Result, Context, typed::Typed,
 				parser::Span,
 			};
-			const PARAMS: &'static [BuiltinParam] = &[
+			const PARAMS: &'static [Param] = &[
 				#(#params_desc)*
 			];
 
@@ -391,7 +393,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				fn name(&self) -> &str {
 					stringify!(#name)
 				}
-				fn params(&self) -> &[BuiltinParam] {
+				fn params(&self) -> &[Param] {
 					PARAMS
 				}
 				#[allow(unused_variables)]
@@ -424,7 +426,7 @@ struct TypedAttr {
 	hide: bool,
 }
 impl Parse for TypedAttr {
-	fn parse(input: ParseStream) -> syn::Result<Self> {
+	fn parse(input: ParseStream<'_>) -> syn::Result<Self> {
 		let mut out = Self::default();
 		loop {
 			let lookahead = input.lookahead1();
@@ -769,7 +771,7 @@ struct FormatInput {
 	arguments: Vec<Expr>,
 }
 impl Parse for FormatInput {
-	fn parse(input: ParseStream) -> Result<Self> {
+	fn parse(input: ParseStream<'_>) -> Result<Self> {
 		let formatting = input.parse()?;
 		let mut arguments = Vec::new();
 
@@ -886,6 +888,6 @@ pub fn Thunk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	quote! {{
 		#move_check
 		#(#trace_check)*
-		::jrsonnet_evaluator::Thunk::new(::jrsonnet_evaluator::val::ThunkValueClosure::new(#env, #closure))
+		::jrsonnet_evaluator::Thunk::new_cached(::jrsonnet_evaluator::val::ThunkValueClosure::new(#env, #closure))
 	}}.into()
 }

@@ -1,5 +1,6 @@
-use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
+use std::{collections::BTreeMap, fmt::Debug, marker::PhantomData, ops::Deref};
 
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
 pub use jrsonnet_macros::Typed;
@@ -8,13 +9,13 @@ use jrsonnet_types::{ComplexValType, ValType};
 use crate::{
 	arr::{ArrValue, BytesArray},
 	bail,
-	function::{native::NativeDesc, FuncDesc, FuncVal},
+	function::{FuncDesc, FuncVal, NativeDesc},
 	typed::CheckType,
-	val::{IndexableVal, NumValue, StrValue, ThunkMapper},
+	val::{Indexable, NumValue, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 struct FromUntyped<K: Trace>(PhantomData<fn() -> K>);
 impl<K> ThunkMapper<Val> for FromUntyped<K>
 where
@@ -42,7 +43,7 @@ pub trait TypedObj: Typed {
 	}
 }
 
-pub trait Typed: Sized {
+pub trait Typed: Sized + Debug {
 	const TYPE: &'static ComplexValType;
 	fn into_untyped(typed: Self) -> Result<Val>;
 	fn into_lazy_untyped(typed: Self) -> Thunk<Val> {
@@ -91,11 +92,11 @@ where
 	}
 
 	fn into_lazy_untyped(inner: Self) -> Thunk<Val> {
-		#[derive(Trace)]
-		struct IntoUntyped<K: Trace>(PhantomData<fn() -> K>);
+		#[derive(Trace, Debug)]
+		struct IntoUntyped<K: Trace + Debug>(PhantomData<fn() -> K>);
 		impl<K> ThunkMapper<K> for IntoUntyped<K>
 		where
-			K: Typed + Trace,
+			K: Typed + Trace + Debug,
 		{
 			type Output = Val;
 
@@ -103,7 +104,7 @@ where
 				K::into_untyped(from)
 			}
 		}
-		impl<K: Trace> Default for IntoUntyped<K> {
+		impl<K: Trace + Debug> Default for IntoUntyped<K> {
 			fn default() -> Self {
 				Self(PhantomData)
 			}
@@ -120,6 +121,10 @@ where
 	}
 }
 
+#[allow(
+	clippy::cast_precision_loss,
+	reason = "no precision is lost, it is explicitly at border value"
+)]
 pub const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
 pub const MIN_SAFE_INTEGER: f64 = -MAX_SAFE_INTEGER;
 
@@ -140,6 +145,7 @@ macro_rules! impl_int {
 								stringify!($ty)
 							)
 						}
+						#[allow(clippy::cast_sign_loss, reason = "numbers have checked bounds")]
 						Ok(n as Self)
 					}
 					_ => unreachable!(),
@@ -156,7 +162,7 @@ impl_int!(i8 u8 i16 u16 i32 u32);
 
 macro_rules! impl_bounded_int {
 	($($name:ident = $ty:ty)*) => {$(
-		#[derive(Clone, Copy)]
+		#[derive(Clone, Copy, Debug)]
 		pub struct $name<const MIN: $ty, const MAX: $ty>($ty);
 		impl<const MIN: $ty, const MAX: $ty> $name<MIN, MAX> {
 			pub const fn new(value: $ty) -> Option<$name<MIN, MAX>> {
@@ -178,6 +184,8 @@ macro_rules! impl_bounded_int {
 		}
 
 		impl<const MIN: $ty, const MAX: $ty> Typed for $name<MIN, MAX> {
+			// TODO: Rename BoundedUsize to BoundedIndex or smth?
+			#[allow(clippy::cast_precision_loss, reason = "usize is used for array indexes, and do not reach values that big")]
 			const TYPE: &'static ComplexValType =
 				&ComplexValType::BoundedNumber(
 					Some(MIN as f64),
@@ -196,6 +204,7 @@ macro_rules! impl_bounded_int {
 								stringify!($ty)
 							)
 						}
+						#[allow(clippy::cast_sign_loss, reason = "bounds are checked")]
 						Ok(Self(n as $ty))
 					}
 					_ => unreachable!(),
@@ -214,7 +223,6 @@ impl_bounded_int!(
 	BoundedI8 = i8
 	BoundedI16 = i16
 	BoundedI32 = i32
-	BoundedI64 = i64
 	BoundedUsize = usize
 );
 
@@ -234,6 +242,7 @@ impl Typed for f64 {
 	}
 }
 
+#[derive(Debug)]
 pub struct PositiveF64(pub f64);
 impl Typed for PositiveF64 {
 	const TYPE: &'static ComplexValType = &ComplexValType::BoundedNumber(Some(0.0), None);
@@ -267,6 +276,7 @@ impl Typed for usize {
 				if n.trunc() != n {
 					bail!("cannot convert number with fractional part to usize")
 				}
+				#[allow(clippy::cast_sign_loss, reason = "bounds are checked")]
 				Ok(n as Self)
 			}
 			_ => unreachable!(),
@@ -398,7 +408,8 @@ impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
 				let value = obj.get_lazy(key.clone()).expect("field exists");
 				let value = V::from_lazy_untyped(value)?;
 				let key = K::from_untyped(Val::Str(key.into()))?;
-				let _ = out.insert(key, value);
+				let old = out.insert(key, value);
+				assert!(old.is_none(), "fields are unique");
 			}
 		} else {
 			for (key, value) in obj.iter(
@@ -407,7 +418,8 @@ impl<K: Typed + Ord, V: Typed> Typed for BTreeMap<K, V> {
 			) {
 				let key = K::from_untyped(Val::Str(key.into()))?;
 				let value = V::from_untyped(value?)?;
-				let _ = out.insert(key, value);
+				let old = out.insert(key, value);
+				assert!(old.is_none(), "fields are unique");
 			}
 		}
 		Ok(out)
@@ -474,6 +486,7 @@ impl Typed for IBytes {
 	}
 }
 
+#[derive(Debug)]
 pub struct M1;
 impl Typed for M1 {
 	const TYPE: &'static ComplexValType = &ComplexValType::BoundedNumber(Some(-1.0), Some(-1.0));
@@ -490,7 +503,7 @@ impl Typed for M1 {
 
 macro_rules! decl_either {
 	($($name: ident, $($id: ident)*);*) => {$(
-		#[derive(Clone)]
+		#[derive(Clone, Debug)]
 		pub enum $name<$($id),*> {
 			$($id($id)),*
 		}
@@ -641,6 +654,7 @@ impl Typed for Indexable {
 	}
 }
 
+#[derive(Debug)]
 pub struct Null;
 impl Typed for Null {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Null);
@@ -675,7 +689,9 @@ where
 	}
 }
 
-pub struct NativeFn<D: NativeDesc>(D::Value);
+#[derive(Educe)]
+#[educe(Debug)]
+pub struct NativeFn<D: NativeDesc>(#[educe(Debug(ignore))] D::Value);
 impl<D: NativeDesc> Deref for NativeFn<D> {
 	type Target = D::Value;
 

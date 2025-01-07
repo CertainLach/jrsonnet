@@ -312,8 +312,10 @@ impl Indexable {
 				};
 				let mut get_idx = |pos: Option<i32>, default| {
 					match pos {
+						#[expect(clippy::cast_sign_loss, reason = "value is alvays positive due to guard and inversion")]
 						Some(v) if v < 0 => get_len().saturating_sub((-v) as usize),
 						// No need to clamp, as iterator interface is used
+						#[expect(clippy::cast_sign_loss, reason = "value is alvays positive, as negatives are already handled")]
 						Some(v) => v as usize,
 						None => default,
 					}
@@ -545,6 +547,7 @@ macro_rules! impl_try_num {
 			#[inline]
 			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
 				use crate::typed::conversions::{MIN_SAFE_INTEGER, MAX_SAFE_INTEGER};
+				#[allow(clippy::cast_precision_loss, reason = "value is further limited to u32 later")]
 				let value = value as f64;
 				if value < MIN_SAFE_INTEGER {
 					return Err(ConvertNumValueError::Underflow)

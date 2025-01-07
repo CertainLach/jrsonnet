@@ -26,8 +26,8 @@ pub enum ResolvePathOwned {
 impl fmt::Display for ResolvePathOwned {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		match self {
-			ResolvePathOwned::Str(s) => write!(f, "{s}"),
-			ResolvePathOwned::Path(p) => write!(f, "{}", p.display()),
+			Self::Str(s) => write!(f, "{s}"),
+			Self::Path(p) => write!(f, "{}", p.display()),
 		}
 	}
 }

@@ -65,17 +65,17 @@ impl<'de> Deserialize<'de> for Val {
 			// 	visit_u16 => u16,
 			// 	visit_u32 => u32,
 			// }
-			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
+			fn visit_i32<E>(self, v: i32) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				Ok(Val::Num(NumValue::new(v.into()).expect("no overflow")))
 			}
-			fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
+			fn visit_u32<E>(self, v: u32) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				Ok(Val::Num(NumValue::new(v.into()).expect("no overflow")))
 			}
 
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
@@ -122,7 +122,7 @@ impl<'de> Deserialize<'de> for Val {
 					out.push(val);
 				}
 
-				Ok(Val::Arr(ArrValue::eager(out)))
+				Ok(Val::array(out))
 			}
 
 			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
@@ -258,7 +258,7 @@ impl SerializeSeq for IntoVecValSerializer {
 	}
 
 	fn end(self) -> Result<Val> {
-		let inner = Val::Arr(ArrValue::eager(self.data));
+		let inner = Val::array(self.data);
 		if let Some(variant) = self.variant {
 			let mut out = ObjValue::builder_with_capacity(1);
 			out.field(variant).value(inner);

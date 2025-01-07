@@ -177,7 +177,7 @@ impl_context_initializer! {
 	A @ B C D E F G
 }
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
@@ -225,8 +225,10 @@ pub struct EvaluationStateInternals {
 	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
+	#[educe(Debug(ignore))]
 	context_initializer: TraceBox<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
+	#[educe(Debug(ignore))]
 	import_resolver: TraceBox<dyn ImportResolver>,
 }
 

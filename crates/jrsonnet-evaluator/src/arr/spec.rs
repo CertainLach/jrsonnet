@@ -21,6 +21,7 @@ pub trait ArrayLike: Any + Trace + Debug {
 	fn get_cheap(&self, index: usize) -> Option<Val>;
 
 	fn is_cheap(&self) -> bool;
+
 	#[doc(hidden)]
 	// Specialization for passing ArrayLike as ArrValue, to get ArrValue back
 	fn internal_owned(&self) -> Option<ArrValue> {
@@ -384,6 +385,7 @@ impl RangeArray {
 	fn range(&self) -> impl ExactSizeIterator<Item = i32> + DoubleEndedIterator + use<> {
 		WithExactSize(
 			self.start..=self.end,
+			#[expect(clippy::cast_sign_loss, reason = "sign does not matter for difference calculation")]
 			(self.end as usize)
 				.wrapping_sub(self.start as usize)
 				.wrapping_add(1),

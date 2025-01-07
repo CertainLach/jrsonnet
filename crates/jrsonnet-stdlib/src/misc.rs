@@ -76,7 +76,7 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 ))]
 pub fn builtin_trace(
 	this: &builtin_trace,
-	loc: CallLocation,
+	loc: CallLocation<'_>,
 	str: Val,
 	rest: Option<Thunk<Val>>,
 ) -> Result<Val> {

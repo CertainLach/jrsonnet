@@ -432,9 +432,10 @@ impl ObjValue {
 		if let Some(loc) = value.location {
 			member = member.with_location(loc);
 		}
-		let _ = member
+		let result = member
 			.with_visibility(value.flags.visibility())
 			.binding(value.invoke);
+		assert!(result.is_ok(), "obj builder is empty, no conflict possible");
 		out.build()
 	}
 	pub fn extend_field(&mut self, name: IStr) -> ObjMemberBuilder<ExtendBuilder<'_>> {
@@ -869,7 +870,6 @@ impl ObjectLayer for OopObject {
 	}
 }
 
-#[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
 	sup: Option<ObjValue>,
 	map: GcHashMap<IStr, ObjMember>,
@@ -937,7 +937,6 @@ impl Default for ObjValueBuilder {
 	}
 }
 
-#[allow(clippy::module_name_repetitions)]
 #[must_use = "value not added unless binding() was called"]
 pub struct ObjMemberBuilder<Kind> {
 	kind: Kind,

@@ -3,7 +3,9 @@ use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
 
-use crate::{evaluate, gc::GcHashMap, typed::Typed, with_state, Context, Result, Thunk, Val};
+use crate::{
+	evaluate, gc::GcHashMap, typed::Typed, with_state, BindingValue, Context, Result, Thunk, Val,
+};
 
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}

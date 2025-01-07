@@ -82,7 +82,7 @@ fn manifest_ini_body(
 	Ok(())
 }
 
-#[derive(Typed)]
+#[derive(Typed, Debug)]
 struct IniObj {
 	main: Option<ObjValue>,
 	// TODO: Preserve section order?

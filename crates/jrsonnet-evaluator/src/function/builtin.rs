@@ -50,11 +50,11 @@ impl ParamDefault {
 }
 
 #[derive(Clone, Trace)]
-pub struct BuiltinParam {
+pub struct Param {
 	name: ParamName,
 	default: ParamDefault,
 }
-impl BuiltinParam {
+impl Param {
 	pub const fn new(name: ParamName, default: ParamDefault) -> Self {
 		Self { name, default }
 	}
@@ -73,17 +73,19 @@ impl BuiltinParam {
 /// Description of function defined by native code
 ///
 /// Prefer to use #[builtin] macro, instead of manual implementation of this trait
+#[allow(clippy::module_name_repetitions)]
 pub trait Builtin: Trace {
 	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
 	/// Parameter names for named calls
-	fn params(&self) -> &[BuiltinParam];
+	fn params(&self) -> &[Param];
 	/// Call the builtin
 	fn call(&self, ctx: &Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
 
 	fn as_any(&self) -> &dyn Any;
 }
 
+#[allow(clippy::module_name_repetitions)]
 pub trait StaticBuiltin: Builtin + Send + Sync
 where
 	Self: 'static,
@@ -94,7 +96,7 @@ where
 
 #[derive(Trace)]
 pub struct NativeCallback {
-	pub(crate) params: Vec<BuiltinParam>,
+	pub(crate) params: Vec<Param>,
 	handler: TraceBox<dyn NativeCallbackHandler>,
 }
 impl NativeCallback {
@@ -103,7 +105,7 @@ impl NativeCallback {
 		Self {
 			params: params
 				.into_iter()
-				.map(|n| BuiltinParam {
+				.map(|n| Param {
 					name: ParamName::new_dynamic(n),
 					default: ParamDefault::None,
 				})
@@ -120,7 +122,7 @@ impl Builtin for NativeCallback {
 		"<native>"
 	}
 
-	fn params(&self) -> &[BuiltinParam] {
+	fn params(&self) -> &[Param] {
 		&self.params
 	}
 

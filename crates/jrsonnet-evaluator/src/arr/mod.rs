@@ -102,7 +102,15 @@ impl ArrValue {
 	#[must_use]
 	pub fn slice(self, index: Option<i32>, end: Option<i32>, step: Option<NonZeroU32>) -> Self {
 		let get_idx = |pos: Option<i32>, len: usize, default| match pos {
+			#[expect(
+				clippy::cast_sign_loss,
+				reason = "value is alvays positive due to guard and inversion"
+			)]
 			Some(v) if v < 0 => len.saturating_sub((-v) as usize),
+			#[expect(
+				clippy::cast_sign_loss,
+				reason = "value is alvays positive, as negatives are already handled"
+			)]
 			Some(v) => (v as usize).min(len),
 			None => default,
 		};
