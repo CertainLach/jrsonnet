@@ -8,7 +8,7 @@ use std::{
 };
 
 use fs::File;
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{cc_dyn, Trace};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::{
 	IStr, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
@@ -84,6 +84,7 @@ impl AsPathLike for Cow<'_, Path> {
 	}
 }
 
+cc_dyn!(CcImportResolver, ImportResolver);
 /// Implements file resolution logic for `import` and `importStr`
 pub trait ImportResolver: Trace {
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond

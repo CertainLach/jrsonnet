@@ -40,7 +40,7 @@ use function::CallLocation;
 use gc::{GcHashMap, TraceBox};
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
@@ -92,6 +92,7 @@ impl MaybeUnbound {
 	}
 }
 
+cc_dyn!(CcContextInitializer, ContextInitializer);
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
 pub trait ContextInitializer: Trace {
@@ -219,7 +220,8 @@ impl FileData {
 	}
 }
 
-#[derive(Trace)]
+#[derive(Trace, educe::Educe)]
+#[educe(Debug)]
 pub struct EvaluationStateInternals {
 	/// Internal state
 	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
@@ -233,26 +235,52 @@ pub struct EvaluationStateInternals {
 }
 
 /// Maintains stack trace and import resolution
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Debug)]
 pub struct State(Cc<EvaluationStateInternals>);
 
 thread_local! {
 	pub static DEFAULT_STATE: State = State::builder().build();
+}
+#[cfg(not(feature = "nightly"))]
+thread_local! {
 	pub static STATE: RefCell<Option<State>> = const {RefCell::new(None)};
 }
+#[cfg(feature = "nightly")]
+#[thread_local]
+pub static STATE: RefCell<Option<State>> = RefCell::new(None);
+
 pub struct StateEnterGuard(PhantomData<()>);
 impl Drop for StateEnterGuard {
 	fn drop(&mut self) {
-		STATE.with_borrow_mut(|v| *v = None);
+		#[cfg(not(feature = "nightly"))]
+		{
+			STATE.with_borrow_mut(|v| *v = None);
+		}
+		#[cfg(feature = "nightly")]
+		{
+			*STATE.borrow_mut() = None;
+		}
 	}
 }
 
 pub fn with_state<V>(v: impl FnOnce(State) -> V) -> V {
-	if let Some(state) = STATE.with_borrow(Clone::clone) {
-		v(state)
-	} else {
-		let s = DEFAULT_STATE.with(Clone::clone);
-		v(s)
+	#[cfg(not(feature = "nightly"))]
+	{
+		if let Some(state) = STATE.with_borrow(Clone::clone) {
+			v(state)
+		} else {
+			let s = DEFAULT_STATE.with(Clone::clone);
+			v(s)
+		}
+	}
+	#[cfg(feature = "nightly")]
+	{
+		if let Some(state) = STATE.borrow().clone() {
+			v(state)
+		} else {
+			let s = DEFAULT_STATE.with(Clone::clone);
+			v(s)
+		}
 	}
 }
 
@@ -261,14 +289,27 @@ impl State {
 		self.try_enter().expect("entered state already exists")
 	}
 	pub fn try_enter(&self) -> Option<StateEnterGuard> {
-		STATE.with_borrow_mut(|v| {
-			if v.is_none() {
-				*v = Some(self.clone());
+		#[cfg(not(feature = "nightly"))]
+		{
+			STATE.with_borrow_mut(|v| {
+				if v.is_none() {
+					*v = Some(self.clone());
+					Some(StateEnterGuard(PhantomData))
+				} else {
+					None
+				}
+			})
+		}
+		#[cfg(feature = "nightly")]
+		{
+			let mut s = STATE.borrow_mut();
+			if s.is_none() {
+				*s = Some(self.clone());
 				Some(StateEnterGuard(PhantomData))
 			} else {
 				None
 			}
-		})
+		}
 	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
@@ -561,4 +602,25 @@ impl StateBuilder {
 				.unwrap_or_else(|| tb!(DummyImportResolver)),
 		}))
 	}
+}
+
+#[macro_export]
+macro_rules! strings {
+	($($name:ident: $lit:literal),+ $(,)?) => {$(
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> IStr {
+			thread_local! {
+				static LIT: IStr = IStr::from($lit);
+			}
+			LIT.with(Clone::clone)
+		}
+		#[cfg(feature = "nightly")]
+		#[inline]
+		fn $name() -> IStr {
+			use std::cell::LazyCell;
+			#[thread_local]
+			static LIT: LazyCell<IStr> = LazyCell::new(|| IStr::from($lit));
+			LIT.clone()
+		}
+	)+};
 }

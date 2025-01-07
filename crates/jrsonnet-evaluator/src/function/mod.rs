@@ -1,6 +1,11 @@
 use std::fmt::Debug;
 
-pub use arglike::{ArgLike, ArgsLike, TlaArg};
+pub use arglike::TlaArg;
+use arglike::{ArgsLike, OptionalContext};
+pub use builtin::{
+	Builtin, CcBuiltin, NativeCallback, NativeCallbackHandler, Param, ParamDefault, ParamName,
+	StaticBuiltin,
+};
 use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
@@ -108,7 +113,7 @@ pub enum FuncVal {
 		&'static dyn StaticBuiltin,
 	),
 	/// User-provided function.
-	Builtin(#[educe(Debug(ignore))] Cc<TraceBox<dyn Builtin>>),
+	Builtin(#[educe(Debug(ignore))] CcBuiltin),
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -120,7 +125,7 @@ static ID: &builtin_id = &builtin_id {};
 
 impl FuncVal {
 	pub fn builtin(builtin: impl Builtin) -> Self {
-		Self::Builtin(Cc::new(tb!(builtin)))
+		Self::Builtin(CcBuiltin::make(builtin))
 	}
 	pub fn static_builtin(static_builtin: &'static dyn StaticBuiltin) -> Self {
 		Self::StaticBuiltin(static_builtin)
