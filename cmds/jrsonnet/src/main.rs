@@ -15,7 +15,7 @@ use jrsonnet_parser::{SourceDefaultIgnoreJpath, SourcePath};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
 enum SubOpts {
