@@ -10,17 +10,8 @@
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
-    };
-    shelly = {
-      url = "github:CertainLach/shelly";
-      inputs = {
-        flake-parts.follows = "flake-parts";
-        nixpkgs.follows = "nixpkgs";
-      };
-    };
+    crane.url = "github:ipetkov/crane";
+    shelly.url = "github:CertainLach/shelly";
   };
   outputs = inputs @ {
     nixpkgs,
@@ -139,7 +130,7 @@
             [
               alejandra
               cargo-edit
-              cargo-asm
+              cargo-show-asm
               cargo-outdated
               cargo-watch
               cargo-insta
