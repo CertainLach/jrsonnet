@@ -41,61 +41,61 @@ pub trait Printable {
 macro_rules! pi {
 	(@i; $($t:tt)*) => {{
 		#[allow(unused_mut)]
-		let mut o = dprint_core::formatting::PrintItems::new();
-		pi!(@s; o: $($t)*);
+		let mut o = ::dprint_core::formatting::PrintItems::new();push_sc
+		$crate::pi!(@s; o: $($t)*);
 		o
 	}};
 	(@s; $o:ident: str($e:expr $(,)?) $($t:tt)*) => {{
-		$o.push_sc(dprint_core_macros::sc!($e));
-		pi!(@s; $o: $($t)*);
+		$o.push_sc(::dprint_core_macros::sc!($e));
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: string($e:expr $(,)?) $($t:tt)*) => {{
 		$o.push_string($e);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: nl $($t:tt)*) => {{
-		$o.push_signal(dprint_core::formatting::Signal::NewLine);
-		pi!(@s; $o: $($t)*);
+		$o.push_signal(::dprint_core::formatting::Signal::NewLine);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: tab $($t:tt)*) => {{
-		$o.push_signal(dprint_core::formatting::Signal::Tab);
-		pi!(@s; $o: $($t)*);
+		$o.push_signal(::dprint_core::formatting::Signal::Tab);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: >i $($t:tt)*) => {{
-		$o.push_signal(dprint_core::formatting::Signal::StartIndent);
-		pi!(@s; $o: $($t)*);
+		$o.push_signal(::dprint_core::formatting::Signal::StartIndent);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: <i $($t:tt)*) => {{
-		$o.push_signal(dprint_core::formatting::Signal::FinishIndent);
-		pi!(@s; $o: $($t)*);
+		$o.push_signal(::dprint_core::formatting::Signal::FinishIndent);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: info($v:expr) $($t:tt)*) => {{
 		$o.push_info($v);
-		pi!(@s; $o: $($t)*);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: if($s:literal, $cond:expr, $($i:tt)*) $($t:tt)*) => {{
-		$o.push_condition(dprint_core::formatting::conditions::if_true(
+		$o.push_condition(::dprint_core::formatting::conditions::if_true(
 			$s,
 			$cond.clone(),
 			{
-				let mut o = PrintItems::new();
+				let mut o = ::dprint_core::formatting::PrintItems::new();
 				p!(o, $($i)*);
 				o
 			},
 		));
-		pi!(@s; $o: $($t)*);
+		$crate::pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: if_else($s:literal, $cond:expr, $($i:tt)*)($($e:tt)+) $($t:tt)*) => {{
 		$o.push_condition(dprint_core::formatting::conditions::if_true_or(
 			$s,
 			$cond.clone(),
 			{
-				let mut o = PrintItems::new();
+				let mut o = ::dprint_core::formatting::PrintItems::new();
 				p!(o, $($i)*);
 				o
 			},
 			{
-				let mut o = PrintItems::new();
+				let mut o = ::dprint_core::formatting::PrintItems::new();
 				p!(o, $($e)*);
 				o
 			},
@@ -107,11 +107,11 @@ macro_rules! pi {
 			$s,
 			$cond.clone(),
 			{
-				let o = PrintItems::new();
+				let o = ::dprint_core::formatting::PrintItems::new();
 				o
 			},
 			{
-				let mut o = PrintItems::new();
+				let mut o = ::dprint_core::formatting::PrintItems::new();
 				p!(o, $($e)*);
 				o
 			},
