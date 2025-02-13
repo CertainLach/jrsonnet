@@ -11,6 +11,7 @@ workspace = true
 
 [dependencies]
 dprint-core.workspace = true
+dprint-core-macros.workspace = true
 jrsonnet-rowan-parser.workspace = true
 insta.workspace = true
 indoc.workspace = true
