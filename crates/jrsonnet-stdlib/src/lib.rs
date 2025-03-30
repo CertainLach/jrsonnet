@@ -226,6 +226,11 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 			"__array_greater_or_equal",
 			builtin___array_greater_or_equal::INST,
 		),
+		("log2", builtin_log2::INST),
+		("log10", builtin_log10::INST),
+		("deg2rad", builtin_deg2rad::INST),
+		("rad2deg", builtin_rad2deg::INST),
+		("hypot", builtin_hypot::INST),
 	]
 	.iter()
 	.copied()
@@ -247,6 +252,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	);
 	builder.method("trace", builtin_trace { settings });
 	builder.method("id", FuncVal::Id);
+	builder
+		.field("pi")
+		.value(Val::try_num(std::f64::consts::PI).expect("pi is a valid number"));
 
 	#[cfg(feature = "exp-regex")]
 	{
