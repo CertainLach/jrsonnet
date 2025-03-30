@@ -266,6 +266,11 @@ fn new_trim_pattern(chars: Indexable) -> Result<impl Fn(char) -> bool> {
 	Ok(move |char| chars.contains(&char))
 }
 
+#[builtin]
+pub fn builtin_trim(str: IStr) -> IStr {
+	str.trim().into()
+}
+
 #[cfg(test)]
 #[allow(clippy::float_cmp)]
 mod tests {

@@ -231,6 +231,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("deg2rad", builtin_deg2rad::INST),
 		("rad2deg", builtin_rad2deg::INST),
 		("hypot", builtin_hypot::INST),
+		("trim", builtin_trim::INST),
 	]
 	.iter()
 	.copied()
