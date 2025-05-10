@@ -106,14 +106,6 @@ impl ImportResolver for CallbackImportResolver {
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
-	}
 }
 
 /// # Safety

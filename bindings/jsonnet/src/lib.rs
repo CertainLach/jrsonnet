@@ -101,13 +101,6 @@ impl ImportResolver for VMImportResolver {
 	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.inner.borrow().resolve_from_default(path)
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
-	}
 }
 
 pub struct VM {
