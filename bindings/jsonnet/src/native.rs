@@ -1,4 +1,5 @@
 use std::{
+	any::Any,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 };
@@ -6,7 +7,7 @@ use std::{
 use jrsonnet_evaluator::{
 	error::{Error, ErrorKind},
 	function::{NativeCallback, NativeCallbackHandler},
-	typed::{FromUntyped, IntoUntyped, Typed},
+	typed::FromUntyped,
 	IStr, Val,
 };
 
@@ -86,8 +87,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	}
 
 	let any_resolver = vm.state.context_initializer();
-	any_resolver
-		.as_any()
+	(any_resolver as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_native(

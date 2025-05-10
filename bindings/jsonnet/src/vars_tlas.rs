@@ -1,6 +1,6 @@
 //! Manipulate external variables and top level arguments
 
-use std::{ffi::CStr, os::raw::c_char};
+use std::{any::Any, ffi::CStr, os::raw::c_char};
 
 use jrsonnet_evaluator::{function::TlaArg, IStr};
 
@@ -19,8 +19,7 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *c
 	let value = unsafe { CStr::from_ptr(value) };
 
 	let any_initializer = vm.state.context_initializer();
-	any_initializer
-		.as_any()
+	(any_initializer as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_ext_str(
@@ -42,8 +41,7 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *c
 	let code = unsafe { CStr::from_ptr(code) };
 
 	let any_initializer = vm.state.context_initializer();
-	any_initializer
-		.as_any()
+	(any_initializer as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_ext_code(

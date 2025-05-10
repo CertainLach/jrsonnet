@@ -22,20 +22,19 @@ use std::{
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	function::TlaArg,
-	gc::{GcHashMap, TraceBox},
+	gc::GcHashMap,
 	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
 	stack::set_stack_depth_limit,
-	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	AsPathLike, FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Trace, TraceBox};
 use jrsonnet_parser::SourcePath;
 use jrsonnet_stdlib::ContextInitializer;
 
 /// WASM stub
 #[cfg(target_arch = "wasm32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() {}
 
 /// Return the version string of the Jsonnet interpreter.
@@ -85,21 +84,21 @@ struct VMImportResolver {
 impl VMImportResolver {
 	fn new(value: impl ImportResolver) -> Self {
 		Self {
-			inner: RefCell::new(tb!(value)),
+			inner: RefCell::new(TraceBox(Box::new(value))),
 		}
 	}
 }
 impl ImportResolver for VMImportResolver {
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
-		self.inner.borrow().load_file_contents(resolved)
+		self.inner.borrow().as_ref().load_file_contents(resolved)
 	}
 
 	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
-		self.inner.borrow().resolve_from(from, path)
+		self.inner.borrow().as_ref().resolve_from(from, path)
 	}
 
 	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
-		self.inner.borrow().resolve_from_default(path)
+		self.inner.borrow().as_ref().resolve_from_default(path)
 	}
 }
 
@@ -111,24 +110,20 @@ pub struct VM {
 }
 impl VM {
 	fn replace_import_resolver(&self, resolver: impl ImportResolver) {
-		*self
-			.state
-			.import_resolver()
-			.as_any()
+		*(self.state.import_resolver() as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
 			.expect("valid resolver ty")
 			.inner
-			.borrow_mut() = tb!(resolver);
+			.borrow_mut() = TraceBox(Box::new(resolver));
 	}
 	fn add_jpath(&self, path: PathBuf) {
-		self.state
-			.import_resolver()
-			.as_any()
+		let vm_import_resolver = (self.state.import_resolver() as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
-			.expect("valid resolver ty")
-			.inner
-			.borrow_mut()
-			.as_any_mut()
+			.expect("valid resolver ty");
+
+		let mut inner_mut = vm_import_resolver.inner.borrow_mut();
+
+		(&mut *inner_mut as &mut dyn Any)
 			.downcast_mut::<FileImportResolver>()
 			.expect("jpaths are not compatible with callback imports!")
 			.add_jpath(path);
@@ -229,7 +224,7 @@ pub extern "C" fn jsonnet_json_destroy(_vm: &VM, v: Box<Val>) {
 /// Set the number of lines of stack trace to display (0 for all of them).
 #[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_max_trace(vm: &mut VM, v: c_uint) {
-	if let Some(format) = vm.trace_format.as_any_mut().downcast_mut::<CompactFormat>() {
+	if let Some(format) = (&mut *vm.trace_format as &mut dyn Any).downcast_mut::<CompactFormat>() {
 		format.max_trace = v as usize;
 	} else {
 		panic!("max_trace is not supported by current tracing format")

@@ -2,9 +2,7 @@
 
 use std::{
 	alloc::Layout,
-	any::Any,
 	cell::RefCell,
-	collections::HashMap,
 	env::current_dir,
 	ffi::{c_void, CStr, CString},
 	os::raw::{c_char, c_int},
@@ -15,6 +13,7 @@ use std::{
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
+	gc::GcHashMap,
 	AsPathLike, ImportResolver, ResolvePath,
 };
 use jrsonnet_gcmodule::Trace;
@@ -38,7 +37,7 @@ pub struct CallbackImportResolver {
 	cb: JsonnetImportCallback,
 	#[trace(skip)]
 	ctx: *mut c_void,
-	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
+	out: RefCell<GcHashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
 	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
@@ -120,7 +119,7 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 	vm.replace_import_resolver(CallbackImportResolver {
 		cb,
 		ctx,
-		out: RefCell::new(HashMap::new()),
+		out: RefCell::new(GcHashMap::new()),
 	});
 }
 

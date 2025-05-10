@@ -300,9 +300,11 @@ impl Printable for ArgsDesc {
 	fn print(&self, out: &mut PrintItems) {
 		let start = LineNumber::new("start");
 		let end = LineNumber::new("end");
-		let multi_line = Rc::new(move |condition_context: &mut ConditionResolverContext| {
-			is_multiple_lines(condition_context, start, end).map(|v| !v)
-		});
+		let multi_line = Rc::new(
+			move |condition_context: &mut ConditionResolverContext<'_, '_>| {
+				is_multiple_lines(condition_context, start, end).map(|v| !v)
+			},
+		);
 		p!(out, str("(") info(start) if("start args", multi_line, >i nl));
 		let (children, end_comments) = children_between::<Arg>(
 			self.syntax().clone(),
