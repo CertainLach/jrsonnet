@@ -604,19 +604,72 @@ impl StateBuilder {
 macro_rules! strings {
 	($($name:ident: $lit:literal),+ $(,)?) => {$(
 		#[cfg(not(feature = "nightly"))]
-		fn $name() -> IStr {
+		fn $name() -> $crate::IStr {
 			thread_local! {
-				static LIT: IStr = IStr::from($lit);
+				static LIT: $crate::IStr = $crate::IStr::from($lit);
 			}
 			LIT.with(Clone::clone)
 		}
 		#[cfg(feature = "nightly")]
 		#[inline]
-		fn $name() -> IStr {
+		fn $name() -> $crate::IStr {
 			use std::cell::LazyCell;
 			#[thread_local]
-			static LIT: LazyCell<IStr> = LazyCell::new(|| IStr::from($lit));
+			static LIT: LazyCell<$crate::IStr> = LazyCell::new(|| $crate::IStr::from($lit));
 			LIT.clone()
 		}
 	)+};
+}
+
+#[macro_export]
+macro_rules! stringlist {
+	($name:ident: $($lit:literal),+ $(,)?) => {
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> std::rc::Rc<[IStr]> {
+			thread_local! {
+				static LIT: std::rc::Rc<[IStr]> = std::rc::Rc::from([$(IStr::from($lit)),+]);
+			}
+			LIT.with(Clone::clone)
+		}
+		#[cfg(feature = "nightly")]
+		#[inline]
+		fn $name() -> std::rc::Rc<[IStr]> {
+			use std::cell::LazyCell;
+			#[thread_local]
+			static LIT: LazyCell<std::rc::Rc<[IStr]>> = LazyCell::new(|| std::rc::Rc::from([
+				$(IStr::from($lit)),+
+			]));
+			LIT.clone()
+		}
+	};
+}
+
+/// Crates which use paramlist should have nightly feature
+#[macro_export]
+macro_rules! paramlist {
+	($name:ident: $($lit:expr => $expr:expr);* $(;)?) => {
+		use $crate::function::{Param, ParamName, ParamDefault};
+		#[allow(unreachable_code)]
+		fn compute() -> std::rc::Rc<[Param]> {
+			std::rc::Rc::from([
+				$(Param::new($lit, $expr)),*
+			])
+		}
+		#[inline]
+		#[cfg(feature = "nightly")]
+		fn $name() -> std::rc::Rc<[Param]> {
+			use std::cell::LazyCell;
+			#[thread_local]
+			#[allow(unreachable_code)]
+			static LIT: LazyCell<std::rc::Rc<[Param]>> = LazyCell::new(compute);
+			LIT.clone()
+		}
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> std::rc::Rc<[Param]> {
+			thread_local! {
+				static LIT: std::rc::Rc<[Param]> = compute();
+			}
+			LIT.with(Clone::clone)
+		}
+	};
 }

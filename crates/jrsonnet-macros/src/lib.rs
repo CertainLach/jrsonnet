@@ -1,7 +1,7 @@
 use std::string::String;
 
 use proc_macro2::TokenStream;
-use quote::{quote, quote_spanned};
+use quote::{format_ident, quote, quote_spanned};
 use syn::{
 	parenthesized,
 	parse::{Parse, ParseStream},
@@ -44,13 +44,13 @@ where
 fn path_is(path: &Path, needed: &str) -> bool {
 	path.leading_colon.is_none()
 		&& !path.segments.is_empty()
-		&& path.segments.iter().last().unwrap().ident == needed
+		&& path.segments.iter().next_back().unwrap().ident == needed
 }
 
 fn type_is_path<'ty>(ty: &'ty Type, needed: &str) -> Option<&'ty PathArguments> {
 	match ty {
 		Type::Path(path) if path.qself.is_none() && path_is(&path.path, needed) => {
-			let args = &path.path.segments.iter().last().unwrap().arguments;
+			let args = &path.path.segments.iter().next_back().unwrap().arguments;
 			Some(args)
 		}
 		_ => None,
@@ -131,7 +131,7 @@ impl Parse for BuiltinAttrs {
 enum Optionality {
 	Required,
 	Optional,
-	Default(Expr),
+	Default(Box<Expr>),
 }
 
 enum ArgInfo {
@@ -243,30 +243,26 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 
 	let params_desc = args.iter().filter_map(|a| match a {
 		ArgInfo::Normal {
-			optionality,
-			name,
-			cfg_attrs,
-			..
+			optionality, name, ..
 		} => {
 			let name = name
 				.as_ref()
-				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
+				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new(#n)});
 			let default = match optionality {
 				Optionality::Required => quote!(ParamDefault::None),
 				Optionality::Optional => quote!(ParamDefault::Exists),
 				Optionality::Default(e) => quote!(ParamDefault::Literal(stringify!(#e))),
 			};
 			Some(quote! {
-				#(#cfg_attrs)*
-				Param::new(#name, #default),
+				#name => #default
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
 			let name = name
 				.as_ref()
-				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
+				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new(#n)});
 			Some(quote! {
-				Param::new(#name, ParamDefault::exists(#is_option)),
+				#name => ParamDefault::exists(#is_option)
 			})
 		}
 		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
@@ -378,13 +374,9 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			use ::jrsonnet_evaluator::{
 				State, Val,
 				function::{Param, Builtin, StaticBuiltin, ParamName, ParamDefault, CallLocation, macro_internal::{ArgsLike, parse_builtin_call}},
-				Result, Context, typed::Typed,
-				parser::Span,
+				Result, Context, typed::{Typed, IntoUntyped, FromUntyped},
+				parser::Span, paramlist,
 			};
-			const PARAMS: &'static [Param] = &[
-				#(#params_desc)*
-			];
-
 			#static_ext
 			impl Builtin for #name
 			where
@@ -393,12 +385,13 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				fn name(&self) -> &str {
 					stringify!(#name)
 				}
-				fn params(&self) -> &[Param] {
-					PARAMS
+				fn params(&self) -> std::rc::Rc<[Param]> {
+					paramlist!(list: #(#params_desc);*);
+					list()
 				}
 				#[allow(unused_variables)]
 				fn call(&self, ctx: &Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx, &PARAMS, args, false)?;
+					let parsed = parse_builtin_call(ctx, &self.params(), args, false)?;
 
 					let result: #result = #name(#(#pass)*);
 					<_ as IntoUntyped>::into_result(result)

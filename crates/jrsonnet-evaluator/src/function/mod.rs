@@ -1,4 +1,4 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
 pub use arglike::TlaArg;
 use arglike::{ArgsLike, OptionalContext};
@@ -20,8 +20,8 @@ pub mod macro_internal {
 }
 
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, Context, ContextBuilder, Result, Thunk,
-	Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, paramlist, Context, ContextBuilder,
+	Result, Thunk, Val,
 };
 
 mod arglike;
@@ -131,11 +131,12 @@ impl FuncVal {
 		Self::StaticBuiltin(static_builtin)
 	}
 
-	pub fn params(&self) -> Vec<Param> {
+	pub fn params(&self) -> Rc<[Param]> {
+		paramlist!(empty_params:);
 		match self {
-			Self::Id => ID.params().to_vec(),
-			Self::StaticBuiltin(i) => i.params().to_vec(),
-			Self::Builtin(i) => i.as_ref().params().to_vec(),
+			Self::Id => ID.params(),
+			Self::StaticBuiltin(i) => i.params(),
+			Self::Builtin(i) => i.as_ref().params(),
 			Self::Normal(p) => p
 				.params
 				.iter()
@@ -144,12 +145,12 @@ impl FuncVal {
 						p.0.name()
 							.as_ref()
 							.map(IStr::to_string)
-							.map_or(ParamName::ANONYMOUS, ParamName::new_dynamic),
+							.map_or(ParamName::ANONYMOUS, ParamName::new),
 						ParamDefault::exists(p.1.is_some()),
 					)
 				})
 				.collect(),
-			Self::Thunk(_) => vec![],
+			Self::Thunk(_) => empty_params(),
 		}
 	}
 	/// Amount of non-default required arguments
