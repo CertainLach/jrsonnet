@@ -3,22 +3,25 @@
   fetchFromGitHub,
   makeWrapper,
 }:
-stdenv.mkDerivation rec {
+let
+  version = "0.21.0";
+in
+stdenv.mkDerivation {
+  inherit version;
   pname = "jsonnet";
-  version = "0.20.0";
 
   src = fetchFromGitHub {
-    rev = "v${version}";
     owner = "google";
-    repo = pname;
-    hash = "sha256-FtVJE9alEl56Uik+nCpJMV5DMVVmRCnE1xMAiWdK39Y=";
+    repo = "jsonnet";
+    rev = "refs/tags/v${version}";
+    hash = "sha256-QHp0DOu/pqcgN7di219cHzfFb7fWtdGGE6J1ZXgbOGQ=";
   };
 
   makeFlags = [
     "jsonnet"
   ];
 
-  nativeBuildInputs = [makeWrapper];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     mkdir -p $out/bin
