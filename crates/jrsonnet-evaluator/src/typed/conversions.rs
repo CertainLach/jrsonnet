@@ -107,6 +107,10 @@ pub trait IntoUntyped: Typed {
 	fn provides_lazy() -> bool {
 		false
 	}
+	/// Whatever caller should use `into_untyped_cheap` instead of `into_untyped`
+	fn provides_cheap() -> bool {
+		false
+	}
 
 	/// Hack to make builtins be able to return non-result values, and make macros able to convert those values to result
 	/// This method returns identity in impl Typed for Result, and should not be overriden
@@ -231,6 +235,9 @@ macro_rules! impl_int {
 		impl IntoUntyped for $ty {
 			fn into_untyped_cheap(value: Self) -> Option<Val> {
 				Some(Val::Num(value.into()))
+			}
+			fn provides_cheap() -> bool {
+				true
 			}
 		}
 	)*};
@@ -378,6 +385,9 @@ impl IntoUntyped for IStr {
 	fn into_untyped_cheap(value: Self) -> Option<Val> {
 		Some(Val::string(value))
 	}
+	fn provides_cheap() -> bool {
+		true
+	}
 }
 impl FromUntyped for IStr {
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -396,6 +406,9 @@ impl IntoUntyped for String {
 	fn into_untyped_cheap(value: Self) -> Option<Val> {
 		Some(Val::string(value))
 	}
+	fn provides_cheap() -> bool {
+		true
+	}
 }
 impl FromUntyped for String {
 	fn from_untyped(value: Val) -> Result<Self> {
@@ -413,6 +426,9 @@ impl Typed for StrValue {
 impl IntoUntyped for StrValue {
 	fn into_untyped_cheap(value: Self) -> Option<Val> {
 		Some(Val::Str(value))
+	}
+	fn provides_cheap() -> bool {
+		true
 	}
 }
 impl FromUntyped for StrValue {
@@ -537,6 +553,9 @@ impl Typed for Val {
 impl IntoUntyped for Val {
 	fn into_untyped_cheap(typed: Self) -> Option<Val> {
 		Some(typed)
+	}
+	fn provides_cheap() -> bool {
+		true
 	}
 }
 impl FromUntyped for Val {

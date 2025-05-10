@@ -15,7 +15,7 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
-	bail,
+	bail, debug_cyclic,
 	error::ErrorKind::*,
 	function::{CallLocation, FuncVal},
 	gc::{GcHashMap, GcHashSet},
@@ -244,9 +244,13 @@ fn finish_asserting(obj: &ObjValue) {
 	});
 }
 
-#[derive(Clone, Trace, Debug, Educe)]
-#[educe(PartialEq, Hash, Eq)]
-pub struct ObjValue(#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))] Cc<Inner>);
+#[derive(Clone, Trace, Educe)]
+#[educe(PartialEq, Hash, Eq, Debug)]
+pub struct ObjValue(
+	#[educe(Debug(method(debug_cyclic)))]
+	#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))]
+	Cc<Inner>,
+);
 
 #[derive(Trace, Debug)]
 struct StandaloneSuperCore {

@@ -319,7 +319,7 @@ impl<T: IntoUntyped + Clone + Debug + Trace + 'static> ArrayLike for Vec<T> {
 		IntoUntyped::into_untyped_cheap(self.as_slice().get(index).cloned()?)
 	}
 	fn is_cheap(&self) -> bool {
-		true
+		T::provides_cheap()
 	}
 }
 
