@@ -7,6 +7,14 @@ use crate::{
 	evaluate_method, evaluate_named, BindingValue, BindingsMap, Context, Pending, Thunk,
 };
 
+/// Like `destruct_lazy`, but can only be used for non self-referencial binding sets, i.e
+///
+/// ```jsonnet
+/// local
+///	a = b;
+///	c = d;
+/// ; // Valid, as neither a/c reference a/c
+/// ```
 #[allow(clippy::too_many_lines)]
 #[allow(unused_variables)]
 pub fn destruct_strict(

@@ -22,10 +22,10 @@ use crate::{
 	},
 	function::{CallLocation, FuncDesc, FuncVal},
 	in_frame, suggest_object_fields,
-	typed::Typed,
+	typed::{FromUntyped, IntoUntyped},
 	val::{CachedUnbound, Indexable, NumValue},
-	with_state, BindingsMap, Context, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, SupThis, Thunk, Unbound, Val,
+	with_state, BindingValue, BindingsMap, Context, ObjValue, ObjValueBuilder, ObjectAssertion,
+	Pending, Result, ResultExt, SupThis, Thunk, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -49,6 +49,8 @@ pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
 
 	stacker::maybe_grow(RED_ZONE, STACK_PER_RECURSION, f)
 }
+
+// Stacker doesn't support miri
 #[inline]
 #[cfg(miri)]
 pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
@@ -134,7 +136,39 @@ pub fn evaluate_comp_strict(
 				for item in list.iter() {
 					let item = item?;
 					let mut new_bindings = BindingsMap::with_capacity(var.capacity_hint());
+					// It is valid to use strict destruct here, as in
+					//
+					// ```jsonnet
+					// [... for a in a]
+					// ```
+					//
+					// We're storing elements of `a` as `a` local, not self-referencing `a`
 					destruct_strict(var, item, &mut new_bindings)?;
+
+					let captured = ctx.bindings.overlay_capture(new_bindings);
+					let res = evaluate_comp_strict(ctx, &specs[1..], callback);
+					ctx.bindings.overlay_restore(captured);
+
+					res?;
+				}
+			}
+			Val::Obj(obj) if cfg!(feature = "exp-object-iteration") => {
+				// TODO: Try a non-lazy iteration?
+				// It creates a thunk per object field, which may not be diserable.
+				for (field, value) in obj.iter_lazy(
+					// TODO: Should there be ability to preserve iteration order?
+					#[cfg(feature = "exp-preserve-order")]
+					false,
+				) {
+					let mut new_bindings = BindingsMap::with_capacity(var.capacity_hint());
+
+					let value = BindingValue::Value(Val::array(vec![
+						Thunk::evaluated(Val::string(field.clone())),
+						value,
+					]));
+
+					// See comment regarding strict destruct in array iteration
+					destruct_strict(var, value, &mut new_bindings)?;
 
 					let captured = ctx.bindings.overlay_capture(new_bindings);
 					let res = evaluate_comp_strict(ctx, &specs[1..], callback);
@@ -171,27 +205,23 @@ pub fn evaluate_comp_lazy(
 					evaluate_comp_lazy(&ctx, &specs[1..], callback)?;
 				}
 			}
-			#[cfg(feature = "exp-object-iteration")]
-			Val::Obj(obj) => {
+			Val::Obj(obj) if cfg!(feature = "exp-object-iteration") => {
 				for field in obj.fields(
 					// TODO: Should there be ability to preserve iteration order?
 					#[cfg(feature = "exp-preserve-order")]
 					false,
 				) {
 					let fctx = Pending::new();
-					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
+					let mut new_bindings = BindingsMap::with_capacity(var.capacity_hint());
 					let obj = obj.clone();
-					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
+					let value = Thunk::evaluated(Val::array(vec![
 						Thunk::evaluated(Val::string(field.clone())),
 						obj.get_lazy(field).expect("field exists"),
-					])));
+					]));
 					destruct_lazy(var, value, fctx.clone(), &mut new_bindings)?;
-					let ctx = ctx
-						.clone()
-						.extend(new_bindings, None, None, None)
-						.into_future(fctx);
+					let ctx = ctx.clone().with_bindings(new_bindings).into_future(fctx);
 
-					evaluate_comp_lazy(ctx, &specs[1..], callback)?;
+					evaluate_comp_lazy(&ctx, &specs[1..], callback)?;
 				}
 			}
 			_ => bail!(InComprehensionCanOnlyIterateOverArray),
@@ -565,7 +595,7 @@ fn evaluate_slice(
 	value: &LocExpr,
 	desc: &SliceDesc,
 ) -> Result<Val> {
-	fn parse_idx<T: Typed>(
+	fn parse_idx<T: FromUntyped>(
 		loc: CallLocation<'_>,
 		ctx: &Context,
 		expr: Option<&LocExpr>,
@@ -653,7 +683,7 @@ pub fn evaluate(ctx: &Context, expr: &LocExpr) -> Result<Val> {
 			} else if items.len() == 1 {
 				let item = items[0].clone();
 				let ctx = ctx.clone();
-				Val::Arr(ArrValue::lazy(vec![Thunk!(move || evaluate(&ctx, &item))]))
+				Val::array(vec![Thunk!(move || evaluate(&ctx, &item))])
 			} else {
 				Val::Arr(ArrValue::expr(ctx.clone(), items.iter().cloned()))
 			}
@@ -677,7 +707,7 @@ pub fn evaluate(ctx: &Context, expr: &LocExpr) -> Result<Val> {
 					out.push(Thunk!(move || evaluate(&ctx, &expr)));
 					Ok(())
 				})?;
-				Ok(Val::Arr(ArrValue::lazy(out)))
+				Ok(Val::array(out))
 			},
 		)?,
 		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
@@ -735,9 +765,7 @@ pub fn evaluate(ctx: &Context, expr: &LocExpr) -> Result<Val> {
 						|| s.import_resolved(resolved_path),
 					)?,
 					ImportStr(_) => Val::string(s.import_resolved_str(resolved_path)?),
-					ImportBin(_) => {
-						Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?))
-					}
+					ImportBin(_) => Val::array(s.import_resolved_bin(resolved_path)?),
 					_ => unreachable!(),
 				}) as Result<Val>
 			})?
