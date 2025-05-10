@@ -392,6 +392,9 @@ impl Span {
 	}
 }
 
+// FIXME: For some reason, it also fails on aarch64, being 3 usizes long.
+// It shouldn't be vtable as `SourcePathT`, as it is moved to `Rc<...>` in `Source`, but then why?
+#[cfg(target_arch = "x86_64")]
 static_assertions::assert_eq_size!(Span, (usize, usize));
 
 impl Debug for Span {

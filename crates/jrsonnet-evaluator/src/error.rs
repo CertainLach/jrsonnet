@@ -10,7 +10,7 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{ParamDefault, CallLocation},
+	function::{CallLocation, ParamDefault},
 	stdlib::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,

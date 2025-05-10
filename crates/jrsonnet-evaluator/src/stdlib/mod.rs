@@ -1,8 +1,8 @@
 // All builtins should return results
 #![allow(clippy::unnecessary_wraps)]
 
-use format::{format_arr, format_obj};
 pub use format::FormatError;
+use format::{format_arr, format_obj};
 
 use crate::{function::CallLocation, in_frame, Result, Val};
 

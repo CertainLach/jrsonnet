@@ -13,8 +13,8 @@ exp-destruct = []
 exp-null-coaelse = []
 
 [dependencies]
-jrsonnet-interner.workspace = true
 jrsonnet-gcmodule.workspace = true
+jrsonnet-interner.workspace = true
 
 static_assertions.workspace = true
 

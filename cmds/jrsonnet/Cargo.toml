@@ -12,20 +12,20 @@ workspace = true
 
 [features]
 experimental = [
-    "exp-preserve-order",
-    "exp-destruct",
-    "exp-null-coaelse",
-    "exp-object-iteration",
-    "exp-bigint",
-    "exp-apply",
-    "exp-regex",
+	"exp-preserve-order",
+	"exp-destruct",
+	"exp-null-coaelse",
+	"exp-object-iteration",
+	"exp-bigint",
+	"exp-apply",
+	"exp-regex",
 ]
 # Use mimalloc as allocator
 mimalloc = ["dep:mimalloc"]
 # Experimental feature, which allows to preserve order of object fields
 exp-preserve-order = [
-    "jrsonnet-evaluator/exp-preserve-order",
-    "jrsonnet-cli/exp-preserve-order",
+	"jrsonnet-evaluator/exp-preserve-order",
+	"jrsonnet-cli/exp-preserve-order",
 ]
 # Destructuring of locals
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
@@ -37,25 +37,25 @@ exp-bigint = ["jrsonnet-evaluator/exp-bigint", "jrsonnet-cli/exp-bigint"]
 exp-regex = ["jrsonnet-cli/exp-regex"]
 # obj?.field, obj?.['field']
 exp-null-coaelse = [
-    "jrsonnet-evaluator/exp-null-coaelse",
-    "jrsonnet-parser/exp-null-coaelse",
-    "jrsonnet-cli/exp-null-coaelse",
+	"jrsonnet-evaluator/exp-null-coaelse",
+	"jrsonnet-parser/exp-null-coaelse",
+	"jrsonnet-cli/exp-null-coaelse",
 ]
 # --exp-apply
 exp-apply = []
 
-nightly = ["jrsonnet-evaluator/nightly"]
+nightly = ["jrsonnet-evaluator/nightly", "jrsonnet-cli/nightly"]
 
 [dependencies]
-jrsonnet-evaluator.workspace = true
-jrsonnet-parser.workspace = true
 jrsonnet-cli.workspace = true
+jrsonnet-evaluator.workspace = true
 jrsonnet-gcmodule.workspace = true
+jrsonnet-parser.workspace = true
 
-mimalloc = { workspace = true, optional = true }
-thiserror.workspace = true
 clap = { workspace = true, features = ["derive"] }
 clap_complete.workspace = true
-serde_json.workspace = true
-serde = { workspace = true, features = ["derive"] }
 hi-doc.workspace = true
+mimalloc = { workspace = true, optional = true }
+serde = { workspace = true, features = ["derive"] }
+serde_json.workspace = true
+thiserror.workspace = true

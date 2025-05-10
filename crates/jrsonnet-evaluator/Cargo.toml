@@ -13,7 +13,7 @@ workspace = true
 [features]
 default = ["explaining-traces"]
 # Rustc-like trace visualization
-explaining-traces = ["annotate-snippets", "hi-doc"]
+explaining-traces = ["hi-doc"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
 # Adds ability to build import closure in async
@@ -34,14 +34,14 @@ exp-null-coaelse = ["jrsonnet-parser/exp-null-coaelse"]
 nightly = ["hashbrown/nightly"]
 
 [dependencies]
+jrsonnet-gcmodule.workspace = true
 jrsonnet-interner.workspace = true
+jrsonnet-macros.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-types.workspace = true
-jrsonnet-macros.workspace = true
-jrsonnet-gcmodule.workspace = true
 
-pathdiff.workspace = true
 hashbrown.workspace = true
+pathdiff.workspace = true
 static_assertions.workspace = true
 
 rustc-hash.workspace = true
@@ -53,11 +53,10 @@ strsim.workspace = true
 serde.workspace = true
 
 anyhow = { workspace = true, optional = true }
-# Explaining traces
-annotate-snippets = { workspace = true, optional = true }
 # Better explaining traces
 hi-doc = { workspace = true, optional = true }
 # Bigint
-num-bigint = { workspace = true, features = ["serde"], optional = true }
-stacker = "0.1.15"
 educe = { version = "0.6.0", default-features = false, features = ["Clone", "Debug", "Eq", "Hash", "PartialEq"] }
+num-bigint = { workspace = true, features = ["serde"], optional = true }
+smallvec = "1.13.2"
+stacker = "0.1.15"

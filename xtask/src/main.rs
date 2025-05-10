@@ -81,7 +81,11 @@ fn main() -> Result<()> {
 			if massif {
 				let mut cachegrind_out = out.path().to_owned();
 				cachegrind_out.push("massif.out.1");
-				cmd!(sh, "valgrind --tool=massif --massif-out-file={cachegrind_out} {built} {args...}").run()?;
+				cmd!(
+					sh,
+					"valgrind --tool=massif --massif-out-file={cachegrind_out} {built} {args...}"
+				)
+				.run()?;
 				cmd!(sh, "massif-visualizer {cachegrind_out}").run()?;
 			}
 

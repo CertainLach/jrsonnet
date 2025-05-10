@@ -1,0 +1,11 @@
+[formatting]
+indent_string = "\t"
+
+[[rule]]
+include = ["**/Cargo.toml"]
+keys = ['dependencies', 'workspace.dependencies']
+
+[rule.formatting]
+reorder_keys = true
+reorder_arrays = true
+column_width = 9999

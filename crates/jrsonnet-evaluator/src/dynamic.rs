@@ -55,7 +55,10 @@ thread_local! {
 	static DEBUG_OF_THUNK: RefCell<HashSet<usize>> = RefCell::new(HashSet::new())
 }
 
-pub fn debug_cyclic<T: std::fmt::Debug + ?Sized>(v: &Cc<T>, fmt: &mut Formatter<'_>) -> fmt::Result {
+pub fn debug_cyclic<T: std::fmt::Debug + ?Sized>(
+	v: &Cc<T>,
+	fmt: &mut Formatter<'_>,
+) -> fmt::Result {
 	let ptr = addr_of!(*v) as usize;
 	if DEBUG_OF_THUNK.with_borrow_mut(|v| v.insert(ptr)) {
 		Debug::fmt(v, fmt)

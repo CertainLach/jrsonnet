@@ -13,5 +13,5 @@ workspace = true
 [dependencies]
 jrsonnet-gcmodule.workspace = true
 
+hashbrown = { workspace = true }
 rustc-hash.workspace = true
-hashbrown = { workspace = true, features = ["inline-more"] }

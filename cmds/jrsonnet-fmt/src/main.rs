@@ -46,7 +46,7 @@ macro_rules! pi {
 		o
 	}};
 	(@s; $o:ident: str($e:expr $(,)?) $($t:tt)*) => {{
-		$o.push_str($e);
+		$o.push_sc(dprint_core_macros::sc!($e));
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: string($e:expr $(,)?) $($t:tt)*) => {{

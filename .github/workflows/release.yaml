@@ -1,14 +1,13 @@
 name: Release
 on:
   push:
-    tags: [ 'v*' ]
+    tags: ['v*']
 jobs:
   tests:
     uses: ./.github/workflows/test.yaml
-
   cargo-release:
-    if: !endsWith(github.ref, '-test')
-    needs: [ tests ]
+    if: "!endsWith(github.ref, '-test')"
+    needs: [tests]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4.1.4
@@ -19,9 +18,8 @@ jobs:
       - run: cargo install cargo-release
       - run: cargo login ${{ secrets.CARGO_TOKEN }}
       - run: cargo release --no-dev-version --skip-push --skip-tag --no-confirm
-
   github-release:
-    needs: [ tests ]
+    needs: [tests]
     strategy:
       matrix:
         target:
@@ -34,7 +32,6 @@ jobs:
           - i686-pc-windows-msvc
           - x86_64-apple-darwin
           - x86_64-pc-windows-msvc
-
           # Tier 2
           - aarch64-apple-darwin
           - aarch64-unknown-linux-musl
@@ -54,7 +51,6 @@ jobs:
             os: ubuntu-latest
             bin: jrsonnet
             name: jrsonnet-linux-amd64
-
           # Windows
           - target: i686-pc-windows-msvc
             os: windows-latest
@@ -64,7 +60,6 @@ jobs:
             os: windows-latest
             bin: jrsonnet.exe
             name: jrsonnet-windows-amd64.exe
-
           # Apple
           - target: aarch64-apple-darwin
             os: macOS-latest
@@ -79,47 +74,37 @@ jobs:
       - name: Fetch apt repo updates
         if: ${{ startsWith(matrix.os, 'ubuntu-') }}
         run: sudo apt update
-
       - name: Install stable toolchain
         uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
         with:
           toolchain: stable
           target: ${{ matrix.target }}
-
       - uses: actions/checkout@v4.1.4
-
       - name: Add experimental flags
         if: ${{ endsWith(github.ref, '-test' )}}
         run: echo 'EXPERIMENTAL_FLAGS=--features=experimental' >> $GITHUB_ENV
-
       - name: Linux x86 cross compiler
         if: ${{ startsWith(matrix.target, 'i686-unknown-linux-') }}
         run: sudo apt install gcc-multilib
-
       - name: ARM cross compiler
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         uses: actions-rs/cargo@v1
         with:
           command: install
           args: cross
-
       - name: ARM gcc
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         run: sudo apt install gcc-aarch64-linux-gnu
-
       - name: Musl gcc
         if: ${{ endsWith(matrix.target, '-musl') }}
         run: sudo apt install musl musl-tools
-
       - name: Run cross build
         if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         shell: bash
         run: cross build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
       - name: Run build
         if: ${{ !startsWith(matrix.target, 'aarch64-unknown-linux-') }}
         run: cargo build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
       - name: Package
         shell: bash
         run: |
@@ -127,10 +112,8 @@ jobs:
 
           cp ${{ matrix.bin }} ../../../${{ matrix.name }}
           cd -
-
       - name: Generate SHA-256
         run: shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
-
       - name: Publish
         uses: softprops/action-gh-release@v2.0.4
         with:
