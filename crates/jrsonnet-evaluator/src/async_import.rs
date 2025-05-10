@@ -270,10 +270,6 @@ impl ImportResolver for ResolvedImportResolver {
 	fn resolve_from_default(&self, path: &str) -> crate::Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
 	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
-	}
 }
 
 enum Job {

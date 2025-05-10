@@ -91,15 +91,13 @@ impl AsRef<dyn Builtin> for CcBuiltin {
 ///
 /// Prefer to use #[builtin] macro, instead of manual implementation of this trait
 #[allow(clippy::module_name_repetitions)]
-pub trait Builtin: Trace {
+pub trait Builtin: Trace + Any {
 	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
 	/// Parameter names for named calls
 	fn params(&self) -> &[Param];
 	/// Call the builtin
 	fn call(&self, ctx: &Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
-
-	fn as_any(&self) -> &dyn Any;
 }
 
 #[allow(clippy::module_name_repetitions)]
@@ -151,10 +149,6 @@ impl Builtin for NativeCallback {
 			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;
 		self.handler.call(&args)
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
 	}
 }
 

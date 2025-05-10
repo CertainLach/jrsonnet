@@ -95,7 +95,7 @@ impl MaybeUnbound {
 cc_dyn!(CcContextInitializer, ContextInitializer);
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
-pub trait ContextInitializer: Trace {
+pub trait ContextInitializer: Trace + Any {
 	/// For which size the builder should be preallocated
 	fn reserve_vars(&self) -> usize {
 		0
@@ -111,17 +111,11 @@ pub trait ContextInitializer: Trace {
 	/// For composability: extend builder. May panic if this initialization is not supported,
 	/// and the context may only be created via `initialize`.
 	fn populate(&self, for_file: Source, builder: &mut ContextBuilder);
-	/// Allows upcasting from abstract to concrete context initializer.
-	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
-	fn as_any(&self) -> &dyn Any;
 }
 
 /// Context initializer which adds nothing.
 impl ContextInitializer for () {
 	fn populate(&self, _for_file: Source, _builder: &mut ContextBuilder) {}
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
 }
 
 impl<T> ContextInitializer for Option<T>
@@ -141,10 +135,6 @@ where
 			ctx.populate(for_file, builder);
 		}
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
 }
 
 macro_rules! impl_context_initializer {
@@ -160,9 +150,6 @@ macro_rules! impl_context_initializer {
 			fn populate(&self, for_file: Source, builder: &mut ContextBuilder) {
 				let ($($gen,)*) = self;
 				$($gen.populate(for_file.clone(), builder);)*
-			}
-			fn as_any(&self) -> &dyn Any {
-				self
 			}
 		}
 	};
@@ -493,10 +480,6 @@ pub struct InitialUnderscore(pub Thunk<Val>);
 impl ContextInitializer for InitialUnderscore {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
 		builder.bind("_", self.0.clone());
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
 	}
 }
 

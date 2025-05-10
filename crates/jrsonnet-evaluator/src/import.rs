@@ -8,7 +8,7 @@ use std::{
 };
 
 use fs::File;
-use jrsonnet_gcmodule::{cc_dyn, Trace};
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::{
 	IStr, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
@@ -84,9 +84,8 @@ impl AsPathLike for Cow<'_, Path> {
 	}
 }
 
-cc_dyn!(CcImportResolver, ImportResolver);
 /// Implements file resolution logic for `import` and `importStr`
-pub trait ImportResolver: Trace {
+pub trait ImportResolver: Trace + Any {
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
 	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
 	/// where `${vendor}` is a library path.
@@ -104,26 +103,17 @@ pub trait ImportResolver: Trace {
 	/// This should only be called with value returned from [`ImportResolver::resolve_file`]/[`ImportResolver::resolve`],
 	/// this cannot be resolved using associated type, as evaluator uses object instead of generic for [`ImportResolver`]
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>>;
-
-	// For downcasts, will be removed after trait_upcasting_coercion
-	// stabilization.
-	fn as_any(&self) -> &dyn Any;
-	fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Dummy resolver, can't resolve/load any file
 #[derive(Trace)]
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
+	fn resolve_from(&self, _from: &SourcePath, _path: &dyn AsPathLike) -> Result<SourcePath> {
+		bail!("dummy import resolver can't resolve any file, is vm state entered?")
+	}
 	fn load_file_contents(&self, _resolved: &SourcePath) -> Result<Vec<u8>> {
 		panic!("dummy resolver can't load any file")
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }
 #[allow(clippy::use_self)]
@@ -236,13 +226,5 @@ impl ImportResolver for FileImportResolver {
 
 	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }

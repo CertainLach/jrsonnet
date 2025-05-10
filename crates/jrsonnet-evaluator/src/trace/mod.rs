@@ -48,7 +48,7 @@ impl PathResolver {
 
 /// Implements pretty-printing of traces
 #[expect(clippy::module_name_repetitions)]
-pub trait TraceFormat: Trace {
+pub trait TraceFormat: Trace + Any {
 	fn write_trace(
 		&self,
 		out: &mut dyn std::fmt::Write,
@@ -59,8 +59,6 @@ pub trait TraceFormat: Trace {
 		self.write_trace(&mut out, error)?;
 		Ok(out)
 	}
-	fn as_any(&self) -> &dyn Any;
-	fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 fn print_code_location(
@@ -187,14 +185,6 @@ impl TraceFormat for CompactFormat {
 		}
 		Ok(())
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
-	}
 }
 
 #[derive(Trace)]
@@ -228,14 +218,6 @@ impl TraceFormat for JsFormat {
 			}
 		}
 		Ok(())
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }
 
@@ -339,13 +321,5 @@ impl TraceFormat for HiDocFormat {
 			write!(out, "{flushed}")?;
 		}
 		Ok(())
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }

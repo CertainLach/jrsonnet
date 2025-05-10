@@ -195,8 +195,8 @@ impl ArrValue {
 		self.0.is_cheap()
 	}
 
-	pub fn as_any(&self) -> &dyn Any {
-		&self.0
+	pub fn downcast_ref<'s, T: 'static>(&'s self) -> Option<&'s T> {
+		(&*self.0 as &dyn Any).downcast_ref()
 	}
 }
 impl From<Vec<Val>> for ArrValue {
