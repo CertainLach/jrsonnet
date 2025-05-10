@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	function::{builtin, Builtin, CallLocation, FuncVal},
 	parser::Source,
 	trace::PathResolver,
-	typed::Typed,
+	typed::FromUntyped,
 	ContextBuilder, ContextInitializer, FileImportResolver, Result, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Trace;
@@ -37,10 +37,6 @@ impl ContextInitializer for NativeAddContextInitializer {
 			"nativeAdd",
 			Thunk::evaluated(Val::function(native_add::INST)),
 		);
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 
@@ -82,10 +78,6 @@ struct CurryAddContextInitializer;
 impl ContextInitializer for CurryAddContextInitializer {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
 		builder.bind("curryAdd", Thunk::evaluated(Val::function(curry_add::INST)));
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 

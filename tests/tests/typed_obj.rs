@@ -2,16 +2,22 @@ mod common;
 
 use std::fmt::Debug;
 
-use jrsonnet_evaluator::{trace::PathResolver, typed::Typed, Result, State};
+use jrsonnet_evaluator::{
+	trace::PathResolver,
+	typed::{FromUntyped, IntoUntyped, Typed},
+	Result, State,
+};
 use jrsonnet_stdlib::ContextInitializer;
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, FromUntyped, IntoUntyped, Typed, PartialEq, Debug)]
 struct A {
 	a: u32,
 	b: u16,
 }
 
-fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T) -> Result<()> {
+fn test_roundtrip<T: IntoUntyped + FromUntyped + PartialEq + Debug + Clone>(
+	value: T,
+) -> Result<()> {
 	let untyped = T::into_untyped(value.clone())?;
 	let value2 = T::from_untyped(untyped.clone())?;
 	ensure_eq!(value, value2);
@@ -33,7 +39,7 @@ fn simple_object() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct B {
 	a: u32,
 	#[typed(rename = "c")]
@@ -56,7 +62,7 @@ fn renamed_field() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct ObjectKind {
 	#[typed(rename = "apiVersion")]
 	api_version: String,
@@ -64,7 +70,7 @@ struct ObjectKind {
 	kind: String,
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct Object {
 	#[typed(flatten)]
 	kind: ObjectKind,
@@ -98,7 +104,7 @@ fn flattened_object() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct C {
 	a: Option<u32>,
 	b: u16,
@@ -136,14 +142,14 @@ fn optional_field_none() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, IntoUntyped, FromUntyped, PartialEq, Debug)]
 struct D {
 	#[typed(flatten(ok))]
 	e: Option<E>,
 	b: u16,
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, IntoUntyped, FromUntyped, PartialEq, Debug)]
 struct E {
 	v: u32,
 }
