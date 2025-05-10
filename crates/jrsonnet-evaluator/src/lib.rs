@@ -51,6 +51,19 @@ use stack::check_depth;
 pub use tla::apply_tla;
 pub use val::{Thunk, Val};
 
+#[doc(hidden)]
+pub mod typed_macro_prelude {
+	pub use super::{
+		error::{ErrorKind, Result as JrResult},
+		strings,
+		typed::{
+			CheckType, ComplexValType, FromUntypedObj, IntoUntypedObj, IntoVal, Typed, TypedObj,
+		},
+		EnumFieldsHandler, FieldIndex, ObjValue, ObjValueBuilder, ObjectLayer, State, SupThis,
+		SuperDepth, Val, ValueProcess, Visibility,
+	};
+}
+
 jrsonnet_gcmodule::cc_dyn!(CcUnbound, Unbound<Bound = Val>);
 impl Clone for CcUnbound {
 	fn clone(&self) -> Self {

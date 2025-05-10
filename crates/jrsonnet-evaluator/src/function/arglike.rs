@@ -4,7 +4,10 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
 
 use crate::{
-	evaluate, gc::GcHashMap, typed::Typed, with_state, BindingValue, Context, Result, Thunk, Val,
+	evaluate,
+	gc::GcHashMap,
+	typed::{IntoUntyped, Typed},
+	with_state, BindingValue, Context, Result, Thunk, Val,
 };
 
 /// Marker for arguments, which can be evaluated with context set to None
@@ -28,7 +31,7 @@ impl ArgLike for &LocExpr {
 
 impl<T> ArgLike for T
 where
-	T: Typed + Clone,
+	T: IntoUntyped + Clone,
 {
 	fn evaluate_arg(&self, _ctx: &Context, tailstrict: bool) -> Result<BindingValue> {
 		if T::provides_lazy() && !tailstrict {

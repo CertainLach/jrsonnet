@@ -161,6 +161,10 @@ pub fn builtin_object_remove_key(
 
 	// Standard implementation uses std.objectFields without such argument, we can't
 	// assume order preservation should always be enabled/disabled
+	//
+	// FIXME: On second thought, field order is not observable unless
+	// some other call passes uses preserve_order and inspects it.
+	// Shouldn't it default to true?
 	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,

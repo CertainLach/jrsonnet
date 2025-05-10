@@ -2,7 +2,7 @@ use super::{
 	arglike::{ArgLike, OptionalContext},
 	FuncVal,
 };
-use crate::{typed::Typed, Result};
+use crate::{typed::FromUntyped, Result};
 
 pub trait Desc {
 	type Value;
@@ -13,7 +13,7 @@ macro_rules! impl_native_desc {
 		impl<$($gen,)* O> Desc for (($($gen,)*), O)
 		where
 			$($gen: ArgLike + OptionalContext,)*
-			O: Typed,
+			O: FromUntyped,
 		{
 			type Value = Box<dyn Fn($($gen,)*) -> Result<O>>;
 

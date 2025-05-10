@@ -10,7 +10,7 @@ use crate::{
 	bail,
 	error::{format_found, ErrorKind::*},
 	suggest_object_fields,
-	typed::Typed,
+	typed::FromUntyped,
 	Error, ObjValue, Result, Val,
 };
 
@@ -432,7 +432,10 @@ pub fn render_float(
 		}
 		return;
 	}
-	#[expect(clippy::cast_precision_loss, reason = "precision is number of digits, it shouldn't be that high")]
+	#[expect(
+		clippy::cast_precision_loss,
+		reason = "precision is number of digits, it shouldn't be that high"
+	)]
 	let frac = n
 		.fract()
 		.mul_add(10.0_f64.powf(precision as f64), 0.5)
@@ -593,7 +596,10 @@ pub fn format_code(
 					code.caps,
 				);
 			} else {
-				#[expect(clippy::cast_sign_loss, reason = "max(val + 1, 1) is used, negative val doesn't matter anyway")]
+				#[expect(
+					clippy::cast_sign_loss,
+					reason = "max(val + 1, 1) is used, negative val doesn't matter anyway"
+				)]
 				let digits_before_pt = 1.max(exponent as usize + 1);
 				render_float(
 					&mut tmp_out,
@@ -612,10 +618,7 @@ pub fn format_code(
 				let n = n.get();
 				// TODO: should also return error for codepoint > u32::MAX
 				let n = n as u32;
-				tmp_out.push(
-					std::char::from_u32(n)
-						.ok_or_else(|| InvalidUnicodeCodepointGot(n))?,
-				);
+				tmp_out.push(std::char::from_u32(n).ok_or_else(|| InvalidUnicodeCodepointGot(n))?);
 			}
 			Val::Str(s) => {
 				let s = s.into_flat();

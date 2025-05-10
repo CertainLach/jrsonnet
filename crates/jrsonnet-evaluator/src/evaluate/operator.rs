@@ -8,7 +8,7 @@ use crate::{
 	error::ErrorKind::*,
 	evaluate,
 	stdlib::std_format,
-	typed::Typed,
+	typed::IntoUntyped,
 	val::{equals, StrValue},
 	Context, Result, Val,
 };
@@ -20,7 +20,10 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(Plus, Num(n)) => Val::Num(*n),
 		(Minus, Num(n)) => Val::try_num(-n.get())?,
 		(Not, Bool(v)) => Bool(!v),
-		#[expect(clippy::cast_precision_loss, reason = "behavior is expected to be truncating")]
+		#[expect(
+			clippy::cast_precision_loss,
+			reason = "behavior is expected to be truncating"
+		)]
 		(BitNot, Num(n)) => Val::try_num(!(n.get() as i64) as f64)?,
 		(op, o) => bail!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
@@ -136,7 +139,10 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
 		// Compat: This behavior is specific to jrsonnet, as it turns out, don't want to break compatibility
-		#[expect(clippy::cast_sign_loss, reason = "multiply by negative doesn't make sense, but it wasn't erroring in the old versions")]
+		#[expect(
+			clippy::cast_sign_loss,
+			reason = "multiply by negative doesn't make sense, but it wasn't erroring in the old versions"
+		)]
 		(Str(v1), Mul, Num(v2)) => Val::string(v1.to_string().repeat(v2.get() as usize)),
 
 		// Bool X Bool
@@ -154,7 +160,10 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		(Num(v1), Sub, Num(v2)) => Val::try_num(v1.get() - v2.get())?,
 
-		#[expect(clippy::cast_precision_loss, reason = "behavior is expected to be truncating")]
+		#[expect(
+			clippy::cast_precision_loss,
+			reason = "behavior is expected to be truncating"
+		)]
 		(Num(v1), BitAnd, Num(v2)) => Val::try_num((v1.get() as i64 & v2.get() as i64) as f64)?,
 		#[expect(clippy::cast_precision_loss)]
 		(Num(v1), BitOr, Num(v2)) => Val::try_num((v1.get() as i64 | v2.get() as i64) as f64)?,
