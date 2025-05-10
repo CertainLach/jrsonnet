@@ -4,8 +4,8 @@ use jrsonnet_evaluator::{
 	bail,
 	function::{builtin, FuncVal},
 	runtime_error,
-	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
-	val::{equals, ArrValue, Indexable},
+	typed::{BoundedI32, BoundedUsize, Either2, FromUntyped, NativeFn},
+	val::{equals, ArrValue, Indexable, StrValue},
 	Either, IStr, ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
 
@@ -28,7 +28,10 @@ pub fn make_array_strict(size: usize, func: FuncVal) -> Result<ArrValue> {
 
 #[builtin]
 pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Result<ArrValue> {
-	#[expect(clippy::cast_sign_loss, reason = "this function accepts negative numbers, but returns empty array on negatives")]
+	#[expect(
+		clippy::cast_sign_loss,
+		reason = "this function accepts negative numbers, but returns empty array on negatives"
+	)]
 	let sz = *sz as usize;
 	if sz == 0 {
 		return Ok(ArrValue::new(()));
@@ -39,7 +42,11 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 	}
 
 	// Most of the time, all elements of make_array are used, assume this holds true
-	#[expect(clippy::cast_possible_wrap, clippy::cast_possible_truncation, reason = "sz is bounded to i32 range")]
+	#[expect(
+		clippy::cast_possible_wrap,
+		clippy::cast_possible_truncation,
+		reason = "sz is bounded to i32 range"
+	)]
 	Ok(make_array_strict(sz, func.clone())
 		.unwrap_or_else(|_| ArrValue::range_exclusive(0, sz as i32).map(func)))
 }
@@ -108,7 +115,7 @@ pub fn builtin_flatmap(
 			for c in str.chars() {
 				match func(Either2::A(c.to_string()))? {
 					Val::Str(o) => write!(out, "{o}").unwrap(),
-					Val::Null => continue,
+					Val::Null => {}
 					_ => bail!("in std.join all items should be strings"),
 				};
 			}
@@ -124,7 +131,7 @@ pub fn builtin_flatmap(
 							out.push(oe?);
 						}
 					}
-					Val::Null => continue,
+					Val::Null => {}
 					_ => bail!("in std.join all items should be arrays"),
 				};
 			}
@@ -148,19 +155,37 @@ pub fn builtin_filter_map(
 }
 
 #[builtin]
-pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, StrValue], init: Val) -> Result<Val> {
 	let mut acc = init;
-	for i in arr.iter() {
-		acc = func.evaluate_simple(&(acc, i?), false)?;
+	match arr {
+		Either2::A(arr) => {
+			for i in arr.iter() {
+				acc = func.evaluate_simple(&(acc, i?), false)?;
+			}
+		}
+		Either2::B(str) => {
+			for c in str.to_string().chars() {
+				acc = func.evaluate_simple(&(acc, c), false)?;
+			}
+		}
 	}
 	Ok(acc)
 }
 
 #[builtin]
-pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+pub fn builtin_foldr(func: FuncVal, arr: Either![ArrValue, StrValue], init: Val) -> Result<Val> {
 	let mut acc = init;
-	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&(i?, acc), false)?;
+	match arr {
+		Either2::A(arr) => {
+			for i in arr.iter().rev() {
+				acc = func.evaluate_simple(&(i?, acc), false)?;
+			}
+		}
+		Either2::B(str) => {
+			for c in str.to_string().chars().rev() {
+				acc = func.evaluate_simple(&(c, acc), false)?;
+			}
+		}
 	}
 	Ok(acc)
 }
@@ -197,7 +222,7 @@ pub fn builtin_join(sep: Indexable, arr: ArrValue) -> Result<Indexable> {
 						out.push(item?);
 					}
 				} else if matches!(item, Val::Null) {
-					continue;
+					// Pass
 				} else {
 					bail!("in std.join all items should be arrays");
 				}
@@ -218,7 +243,7 @@ pub fn builtin_join(sep: Indexable, arr: ArrValue) -> Result<Indexable> {
 					first = false;
 					write!(out, "{item}").unwrap();
 				} else if matches!(item, Val::Null) {
-					continue;
+					// Pass
 				} else {
 					bail!("in std.join all items should be strings");
 				}
@@ -345,7 +370,10 @@ pub fn builtin_avg(arr: Vec<f64>, onEmpty: Option<Thunk<Val>>) -> Result<Val> {
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	#[allow(clippy::cast_precision_loss, reason = "arrays aren't that large in practice")]
+	#[allow(
+		clippy::cast_precision_loss,
+		reason = "arrays aren't that large in practice"
+	)]
 	let items = arr.len() as f64;
 	Ok(Val::try_num(arr.iter().sum::<f64>() / items)?)
 }
@@ -362,7 +390,10 @@ pub fn builtin_remove_at(arr: ArrValue, at: i32) -> Result<ArrValue> {
 pub fn builtin_remove(arr: ArrValue, elem: Val) -> Result<ArrValue> {
 	for (index, item) in arr.iter().enumerate() {
 		if equals(&item?, &elem)? {
-			#[allow(clippy::cast_possible_wrap, reason = "index is bounded to array length")]
+			#[allow(
+				clippy::cast_possible_wrap,
+				reason = "index is bounded to array length"
+			)]
 			return builtin_remove_at(arr.clone(), index as i32);
 		}
 	}
@@ -410,6 +441,9 @@ pub fn builtin_flatten_deep_array(value: Val) -> Result<Vec<Val>> {
 pub fn builtin_prune(
 	a: Val,
 
+	// Field order is not observable unless
+	// some other call passes uses preserve_order and inspects it.
+	// Shouldn't it default to true?
 	#[default(false)]
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
