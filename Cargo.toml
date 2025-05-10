@@ -39,7 +39,7 @@ clap_complete = "4.5"
 # https://github.com/dtolnay/serde-yaml/pull/225
 serde = "1.0.197"
 serde_json = "1.0.114"
-serde_yaml_with_quirks = "0.8.24"
+serde_yaml_with_quirks = "0.9.34"
 
 # Error handling
 anyhow = "1.0.83"
