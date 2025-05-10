@@ -265,7 +265,7 @@ impl Indexable {
 
 	pub fn to_array(self) -> ArrValue {
 		match self {
-			Self::Str(s) => ArrValue::chars(s.chars()),
+			Self::Str(s) => ArrValue::new(s.chars().collect::<Vec<_>>()),
 			Self::Arr(arr) => arr,
 		}
 	}
@@ -312,10 +312,16 @@ impl Indexable {
 				};
 				let mut get_idx = |pos: Option<i32>, default| {
 					match pos {
-						#[expect(clippy::cast_sign_loss, reason = "value is alvays positive due to guard and inversion")]
+						#[expect(
+							clippy::cast_sign_loss,
+							reason = "value is always positive due to guard and inversion"
+						)]
 						Some(v) if v < 0 => get_len().saturating_sub((-v) as usize),
 						// No need to clamp, as iterator interface is used
-						#[expect(clippy::cast_sign_loss, reason = "value is alvays positive, as negatives are already handled")]
+						#[expect(
+							clippy::cast_sign_loss,
+							reason = "value is always positive, as negatives are already handled"
+						)]
 						Some(v) => v as usize,
 						None => default,
 					}

@@ -68,7 +68,7 @@ pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 			}
 		};
 	}
-	Ok(ArrValue::lazy(out))
+	Ok(ArrValue::new(out))
 }
 
 #[builtin]
@@ -114,7 +114,7 @@ pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Resu
 		av = a.next();
 		ak = av.clone().map(keyF).transpose()?;
 	}
-	Ok(ArrValue::lazy(out))
+	Ok(ArrValue::new(out))
 }
 
 #[builtin]
@@ -168,5 +168,5 @@ pub fn builtin_set_union(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 		bv = b.next();
 		bk = bv.clone().map(keyF).transpose()?;
 	}
-	Ok(ArrValue::lazy(out))
+	Ok(ArrValue::new(out))
 }

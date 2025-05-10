@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
 	function::builtin,
-	typed::{Either2, Typed, M1},
+	typed::{Either2, FromUntyped, M1},
 	val::{ArrValue, Indexable},
 	Either, IStr, Val,
 };
@@ -221,7 +221,7 @@ pub fn builtin_bigint(v: Either![f64, IStr]) -> Result<Val> {
 
 #[builtin]
 pub fn builtin_string_chars(str: IStr) -> ArrValue {
-	ArrValue::chars(str.chars())
+	ArrValue::new(str.chars().collect::<Vec<_>>())
 }
 
 #[builtin]

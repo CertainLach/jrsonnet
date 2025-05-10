@@ -168,7 +168,7 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 		// Try to handle most cases first (keyF accessing array element), fallback to lazy, original implementation, in case of error.
 		Ok(match sort_keyf_strict(values.clone(), key_getter.clone()) {
 			Ok(v) => ArrValue::new(v),
-			Err(_) => ArrValue::lazy(sort_keyf_lazy(values, key_getter)?),
+			Err(_) => ArrValue::new(sort_keyf_lazy(values, key_getter)?),
 		})
 	}
 }
@@ -238,7 +238,7 @@ pub fn uniq(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 		// See comment on strict/lazy handling in [`sort`]
 		Ok(match uniq_keyf_strict(values.clone(), key_getter.clone()) {
 			Ok(v) => ArrValue::new(v),
-			Err(_) => ArrValue::lazy(uniq_keyf_lazy(values, key_getter)?),
+			Err(_) => ArrValue::new(uniq_keyf_lazy(values, key_getter)?),
 		})
 	}
 }

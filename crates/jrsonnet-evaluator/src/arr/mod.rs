@@ -1,7 +1,6 @@
 use std::{any::Any, num::NonZeroU32};
 
 use jrsonnet_gcmodule::Cc;
-use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
 
 use crate::{function::FuncVal, Context, Result, Thunk, Val};
@@ -28,23 +27,12 @@ impl ArrValue {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
 
-	pub fn lazy(thunks: Vec<Thunk<Val>>) -> Self {
-		Self::new(LazyArray(thunks))
-	}
-
 	pub fn repeated_single(elem: Val, len: usize) -> Self {
 		Self::new(RepeatedSingleArray { elem, len })
 	}
 
 	pub fn repeated(data: Self, repeats: usize) -> Option<Self> {
 		Some(Self::new(RepeatedArray::new(data, repeats)?))
-	}
-
-	pub fn bytes(bytes: IBytes) -> Self {
-		Self::new(BytesArray(bytes))
-	}
-	pub fn chars(chars: impl Iterator<Item = char>) -> Self {
-		Self::new(CharArray(chars.collect()))
 	}
 
 	#[must_use]
@@ -88,7 +76,7 @@ impl ArrValue {
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a.iter_lazy());
 			out.extend(b.iter_lazy());
-			Self::lazy(out)
+			Self::new(out)
 		}
 	}
 
@@ -206,7 +194,7 @@ impl From<Vec<Val>> for ArrValue {
 }
 impl From<Vec<Thunk<Val>>> for ArrValue {
 	fn from(value: Vec<Thunk<Val>>) -> Self {
-		Self::lazy(value)
+		Self::new(value)
 	}
 }
 impl FromIterator<Val> for ArrValue {

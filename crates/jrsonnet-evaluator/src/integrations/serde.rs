@@ -63,7 +63,7 @@ impl<'de> Deserialize<'de> for Val {
 			where
 				E: de::Error,
 			{
-				Ok(Val::Arr(ArrValue::bytes(v.into())))
+				Ok(Val::array(IBytes::from(v)))
 			}
 
 			fn visit_none<E>(self) -> Result<Self::Value, E>
@@ -478,7 +478,7 @@ impl Serializer for IntoValSerializer {
 	}
 
 	fn serialize_bytes(self, v: &[u8]) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::bytes(v.into())))
+		Ok(Val::array(IBytes::from(v)))
 	}
 
 	fn serialize_none(self) -> Result<Val> {
