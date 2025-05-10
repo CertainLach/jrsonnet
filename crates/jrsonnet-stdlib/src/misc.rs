@@ -193,19 +193,35 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 
 	let mut out = ObjValueBuilder::new();
 	for field in target_fields.union(&patch_fields) {
-		let Some(field_patch) = patch.get(field.clone())? else {
-			out.field(field.clone()).value(target.get(field.clone())?.expect("we're iterating over fields union, if field is missing in patch - it exists in target"));
-			continue;
-		};
-		if matches!(field_patch, Val::Null) {
+		let field_patch = patch.get(field.clone())?;
+		if matches!(field_patch, Some(Val::Null)) {
 			continue;
 		}
-		let Some(field_target) = target.get(field.clone())? else {
-			out.field(field.clone()).value(field_patch);
-			continue;
-		};
-		out.field(field.clone())
-			.value(builtin_merge_patch(field_target, field_patch)?);
+		let b = out.field(field.clone());
+		println!("{field}");
+		match (field_patch, target.get(field.clone())) {
+			(Some(p), Ok(Some(field_target))) => {
+				// Field found => applying patch recursively
+				b.value(builtin_merge_patch(field_target, p)?);
+			}
+			(None, Ok(Some(field_target))) => {
+				// Field found an no patch => copying value
+				b.value(field_target);
+			}
+			(Some(p), Ok(None)) => {
+				// Field not found => replacing with patch
+				b.value(p);
+			}
+			(_, Err(e)) => {
+				println!("error");
+				// Field errored => we don't know yet if it even be used, so storing error,
+				// ignoring the patch
+				b.thunk(Thunk::errored(e));
+			}
+			(None, Ok(None)) => {
+				unreachable!("we're iterating over a field union, every field should be in either target or patch objects")
+			}
+		}
 	}
 	Ok(out.build().into())
 }
