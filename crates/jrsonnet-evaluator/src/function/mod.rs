@@ -1,7 +1,7 @@
 use std::{fmt::Debug, rc::Rc};
 
+use arglike::ArgsLike;
 pub use arglike::TlaArg;
-use arglike::{ArgsLike, OptionalContext};
 pub use builtin::{
 	Builtin, CcBuiltin, NativeCallback, NativeCallbackHandler, Param, ParamDefault, ParamName,
 	StaticBuiltin,
@@ -12,7 +12,10 @@ use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, LocExpr, ParamsDesc, Span};
 pub use native::Desc as NativeDesc;
-use parse::{parse_default_function_call, parse_function_call};
+use parse::{
+	parse_builtin_call, parse_default_function_call, parse_function_call,
+	parse_prepared_builtin_call, parse_prepared_function_call, prepare_call, PreparedCall,
+};
 
 #[doc(hidden)]
 pub mod macro_internal {
@@ -20,8 +23,8 @@ pub mod macro_internal {
 }
 
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, paramlist, Context, ContextBuilder,
-	Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, paramlist, typed::NativeFn,
+	BindingValue, Context, Result, Thunk, Val,
 };
 
 mod arglike;
@@ -189,7 +192,10 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			Self::Id => ID.call(call_ctx, loc, args),
+			Self::Id => {
+				let args = parse_builtin_call(call_ctx, &ID.params(), args, true)?;
+				ID.call(loc, &args)
+			}
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
 				evaluate(&body_ctx, &func.body)
@@ -200,21 +206,54 @@ impl FuncVal {
 				}
 				thunk.evaluate()
 			}
-			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.as_ref().call(call_ctx, loc, args),
+			Self::StaticBuiltin(b) => {
+				let args = parse_builtin_call(call_ctx, &b.params(), args, true)?;
+				b.call(loc, &args)
+			}
+			Self::Builtin(b) => {
+				let args = parse_builtin_call(call_ctx, &b.as_ref().params(), args, true)?;
+				b.as_ref().call(loc, &args)
+			}
 		}
 	}
-	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
+	pub(crate) fn evaluate_prepared(
 		&self,
-		args: &A,
-		tailstrict: bool,
+		prepared: &PreparedCall,
+		loc: CallLocation<'_>,
+		unnamed: &[BindingValue],
+		named: &[BindingValue],
+		_tailstrict: bool,
 	) -> Result<Val> {
-		let ctx = ContextBuilder::new().build();
-		self.evaluate(&ctx, CallLocation::native(), args, tailstrict)
+		match self {
+			FuncVal::Id => {
+				let args = parse_prepared_builtin_call(prepared, &ID.params(), unnamed, named)?;
+				ID.call(loc, &args)
+			}
+			FuncVal::Normal(func) => {
+				let body_ctx = parse_prepared_function_call(
+					func.ctx.clone(),
+					prepared,
+					&func.params,
+					unnamed,
+					named,
+				)?;
+				evaluate(&body_ctx, &func.body)
+			}
+			FuncVal::Thunk(t) => t.evaluate(),
+			FuncVal::StaticBuiltin(b) => {
+				let args = parse_prepared_builtin_call(prepared, &b.params(), unnamed, named)?;
+				b.call(loc, &args)
+			}
+			FuncVal::Builtin(b) => {
+				let args =
+					parse_prepared_builtin_call(prepared, &b.as_ref().params(), unnamed, named)?;
+				b.as_ref().call(loc, &args)
+			}
+		}
 	}
 	/// Convert jsonnet function to plain `Fn` value.
-	pub fn into_native<D: NativeDesc>(self) -> D::Value {
-		D::into_native(self)
+	pub fn into_native<D: NativeDesc>(self) -> NativeFn<D> {
+		NativeFn(D::into_native(PreparedFuncVal::new(self, D::NUM_ARGS, &[])))
 	}
 
 	/// Is this function an indentity function.
@@ -268,5 +307,30 @@ where
 impl From<&'static dyn StaticBuiltin> for FuncVal {
 	fn from(value: &'static dyn StaticBuiltin) -> Self {
 		Self::static_builtin(value)
+	}
+}
+
+#[derive(Debug, Trace, Clone)]
+pub struct PreparedFuncVal {
+	fun: FuncVal,
+	prepared: Rc<PreparedCall>,
+}
+
+impl PreparedFuncVal {
+	pub fn new(fun: FuncVal, unnamed: usize, named: &[IStr]) -> Result<Self> {
+		let prepared = prepare_call(&fun.params(), unnamed, named)?;
+		Ok(Self {
+			fun,
+			prepared: Rc::new(prepared),
+		})
+	}
+	pub fn call(
+		&self,
+		loc: CallLocation<'_>,
+		unnamed: &[BindingValue],
+		named: &[BindingValue],
+	) -> Result<Val> {
+		self.fun
+			.evaluate_prepared(&self.prepared, loc, unnamed, named, false)
 	}
 }

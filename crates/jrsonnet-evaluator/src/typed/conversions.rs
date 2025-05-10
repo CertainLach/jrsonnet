@@ -858,7 +858,7 @@ where
 
 #[derive(Educe)]
 #[educe(Debug)]
-pub struct NativeFn<D: NativeDesc>(#[educe(Debug(ignore))] D::Value);
+pub struct NativeFn<D: NativeDesc>(#[educe(Debug(ignore))] pub(crate) D::Value);
 impl<D: NativeDesc> Deref for NativeFn<D> {
 	type Target = D::Value;
 
@@ -871,12 +871,10 @@ impl<D: NativeDesc> Typed for NativeFn<D> {
 }
 impl<D: NativeDesc> FromUntyped for NativeFn<D> {
 	fn from_untyped(untyped: Val) -> Result<Self> {
-		Ok(Self(
-			untyped
-				.as_func()
-				.expect("shape is checked")
-				.into_native::<D>(),
-		))
+		Ok(untyped
+			.as_func()
+			.expect("shape is checked")
+			.into_native::<D>())
 	}
 }
 

@@ -372,8 +372,9 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 		}
 		const _: () = {
 			use ::jrsonnet_evaluator::{
+				builtin_macro_prelude::*,
 				State, Val,
-				function::{Param, Builtin, StaticBuiltin, ParamName, ParamDefault, CallLocation, macro_internal::{ArgsLike, parse_builtin_call}},
+				function::{Param, Builtin, StaticBuiltin, ParamName, ParamDefault, CallLocation, macro_internal::{ArgsLike}},
 				Result, Context, typed::{Typed, IntoUntyped, FromUntyped},
 				parser::Span, paramlist,
 			};
@@ -390,9 +391,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 					list()
 				}
 				#[allow(unused_variables)]
-				fn call(&self, ctx: &Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx, &self.params(), args, false)?;
-
+				fn call(&self, location: CallLocation, parsed: &[Option<BindingValue>]) -> Result<Val> {
 					let result: #result = #name(#(#pass)*);
 					<_ as IntoUntyped>::into_result(result)
 				}

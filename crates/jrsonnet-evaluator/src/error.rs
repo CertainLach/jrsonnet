@@ -10,7 +10,7 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{CallLocation, ParamDefault},
+	function::{CallLocation, ParamDefault, ParamName},
 	stdlib::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
@@ -47,21 +47,18 @@ pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 }
 
 fn format_signature(sig: &FunctionSignature) -> String {
+	use std::fmt::Write;
 	let mut out = String::new();
 	out.push_str("\nFunction has the following signature: ");
 	out.push('(');
 	if sig.is_empty() {
-		out.push_str("/*no arguments*/");
+		out.push_str("/*no parameters*/");
 	} else {
 		for (i, (name, default)) in sig.iter().enumerate() {
 			if i != 0 {
 				out.push_str(", ");
 			}
-			if let Some(name) = name {
-				out.push_str(name);
-			} else {
-				out.push_str("<unnamed>");
-			}
+			let _ = write!(out, "{name}");
 			match default {
 				ParamDefault::None => {}
 				ParamDefault::Exists => out.push_str(" = <default>"),
@@ -84,7 +81,7 @@ const fn format_empty_str(str: &str) -> &str {
 	}
 }
 
-type FunctionSignature = Vec<(Option<IStr>, ParamDefault)>;
+type FunctionSignature = Vec<(ParamName, ParamDefault)>;
 
 /// Possible errors
 #[allow(missing_docs)]
@@ -132,8 +129,8 @@ pub enum ErrorKind {
 	BindingParameterASecondTime(IStr),
 	#[error("too many args, function has {0}{signature}", signature = format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
-	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
-	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
+	#[error("function argument is not passed: {0}{signature}", signature = format_signature(.1))]
+	FunctionParameterNotBoundInCall(ParamName, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),

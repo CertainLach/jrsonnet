@@ -17,10 +17,10 @@ pub fn eval_on_empty(on_empty: Option<Thunk<Val>>) -> Result<Val> {
 	}
 }
 
-pub fn make_array_strict(size: usize, func: FuncVal) -> Result<ArrValue> {
+pub fn make_array_strict(size: usize, func: NativeFn<((usize,), Val)>) -> Result<ArrValue> {
 	let mut out = Vec::with_capacity(size);
 	for v in 0..size {
-		let v = func.evaluate_simple(&(v,), true)?;
+		let v = func(v)?;
 		out.push(v);
 	}
 	Ok(ArrValue::new(out))
@@ -47,7 +47,7 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 		clippy::cast_possible_truncation,
 		reason = "sz is bounded to i32 range"
 	)]
-	Ok(make_array_strict(sz, func.clone())
+	Ok(make_array_strict(sz, func.clone().into_native())
 		.unwrap_or_else(|_| ArrValue::range_exclusive(0, sz as i32).map(func)))
 }
 
@@ -87,7 +87,7 @@ pub fn builtin_map_with_index(func: FuncVal, arr: Indexable) -> ArrValue {
 }
 
 #[builtin]
-pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
+pub fn builtin_map_with_key(func: NativeFn<((IStr, Val), Val)>, obj: ObjValue) -> Result<ObjValue> {
 	let mut out = ObjValueBuilder::new();
 	for (k, v) in obj.iter(
 		// Makes sense mapped object should be ordered the same way, should not break anything when the output is not ordered (the default).
@@ -97,8 +97,7 @@ pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 		true,
 	) {
 		let v = v?;
-		out.field(k.clone())
-			.value(func.evaluate_simple(&(k, v), false)?);
+		out.field(k.clone()).value(func(k, v)?);
 	}
 	Ok(out.build())
 }
@@ -141,13 +140,13 @@ pub fn builtin_flatmap(
 }
 
 #[builtin]
-pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),), false)?))
+pub fn builtin_filter(func: NativeFn<((Val,), bool)>, arr: ArrValue) -> Result<ArrValue> {
+	arr.filter(|val| func(val.clone()))
 }
 
 #[builtin]
 pub fn builtin_filter_map(
-	filter_func: FuncVal,
+	filter_func: NativeFn<((Val,), bool)>,
 	map_func: FuncVal,
 	arr: ArrValue,
 ) -> Result<ArrValue> {
@@ -155,17 +154,21 @@ pub fn builtin_filter_map(
 }
 
 #[builtin]
-pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, StrValue], init: Val) -> Result<Val> {
+pub fn builtin_foldl(
+	func: NativeFn<((Val, Either![Val, char]), Val)>,
+	arr: Either![ArrValue, StrValue],
+	init: Val,
+) -> Result<Val> {
 	let mut acc = init;
 	match arr {
 		Either2::A(arr) => {
 			for i in arr.iter() {
-				acc = func.evaluate_simple(&(acc, i?), false)?;
+				acc = func(acc, Either2::A(i?))?;
 			}
 		}
 		Either2::B(str) => {
 			for c in str.to_string().chars() {
-				acc = func.evaluate_simple(&(acc, c), false)?;
+				acc = func(acc, Either2::B(c))?;
 			}
 		}
 	}
@@ -173,17 +176,21 @@ pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, StrValue], init: Val)
 }
 
 #[builtin]
-pub fn builtin_foldr(func: FuncVal, arr: Either![ArrValue, StrValue], init: Val) -> Result<Val> {
+pub fn builtin_foldr(
+	func: NativeFn<((Either![Val, char], Val), Val)>,
+	arr: Either![ArrValue, StrValue],
+	init: Val,
+) -> Result<Val> {
 	let mut acc = init;
 	match arr {
 		Either2::A(arr) => {
 			for i in arr.iter().rev() {
-				acc = func.evaluate_simple(&(i?, acc), false)?;
+				acc = func(Either2::A(i?), acc)?;
 			}
 		}
 		Either2::B(str) => {
 			for c in str.to_string().chars().rev() {
-				acc = func.evaluate_simple(&(c, acc), false)?;
+				acc = func(Either2::B(c), acc)?;
 			}
 		}
 	}

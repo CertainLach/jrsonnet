@@ -1,9 +1,9 @@
 use std::{any::Any, num::NonZeroU32};
 
-use jrsonnet_gcmodule::Cc;
+use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_parser::LocExpr;
 
-use crate::{function::FuncVal, Context, Result, Thunk, Val};
+use crate::{function::FuncVal, typed::IntoUntyped, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};
@@ -27,7 +27,7 @@ impl ArrValue {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
 
-	pub fn repeated_single(elem: Val, len: usize) -> Self {
+	pub fn repeated_single<T: IntoUntyped + Trace + Clone>(elem: T, len: usize) -> Self {
 		Self::new(RepeatedSingleArray { elem, len })
 	}
 
@@ -36,13 +36,22 @@ impl ArrValue {
 	}
 
 	#[must_use]
+	fn map_inner<const WITH_INDEX: bool>(self, mapper: FuncVal) -> Self {
+		let len = self.len();
+		match <MappedArray<WITH_INDEX>>::new(self, mapper) {
+			Ok(v) => Self::new(v),
+			Err(e) => Self::repeated_single(<Thunk<Val>>::errored(e), len),
+		}
+	}
+
+	#[must_use]
 	pub fn map(self, mapper: FuncVal) -> Self {
-		Self::new(<MappedArray<false>>::new(self, mapper))
+		self.map_inner::<false>(mapper)
 	}
 
 	#[must_use]
 	pub fn map_with_index(self, mapper: FuncVal) -> Self {
-		Self::new(<MappedArray<true>>::new(self, mapper))
+		self.map_inner::<true>(mapper)
 	}
 
 	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {

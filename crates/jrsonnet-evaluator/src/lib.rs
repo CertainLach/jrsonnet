@@ -64,6 +64,10 @@ pub mod typed_macro_prelude {
 		SuperDepth, Val, ValueProcess, Visibility,
 	};
 }
+#[doc(hidden)]
+pub mod builtin_macro_prelude {
+	pub use super::ctx::BindingValue;
+}
 
 jrsonnet_gcmodule::cc_dyn!(CcUnbound, Unbound<Bound = Val>);
 impl Clone for CcUnbound {

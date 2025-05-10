@@ -6,9 +6,14 @@ use jrsonnet_parser::{LocExpr, Visibility};
 
 use super::ArrValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, strings,
-	typed::IntoUntyped, Context, EnumFieldsHandler, Error, FieldIndex, ObjValue, ObjectLayer,
-	Result, SuperDepth, Thunk, Val, ValueProcess,
+	error::ErrorKind::InfiniteRecursionDetected,
+	evaluate,
+	function::{CallLocation, FuncVal, PreparedFuncVal},
+	strings,
+	typed::IntoUntyped,
+	val::NumValue,
+	BindingValue, Context, EnumFieldsHandler, Error, FieldIndex, ObjValue, ObjectLayer, Result,
+	SuperDepth, Thunk, Val, ValueProcess,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -405,22 +410,34 @@ impl ArrayLike for ReverseArray {
 pub struct MappedArray<const WITH_INDEX: bool> {
 	inner: ArrValue,
 	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
-	mapper: FuncVal,
+	mapper: PreparedFuncVal,
 }
 impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
-	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
+	pub fn new(inner: ArrValue, mapper: FuncVal) -> Result<Self> {
 		let len = inner.len();
-		Self {
+		let mapper = PreparedFuncVal::new(mapper, if WITH_INDEX { 2 } else { 1 }, &[])?;
+		Ok(Self {
 			inner,
 			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting(()); len])),
 			mapper,
-		}
+		})
 	}
 	fn evaluate(&self, index: usize, value: Val) -> Result<Val> {
+		let loc = CallLocation::native();
+		let value = BindingValue::Value(value);
 		if WITH_INDEX {
-			self.mapper.evaluate_simple(&(index, value), false)
+			self.mapper.call(
+				loc,
+				&[
+					BindingValue::Value(Val::Num(
+						NumValue::new(index as f64).expect("index can't be that large"),
+					)),
+					value,
+				],
+				&[],
+			)
 		} else {
-			self.mapper.evaluate_simple(&(value,), false)
+			self.mapper.call(loc, &[value], &[])
 		}
 	}
 }
@@ -488,11 +505,17 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 }
 
 #[derive(Trace, Debug)]
-pub struct RepeatedSingleArray {
-	pub elem: Val,
+pub struct RepeatedSingleArray<T>
+where
+	T: IntoUntyped + Trace,
+{
+	pub elem: T,
 	pub len: usize,
 }
-impl ArrayLike for RepeatedSingleArray {
+impl<T> ArrayLike for RepeatedSingleArray<T>
+where
+	T: IntoUntyped + Trace + Clone,
+{
 	fn len(&self) -> usize {
 		self.len
 	}
@@ -501,25 +524,25 @@ impl ArrayLike for RepeatedSingleArray {
 		if index >= self.len {
 			return Ok(None);
 		}
-		Ok(Some(self.elem.clone()))
+		Some(T::into_untyped(self.elem.clone())).transpose()
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		if index >= self.len {
 			return None;
 		}
-		Some(Thunk::evaluated(self.elem.clone()))
+		Some(T::into_lazy_untyped(self.elem.clone()))
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
 		if index >= self.len {
 			return None;
 		}
-		Some(self.elem.clone())
+		T::into_untyped_cheap(self.elem.clone())
 	}
 
 	fn is_cheap(&self) -> bool {
-		true
+		T::provides_cheap()
 	}
 }
 

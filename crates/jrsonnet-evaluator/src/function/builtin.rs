@@ -1,13 +1,13 @@
-use std::{any::Any, rc::Rc};
+use std::{any::Any, fmt::Display, rc::Rc};
 
 use jrsonnet_gcmodule::{Trace, TraceBox};
 use jrsonnet_interner::IStr;
 
-use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{Context, Result, Val};
+use super::CallLocation;
+use crate::{BindingValue, Result, Val};
 
-#[derive(Clone, Trace)]
-pub struct ParamName(Option<IStr>);
+#[derive(Clone, Trace, Debug)]
+pub struct ParamName(pub Option<IStr>);
 impl ParamName {
 	pub const ANONYMOUS: Self = Self(None);
 	pub fn new(name: impl Into<IStr>) -> Self {
@@ -20,6 +20,17 @@ impl ParamName {
 		self.0.is_none()
 	}
 }
+
+impl Display for ParamName {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		if let Some(name) = self.as_str() {
+			name.fmt(f)
+		} else {
+			"<anonymous>".fmt(f)
+		}
+	}
+}
+
 impl PartialEq<IStr> for ParamName {
 	fn eq(&self, other: &IStr) -> bool {
 		self.0.as_ref().is_some_and(|s| s == other)
@@ -90,7 +101,7 @@ pub trait Builtin: Trace + Any {
 	/// Parameter names for named calls
 	fn params(&self) -> Rc<[Param]>;
 	/// Call the builtin
-	fn call(&self, ctx: &Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(&self, loc: CallLocation<'_>, args: &[Option<BindingValue>]) -> Result<Val>;
 }
 
 #[allow(clippy::module_name_repetitions)]
@@ -135,10 +146,10 @@ impl Builtin for NativeCallback {
 		self.params.clone()
 	}
 
-	fn call(&self, ctx: &Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
-		let args = parse_builtin_call(ctx, &self.params, args, true)?;
+	fn call(&self, _loc: CallLocation<'_>, args: &[Option<BindingValue>]) -> Result<Val> {
 		let args = args
 			.into_iter()
+			.cloned()
 			.map(|a| a.expect("legacy natives have no default params"))
 			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;

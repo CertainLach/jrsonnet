@@ -4,14 +4,9 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
 
 use crate::{
-	evaluate,
-	gc::GcHashMap,
-	typed::{IntoUntyped, Typed},
-	with_state, BindingValue, Context, Result, Thunk, Val,
+	evaluate, gc::GcHashMap, typed::IntoUntyped, with_state, BindingValue, Context, Result, Thunk,
+	Val,
 };
-
-/// Marker for arguments, which can be evaluated with context set to None
-pub trait OptionalContext {}
 
 pub trait ArgLike {
 	fn evaluate_arg(&self, ctx: &Context, tailstrict: bool) -> Result<BindingValue>;
@@ -41,7 +36,6 @@ where
 		Ok(BindingValue::from(val))
 	}
 }
-impl<T> OptionalContext for T where T: Typed + Clone {}
 
 #[derive(Clone, Trace)]
 pub enum TlaArg {
@@ -253,7 +247,6 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 		self.is_empty()
 	}
 }
-impl<V, S> OptionalContext for HashMap<IStr, V, S> where V: ArgLike + OptionalContext {}
 
 impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
 	fn unnamed_len(&self) -> usize {
@@ -323,7 +316,6 @@ macro_rules! impl_args_like {
 				false
 			}
 		}
-		impl<$($gen: ArgLike,)*> OptionalContext for ($($gen,)*) where $($gen: OptionalContext),* {}
 	};
 	($count:expr; $($cur:ident)* @ $c:ident $($rest:ident)*) => {
 		impl_args_like!($count; $($cur)*);
@@ -366,4 +358,3 @@ impl ArgsLike for () {
 		true
 	}
 }
-impl OptionalContext for () {}

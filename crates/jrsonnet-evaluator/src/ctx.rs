@@ -4,7 +4,9 @@ use educe::Educe;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 
-use crate::{bail, error::ErrorKind::*, ObjValue, Pending, Result, SupThis, Thunk, Val};
+use crate::{
+	bail, error::ErrorKind::*, typed::IntoUntyped, ObjValue, Pending, Result, SupThis, Thunk, Val,
+};
 
 #[derive(Trace, Clone, Educe)]
 #[educe(Debug(name = false))]
@@ -13,6 +15,16 @@ pub enum BindingValue {
 	Value(Val),
 }
 impl BindingValue {
+	pub fn new<T: IntoUntyped>(v: T) -> Self {
+		if T::provides_lazy() {
+			Self::Thunk(T::into_lazy_untyped(v))
+		} else {
+			match T::into_untyped(v) {
+				Ok(v) => Self::Value(v),
+				Err(e) => Self::Thunk(Thunk::errored(e)),
+			}
+		}
+	}
 	pub fn evaluate(&self) -> Result<Val> {
 		match self {
 			Self::Thunk(thunk) => thunk.evaluate(),
@@ -108,6 +120,9 @@ impl BindingsMap {
 	}
 	fn keys(&self) -> impl Iterator<Item = &IStr> {
 		self.data.iter().map(|(k, _)| k)
+	}
+	pub fn len(&self) -> usize {
+		self.data.len()
 	}
 }
 impl IntoIterator for BindingsMap {

@@ -4,7 +4,7 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Trace, Tracer};
 use jrsonnet_interner::IStr;
 
 use crate::source::Source;
@@ -432,5 +432,69 @@ impl Debug for LocExpr {
 		}
 		write!(f, " from {:?}", self.span())?;
 		Ok(())
+	}
+}
+
+pub trait RcVecExt<T> {
+	fn rc_idx(&self, idx: usize) -> RcElem<T>;
+	fn rc_iter(&self) -> impl Iterator<Item = RcElem<T>>;
+}
+impl<T> RcVecExt<T> for Rc<Vec<T>> {
+	fn rc_idx(&self, idx: usize) -> RcElem<T> {
+		RcElem {
+			item: &self[idx],
+			vec: self.clone(),
+		}
+	}
+
+	fn rc_iter(&self) -> impl Iterator<Item = RcElem<T>> {
+		self.iter().map(|i| RcElem {
+			item: i,
+			vec: self.clone(),
+		})
+	}
+}
+
+pub struct RcElem<T> {
+	item: *const T,
+	vec: Rc<Vec<T>>,
+}
+impl<T> Clone for RcElem<T> {
+	fn clone(&self) -> Self {
+		Self {
+			item: self.item,
+			vec: self.vec.clone(),
+		}
+	}
+}
+impl<T> Deref for RcElem<T> {
+	type Target = T;
+
+	fn deref(&self) -> &Self::Target {
+		// Safety: Item ptr is alive as long as vec is alive, and you can't destroy vec while there
+		// are item references alive.
+		unsafe { &*self.item }
+	}
+}
+impl<T> Debug for RcElem<T>
+where
+	T: Debug,
+{
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", &**self)
+	}
+}
+impl<T: Trace> Trace for RcElem<T> {
+	fn trace(&self, tracer: &mut Tracer) {
+		if T::is_type_tracked() {
+			self.vec.trace(tracer)
+		}
+	}
+
+	fn is_type_tracked() -> bool
+	where
+		Self: Sized,
+	{
+		T::is_type_tracked()
 	}
 }
