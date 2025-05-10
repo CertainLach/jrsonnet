@@ -1,6 +1,5 @@
 /// Macros to help deal with Gc
 use std::{
-	borrow::{Borrow, BorrowMut},
 	collections::HashSet,
 	ops::{Deref, DerefMut},
 };
@@ -8,71 +7,6 @@ use std::{
 use hashbrown::HashMap;
 use jrsonnet_gcmodule::{Trace, Tracer};
 use rustc_hash::{FxBuildHasher, FxHashSet};
-
-/// Replacement for box, which assumes that the underlying type is [`Trace`]
-/// Used in places, where `Cc<dyn Trait>` should be used instead, but it can't, because `CoerceUnsiced` is not stable
-#[derive(Debug, Clone)]
-pub struct TraceBox<T: ?Sized>(pub Box<T>);
-#[macro_export]
-macro_rules! tb {
-	($v:expr) => {
-		$crate::gc::TraceBox(Box::new($v))
-	};
-}
-
-impl<T: ?Sized + Trace> Trace for TraceBox<T> {
-	fn trace(&self, tracer: &mut Tracer<'_>) {
-		self.0.trace(tracer);
-	}
-
-	fn is_type_tracked() -> bool {
-		true
-	}
-}
-
-// TODO: Replace with CoerceUnsized
-impl<T: ?Sized> From<Box<T>> for TraceBox<T> {
-	fn from(inner: Box<T>) -> Self {
-		Self(inner)
-	}
-}
-
-impl<T: ?Sized> Deref for TraceBox<T> {
-	type Target = T;
-
-	fn deref(&self) -> &Self::Target {
-		&self.0
-	}
-}
-impl<T: Trace + ?Sized> DerefMut for TraceBox<T> {
-	fn deref_mut(&mut self) -> &mut Self::Target {
-		&mut self.0
-	}
-}
-
-impl<T: ?Sized> Borrow<T> for TraceBox<T> {
-	fn borrow(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: ?Sized> BorrowMut<T> for TraceBox<T> {
-	fn borrow_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
-
-impl<T: ?Sized> AsRef<T> for TraceBox<T> {
-	fn as_ref(&self) -> &T {
-		&self.0
-	}
-}
-
-impl<T: ?Sized> AsMut<T> for TraceBox<T> {
-	fn as_mut(&mut self) -> &mut T {
-		&mut self.0
-	}
-}
 
 #[derive(Clone)]
 #[allow(clippy::module_name_repetitions)]

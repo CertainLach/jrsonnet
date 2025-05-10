@@ -37,14 +37,15 @@ pub use dynamic::*;
 pub use error::{Error, ErrorKind::*, Result, ResultExt};
 pub use evaluate::*;
 use function::CallLocation;
-use gc::{GcHashMap, TraceBox};
+use gc::GcHashMap;
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
-use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, TraceBox};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
+pub use jrsonnet_parser::Visibility;
 use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
 pub use obj::*;
 use stack::check_depth;
@@ -578,24 +579,31 @@ pub struct StateBuilder {
 }
 impl StateBuilder {
 	pub fn import_resolver(&mut self, import_resolver: impl ImportResolver) -> &mut Self {
-		let _ = self.import_resolver.insert(tb!(import_resolver));
+		let _ = self
+			.import_resolver
+			.insert(TraceBox(Box::new(import_resolver)));
 		self
 	}
 	pub fn context_initializer(
 		&mut self,
 		context_initializer: impl ContextInitializer,
 	) -> &mut Self {
-		let _ = self.context_initializer.insert(tb!(context_initializer));
+		let _ = self
+			.context_initializer
+			.insert(TraceBox(Box::new(context_initializer)));
 		self
 	}
 	pub fn build(mut self) -> State {
 		State(Cc::new(EvaluationStateInternals {
 			file_cache: RefCell::new(GcHashMap::new()),
-			context_initializer: self.context_initializer.take().unwrap_or_else(|| tb!(())),
+			context_initializer: self
+				.context_initializer
+				.take()
+				.unwrap_or_else(|| TraceBox(Box::new(()))),
 			import_resolver: self
 				.import_resolver
 				.take()
-				.unwrap_or_else(|| tb!(DummyImportResolver)),
+				.unwrap_or_else(|| TraceBox(Box::new(DummyImportResolver))),
 		}))
 	}
 }

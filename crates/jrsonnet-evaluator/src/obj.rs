@@ -8,7 +8,7 @@ use std::{
 
 use educe::Educe;
 use hashbrown::hash_map::Entry;
-use jrsonnet_gcmodule::{Cc, Trace, Weak};
+use jrsonnet_gcmodule::{Cc, Trace, TraceBox, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::FxHashMap;
@@ -18,10 +18,9 @@ use crate::{
 	bail,
 	error::ErrorKind::*,
 	function::{CallLocation, FuncVal},
-	gc::{GcHashMap, GcHashSet, TraceBox},
+	gc::{GcHashMap, GcHashSet},
 	identity_hash, in_frame,
 	operator::evaluate_add_op,
-	tb,
 	val::{ArrValue, ThunkValue},
 	CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
 };
@@ -186,6 +185,7 @@ pub trait ObjectLayer: Trace + Any + Debug {
 		sup_this: SupThis,
 		do_cache: &mut bool,
 	) -> Result<Option<(Val, ValueProcess)>>;
+
 	// fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<(Val, ValueProcess)>>;
 	fn field_visibility(&self, field: IStr) -> Option<Visibility>;
 
@@ -246,9 +246,7 @@ fn finish_asserting(obj: &ObjValue) {
 
 #[derive(Clone, Trace, Debug, Educe)]
 #[educe(PartialEq, Hash, Eq)]
-pub struct ObjValue(
-	#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))] Cc<Inner>,
-);
+pub struct ObjValue(#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))] Cc<Inner>);
 
 #[derive(Trace, Debug)]
 struct StandaloneSuperCore {
@@ -655,6 +653,22 @@ impl ObjValue {
 			)
 		})
 	}
+	pub fn iter_lazy(
+		&self,
+		#[cfg(feature = "exp-preserve-order")] preserve_order: bool,
+	) -> impl Iterator<Item = (IStr, Thunk<Val>)> + '_ {
+		let fields = self.fields(
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		);
+		fields.into_iter().map(|field| {
+			(
+				field.clone(),
+				self.get_lazy(field)
+					.expect("iterating over keys, field exists"),
+			)
+		})
+	}
 	pub fn get_lazy(&self, key: IStr) -> Option<Thunk<Val>> {
 		#[derive(Trace, Debug)]
 		struct FieldThunk {
@@ -898,7 +912,7 @@ impl ObjValueBuilder {
 	}
 
 	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		self.assertions.push(tb!(assertion));
+		self.assertions.push(TraceBox(Box::new(assertion)));
 		self
 	}
 	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
@@ -996,8 +1010,11 @@ pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
 impl ObjMemberBuilder<ValueBuilder<'_>> {
 	/// Inserts value, replacing if it is already defined
 	pub fn value(self, value: impl Into<Val>) {
-		let (receiver, name, member) =
-			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
+		self.thunk(Thunk::evaluated(value.into()));
+	}
+	/// Inserts value, replacing if it is already defined
+	pub fn thunk(self, value: Thunk<Val>) {
+		let (receiver, name, member) = self.build_member(MaybeUnbound::Bound(value));
 		let entry = receiver.0.map.entry(name);
 		entry.insert(member);
 	}
