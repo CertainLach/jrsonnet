@@ -205,10 +205,11 @@ where
 
 #[allow(
 	clippy::cast_precision_loss,
+	clippy::cast_possible_wrap,
 	reason = "no precision is lost, it is explicitly at border value"
 )]
-pub const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
-pub const MIN_SAFE_INTEGER: f64 = -MAX_SAFE_INTEGER;
+pub const MAX_SAFE_INTEGER: i64 = ((1u64 << (f64::MANTISSA_DIGITS)) - 1) as i64;
+pub const MIN_SAFE_INTEGER: i64 = -MAX_SAFE_INTEGER;
 
 macro_rules! impl_int {
 	($($ty:ty)*) => {$(
@@ -219,21 +220,12 @@ macro_rules! impl_int {
 		impl FromUntyped for $ty {
 			fn from_untyped(value: Val) -> Result<Self> {
 				<Self as Typed>::TYPE.check(&value)?;
-				match value {
-					Val::Num(n) => {
-						let n = n.get();
-						#[allow(clippy::float_cmp)]
-						if n.trunc() != n {
-							bail!(
-								"cannot convert number with fractional part to {}",
-								stringify!($ty)
-							)
-						}
-						#[allow(clippy::cast_sign_loss, reason = "numbers have checked bounds")]
-						Ok(n as Self)
-					}
-					_ => unreachable!(),
-				}
+				let Val::Num(n) = value else {
+					unreachable!();
+				};
+				let n = n.get_safe_int()?;
+				#[allow(clippy::cast_sign_loss, reason = "numbers have checked bounds")]
+				Ok(n as Self)
 			}
 		}
 		impl IntoUntyped for $ty {
@@ -354,7 +346,7 @@ impl FromUntyped for PositiveF64 {
 }
 impl Typed for usize {
 	const TYPE: &'static ComplexValType =
-		&ComplexValType::BoundedNumber(Some(0.0), Some(MAX_SAFE_INTEGER));
+		&ComplexValType::BoundedNumber(Some(0.0), Some(MAX_SAFE_INTEGER as f64));
 }
 impl IntoUntyped for usize {
 	fn into_untyped(value: Self) -> Result<Val> {

@@ -160,32 +160,28 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		(Num(v1), Sub, Num(v2)) => Val::try_num(v1.get() - v2.get())?,
 
-		#[expect(
-			clippy::cast_precision_loss,
-			reason = "behavior is expected to be truncating"
-		)]
-		(Num(v1), BitAnd, Num(v2)) => Val::try_num((v1.get() as i64 & v2.get() as i64) as f64)?,
-		#[expect(clippy::cast_precision_loss)]
-		(Num(v1), BitOr, Num(v2)) => Val::try_num((v1.get() as i64 | v2.get() as i64) as f64)?,
-		#[expect(clippy::cast_precision_loss)]
-		(Num(v1), BitXor, Num(v2)) => Val::try_num((v1.get() as i64 ^ v2.get() as i64) as f64)?,
-		#[expect(clippy::cast_precision_loss)]
-		(Num(v1), Lhs, Num(v2)) => {
-			if v2.get() < 0.0 {
+		(Num(v1), BitAnd, Num(v2)) => Val::try_num(v1.get_safe_int()? & v2.get_safe_int()?)?,
+		(Num(v1), BitOr, Num(v2)) => Val::try_num(v1.get_safe_int()? | v2.get_safe_int()?)?,
+		(Num(v1), BitXor, Num(v2)) => Val::try_num(v1.get_safe_int()? ^ v2.get_safe_int()?)?,
+		#[expect(clippy::cast_sign_loss, reason = "rhs is checked to be non-negative")]
+		(Num(lhs), Lhs, Num(rhs)) => {
+			let lhs = lhs.get_safe_int()?;
+			let mut rhs = rhs.get_safe_int()?;
+			if rhs < 0 {
 				bail!("shift by negative exponent")
 			}
-			#[expect(clippy::cast_sign_loss, reason = "value is checked to be positive")]
-			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shl(exp) as f64)?
+			rhs &= 63;
+			Val::try_num(lhs.wrapping_shl(rhs as u32))?
 		}
-		#[expect(clippy::cast_precision_loss)]
-		(Num(v1), Rhs, Num(v2)) => {
-			if v2.get() < 0.0 {
+		#[expect(clippy::cast_sign_loss, reason = "rhs is checked to be non-negative")]
+		(Num(lhs), Rhs, Num(rhs)) => {
+			let lhs = lhs.get_safe_int()?;
+			let mut rhs = rhs.get_safe_int()?;
+			if rhs < 0 {
 				bail!("shift by negative exponent")
 			}
-			#[expect(clippy::cast_sign_loss, reason = "value is checked to be positive")]
-			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shr(exp) as f64)?
+			rhs &= 63;
+			Val::try_num(lhs.wrapping_shr(rhs as u32))?
 		}
 
 		// Bigint X Bigint

@@ -23,7 +23,7 @@ use crate::{
 	function::FuncVal,
 	gc::GcHashMap,
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::BoundedUsize,
+	typed::{BoundedUsize, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER},
 	ObjValue, ObjectLayer, Result, SupThis, Unbound, WeakSupThis,
 };
 
@@ -140,7 +140,7 @@ where
 			ThunkValueCachedInner::Pending => return Err(InfiniteRecursionDetected.into()),
 			ThunkValueCachedInner::Waiting(..) => (),
 			ThunkValueCachedInner::Errored(error) => return Err(error.clone()),
-		};
+		}
 		let ThunkValueCachedInner::Waiting(value) =
 			replace(&mut *self.0.borrow_mut(), ThunkValueCachedInner::Pending)
 		else {
@@ -463,6 +463,53 @@ impl NumValue {
 		}
 		Some(Self(v))
 	}
+	/// Creates a [`NumValue`], if i64 can be represented as f64 lossless.
+	#[allow(
+		clippy::cast_precision_loss,
+		reason = "no loss happens here, range is checked"
+	)]
+	#[inline]
+	pub fn new_safe_int(v: i64) -> Result<Self, ConvertNumValueError> {
+		if v < MIN_SAFE_INTEGER {
+			return Err(ConvertNumValueError::Underflow);
+		}
+		if v > MAX_SAFE_INTEGER {
+			return Err(ConvertNumValueError::Overflow);
+		}
+		Ok(Self(v as f64))
+	}
+	/// Creates a [`NumValue`], if i64 can be represented as f64 lossless.
+	#[allow(
+		clippy::cast_precision_loss,
+		reason = "no loss happens here, range is checked"
+	)]
+	#[inline]
+	pub fn new_safe_uint(v: u64) -> Result<Self, ConvertNumValueError> {
+		if v > MAX_SAFE_INTEGER as u64 {
+			return Err(ConvertNumValueError::Overflow);
+		}
+		Ok(Self(v as f64))
+	}
+	#[allow(clippy::float_cmp, reason = "comparing integer with 0.0")]
+	#[allow(
+		clippy::cast_precision_loss,
+		reason = "{MIN,MAX}_SAFE_INTEGER is in f64 range"
+	)]
+	#[inline]
+	pub fn get_safe_int(&self) -> Result<i64, ConvertNumValueError> {
+		let value = self.get();
+		if value.trunc() != value {
+			return Err(ConvertNumValueError::FractionalInt);
+		}
+		if value < MIN_SAFE_INTEGER as f64 {
+			return Err(ConvertNumValueError::Underflow);
+		}
+		if value > MAX_SAFE_INTEGER as f64 {
+			return Err(ConvertNumValueError::Overflow);
+		}
+		Ok(value as i64)
+	}
+
 	#[inline]
 	pub const fn get(&self) -> f64 {
 		self.0
@@ -539,6 +586,8 @@ pub enum ConvertNumValueError {
 	Underflow,
 	#[error("non-finite")]
 	NonFinite,
+	#[error("number with fractional part can't be converted to integer")]
+	FractionalInt,
 }
 impl From<ConvertNumValueError> for Error {
 	fn from(e: ConvertNumValueError) -> Self {
@@ -546,27 +595,30 @@ impl From<ConvertNumValueError> for Error {
 	}
 }
 
-macro_rules! impl_try_num {
+macro_rules! impl_try_signed {
 	($($ty:ty),+) => {$(
 		impl TryFrom<$ty> for NumValue {
 			type Error = ConvertNumValueError;
 			#[inline]
 			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
-				use crate::typed::conversions::{MIN_SAFE_INTEGER, MAX_SAFE_INTEGER};
-				#[allow(clippy::cast_precision_loss, reason = "value is further limited to u32 later")]
-				let value = value as f64;
-				if value < MIN_SAFE_INTEGER {
-					return Err(ConvertNumValueError::Underflow)
-				} else if value > MAX_SAFE_INTEGER {
-					return Err(ConvertNumValueError::Overflow)
-				}
-				// Number is finite.
-				Ok(Self(value))
+				Self::new_safe_int(value as i64)
 			}
 		}
 	)+};
 }
-impl_try_num!(usize, isize, i64, u64);
+macro_rules! impl_try_unsigned {
+	($($ty:ty),+) => {$(
+		impl TryFrom<$ty> for NumValue {
+			type Error = ConvertNumValueError;
+			#[inline]
+			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
+				Self::new_safe_uint(value as u64)
+			}
+		}
+	)+};
+}
+impl_try_signed!(isize, i64);
+impl_try_unsigned!(usize, u64);
 
 impl TryFrom<f64> for NumValue {
 	type Error = ConvertNumValueError;
