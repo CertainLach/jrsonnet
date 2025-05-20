@@ -11,6 +11,9 @@ workspace = true
 jrsonnet-evaluator.workspace = true
 jrsonnet-gcmodule.workspace = true
 jrsonnet-stdlib.workspace = true
-serde.workspace = true
 json-structural-diff.workspace = true
+serde.workspace = true
 serde_json.workspace = true
+
+[features]
+nightly = []

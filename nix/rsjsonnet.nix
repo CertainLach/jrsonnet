@@ -2,23 +2,25 @@
   fetchFromGitHub,
   rustPlatform,
   makeWrapper,
-}:
-rustPlatform.buildRustPackage rec {
+}: let
   pname = "rsjsonnet";
-  version = "0.1.1";
+  version = "0.4.0-git";
+in
+  rustPlatform.buildRustPackage {
+    inherit pname version;
 
-  src = fetchFromGitHub {
-    owner = "eduardosm";
-    repo = pname;
-    rev = "v${version}";
-    hash = "sha256-C6hZYGllKrKKMwMwss6PK2UD5Zb7bk2v8DrGpWnwP/A=";
-  };
+    src = fetchFromGitHub {
+      owner = "eduardosm";
+      repo = pname;
+      rev = "deac8457b9d1648b0f0b559b6cf8ce34854927a9";
+      hash = "sha256-fGZZsujTAtKiw9IRFXZpq8QPWr98Q54cCHzXoo33ZAk=";
+    };
 
-  cargoHash = "sha256-TsUN9oUu6S1l9oTaR6nET1ZdRvMrR29bkP3VEDre8aE=";
+    cargoHash = "sha256-m1Jjir1hxEZsowP6qMIzDtJUBnDstFghwzoRHJA8msM=";
 
-  nativeBuildInputs = [makeWrapper];
+    nativeBuildInputs = [makeWrapper];
 
-  postInstall = ''
-    wrapProgram $out/bin/rsjsonnet --add-flags "--max-stack=200000"
-  '';
-}
+    postInstall = ''
+      wrapProgram $out/bin/rsjsonnet --add-flags "--max-stack=200000"
+    '';
+  }

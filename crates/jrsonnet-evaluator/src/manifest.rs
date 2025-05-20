@@ -2,6 +2,7 @@ use std::{borrow::Cow, fmt::Write, ptr};
 
 use crate::{bail, in_description_frame, Result, ResultExt, Val};
 
+#[expect(clippy::module_name_repetitions)]
 pub trait ManifestFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
 	fn manifest(&self, val: Val) -> Result<String> {
@@ -169,12 +170,6 @@ impl Default for JsonFormat<'static> {
 			debug_truncate_strings: None,
 		}
 	}
-}
-
-pub fn manifest_json_ex(val: &Val, options: &JsonFormat<'_>) -> Result<String> {
-	let mut out = String::new();
-	manifest_json_ex_buf(val, &mut out, &mut String::new(), options)?;
-	Ok(out)
 }
 
 #[allow(clippy::too_many_lines)]
@@ -350,7 +345,7 @@ impl ManifestFormat for JsonFormat<'_> {
 pub struct ToStringFormat;
 impl ManifestFormat for ToStringFormat {
 	fn manifest_buf(&self, val: Val, out: &mut String) -> Result<()> {
-		const JSON_TO_STRING: JsonFormat = JsonFormat::std_to_string_helper();
+		const JSON_TO_STRING: JsonFormat<'_> = JsonFormat::std_to_string_helper();
 		if let Some(str) = val.as_str() {
 			out.push_str(&str);
 			return Ok(());

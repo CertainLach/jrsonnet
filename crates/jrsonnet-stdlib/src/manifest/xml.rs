@@ -1,7 +1,7 @@
 use jrsonnet_evaluator::{
 	bail, in_description_frame,
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::{ComplexValType, Either2, Typed, ValType},
+	typed::{ComplexValType, Either2, FromUntyped, Typed, ValType},
 	val::ArrValue,
 	Either, ObjValue, Result, ResultExt, Val,
 };
@@ -22,6 +22,7 @@ impl XmlJsonmlFormat {
 	}
 }
 
+#[derive(Debug)]
 enum JSONMLValue {
 	Tag {
 		tag: String,
@@ -32,11 +33,8 @@ enum JSONMLValue {
 }
 impl Typed for JSONMLValue {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Arr);
-
-	fn into_untyped(_typed: Self) -> Result<Val> {
-		unreachable!("not used, reserved for parseXML?")
-	}
-
+}
+impl FromUntyped for JSONMLValue {
 	fn from_untyped(untyped: Val) -> Result<Self> {
 		let val = <Either![ArrValue, String]>::from_untyped(untyped)
 			.description("parsing JSONML value (an array or string)")?;
@@ -62,10 +60,10 @@ impl Typed for JSONMLValue {
 			if let Val::Obj(attrs) = maybe_attrs {
 				(true, attrs)
 			} else {
-				(false, ObjValue::new_empty())
+				(false, ObjValue::new(()))
 			}
 		} else {
-			(false, ObjValue::new_empty())
+			(false, ObjValue::new(()))
 		};
 		Ok(Self::Tag {
 			tag,
@@ -73,7 +71,7 @@ impl Typed for JSONMLValue {
 			children: in_description_frame(
 				|| "parsing children".to_owned(),
 				|| {
-					Typed::from_untyped(Val::Arr(arr.slice(
+					FromUntyped::from_untyped(Val::Arr(arr.slice(
 						Some(if has_attrs { 2 } else { 1 }),
 						None,
 						None,

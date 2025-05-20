@@ -1,8 +1,6 @@
 use std::{
-	cmp::Ordering,
 	convert::Infallible,
 	fmt::{Debug, Display},
-	path::PathBuf,
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -12,11 +10,11 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{builtin::ParamDefault, CallLocation},
-	stdlib::format::FormatError,
+	function::{CallLocation, ParamDefault, ParamName},
+	stdlib::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
-	ObjValue,
+	ResolvePathOwned,
 };
 
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
@@ -49,21 +47,18 @@ pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 }
 
 fn format_signature(sig: &FunctionSignature) -> String {
+	use std::fmt::Write;
 	let mut out = String::new();
 	out.push_str("\nFunction has the following signature: ");
 	out.push('(');
 	if sig.is_empty() {
-		out.push_str("/*no arguments*/");
+		out.push_str("/*no parameters*/");
 	} else {
 		for (i, (name, default)) in sig.iter().enumerate() {
 			if i != 0 {
 				out.push_str(", ");
 			}
-			if let Some(name) = name {
-				out.push_str(name);
-			} else {
-				out.push_str("<unnamed>");
-			}
+			let _ = write!(out, "{name}");
 			match default {
 				ParamDefault::None => {}
 				ParamDefault::Exists => out.push_str(" = <default>"),
@@ -86,31 +81,13 @@ const fn format_empty_str(str: &str) -> &str {
 	}
 }
 
-pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
-	let mut heap = Vec::new();
-	for field in v.fields_ex(
-		true,
-		#[cfg(feature = "exp-preserve-order")]
-		false,
-	) {
-		let conf = strsim::jaro_winkler(field.as_str(), key.as_str());
-		if conf < 0.8 {
-			continue;
-		}
-		assert!(field.as_str() != key.as_str(), "looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
-
-		heap.push((conf, field));
-	}
-	heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
-	heap.into_iter().map(|v| v.1).collect()
-}
-
-type FunctionSignature = Vec<(Option<IStr>, ParamDefault)>;
+type FunctionSignature = Vec<(ParamName, ParamDefault)>;
 
 /// Possible errors
 #[allow(missing_docs)]
 #[derive(Error, Debug, Clone, Trace)]
 #[non_exhaustive]
+#[expect(clippy::module_name_repetitions)]
 pub enum ErrorKind {
 	#[error("intrinsic not found: {0}")]
 	IntrinsicNotFound(IStr),
@@ -120,30 +97,26 @@ pub enum ErrorKind {
 	#[error("binary operation {1} {0} {2} is not implemented")]
 	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
 
-	#[error("no top level object in this context")]
-	NoTopLevelObjectFound,
-	#[error("self is only usable inside objects")]
-	CantUseSelfOutsideOfObject,
+	#[error("self/super/$ are only usable inside objects")]
+	CantUseSelfSupOutsideOfObject,
 	#[error("no super found")]
 	NoSuperFound,
 
 	#[error("for loop can only iterate over arrays")]
 	InComprehensionCanOnlyIterateOverArray,
 
-	#[error("array out of bounds: {0} is not within [0,{1})")]
-	ArrayBoundsError(isize, usize),
-	#[error("string out of bounds: {0} is not within [0,{1})")]
-	StringBoundsError(usize, usize),
+	#[error("index is out of bounds: {0} is not within [0,{1})")]
+	IndexBoundsError(usize, usize),
 
 	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
-	#[error("local is not defined: {0}{}", format_found(.1, "local"))]
-	VariableIsNotDefined(IStr, Vec<IStr>),
+	#[error("local is not defined: {0}{found}", found = format_found(.1, "local"))]
+	LocalIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
-	DuplicateLocalVar(IStr),
+	DuplicateLocal(IStr),
 
-	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
+	#[error("type mismatch: expected {expected}, got {2} {0}", expected = .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
@@ -154,10 +127,10 @@ pub enum ErrorKind {
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}{}", format_signature(.1))]
+	#[error("too many args, function has {0}{signature}", signature = format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
-	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
-	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
+	#[error("function argument is not passed: {0}{signature}", signature = format_signature(.1))]
+	FunctionParameterNotBoundInCall(ParamName, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),
@@ -180,9 +153,7 @@ pub enum ErrorKind {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(SourcePath, String),
-	#[error("can't resolve absolute {0}")]
-	AbsoluteImportFileNotFound(PathBuf),
+	ImportFileNotFound(SourcePath, ResolvePathOwned),
 	#[error("resolved file not found: {:?}", .0)]
 	ResolvedFileNotFound(SourcePath),
 	#[error("can't import {0}: is a directory")]
@@ -192,9 +163,7 @@ pub enum ErrorKind {
 	#[error("import io error: {0}")]
 	ImportIo(String),
 	#[error("tried to import {1} from {0}, but imports are not supported")]
-	ImportNotSupported(SourcePath, String),
-	#[error("tried to import {0}, but absolute imports are not supported")]
-	AbsoluteImportNotSupported(PathBuf),
+	ImportNotSupported(SourcePath, ResolvePathOwned),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(
@@ -223,6 +192,8 @@ pub enum ErrorKind {
 	InfiniteRecursionDetected,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
+	#[error("tried to index by negative value")]
+	NegativeIndex,
 	#[error("attempted to divide by zero")]
 	DivisionByZero,
 
@@ -328,6 +299,7 @@ impl Debug for Error {
 }
 impl std::error::Error for Error {}
 
+#[expect(clippy::module_name_repetitions)]
 pub trait ErrorSource {
 	fn to_location(self) -> Option<Span>;
 }
@@ -409,6 +381,7 @@ macro_rules! bail {
 }
 
 #[macro_export]
+#[expect(clippy::module_name_repetitions)]
 macro_rules! runtime_error {
 	($l:literal$(, $($tt:tt)*)?) => {
 		$crate::error::Error::from($crate::error::ErrorKind::RuntimeError($crate::jrsonnet_macros::format_istr!($l$(, $($tt)*)?)))

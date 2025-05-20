@@ -22,32 +22,32 @@ use std::{
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	function::TlaArg,
-	gc::{GcHashMap, TraceBox},
+	gc::GcHashMap,
 	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
 	stack::set_stack_depth_limit,
-	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, IStr, ImportResolver, Result, State, Val,
+	AsPathLike, FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Trace, TraceBox};
 use jrsonnet_parser::SourcePath;
 use jrsonnet_stdlib::ContextInitializer;
 
 /// WASM stub
 #[cfg(target_arch = "wasm32")]
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn _start() {}
 
 /// Return the version string of the Jsonnet interpreter.
 /// Conforms to [semantic versioning](http://semver.org/).
+///
 /// If this does not match `LIB_JSONNET_VERSION`
 /// then there is a mismatch between header and compiled library.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.20.0\0"
 }
 
-unsafe fn parse_path(input: &CStr) -> Cow<Path> {
+unsafe fn parse_path(input: &CStr) -> Cow<'_, Path> {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
@@ -61,18 +61,18 @@ unsafe fn parse_path(input: &CStr) -> Cow<Path> {
 	}
 }
 
-unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
+unsafe fn unparse_path(input: &Path) -> CString {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
 		let str = CString::new(input.as_os_str().as_bytes()).expect("input has zero byte in it");
-		Cow::Owned(str)
+		str
 	}
 	#[cfg(not(target_family = "unix"))]
 	{
 		let str = input.as_os_str().to_str().expect("bad utf-8");
 		let cstr = CString::new(str).expect("input has NUL inside");
-		Cow::Owned(cstr)
+		cstr
 	}
 }
 
@@ -84,32 +84,21 @@ struct VMImportResolver {
 impl VMImportResolver {
 	fn new(value: impl ImportResolver) -> Self {
 		Self {
-			inner: RefCell::new(tb!(value)),
+			inner: RefCell::new(TraceBox(Box::new(value))),
 		}
 	}
 }
 impl ImportResolver for VMImportResolver {
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
-		self.inner.borrow().load_file_contents(resolved)
+		self.inner.borrow().as_ref().load_file_contents(resolved)
 	}
 
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		self.inner.borrow().resolve_from(from, path)
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.inner.borrow().as_ref().resolve_from(from, path)
 	}
 
-	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
-		self.inner.borrow().resolve_from_default(path)
-	}
-
-	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		self.inner.borrow().resolve(path)
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
+	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.inner.borrow().as_ref().resolve_from_default(path)
 	}
 }
 
@@ -121,24 +110,20 @@ pub struct VM {
 }
 impl VM {
 	fn replace_import_resolver(&self, resolver: impl ImportResolver) {
-		*self
-			.state
-			.import_resolver()
-			.as_any()
+		*(self.state.import_resolver() as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
 			.expect("valid resolver ty")
 			.inner
-			.borrow_mut() = tb!(resolver);
+			.borrow_mut() = TraceBox(Box::new(resolver));
 	}
 	fn add_jpath(&self, path: PathBuf) {
-		self.state
-			.import_resolver()
-			.as_any()
+		let vm_import_resolver = (self.state.import_resolver() as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
-			.expect("valid resolver ty")
-			.inner
-			.borrow_mut()
-			.as_any_mut()
+			.expect("valid resolver ty");
+
+		let mut inner_mut = vm_import_resolver.inner.borrow_mut();
+
+		(&mut *inner_mut as &mut dyn Any)
 			.downcast_mut::<FileImportResolver>()
 			.expect("jpaths are not compatible with callback imports!")
 			.add_jpath(path);
@@ -146,7 +131,7 @@ impl VM {
 }
 
 /// Creates a new Jsonnet virtual machine.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::box_default)]
 pub extern "C" fn jsonnet_make() -> *mut VM {
 	let mut state = State::builder();
@@ -163,14 +148,14 @@ pub extern "C" fn jsonnet_make() -> *mut VM {
 }
 
 /// Complement of [`jsonnet_vm_make`].
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::boxed_local)]
 pub extern "C" fn jsonnet_destroy(vm: Box<VM>) {
 	drop(vm);
 }
 
 /// Set the maximum stack depth.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_max_stack(_vm: &VM, v: c_uint) {
 	set_stack_depth_limit(v as usize);
 }
@@ -178,17 +163,17 @@ pub extern "C" fn jsonnet_max_stack(_vm: &VM, v: c_uint) {
 /// Set the number of objects required before a garbage collection cycle is allowed.
 ///
 /// No-op for now
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_gc_min_objects(_vm: &VM, _v: c_uint) {}
 
 /// Run the garbage collector after this amount of growth in the number of objects
 ///
 /// No-op for now
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_gc_growth_trigger(_vm: &VM, _v: c_double) {}
 
 /// Expect a string as output and don't JSON encode it.
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_string_output(vm: &mut VM, v: c_int) {
 	vm.manifest_format = match v {
 		0 => Box::new(JsonFormat::default()),
@@ -205,7 +190,7 @@ pub extern "C" fn jsonnet_string_output(vm: &mut VM, v: c_int) {
 /// `buf` should be either previosly allocated by this library, or NULL
 ///
 /// This function is most definitely broken, but it works somehow, see TODO inside
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_realloc(_vm: &VM, buf: *mut u8, sz: usize) -> *mut u8 {
 	if buf.is_null() {
 		if sz == 0 {
@@ -230,16 +215,16 @@ pub unsafe extern "C" fn jsonnet_realloc(_vm: &VM, buf: *mut u8, sz: usize) -> *
 /// Clean up a JSON subtree.
 ///
 /// This is useful if you want to abort with an error mid-way through building a complex value.
-#[no_mangle]
+#[unsafe(no_mangle)]
 #[allow(clippy::boxed_local)]
 pub extern "C" fn jsonnet_json_destroy(_vm: &VM, v: Box<Val>) {
 	drop(v);
 }
 
 /// Set the number of lines of stack trace to display (0 for all of them).
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub extern "C" fn jsonnet_max_trace(vm: &mut VM, v: c_uint) {
-	if let Some(format) = vm.trace_format.as_any_mut().downcast_mut::<CompactFormat>() {
+	if let Some(format) = (&mut *vm.trace_format as &mut dyn Any).downcast_mut::<CompactFormat>() {
 		format.max_trace = v as usize;
 	} else {
 		panic!("max_trace is not supported by current tracing format")
@@ -253,7 +238,7 @@ pub extern "C" fn jsonnet_max_trace(vm: &mut VM, v: c_uint) {
 /// # Safety
 ///
 /// `filename` should be a NUL-terminated string
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_file(
 	vm: &VM,
 	filename: *const c_char,
@@ -263,7 +248,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val.manifest(&vm.manifest_format))
 	{
 		Ok(v) => {
@@ -286,7 +271,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file(
 /// # Safety
 ///
 /// `filename`, `snippet` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	vm: &VM,
 	filename: *const c_char,
@@ -298,7 +283,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val.manifest(&vm.manifest_format))
 	{
 		Ok(v) => {
@@ -346,7 +331,7 @@ fn multi_to_raw(multi: Vec<(IStr, IStr)>) -> *const c_char {
 }
 
 /// # Safety
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 	vm: &VM,
 	filename: *const c_char,
@@ -356,7 +341,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_multi(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -373,7 +358,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_multi(
 }
 
 /// # Safety
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	vm: &VM,
 	filename: *const c_char,
@@ -385,7 +370,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_multi(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_multi(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -428,7 +413,7 @@ fn stream_to_raw(multi: Vec<IStr>) -> *const c_char {
 }
 
 /// # Safety
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 	vm: &VM,
 	filename: *const c_char,
@@ -438,7 +423,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 	match vm
 		.state
 		.import(filename)
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_stream(val, &vm.manifest_format))
 	{
 		Ok(v) => {
@@ -455,7 +440,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_file_stream(
 }
 
 /// # Safety
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 	vm: &VM,
 	filename: *const c_char,
@@ -467,7 +452,7 @@ pub unsafe extern "C" fn jsonnet_evaluate_snippet_stream(
 	match vm
 		.state
 		.evaluate_snippet(filename.to_str().unwrap(), snippet.to_str().unwrap())
-		.and_then(|val| apply_tla(vm.state.clone(), &vm.tla_args, val))
+		.and_then(|val| apply_tla(&vm.tla_args, val))
 		.and_then(|val| val_to_stream(val, &vm.manifest_format))
 	{
 		Ok(v) => {

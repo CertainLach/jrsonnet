@@ -2,9 +2,10 @@ use std::collections::BTreeMap;
 
 use jrsonnet_evaluator::{
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::Typed,
+	typed::{FromUntyped, Typed},
 	ObjValue, Result, ResultExt, Val,
 };
+use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::IStr;
 
 pub struct IniFormat {
@@ -82,7 +83,7 @@ fn manifest_ini_body(
 	Ok(())
 }
 
-#[derive(Typed)]
+#[derive(Typed, FromUntyped, Trace, Debug)]
 struct IniObj {
 	main: Option<ObjValue>,
 	// TODO: Preserve section order?

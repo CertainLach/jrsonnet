@@ -153,3 +153,28 @@ pub fn builtin_is_integer(x: f64) -> bool {
 pub fn builtin_is_decimal(x: f64) -> bool {
 	builtin_round(x) != x
 }
+
+#[builtin]
+pub fn builtin_log2(x: f64) -> f64 {
+	x.log2()
+}
+
+#[builtin]
+pub fn builtin_log10(x: f64) -> f64 {
+	x.log10()
+}
+
+#[builtin]
+pub fn builtin_deg2rad(x: f64) -> f64 {
+	x.to_radians()
+}
+
+#[builtin]
+pub fn builtin_rad2deg(x: f64) -> f64 {
+	x.to_degrees()
+}
+
+#[builtin]
+pub fn builtin_hypot(a: f64, b: f64) -> f64 {
+	a.hypot(b)
+}

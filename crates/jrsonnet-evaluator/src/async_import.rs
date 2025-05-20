@@ -236,8 +236,6 @@ pub trait AsyncImportResolver {
 	) -> impl Future<Output = Result<SourcePath, Self::Error>> {
 		async { self.resolve_from(&SourcePath::default(), path).await }
 	}
-	/// Resolves absolute path, doesn't supports jpath and other fancy things
-	fn resolve(&self, path: &Path) -> impl Future<Output = Result<SourcePath, Self::Error>>;
 
 	/// Load resolved file
 	/// This should only be called with value returned
@@ -271,16 +269,6 @@ impl ImportResolver for ResolvedImportResolver {
 
 	fn resolve_from_default(&self, path: &str) -> crate::Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
-	}
-
-	fn resolve(&self, path: &Path) -> crate::Result<SourcePath> {
-		bail!(crate::error::ErrorKind::AbsoluteImportNotSupported(
-			path.to_owned()
-		))
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 

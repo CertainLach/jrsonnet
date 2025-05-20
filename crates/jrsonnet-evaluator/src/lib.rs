@@ -16,7 +16,6 @@ pub mod gc;
 mod import;
 mod integrations;
 pub mod manifest;
-mod map;
 mod obj;
 pub mod stack;
 pub mod stdlib;
@@ -28,8 +27,9 @@ pub mod val;
 use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
+	clone::Clone,
 	fmt::{self, Debug},
-	path::Path,
+	marker::PhantomData,
 };
 
 pub use ctx::*;
@@ -37,19 +37,44 @@ pub use dynamic::*;
 pub use error::{Error, ErrorKind::*, Result, ResultExt};
 pub use evaluate::*;
 use function::CallLocation;
-use gc::{GcHashMap, TraceBox};
+use gc::GcHashMap;
 use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, TraceBox};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
+pub use jrsonnet_parser::Visibility;
 use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
 pub use obj::*;
 use stack::check_depth;
 pub use tla::apply_tla;
 pub use val::{Thunk, Val};
+
+#[doc(hidden)]
+pub mod typed_macro_prelude {
+	pub use super::{
+		error::{ErrorKind, Result as JrResult},
+		strings,
+		typed::{
+			CheckType, ComplexValType, FromUntypedObj, IntoUntypedObj, IntoVal, Typed, TypedObj,
+		},
+		EnumFieldsHandler, FieldIndex, ObjValue, ObjValueBuilder, ObjectLayer, State, SupThis,
+		SuperDepth, Val, ValueProcess, Visibility,
+	};
+}
+#[doc(hidden)]
+pub mod builtin_macro_prelude {
+	pub use super::ctx::BindingValue;
+}
+
+jrsonnet_gcmodule::cc_dyn!(CcUnbound, Unbound<Bound = Val>);
+impl Clone for CcUnbound {
+	fn clone(&self) -> Self {
+		Self(self.0.clone())
+	}
+}
 
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read
@@ -57,7 +82,7 @@ pub trait Unbound: Trace {
 	/// Type of value after object context is bound
 	type Bound;
 	/// Create value bound to specified object context
-	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
+	fn bind(&self, sup_this: SupThis) -> Result<Self::Bound>;
 }
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
@@ -65,7 +90,7 @@ pub trait Unbound: Trace {
 #[derive(Clone, Trace)]
 pub enum MaybeUnbound {
 	/// Value needs to be bound to `this`/`super`
-	Unbound(Cc<TraceBox<dyn Unbound<Bound = Val>>>),
+	Unbound(CcUnbound),
 	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
@@ -77,17 +102,18 @@ impl Debug for MaybeUnbound {
 }
 impl MaybeUnbound {
 	/// Attach object context to value, if required
-	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+	pub fn evaluate(&self, sup_this: SupThis) -> Result<Val> {
 		match self {
-			Self::Unbound(v) => v.bind(sup, this),
+			Self::Unbound(v) => v.0.bind(sup_this),
 			Self::Bound(v) => Ok(v.evaluate()?),
 		}
 	}
 }
 
+cc_dyn!(CcContextInitializer, ContextInitializer);
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
-pub trait ContextInitializer: Trace {
+pub trait ContextInitializer: Trace + Any {
 	/// For which size the builder should be preallocated
 	fn reserve_vars(&self) -> usize {
 		0
@@ -95,36 +121,30 @@ pub trait ContextInitializer: Trace {
 	/// Initialize default file context.
 	/// Has default implementation, which calls `populate`.
 	/// Prefer to always implement `populate` instead.
-	fn initialize(&self, state: State, for_file: Source) -> Context {
-		let mut builder = ContextBuilder::with_capacity(state, self.reserve_vars());
+	fn initialize(&self, for_file: Source) -> Context {
+		let mut builder = ContextBuilder::with_capacity(self.reserve_vars());
 		self.populate(for_file, &mut builder);
 		builder.build()
 	}
 	/// For composability: extend builder. May panic if this initialization is not supported,
 	/// and the context may only be created via `initialize`.
 	fn populate(&self, for_file: Source, builder: &mut ContextBuilder);
-	/// Allows upcasting from abstract to concrete context initializer.
-	/// jrsonnet by itself doesn't use this method, it is allowed for it to panic.
-	fn as_any(&self) -> &dyn Any;
 }
 
 /// Context initializer which adds nothing.
 impl ContextInitializer for () {
 	fn populate(&self, _for_file: Source, _builder: &mut ContextBuilder) {}
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
 }
 
 impl<T> ContextInitializer for Option<T>
 where
 	T: ContextInitializer,
 {
-	fn initialize(&self, state: State, for_file: Source) -> Context {
+	fn initialize(&self, for_file: Source) -> Context {
 		if let Some(ctx) = self {
-			ctx.initialize(state, for_file)
+			ctx.initialize(for_file)
 		} else {
-			().initialize(state, for_file)
+			().initialize(for_file)
 		}
 	}
 
@@ -132,10 +152,6 @@ where
 		if let Some(ctx) = self {
 			ctx.populate(for_file, builder);
 		}
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
 	}
 }
 
@@ -153,9 +169,6 @@ macro_rules! impl_context_initializer {
 				let ($($gen,)*) = self;
 				$($gen.populate(for_file.clone(), builder);)*
 			}
-			fn as_any(&self) -> &dyn Any {
-				self
-			}
 		}
 	};
 	($($cur:ident)* @ $c:ident $($rest:ident)*) => {
@@ -170,7 +183,7 @@ impl_context_initializer! {
 	A @ B C D E F G
 }
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
@@ -212,22 +225,97 @@ impl FileData {
 	}
 }
 
-#[derive(Trace)]
+#[derive(Trace, educe::Educe)]
+#[educe(Debug)]
 pub struct EvaluationStateInternals {
 	/// Internal state
 	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
+	#[educe(Debug(ignore))]
 	context_initializer: TraceBox<dyn ContextInitializer>,
 	/// Used to resolve file locations/contents
+	#[educe(Debug(ignore))]
 	import_resolver: TraceBox<dyn ImportResolver>,
 }
 
 /// Maintains stack trace and import resolution
-#[derive(Clone, Trace)]
+#[derive(Clone, Trace, Debug)]
 pub struct State(Cc<EvaluationStateInternals>);
 
+thread_local! {
+	pub static DEFAULT_STATE: State = State::builder().build();
+}
+#[cfg(not(feature = "nightly"))]
+thread_local! {
+	pub static STATE: RefCell<Option<State>> = const {RefCell::new(None)};
+}
+#[cfg(feature = "nightly")]
+#[thread_local]
+pub static STATE: RefCell<Option<State>> = RefCell::new(None);
+
+pub struct StateEnterGuard(PhantomData<()>);
+impl Drop for StateEnterGuard {
+	fn drop(&mut self) {
+		#[cfg(not(feature = "nightly"))]
+		{
+			STATE.with_borrow_mut(|v| *v = None);
+		}
+		#[cfg(feature = "nightly")]
+		{
+			*STATE.borrow_mut() = None;
+		}
+	}
+}
+
+pub fn with_state<V>(v: impl FnOnce(State) -> V) -> V {
+	#[cfg(not(feature = "nightly"))]
+	{
+		if let Some(state) = STATE.with_borrow(Clone::clone) {
+			v(state)
+		} else {
+			let s = DEFAULT_STATE.with(Clone::clone);
+			v(s)
+		}
+	}
+	#[cfg(feature = "nightly")]
+	{
+		if let Some(state) = STATE.borrow().clone() {
+			v(state)
+		} else {
+			let s = DEFAULT_STATE.with(Clone::clone);
+			v(s)
+		}
+	}
+}
+
 impl State {
+	pub fn enter(&self) -> StateEnterGuard {
+		self.try_enter().expect("entered state already exists")
+	}
+	pub fn try_enter(&self) -> Option<StateEnterGuard> {
+		#[cfg(not(feature = "nightly"))]
+		{
+			STATE.with_borrow_mut(|v| {
+				if v.is_none() {
+					*v = Some(self.clone());
+					Some(StateEnterGuard(PhantomData))
+				} else {
+					None
+				}
+			})
+		}
+		#[cfg(feature = "nightly")]
+		{
+			let mut s = STATE.borrow_mut();
+			if s.is_none() {
+				*s = Some(self.clone());
+				Some(StateEnterGuard(PhantomData))
+			} else {
+				None
+			}
+		}
+	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
 		let mut file_cache = self.file_cache();
@@ -327,7 +415,7 @@ impl State {
 		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too
 		drop(file_cache);
-		let res = evaluate(self.create_default_context(file_name), &parsed);
+		let res = evaluate(&self.create_default_context(file_name), &parsed);
 
 		let mut file_cache = self.file_cache();
 		let mut file = file_cache.raw_entry_mut().from_key(&path);
@@ -347,18 +435,18 @@ impl State {
 	}
 
 	/// Has same semantics as `import 'path'` called from `from` file
-	pub fn import_from(&self, from: &SourcePath, path: &str) -> Result<Val> {
-		let resolved = self.resolve_from(from, path)?;
+	pub fn import_from(&self, from: &SourcePath, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from(from, &path)?;
 		self.import_resolved(resolved)
 	}
-	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
-		let resolved = self.resolve(path)?;
+	pub fn import(&self, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from_default(&path)?;
 		self.import_resolved(resolved)
 	}
 
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self, source: Source) -> Context {
-		self.context_initializer().initialize(self.clone(), source)
+		self.context_initializer().initialize(source)
 	}
 
 	/// Creates context with all passed global variables, calling custom modifier
@@ -369,7 +457,6 @@ impl State {
 	) -> Context {
 		let default_initializer = self.context_initializer();
 		let mut builder = ContextBuilder::with_capacity(
-			self.clone(),
 			default_initializer.reserve_vars() + context_initializer.reserve_vars(),
 		);
 		default_initializer.populate(source.clone(), &mut builder);
@@ -412,10 +499,6 @@ impl ContextInitializer for InitialUnderscore {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
 		builder.bind("_", self.0.clone());
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
 }
 
 /// Raw methods evaluate passed values but don't perform TLA execution
@@ -434,7 +517,7 @@ impl State {
 			path: source.clone(),
 			error: Box::new(e),
 		})?;
-		evaluate(self.create_default_context(source), &parsed)
+		evaluate(&self.create_default_context(source), &parsed)
 	}
 	/// Parses and evaluates the given snippet with custom context modifier
 	pub fn evaluate_snippet_with(
@@ -456,7 +539,7 @@ impl State {
 			error: Box::new(e),
 		})?;
 		evaluate(
-			self.create_default_context_with(source, context_initializer),
+			&self.create_default_context_with(source, context_initializer),
 			&parsed,
 		)
 	}
@@ -466,14 +549,12 @@ impl State {
 impl State {
 	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		self.import_resolver().resolve_from(from, path.as_ref())
+	pub fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from(from, path)
 	}
-
-	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
-		self.import_resolver().resolve(path.as_ref())
+	pub fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from_default(path)
 	}
 	pub fn import_resolver(&self) -> &dyn ImportResolver {
 		&*self.0.import_resolver
@@ -502,24 +583,105 @@ pub struct StateBuilder {
 }
 impl StateBuilder {
 	pub fn import_resolver(&mut self, import_resolver: impl ImportResolver) -> &mut Self {
-		let _ = self.import_resolver.insert(tb!(import_resolver));
+		let _ = self
+			.import_resolver
+			.insert(TraceBox(Box::new(import_resolver)));
 		self
 	}
 	pub fn context_initializer(
 		&mut self,
 		context_initializer: impl ContextInitializer,
 	) -> &mut Self {
-		let _ = self.context_initializer.insert(tb!(context_initializer));
+		let _ = self
+			.context_initializer
+			.insert(TraceBox(Box::new(context_initializer)));
 		self
 	}
 	pub fn build(mut self) -> State {
 		State(Cc::new(EvaluationStateInternals {
 			file_cache: RefCell::new(GcHashMap::new()),
-			context_initializer: self.context_initializer.take().unwrap_or_else(|| tb!(())),
+			context_initializer: self
+				.context_initializer
+				.take()
+				.unwrap_or_else(|| TraceBox(Box::new(()))),
 			import_resolver: self
 				.import_resolver
 				.take()
-				.unwrap_or_else(|| tb!(DummyImportResolver)),
+				.unwrap_or_else(|| TraceBox(Box::new(DummyImportResolver))),
 		}))
 	}
+}
+
+#[macro_export]
+macro_rules! strings {
+	($($name:ident: $lit:literal),+ $(,)?) => {$(
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> $crate::IStr {
+			thread_local! {
+				static LIT: $crate::IStr = $crate::IStr::from($lit);
+			}
+			LIT.with(Clone::clone)
+		}
+		#[cfg(feature = "nightly")]
+		#[inline]
+		fn $name() -> $crate::IStr {
+			use std::cell::LazyCell;
+			#[thread_local]
+			static LIT: LazyCell<$crate::IStr> = LazyCell::new(|| $crate::IStr::from($lit));
+			LIT.clone()
+		}
+	)+};
+}
+
+#[macro_export]
+macro_rules! stringlist {
+	($name:ident: $($lit:literal),+ $(,)?) => {
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> std::rc::Rc<[IStr]> {
+			thread_local! {
+				static LIT: std::rc::Rc<[IStr]> = std::rc::Rc::from([$(IStr::from($lit)),+]);
+			}
+			LIT.with(Clone::clone)
+		}
+		#[cfg(feature = "nightly")]
+		#[inline]
+		fn $name() -> std::rc::Rc<[IStr]> {
+			use std::cell::LazyCell;
+			#[thread_local]
+			static LIT: LazyCell<std::rc::Rc<[IStr]>> = LazyCell::new(|| std::rc::Rc::from([
+				$(IStr::from($lit)),+
+			]));
+			LIT.clone()
+		}
+	};
+}
+
+/// Crates which use paramlist should have nightly feature
+#[macro_export]
+macro_rules! paramlist {
+	($name:ident: $($lit:expr => $expr:expr);* $(;)?) => {
+		use $crate::function::{Param, ParamName, ParamDefault};
+		#[allow(unreachable_code)]
+		fn compute() -> std::rc::Rc<[Param]> {
+			std::rc::Rc::from([
+				$(Param::new($lit, $expr)),*
+			])
+		}
+		#[inline]
+		#[cfg(feature = "nightly")]
+		fn $name() -> std::rc::Rc<[Param]> {
+			use std::cell::LazyCell;
+			#[thread_local]
+			#[allow(unreachable_code)]
+			static LIT: LazyCell<std::rc::Rc<[Param]>> = LazyCell::new(compute);
+			LIT.clone()
+		}
+		#[cfg(not(feature = "nightly"))]
+		fn $name() -> std::rc::Rc<[Param]> {
+			thread_local! {
+				static LIT: std::rc::Rc<[Param]> = compute();
+			}
+			LIT.with(Clone::clone)
+		}
+	};
 }

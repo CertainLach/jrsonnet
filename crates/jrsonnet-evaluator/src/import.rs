@@ -1,7 +1,8 @@
 use std::{
 	any::Any,
+	borrow::Cow,
 	env::current_dir,
-	fs,
+	fmt, fs,
 	io::{ErrorKind, Read},
 	path::{Path, PathBuf},
 };
@@ -9,56 +10,110 @@ use std::{
 use fs::File;
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::{SourceDirectory, SourceFifo, SourceFile, SourcePath};
+use jrsonnet_parser::{
+	IStr, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
+};
 
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
 };
+#[derive(Clone, Debug, Trace)]
+pub enum ResolvePathOwned {
+	Str(String),
+	Path(PathBuf),
+}
+impl fmt::Display for ResolvePathOwned {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			Self::Str(s) => write!(f, "{s}"),
+			Self::Path(p) => write!(f, "{}", p.display()),
+		}
+	}
+}
+#[derive(Clone, Copy)]
+pub enum ResolvePath<'s> {
+	Str(&'s str),
+	Path(&'s Path),
+}
+impl ResolvePath<'_> {
+	fn to_owned(self) -> ResolvePathOwned {
+		match self {
+			ResolvePath::Str(s) => ResolvePathOwned::Str(s.to_owned()),
+			ResolvePath::Path(p) => ResolvePathOwned::Path(p.to_owned()),
+		}
+	}
+}
+impl AsRef<Path> for ResolvePath<'_> {
+	fn as_ref(&self) -> &Path {
+		match self {
+			ResolvePath::Str(s) => s.as_ref(),
+			ResolvePath::Path(p) => p,
+		}
+	}
+}
+pub trait AsPathLike {
+	fn as_path(&self) -> ResolvePath<'_>;
+}
+impl<T> AsPathLike for &T
+where
+	T: AsPathLike + ?Sized,
+{
+	fn as_path(&self) -> ResolvePath<'_> {
+		(*self).as_path()
+	}
+}
+impl AsPathLike for str {
+	fn as_path(&self) -> ResolvePath<'_> {
+		ResolvePath::Str(self)
+	}
+}
+impl AsPathLike for IStr {
+	fn as_path(&self) -> ResolvePath<'_> {
+		ResolvePath::Str(self)
+	}
+}
+impl AsPathLike for Path {
+	fn as_path(&self) -> ResolvePath<'_> {
+		ResolvePath::Path(self)
+	}
+}
+impl AsPathLike for Cow<'_, Path> {
+	fn as_path(&self) -> ResolvePath<'_> {
+		ResolvePath::Path(self.as_ref())
+	}
+}
 
 /// Implements file resolution logic for `import` and `importStr`
-pub trait ImportResolver: Trace {
+pub trait ImportResolver: Trace + Any {
 	/// Resolves file path, e.g. `(/home/user/manifests, b.libjsonnet)` can correspond
 	/// both to `/home/user/manifests/b.libjsonnet` and to `/home/user/${vendor}/b.libjsonnet`
 	/// where `${vendor}` is a library path.
 	///
 	/// `from` should only be returned from [`ImportResolver::resolve`], or from other defined file, any other value
 	/// may result in panic
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		bail!(ImportNotSupported(from.clone(), path.into()))
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		bail!(ImportNotSupported(from.clone(), path.as_path().to_owned()))
 	}
-	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
+	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
-	}
-	/// Resolves absolute path, doesn't supports jpath and other fancy things
-	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		bail!(AbsoluteImportNotSupported(path.to_owned()))
 	}
 
 	/// Load resolved file
 	/// This should only be called with value returned from [`ImportResolver::resolve_file`]/[`ImportResolver::resolve`],
 	/// this cannot be resolved using associated type, as evaluator uses object instead of generic for [`ImportResolver`]
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>>;
-
-	// For downcasts, will be removed after trait_upcasting_coercion
-	// stabilization.
-	fn as_any(&self) -> &dyn Any;
-	fn as_any_mut(&mut self) -> &mut dyn Any;
 }
 
 /// Dummy resolver, can't resolve/load any file
 #[derive(Trace)]
 pub struct DummyImportResolver;
 impl ImportResolver for DummyImportResolver {
+	fn resolve_from(&self, _from: &SourcePath, _path: &dyn AsPathLike) -> Result<SourcePath> {
+		bail!("dummy import resolver can't resolve any file, is vm state entered?")
+	}
 	fn load_file_contents(&self, _resolved: &SourcePath) -> Result<Vec<u8>> {
 		panic!("dummy resolver can't load any file")
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }
 #[allow(clippy::use_self)]
@@ -117,13 +172,21 @@ fn check_path(path: &Path) -> Result<Option<SourcePath>> {
 }
 
 impl ImportResolver for FileImportResolver {
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		let path = path.as_path();
 		let mut direct = if let Some(f) = from.downcast_ref::<SourceFile>() {
 			let mut o = f.path().to_owned();
 			o.pop();
 			o
 		} else if let Some(d) = from.downcast_ref::<SourceDirectory>() {
 			d.path().to_owned()
+		} else if from.downcast_ref::<SourceDefaultIgnoreJpath>().is_some() {
+			let mut direct = current_dir().map_err(|e| ImportIo(e.to_string()))?;
+			direct.push(path);
+			if let Some(direct) = check_path(&direct)? {
+				return Ok(direct);
+			}
+			bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 		} else if from.is_default() {
 			current_dir().map_err(|e| ImportIo(e.to_string()))?
 		} else {
@@ -143,12 +206,6 @@ impl ImportResolver for FileImportResolver {
 		}
 		bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 	}
-	fn resolve(&self, path: &Path) -> Result<SourcePath> {
-		let Some(source) = check_path(path)? else {
-			bail!(AbsoluteImportFileNotFound(path.to_owned()))
-		};
-		Ok(source)
-	}
 
 	fn load_file_contents(&self, id: &SourcePath) -> Result<Vec<u8>> {
 		let path = if let Some(f) = id.downcast_ref::<SourceFile>() {
@@ -167,15 +224,7 @@ impl ImportResolver for FileImportResolver {
 		Ok(out)
 	}
 
-	fn resolve_from_default(&self, path: &str) -> Result<SourcePath> {
+	fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }

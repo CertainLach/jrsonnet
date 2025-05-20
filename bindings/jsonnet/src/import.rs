@@ -2,9 +2,7 @@
 
 use std::{
 	alloc::Layout,
-	any::Any,
 	cell::RefCell,
-	collections::HashMap,
 	env::current_dir,
 	ffi::{c_void, CStr, CString},
 	os::raw::{c_char, c_int},
@@ -15,7 +13,8 @@ use std::{
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	ImportResolver,
+	gc::GcHashMap,
+	AsPathLike, ImportResolver, ResolvePath,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
@@ -38,10 +37,10 @@ pub struct CallbackImportResolver {
 	cb: JsonnetImportCallback,
 	#[trace(skip)]
 	ctx: *mut c_void,
-	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
+	out: RefCell<GcHashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
 		let base = if let Some(p) = from.downcast_ref::<SourceFile>() {
 			let mut o = p.path().to_owned();
 			o.pop();
@@ -54,7 +53,11 @@ impl ImportResolver for CallbackImportResolver {
 			unreachable!("can't resolve this path");
 		};
 		let base = unsafe { crate::unparse_path(&base) };
-		let rel = CString::new(path).unwrap();
+		let rel = path.as_path();
+		let rel = match rel {
+			ResolvePath::Str(s) => CString::new(s.as_bytes()).unwrap(),
+			ResolvePath::Path(p) => unsafe { crate::unparse_path(p) },
+		};
 		let found_here: *mut c_char = null_mut();
 
 		let mut buf = null_mut();
@@ -89,7 +92,7 @@ impl ImportResolver for CallbackImportResolver {
 			found_here_raw.to_str().unwrap(),
 		)));
 		unsafe {
-			let _ = CString::from_raw(found_here);
+			drop(CString::from_raw(found_here));
 		}
 
 		let mut out = self.out.borrow_mut();
@@ -102,20 +105,12 @@ impl ImportResolver for CallbackImportResolver {
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
-	}
 }
 
 /// # Safety
 ///
 /// It should be safe to call `cb` using valid values with passed `ctx`
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_import_callback(
 	vm: &VM,
 	cb: JsonnetImportCallback,
@@ -124,14 +119,14 @@ pub unsafe extern "C" fn jsonnet_import_callback(
 	vm.replace_import_resolver(CallbackImportResolver {
 		cb,
 		ctx,
-		out: RefCell::new(HashMap::new()),
+		out: RefCell::new(GcHashMap::new()),
 	});
 }
 
 /// # Safety
 ///
 /// `path` should be a NUL-terminated string
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_jpath_add(vm: &VM, path: *const c_char) {
 	let cstr = unsafe { CStr::from_ptr(path) };
 	let path = PathBuf::from(cstr.to_str().unwrap());

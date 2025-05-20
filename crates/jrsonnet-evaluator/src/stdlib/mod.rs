@@ -1,11 +1,12 @@
 // All builtins should return results
 #![allow(clippy::unnecessary_wraps)]
 
+pub use format::FormatError;
 use format::{format_arr, format_obj};
 
 use crate::{function::CallLocation, in_frame, Result, Val};
 
-pub mod format;
+mod format;
 
 pub fn std_format(str: &str, vals: Val) -> Result<String> {
 	in_frame(

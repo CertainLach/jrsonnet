@@ -2,43 +2,42 @@ use std::{cell::Cell, marker::PhantomData};
 
 use crate::error::{Error, ErrorKind};
 
-struct StackLimit {
+struct Limit {
 	max_stack_size: Cell<usize>,
 	current_depth: Cell<usize>,
 }
 
 #[cfg(feature = "nightly")]
-#[allow(clippy::thread_local_initializer_can_be_made_const)]
 #[thread_local]
-static STACK_LIMIT: StackLimit = StackLimit {
+static STACK_LIMIT: Limit = Limit {
 	max_stack_size: Cell::new(200),
 	current_depth: Cell::new(0),
 };
 #[cfg(not(feature = "nightly"))]
 thread_local! {
-	static STACK_LIMIT: StackLimit = const {
-		StackLimit {
+	static STACK_LIMIT: Limit = const {
+		Limit {
 			max_stack_size: Cell::new(200),
 			current_depth: Cell::new(0),
 		}
 	};
 }
 
-pub struct StackOverflowError;
-impl From<StackOverflowError> for ErrorKind {
-	fn from(_: StackOverflowError) -> Self {
+pub struct OverflowError;
+impl From<OverflowError> for ErrorKind {
+	fn from(_: OverflowError) -> Self {
 		Self::StackOverflow
 	}
 }
-impl From<StackOverflowError> for Error {
-	fn from(_: StackOverflowError) -> Self {
+impl From<OverflowError> for Error {
+	fn from(_: OverflowError) -> Self {
 		ErrorKind::StackOverflow.into()
 	}
 }
 
 /// Used to implement stack depth limitation
-pub struct StackDepthGuard(PhantomData<()>);
-impl Drop for StackDepthGuard {
+pub struct DepthGuard(PhantomData<()>);
+impl Drop for DepthGuard {
 	#[cfg(feature = "nightly")]
 	fn drop(&mut self) {
 		STACK_LIMIT
@@ -52,14 +51,14 @@ impl Drop for StackDepthGuard {
 }
 
 // #[cfg(feature = "nightly")]
-pub fn check_depth() -> Result<StackDepthGuard, StackOverflowError> {
-	fn internal(limit: &StackLimit) -> Result<StackDepthGuard, StackOverflowError> {
+pub fn check_depth() -> Result<DepthGuard, OverflowError> {
+	fn internal(limit: &Limit) -> Result<DepthGuard, OverflowError> {
 		let current = limit.current_depth.get();
 		if current < limit.max_stack_size.get() {
 			limit.current_depth.set(current + 1);
-			Ok(StackDepthGuard(PhantomData))
+			Ok(DepthGuard(PhantomData))
 		} else {
-			Err(StackOverflowError)
+			Err(OverflowError)
 		}
 	}
 	#[cfg(feature = "nightly")]
@@ -72,10 +71,10 @@ pub fn check_depth() -> Result<StackDepthGuard, StackOverflowError> {
 	}
 }
 
-pub struct StackDepthLimitOverrideGuard {
+pub struct DepthLimitOverrideGuard {
 	old_limit: usize,
 }
-impl Drop for StackDepthLimitOverrideGuard {
+impl Drop for DepthLimitOverrideGuard {
 	#[cfg(feature = "nightly")]
 	fn drop(&mut self) {
 		STACK_LIMIT.max_stack_size.set(self.old_limit);
@@ -86,13 +85,13 @@ impl Drop for StackDepthLimitOverrideGuard {
 	}
 }
 
-pub fn limit_stack_depth(depth_limit: usize) -> StackDepthLimitOverrideGuard {
-	fn internal(limit: &StackLimit, depth_limit: usize) -> StackDepthLimitOverrideGuard {
+pub fn limit_stack_depth(depth_limit: usize) -> DepthLimitOverrideGuard {
+	fn internal(limit: &Limit, depth_limit: usize) -> DepthLimitOverrideGuard {
 		let old_limit = limit.max_stack_size.get();
 		let current_depth = limit.current_depth.get();
 
 		limit.max_stack_size.set(current_depth + depth_limit);
-		StackDepthLimitOverrideGuard { old_limit }
+		DepthLimitOverrideGuard { old_limit }
 	}
 	#[cfg(feature = "nightly")]
 	{

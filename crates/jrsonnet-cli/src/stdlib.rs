@@ -1,7 +1,7 @@
-use std::{fs::read_to_string, str::FromStr};
+use std::str::FromStr;
 
 use clap::Parser;
-use jrsonnet_evaluator::{trace::PathResolver, Result};
+use jrsonnet_evaluator::{function::TlaArg, trace::PathResolver, Result};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone)]
@@ -23,7 +23,8 @@ pub struct ExtStr {
 /// assert_eq!(ext.name, "name");
 /// assert_eq!(ext.value, "value");
 ///
-/// std::env::set_var("name", "value");
+/// // FIXME: Pass some env vars from the build script, do not use set_var during tests
+/// unsafe { std::env::set_var("name", "value") };
 ///
 /// let ext = ExtStr::from_str("name").unwrap();
 /// assert_eq!(ext.name, "name");
@@ -54,25 +55,20 @@ impl FromStr for ExtStr {
 #[derive(Clone)]
 pub struct ExtFile {
 	pub name: String,
-	pub value: String,
+	pub path: String,
 }
 
 impl FromStr for ExtFile {
 	type Err = String;
 
 	fn from_str(s: &str) -> std::result::Result<Self, Self::Err> {
-		let out: Vec<&str> = s.split('=').collect();
-		if out.len() != 2 {
+		let Some((name, path)) = s.split_once('=') else {
 			return Err("bad ext-file syntax".to_owned());
-		}
-		let file = read_to_string(out[1]);
-		match file {
-			Ok(content) => Ok(Self {
-				name: out[0].into(),
-				value: content,
-			}),
-			Err(e) => Err(format!("{e}")),
-		}
+		};
+		Ok(Self {
+			name: name.into(),
+			path: path.into(),
+		})
 	}
 }
 
@@ -110,16 +106,27 @@ impl StdOpts {
 		}
 		let ctx = ContextInitializer::new(PathResolver::new_cwd_fallback());
 		for ext in &self.ext_str {
-			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
+			ctx.settings_mut().ext_vars.insert(
+				ext.name.as_str().into(),
+				TlaArg::String(ext.value.as_str().into()),
+			);
 		}
 		for ext in &self.ext_str_file {
-			ctx.add_ext_str((&ext.name as &str).into(), (&ext.value as &str).into());
+			ctx.settings_mut().ext_vars.insert(
+				ext.name.as_str().into(),
+				TlaArg::ImportStr(ext.path.clone()),
+			);
 		}
 		for ext in &self.ext_code {
-			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
+			ctx.settings_mut().ext_vars.insert(
+				ext.name.as_str().into(),
+				TlaArg::InlineCode(ext.value.clone()),
+			);
 		}
 		for ext in &self.ext_code_file {
-			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
+			ctx.settings_mut()
+				.ext_vars
+				.insert(ext.name.as_str().into(), TlaArg::Import(ext.path.clone()));
 		}
 		Ok(Some(ctx))
 	}

@@ -1,10 +1,10 @@
 mod common;
 
 use jrsonnet_evaluator::{
-	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
+	function::{builtin, Builtin, CallLocation, FuncVal},
 	parser::Source,
 	trace::PathResolver,
-	typed::Typed,
+	typed::FromUntyped,
 	ContextBuilder, ContextInitializer, FileImportResolver, Result, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Trace;
@@ -18,11 +18,8 @@ fn a() -> u32 {
 #[test]
 fn basic_function() -> Result<()> {
 	let a: a = a {};
-	let v = u32::from_untyped(a.call(
-		ContextBuilder::dangerous_empty_state().build(),
-		CallLocation::native(),
-		&(),
-	)?)?;
+	let v =
+		u32::from_untyped(a.call(&ContextBuilder::new().build(), CallLocation::native(), &())?)?;
 
 	ensure_eq!(v, 1);
 	Ok(())
@@ -40,10 +37,6 @@ impl ContextInitializer for NativeAddContextInitializer {
 			"nativeAdd",
 			Thunk::evaluated(Val::function(native_add::INST)),
 		);
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 
@@ -85,10 +78,6 @@ struct CurryAddContextInitializer;
 impl ContextInitializer for CurryAddContextInitializer {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {
 		builder.bind("curryAdd", Thunk::evaluated(Val::function(curry_add::INST)));
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 

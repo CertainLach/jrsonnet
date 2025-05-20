@@ -1,26 +1,36 @@
-use std::fmt::Debug;
+use std::{fmt::Debug, rc::Rc};
 
-pub use arglike::{ArgLike, ArgsLike, TlaArg};
+use arglike::ArgsLike;
+pub use arglike::TlaArg;
+pub use builtin::{
+	Builtin, CcBuiltin, NativeCallback, NativeCallbackHandler, Param, ParamDefault, ParamName,
+	StaticBuiltin,
+};
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, LocExpr, ParamsDesc, Span};
-
-use self::{
-	arglike::OptionalContext,
-	builtin::{Builtin, BuiltinParam, ParamDefault, ParamName, StaticBuiltin},
-	native::NativeDesc,
-	parse::{parse_default_function_call, parse_function_call},
+pub use native::Desc as NativeDesc;
+use parse::{
+	parse_builtin_call, parse_default_function_call, parse_function_call,
+	parse_prepared_builtin_call, parse_prepared_function_call, prepare_call, PreparedCall,
 };
+
+#[doc(hidden)]
+pub mod macro_internal {
+	pub use super::{arglike::ArgsLike, parse::parse_builtin_call};
+}
+
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context,
-	ContextBuilder, Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, paramlist, typed::NativeFn,
+	BindingValue, Context, Result, Thunk, Val,
 };
 
-pub mod arglike;
-pub mod builtin;
-pub mod native;
-pub mod parse;
+mod arglike;
+mod builtin;
+mod native;
+mod parse;
 
 /// Function callsite location.
 /// Either from other jsonnet code, specified by expression location, or from native (without location).
@@ -40,7 +50,7 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, Trace)]
 pub struct FuncDesc {
 	/// # Example
 	///
@@ -77,8 +87,8 @@ impl FuncDesc {
 	/// Create context, with which body code will run
 	pub fn call_body_context(
 		&self,
-		call_ctx: Context,
-		args: &dyn ArgsLike,
+		call_ctx: &Context,
+		args: &impl ArgsLike,
 		tailstrict: bool,
 	) -> Result<Context> {
 		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
@@ -90,8 +100,8 @@ impl FuncDesc {
 }
 
 /// Represents a Jsonnet function value, including plain functions and user-provided builtins.
-#[allow(clippy::module_name_repetitions)]
-#[derive(Trace, Clone)]
+#[derive(Trace, Clone, Educe)]
+#[educe(Debug)]
 pub enum FuncVal {
 	/// Identity function, kept this way for comparsions.
 	Id,
@@ -100,23 +110,13 @@ pub enum FuncVal {
 	/// Function without arguments works just as a fancy thunk value.
 	Thunk(Thunk<Val>),
 	/// Standard library function.
-	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
+	StaticBuiltin(
+		#[trace(skip)]
+		#[educe(Debug(ignore))]
+		&'static dyn StaticBuiltin,
+	),
 	/// User-provided function.
-	Builtin(Cc<TraceBox<dyn Builtin>>),
-}
-
-impl Debug for FuncVal {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		match self {
-			Self::Id => f.debug_tuple("Id").finish(),
-			Self::Thunk(arg0) => f.debug_tuple("Thunk").field(arg0).finish(),
-			Self::Normal(arg0) => f.debug_tuple("Normal").field(arg0).finish(),
-			Self::StaticBuiltin(arg0) => {
-				f.debug_tuple("StaticBuiltin").field(&arg0.name()).finish()
-			}
-			Self::Builtin(arg0) => f.debug_tuple("Builtin").field(&arg0.name()).finish(),
-		}
-	}
+	Builtin(#[educe(Debug(ignore))] CcBuiltin),
 }
 
 #[allow(clippy::unnecessary_wraps)]
@@ -128,31 +128,32 @@ static ID: &builtin_id = &builtin_id {};
 
 impl FuncVal {
 	pub fn builtin(builtin: impl Builtin) -> Self {
-		Self::Builtin(Cc::new(tb!(builtin)))
+		Self::Builtin(CcBuiltin::make(builtin))
 	}
 	pub fn static_builtin(static_builtin: &'static dyn StaticBuiltin) -> Self {
 		Self::StaticBuiltin(static_builtin)
 	}
 
-	pub fn params(&self) -> Vec<BuiltinParam> {
+	pub fn params(&self) -> Rc<[Param]> {
+		paramlist!(empty_params:);
 		match self {
-			Self::Id => ID.params().to_vec(),
-			Self::StaticBuiltin(i) => i.params().to_vec(),
-			Self::Builtin(i) => i.params().to_vec(),
+			Self::Id => ID.params(),
+			Self::StaticBuiltin(i) => i.params(),
+			Self::Builtin(i) => i.as_ref().params(),
 			Self::Normal(p) => p
 				.params
 				.iter()
 				.map(|p| {
-					BuiltinParam::new(
+					Param::new(
 						p.0.name()
 							.as_ref()
 							.map(IStr::to_string)
-							.map_or(ParamName::ANONYMOUS, ParamName::new_dynamic),
+							.map_or(ParamName::ANONYMOUS, ParamName::new),
 						ParamDefault::exists(p.1.is_some()),
 					)
 				})
 				.collect(),
-			Self::Thunk(_) => vec![],
+			Self::Thunk(_) => empty_params(),
 		}
 	}
 	/// Amount of non-default required arguments
@@ -161,7 +162,12 @@ impl FuncVal {
 			Self::Id => 1,
 			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
 			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
-			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
+			Self::Builtin(i) => i
+				.as_ref()
+				.params()
+				.iter()
+				.filter(|p| !p.has_default())
+				.count(),
 			Self::Thunk(_) => 0,
 		}
 	}
@@ -171,7 +177,7 @@ impl FuncVal {
 			Self::Id => "id".into(),
 			Self::Normal(normal) => normal.name.clone(),
 			Self::StaticBuiltin(builtin) => builtin.name().into(),
-			Self::Builtin(builtin) => builtin.name().into(),
+			Self::Builtin(builtin) => builtin.as_ref().name().into(),
 			Self::Thunk(_) => "thunk".into(),
 		}
 	}
@@ -180,16 +186,19 @@ impl FuncVal {
 	/// If `tailstrict` is specified - then arguments will be evaluated before being passed to function body.
 	pub fn evaluate(
 		&self,
-		call_ctx: Context,
+		call_ctx: &Context,
 		loc: CallLocation<'_>,
-		args: &dyn ArgsLike,
+		args: &impl ArgsLike,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			Self::Id => ID.call(call_ctx, loc, args),
+			Self::Id => {
+				let args = parse_builtin_call(call_ctx, &ID.params(), args, true)?;
+				ID.call(loc, &args)
+			}
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
-				evaluate(body_ctx, &func.body)
+				evaluate(&body_ctx, &func.body)
 			}
 			Self::Thunk(thunk) => {
 				if args.is_empty() {
@@ -197,25 +206,54 @@ impl FuncVal {
 				}
 				thunk.evaluate()
 			}
-			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.call(call_ctx, loc, args),
+			Self::StaticBuiltin(b) => {
+				let args = parse_builtin_call(call_ctx, &b.params(), args, true)?;
+				b.call(loc, &args)
+			}
+			Self::Builtin(b) => {
+				let args = parse_builtin_call(call_ctx, &b.as_ref().params(), args, true)?;
+				b.as_ref().call(loc, &args)
+			}
 		}
 	}
-	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
+	pub(crate) fn evaluate_prepared(
 		&self,
-		args: &A,
-		tailstrict: bool,
+		prepared: &PreparedCall,
+		loc: CallLocation<'_>,
+		unnamed: &[BindingValue],
+		named: &[BindingValue],
+		_tailstrict: bool,
 	) -> Result<Val> {
-		self.evaluate(
-			ContextBuilder::dangerous_empty_state().build(),
-			CallLocation::native(),
-			args,
-			tailstrict,
-		)
+		match self {
+			FuncVal::Id => {
+				let args = parse_prepared_builtin_call(prepared, &ID.params(), unnamed, named)?;
+				ID.call(loc, &args)
+			}
+			FuncVal::Normal(func) => {
+				let body_ctx = parse_prepared_function_call(
+					func.ctx.clone(),
+					prepared,
+					&func.params,
+					unnamed,
+					named,
+				)?;
+				evaluate(&body_ctx, &func.body)
+			}
+			FuncVal::Thunk(t) => t.evaluate(),
+			FuncVal::StaticBuiltin(b) => {
+				let args = parse_prepared_builtin_call(prepared, &b.params(), unnamed, named)?;
+				b.call(loc, &args)
+			}
+			FuncVal::Builtin(b) => {
+				let args =
+					parse_prepared_builtin_call(prepared, &b.as_ref().params(), unnamed, named)?;
+				b.as_ref().call(loc, &args)
+			}
+		}
 	}
 	/// Convert jsonnet function to plain `Fn` value.
-	pub fn into_native<D: NativeDesc>(self) -> D::Value {
-		D::into_native(self)
+	pub fn into_native<D: NativeDesc>(self) -> NativeFn<D> {
+		NativeFn(D::into_native(PreparedFuncVal::new(self, D::NUM_ARGS, &[])))
 	}
 
 	/// Is this function an indentity function.
@@ -269,5 +307,30 @@ where
 impl From<&'static dyn StaticBuiltin> for FuncVal {
 	fn from(value: &'static dyn StaticBuiltin) -> Self {
 		Self::static_builtin(value)
+	}
+}
+
+#[derive(Debug, Trace, Clone)]
+pub struct PreparedFuncVal {
+	fun: FuncVal,
+	prepared: Rc<PreparedCall>,
+}
+
+impl PreparedFuncVal {
+	pub fn new(fun: FuncVal, unnamed: usize, named: &[IStr]) -> Result<Self> {
+		let prepared = prepare_call(&fun.params(), unnamed, named)?;
+		Ok(Self {
+			fun,
+			prepared: Rc::new(prepared),
+		})
+	}
+	pub fn call(
+		&self,
+		loc: CallLocation<'_>,
+		unnamed: &[BindingValue],
+		named: &[BindingValue],
+	) -> Result<Val> {
+		self.fun
+			.evaluate_prepared(&self.prepared, loc, unnamed, named, false)
 	}
 }

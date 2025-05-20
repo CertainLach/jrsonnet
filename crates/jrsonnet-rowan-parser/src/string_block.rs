@@ -13,12 +13,12 @@ use StringBlockError::*;
 
 use crate::SyntaxKind;
 
-pub fn lex_str_block_test(lex: &mut Lexer<SyntaxKind>) {
+pub fn lex_str_block_test(lex: &mut Lexer<'_, SyntaxKind>) {
 	let _ = lex_str_block(lex);
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError> {
+pub fn lex_str_block(lex: &mut Lexer<'_, SyntaxKind>) -> Result<(), StringBlockError> {
 	struct Context<'a> {
 		source: &'a str,
 		index: usize,

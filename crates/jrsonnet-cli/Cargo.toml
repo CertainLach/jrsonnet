@@ -12,25 +12,18 @@ workspace = true
 
 [features]
 exp-preserve-order = [
-    "jrsonnet-evaluator/exp-preserve-order",
-    "jrsonnet-stdlib/exp-preserve-order",
+	"jrsonnet-evaluator/exp-preserve-order",
+	"jrsonnet-stdlib/exp-preserve-order",
 ]
-exp-bigint = [
-    "jrsonnet-evaluator/exp-bigint",
-    "jrsonnet-stdlib/exp-bigint",
-]
-exp-null-coaelse = [
-    "jrsonnet-evaluator/exp-null-coaelse",
-    "jrsonnet-stdlib/exp-null-coaelse",
-]
-exp-regex = [
-    "jrsonnet-stdlib/exp-regex",
-]
+exp-bigint = ["jrsonnet-evaluator/exp-bigint", "jrsonnet-stdlib/exp-bigint"]
+exp-null-coaelse = ["jrsonnet-evaluator/exp-null-coaelse"]
+exp-regex = ["jrsonnet-stdlib/exp-regex"]
+nightly = ["jrsonnet-evaluator/nightly", "jrsonnet-stdlib/nightly"]
 
 [dependencies]
 jrsonnet-evaluator = { workspace = true, features = ["explaining-traces"] }
+jrsonnet-gcmodule.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-stdlib.workspace = true
-jrsonnet-gcmodule.workspace = true
 
 clap = { workspace = true, features = ["derive"] }

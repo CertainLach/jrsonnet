@@ -10,11 +10,12 @@ version.workspace = true
 workspace = true
 
 [dependencies]
-dprint-core.workspace = true
-jrsonnet-rowan-parser.workspace = true
-insta.workspace = true
-indoc.workspace = true
-hi-doc.workspace = true
 clap = { workspace = true, features = ["derive"] }
+dprint-core.workspace = true
+dprint-core-macros.workspace = true
+hi-doc.workspace = true
+indoc.workspace = true
+insta.workspace = true
+jrsonnet-rowan-parser.workspace = true
 tempfile.workspace = true
 thiserror.workspace = true

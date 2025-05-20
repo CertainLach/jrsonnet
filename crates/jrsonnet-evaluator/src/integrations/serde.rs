@@ -1,6 +1,6 @@
 use std::borrow::Cow;
 
-use jrsonnet_interner::IStr;
+use jrsonnet_interner::{IBytes, IStr};
 use serde::{
 	de::{self, Visitor},
 	ser::{
@@ -11,7 +11,7 @@ use serde::{
 };
 
 use crate::{
-	arr::ArrValue, in_description_frame, runtime_error, val::NumValue, Error as JrError, ObjValue,
+	in_description_frame, runtime_error, val::NumValue, Error as JrError, ObjValue,
 	ObjValueBuilder, Result, Val,
 };
 
@@ -21,17 +21,6 @@ impl<'de> Deserialize<'de> for Val {
 		D: serde::Deserializer<'de>,
 	{
 		struct ValVisitor;
-
-		// macro_rules! visit_num {
-		// 	($($method:ident => $ty:ty),* $(,)?) => {$(
-		// 		fn $method<E>(self, v: $ty) -> Result<Self::Value, E>
-		// 		where
-		// 			E: serde::de::Error,
-		// 		{
-		// 			Ok(Val::Num(f64::from(v)))
-		// 		}
-		// 	)*};
-		// }
 
 		impl<'de> Visitor<'de> for ValVisitor {
 			type Value = Val;
@@ -47,7 +36,7 @@ impl<'de> Deserialize<'de> for Val {
 				E: de::Error,
 			{
 				Ok(Val::Num(NumValue::new(v).ok_or_else(|| {
-					E::custom("only finite numbers are supported")
+					E::custom(format!("only finite numbers are supported, got {v}"))
 				})?))
 			}
 			fn visit_str<E>(self, v: &str) -> Result<Self::Value, E>
@@ -57,32 +46,28 @@ impl<'de> Deserialize<'de> for Val {
 				Ok(Val::string(v))
 			}
 
-			// visit_num! {
-			// 	visit_i8 => i8,
-			// 	visit_i16 => i16,
-			// 	visit_i32 => i32,
-			// 	visit_u8 => u8,
-			// 	visit_u16 => u16,
-			// 	visit_u32 => u32,
-			// }
 			fn visit_i64<E>(self, v: i64) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				NumValue::new_safe_int(v)
+					.map_err(|e| E::custom(format!("invalid integer value value {v}: {e}")))
+					.map(Val::Num)
 			}
 			fn visit_u64<E>(self, v: u64) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Num(NumValue::new(v as f64).expect("no overflow")))
+				NumValue::new_safe_uint(v)
+					.map_err(|e| E::custom(format!("invalid unsigned integer value {v}: {e}")))
+					.map(Val::Num)
 			}
 
 			fn visit_bytes<E>(self, v: &[u8]) -> Result<Self::Value, E>
 			where
 				E: de::Error,
 			{
-				Ok(Val::Arr(ArrValue::bytes(v.into())))
+				Ok(Val::array(IBytes::from(v)))
 			}
 
 			fn visit_none<E>(self) -> Result<Self::Value, E>
@@ -122,7 +107,7 @@ impl<'de> Deserialize<'de> for Val {
 					out.push(val);
 				}
 
-				Ok(Val::Arr(ArrValue::eager(out)))
+				Ok(Val::array(out))
 			}
 
 			fn visit_map<A>(self, mut map: A) -> Result<Self::Value, A::Error>
@@ -258,7 +243,7 @@ impl SerializeSeq for IntoVecValSerializer {
 	}
 
 	fn end(self) -> Result<Val> {
-		let inner = Val::Arr(ArrValue::eager(self.data));
+		let inner = Val::array(self.data);
 		if let Some(variant) = self.variant {
 			let mut out = ObjValue::builder_with_capacity(1);
 			out.field(variant).value(inner);
@@ -497,7 +482,7 @@ impl Serializer for IntoValSerializer {
 	}
 
 	fn serialize_bytes(self, v: &[u8]) -> Result<Val> {
-		Ok(Val::Arr(ArrValue::bytes(v.into())))
+		Ok(Val::array(IBytes::from(v)))
 	}
 
 	fn serialize_none(self) -> Result<Val> {

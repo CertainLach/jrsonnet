@@ -11,15 +11,16 @@ repository = "https://github.com/CertainLach/jrsonnet"
 version = "0.5.0-pre96"
 
 [workspace.dependencies]
+jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre96" }
 jrsonnet-evaluator = { path = "./crates/jrsonnet-evaluator", version = "0.5.0-pre96" }
+jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre96" }
 jrsonnet-macros = { path = "./crates/jrsonnet-macros", version = "0.5.0-pre96" }
 jrsonnet-parser = { path = "./crates/jrsonnet-parser", version = "0.5.0-pre96" }
 jrsonnet-rowan-parser = { path = "./crates/jrsonnet-rowan-parser", version = "0.5.0-pre96" }
-jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre96" }
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre96" }
-jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre96" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre96" }
-jrsonnet-gcmodule = { version = "0.3.7" }
+
+jrsonnet-gcmodule = "0.3.10"
 # Diagnostics.
 # hi-doc is my library, which handles text formatting very well, but isn't polished enough yet
 # Previous implementation was based on annotate-snippets, which I don't like for many reasons.
@@ -28,7 +29,6 @@ jrsonnet-gcmodule = { version = "0.3.7" }
 #   and other libraries want to handle spans etc by itself, which is okay for compiler diagnostics, but is
 #   bad for interpreter, where interpreter and parser are paired much closer.
 hi-doc = "0.1.1"
-annotate-snippets = "0.10.1"
 
 # CLI
 clap = "4.5"
@@ -39,14 +39,15 @@ clap_complete = "4.5"
 # https://github.com/dtolnay/serde-yaml/pull/225
 serde = "1.0.197"
 serde_json = "1.0.114"
-serde_yaml_with_quirks = "0.8.24"
+serde_yaml_with_quirks = "0.9.34"
 
 # Error handling
 anyhow = "1.0.83"
-thiserror = "1.0.60"
+thiserror = "2.0.3"
 
 # Code formatting
-dprint-core = "0.65.0"
+dprint-core = "0.67.4"
+dprint-core-macros = "0.1.0"
 
 # Stdlib hashing functions
 md5 = "0.7.0"
@@ -57,51 +58,56 @@ sha3 = "0.10.8"
 # Source code parsing.
 # Jrsonnet has two parsers for jsonnet - one is for execution, and another is for better parsing diagnostics/lints/LSP.
 # First (and fast one) is based on peg, second is based on rowan.
-peg = "0.8.3"
 logos = "0.14.0"
+peg = "0.8.3"
+rowan = "0.16.1"
 ungrammar = "1.16.1"
-rowan = "0.15.15"
 
-mimallocator = "0.1.3"
+base64 = "0.22.1"
+drop_bomb = "0.1.5"
+hashbrown = "0.15.2"
+indexmap = "2.2.3"
 indoc = "2.0"
 insta = "1.39"
-tempfile = "3.10"
-pathdiff = "0.2.1"
-hashbrown = "0.14.5"
-static_assertions = "1.1"
-rustc-hash = "1.1"
+itertools = "0.13.0"
+mimalloc = "0.1.43"
 num-bigint = "0.4.5"
-strsim = "0.11.0"
+pathdiff = "0.2.1"
 proc-macro2 = "1.0"
 quote = "1.0"
+rustc-hash = "2.1.0"
+static_assertions = "1.1"
+strsim = "0.11.0"
 syn = "2.0"
-drop_bomb = "0.1.5"
-base64 = "0.22.1"
-indexmap = "2.2.3"
-itertools = "0.13.0"
+tempfile = "3.10"
 xshell = "0.2.6"
 
-lsp-server = "0.7.6"
-lsp-types = "0.96.0"
-
-regex = "1.10"
 lru = "0.12.3"
+regex = "1.10"
 
 json-structural-diff = "0.1.0"
 syn-dissect-closure = "0.1.0"
 
 [workspace.lints.rust]
 unsafe_op_in_unsafe_fn = "deny"
+future_incompatible = { level = "deny", priority = -1 }
+rust_2024_compatibility = { level = "deny", priority = -1 }
+let_underscore = { level = "deny", priority = -1 }
+
+# False-positives
+if_let_rescope = "allow"
+tail_expr_drop_order = "allow"
+edition_2024_expr_fragment_specifier = "allow"
 
 # TODO: add docs everywhere
 # missing_doc = "warn"
 
-elided_lifetimes_in_paths = "allow"
-explicit_outlives_requirements = "allow"
-noop_method_call = "allow"
-single_use_lifetimes = "allow"
-variant_size_differences = "allow"
-macro_expanded_macro_exports_accessed_by_absolute_paths = "allow"
+elided_lifetimes_in_paths = "deny"
+explicit_outlives_requirements = "deny"
+noop_method_call = "deny"
+# single_use_lifetimes = "deny"
+variant_size_differences = "deny"
+macro_expanded_macro_exports_accessed_by_absolute_paths = "deny"
 
 [workspace.lints.rustdoc]
 all = "warn"
@@ -111,7 +117,6 @@ all = { level = "warn", priority = -1 }
 nursery = { level = "warn", priority = -1 }
 pedantic = { level = "warn", priority = -1 }
 
-ptr_arg = "allow"
 # Too verbose
 must_use_candidate = "allow"
 # A lot of functions pass around errors thrown by code
@@ -121,15 +126,7 @@ needless_pass_by_value = "allow"
 # Its fine
 wildcard_imports = "allow"
 enum_glob_use = "allow"
-module_name_repetitions = "allow"
-# TODO: fix individual issues, however this works as intended almost everywhere
-cast_precision_loss = "allow"
-cast_possible_wrap = "allow"
 cast_possible_truncation = "allow"
-cast_sign_loss = "allow"
-# False positives
-# https://github.com/rust-lang/rust-clippy/issues/6902
-use_self = "allow"
 # https://github.com/rust-lang/rust-clippy/issues/8539
 iter_with_drain = "allow"
 type_repetition_in_bounds = "allow"
@@ -137,17 +134,10 @@ type_repetition_in_bounds = "allow"
 missing_const_for_fn = "allow"
 # too many false-positives with .expect() calls
 missing_panics_doc = "allow"
-# false positive for IStr type. There is an configuration option for
-# such cases, but it doesn't work:
-# https://github.com/rust-lang/rust-clippy/issues/9801
-mutable_key_type = "allow"
 # false positives
 redundant_pub_crate = "allow"
-# Sometimes code is fancier without that
-manual_let_else = "allow"
-# Something is broken about that lint, can't be allowed for
-# codegenerated-stdlib block
-similar_names = "allow"
+
+module_name_repetitions = "deny"
 
 #[profile.test]
 #opt-level = 1

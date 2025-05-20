@@ -11,10 +11,11 @@ use jrsonnet_evaluator::{
 	error::{Error as JrError, ErrorKind},
 	ResultExt, State, Val,
 };
+use jrsonnet_parser::{SourceDefaultIgnoreJpath, SourcePath};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]
-static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
+static GLOBAL: mimalloc::MiMalloc = mimalloc::MiMalloc;
 
 #[derive(Parser)]
 enum SubOpts {
@@ -172,6 +173,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 	let mut s = State::builder();
 	s.import_resolver(import_resolver).context_initializer(std);
 	let s = s.build();
+	let _s = s.enter();
 
 	let input = opts.input.input.ok_or(Error::MissingInputArgument)?;
 	let val = if opts.input.exec {
@@ -182,7 +184,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		let input_str = std::str::from_utf8(&input)?;
 		s.evaluate_snippet("<stdin>".to_owned(), input_str)?
 	} else {
-		s.import(&input)?
+		s.import_from(&SourcePath::new(SourceDefaultIgnoreJpath), input.as_str())?
 	};
 
 	let tla = opts.tla.tla_opts()?;
@@ -191,7 +193,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		unused_mut,
 		clippy::redundant_clone,
 	)]
-	let mut val = apply_tla(s.clone(), &tla, val)?;
+	let mut val = apply_tla(&tla, val)?;
 
 	#[cfg(feature = "exp-apply")]
 	for apply in opts.input.exp_apply {

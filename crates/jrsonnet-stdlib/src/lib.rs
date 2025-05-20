@@ -11,10 +11,10 @@ pub use compat::*;
 pub use encoding::*;
 pub use hash::*;
 use jrsonnet_evaluator::{
-	error::{ErrorKind::*, Result},
+	error::Result,
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
-	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
+	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_parser::Source;
@@ -226,6 +226,12 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 			"__array_greater_or_equal",
 			builtin___array_greater_or_equal::INST,
 		),
+		("log2", builtin_log2::INST),
+		("log10", builtin_log10::INST),
+		("deg2rad", builtin_deg2rad::INST),
+		("rad2deg", builtin_rad2deg::INST),
+		("hypot", builtin_hypot::INST),
+		("trim", builtin_trim::INST),
 	]
 	.iter()
 	.copied()
@@ -247,6 +253,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	);
 	builder.method("trace", builtin_trace { settings });
 	builder.method("id", FuncVal::Id);
+	builder
+		.field("pi")
+		.value(Val::try_num(std::f64::consts::PI).expect("pi is a valid number"));
 
 	#[cfg(feature = "exp-regex")]
 	{
@@ -280,7 +289,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 }
 
 pub trait TracePrinter {
-	fn print_trace(&self, loc: CallLocation, value: IStr);
+	fn print_trace(&self, loc: CallLocation<'_>, value: IStr);
 }
 
 pub struct StdTracePrinter {
@@ -292,7 +301,7 @@ impl StdTracePrinter {
 	}
 }
 impl TracePrinter for StdTracePrinter {
-	fn print_trace(&self, loc: CallLocation, value: IStr) {
+	fn print_trace(&self, loc: CallLocation<'_>, value: IStr) {
 		eprint!("TRACE:");
 		if let Some(loc) = loc.0 {
 			let locs = loc.0.map_source_locations(&[loc.1]);
@@ -320,11 +329,6 @@ pub struct Settings {
 	pub path_resolver: PathResolver,
 }
 
-fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
-	let source_name = format!("<extvar:{name}>");
-	Source::new_virtual(source_name.into(), code.into())
-}
-
 #[derive(Trace, Clone)]
 pub struct ContextInitializer {
 	/// std without applied thisFile overlay
@@ -346,10 +350,10 @@ impl ContextInitializer {
 			settings,
 		}
 	}
-	pub fn settings(&self) -> Ref<Settings> {
+	pub fn settings(&self) -> Ref<'_, Settings> {
 		self.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<Settings> {
+	pub fn settings_mut(&self) -> RefMut<'_, Settings> {
 		self.settings.borrow_mut()
 	}
 	pub fn add_ext_var(&self, name: IStr, value: Val) {
@@ -362,23 +366,11 @@ impl ContextInitializer {
 			.ext_vars
 			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_ext_code(&self, name: &str, code: impl Into<IStr>) -> Result<()> {
-		let code = code.into();
-		let source = extvar_source(name, code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			error: Box::new(e),
-		})?;
+	pub fn add_ext_code(&self, name: &str, code: impl AsRef<str>) -> Result<()> {
 		// self.data_mut().volatile_files.insert(source_name, code);
 		self.settings_mut()
 			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
+			.insert(name.into(), TlaArg::InlineCode(code.as_ref().to_owned()));
 		Ok(())
 	}
 	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {
@@ -403,9 +395,6 @@ impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {
 		});
 		let stdlib_with_this_file = std.build();
 
-		builder.bind("std", Thunk::evaluated(Val::Obj(stdlib_with_this_file)));
-	}
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
+		builder.bind("std", Val::Obj(stdlib_with_this_file));
 	}
 }

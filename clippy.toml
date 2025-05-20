@@ -1,1 +1,9 @@
 ignore-interior-mutability = ["jrsonnet_interner::IStr"]
+
+[[disallowed-types]]
+path = "std::collections::HashMap"
+reason = """use GcHashMap instead"""
+
+[[disallowed-types]]
+path = "std::collections::HashSet"
+reason = """use GcHashSet instead"""

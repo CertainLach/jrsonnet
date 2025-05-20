@@ -7,6 +7,7 @@
   fetchFromGitHub,
   go-jsonnet,
   sjsonnet,
+  sjsonnet-native,
   jsonnet,
   rsjsonnet,
   hyperfine,
@@ -71,6 +72,7 @@ in
 
     buildInputs = [
       sjsonnet
+      sjsonnet-native
       jsonnet
       rsjsonnet
       go-jsonnet
@@ -126,18 +128,41 @@ in
           go-jsonnet $path > generated.jsonnet
           path=generated.jsonnet
         ''}
-        hyperfine -N -w4 -m20 --output=pipe --style=basic --export-asciidoc result.adoc \
-          ${concatStringsSep " " (forEach jrsonnetVariants (
-          variant: "\"${variant.drv}/bin/jrsonnet $path${optionalString (vendor != "") " -J${vendor}"}\" -n \"Rust${
-            if variant.name != ""
-            then " (${variant.name})"
-            else ""
-          }\""
-        ))} \
-          ${optionalString (skipRustAlternative == "") "\"rsjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Rust (alternative, rsjsonnet)\""} \
-          ${optionalString (skipGo == "") "\"go-jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Go\""} \
-          ${optionalString (skipScala == "") "\"sjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Scala\""} \
-          ${optionalString (skipCpp == "") "\"jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"C++\""}
+        hyperfine -N -w10 -m20 --output=pipe --style=basic --export-asciidoc result.adoc \
+          ${
+          concatStringsSep " " (
+            forEach jrsonnetVariants (
+              variant: "\"${variant.drv}/bin/jrsonnet $path${optionalString (vendor != "") " -J${vendor}"}\" -n \"Rust${
+                if variant.name != ""
+                then " (${variant.name})"
+                else ""
+              }\""
+            )
+          )
+        } \
+          ${
+          optionalString (skipRustAlternative == "")
+          "\"rsjsonnet $path${
+            optionalString (vendor != "") " -J ${vendor}"
+          }\" -n \"Rust (alternative, rsjsonnet)\""
+        } \
+          ${
+          optionalString (skipGo == "")
+          "\"go-jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Go\""
+        } \
+          ${
+          optionalString (skipScala == "")
+          "\"sjsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"Scala\""
+        } \
+          ${
+          optionalString (skipScala == "")
+          "\"sjsonnet-native $path${optionalString (vendor != "")
+            " -J ${vendor}"}\" -n \"Scala Native\""
+        } \
+          ${
+          optionalString (skipCpp == "")
+          "\"jsonnet $path${optionalString (vendor != "") " -J ${vendor}"}\" -n \"C++\""
+        }
         cat result.adoc >> $out
       '';
     in ''
@@ -259,8 +284,6 @@ in
         name = "Array sorts";
         path = "${jsonnetBench}/benchmarks/bench.06.jsonnet";
         skipCpp = skipSlow;
-        # std.assertEqual(reverse(std.range(1, 1000)), sort(std.range(1, 1000), keyF=function(x) -x))
-        skipScala = "sjsonnet doesn't support keyF in std.sort: https://github.com/databricks/sjsonnet/issues/204";
       }}
       ${mkBench {
         name = "Lazy array";
@@ -333,7 +356,6 @@ in
       ${mkBench {
         name = "std.manifestTomlEx";
         path = "${goJsonnetBench}/manifestTomlEx.jsonnet";
-        skipScala = "std.manifestTomlEx is not implemented: https://github.com/databricks/sjsonnet/issues/111";
         skipCpp = skipSlow;
       }}
       ${mkBench {

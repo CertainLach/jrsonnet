@@ -1,7 +1,7 @@
 {
   description = "Jrsonnet";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs";
+    nixpkgs.url = "github:nixos/nixpkgs/release-24.11";
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
@@ -10,46 +10,39 @@
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
-    crane = {
-      url = "github:ipetkov/crane";
+    crane.url = "github:ipetkov/crane";
+    shelly.url = "github:CertainLach/shelly";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
       inputs.nixpkgs.follows = "nixpkgs";
     };
-    shelly = {
-      url = "github:CertainLach/shelly";
-      inputs = {
-        flake-parts.follows = "flake-parts";
-        nixpkgs.follows = "nixpkgs";
-      };
-    };
   };
-  outputs = inputs @ {
-    nixpkgs,
-    flake-parts,
-    rust-overlay,
-    crane,
-    shelly,
-    ...
-  }:
-    flake-parts.lib.mkFlake {inherit inputs;} {
-      imports = [shelly.flakeModule];
-      systems = ["x86_64-linux" "aarch64-linux" "armv7l-linux" "armv6l-linux" "mingw-w64"];
+  outputs = inputs:
+    inputs.flake-parts.lib.mkFlake {inherit inputs;} {
+      imports = [inputs.shelly.flakeModule];
+      systems = inputs.nixpkgs.lib.systems.flakeExposed;
       perSystem = {
+        lib,
+        self',
+        pkgs,
         config,
         system,
         ...
       }: let
-        pkgs = import nixpkgs {
+        rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+        craneLib = (inputs.crane.mkLib pkgs).overrideToolchain rust;
+        treefmt = (inputs.treefmt-nix.lib.evalModule pkgs ./treefmt.nix).config.build;
+      in {
+        _module.args.pkgs = import inputs.nixpkgs {
           inherit system;
-          overlays = [rust-overlay.overlays.default];
+          overlays = [inputs.rust-overlay.overlays.default];
           config.allowUnsupportedSystem = true;
         };
-        rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
-        craneLib = (crane.mkLib pkgs).overrideToolchain rust;
-      in {
         legacyPackages = {
           jsonnetImpls = {
             go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
             sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
+            sjsonnet-native = pkgs.callPackage ./nix/sjsonnet-native.nix {};
             jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
             # I didn't managed to build it, and nixpkgs version is marked as broken
             # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
@@ -79,7 +72,14 @@
           };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit
+              (config.legacyPackages.jsonnetImpls)
+              go-jsonnet
+              sjsonnet
+              sjsonnet-native
+              jsonnet
+              rsjsonnet
+              ;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -88,7 +88,14 @@
             ];
           };
           benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit
+              (config.legacyPackages.jsonnetImpls)
+              go-jsonnet
+              sjsonnet
+              sjsonnet-native
+              jsonnet
+              rsjsonnet
+              ;
             quick = true;
             jrsonnetVariants = [
               {
@@ -98,7 +105,14 @@
             ];
           };
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit
+              (config.legacyPackages.jsonnetImpls)
+              go-jsonnet
+              sjsonnet
+              sjsonnet-native
+              jsonnet
+              rsjsonnet
+              ;
             jrsonnetVariants = [
               {
                 drv = jrsonnet.override {forBenchmarks = true;};
@@ -115,7 +129,14 @@
             ];
           };
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
+            inherit
+              (config.legacyPackages.jsonnetImpls)
+              go-jsonnet
+              sjsonnet
+              sjsonnet-native
+              jsonnet
+              rsjsonnet
+              ;
             quick = true;
             jrsonnetVariants = [
               {
@@ -139,7 +160,7 @@
             [
               alejandra
               cargo-edit
-              cargo-asm
+              cargo-show-asm
               cargo-outdated
               cargo-watch
               cargo-insta
@@ -149,9 +170,19 @@
             ]
             ++ lib.optionals (!stdenv.isDarwin) [
               valgrind
-              kcachegrind
+              # kdePackages.kcachegrind
+              # kdePackages.massif-visualizer
+              # Those packages have too aggressive propagates, bloating env vars and causing
+              # rust compiler to fail with collect2: argument list too long error, lol
+              (runCommand "kde-tools" {} ''
+                mkdir -p $out/bin
+                ln -s ${kdePackages.kcachegrind}/bin/kcachegrind $out/bin/
+                ln -s ${kdePackages.massif-visualizer}/bin/massif-visualizer $out/bin/
+                ln -s ${hotspot}/bin/hotspot $out/bin/
+              '')
             ];
         };
+        formatter = treefmt.wrapper;
       };
     };
 }

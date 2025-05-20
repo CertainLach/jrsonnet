@@ -8,7 +8,7 @@ use crate::{
 	error::ErrorKind::*,
 	evaluate,
 	stdlib::std_format,
-	typed::Typed,
+	typed::IntoUntyped,
 	val::{equals, StrValue},
 	Context, Result, Val,
 };
@@ -20,6 +20,10 @@ pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 		(Plus, Num(n)) => Val::Num(*n),
 		(Minus, Num(n)) => Val::try_num(-n.get())?,
 		(Not, Bool(v)) => Bool(!v),
+		#[expect(
+			clippy::cast_precision_loss,
+			reason = "behavior is expected to be truncating"
+		)]
 		(BitNot, Num(n)) => Val::try_num(!(n.get() as i64) as f64)?,
 		(op, o) => bail!(UnaryOperatorDoesNotOperateOnType(op, o.value_type())),
 	})
@@ -72,14 +76,14 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 }
 
 pub fn evaluate_binary_op_special(
-	ctx: Context,
+	ctx: &Context,
 	a: &LocExpr,
 	op: BinaryOpType,
 	b: &LocExpr,
 ) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
-	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
+	Ok(match (evaluate(ctx, a)?, op, b) {
 		(Bool(true), Or, _o) => Val::Bool(true),
 		(Bool(false), And, _o) => Val::Bool(false),
 		#[cfg(feature = "exp-null-coaelse")]
@@ -134,6 +138,11 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone().into_flat(), true)),
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
+		// Compat: This behavior is specific to jrsonnet, as it turns out, don't want to break compatibility
+		#[expect(
+			clippy::cast_sign_loss,
+			reason = "multiply by negative doesn't make sense, but it wasn't erroring in the old versions"
+		)]
 		(Str(v1), Mul, Num(v2)) => Val::string(v1.to_string().repeat(v2.get() as usize)),
 
 		// Bool X Bool
@@ -151,22 +160,28 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 
 		(Num(v1), Sub, Num(v2)) => Val::try_num(v1.get() - v2.get())?,
 
-		(Num(v1), BitAnd, Num(v2)) => Val::try_num((v1.get() as i64 & v2.get() as i64) as f64)?,
-		(Num(v1), BitOr, Num(v2)) => Val::try_num((v1.get() as i64 | v2.get() as i64) as f64)?,
-		(Num(v1), BitXor, Num(v2)) => Val::try_num((v1.get() as i64 ^ v2.get() as i64) as f64)?,
-		(Num(v1), Lhs, Num(v2)) => {
-			if v2.get() < 0.0 {
+		(Num(v1), BitAnd, Num(v2)) => Val::try_num(v1.get_safe_int()? & v2.get_safe_int()?)?,
+		(Num(v1), BitOr, Num(v2)) => Val::try_num(v1.get_safe_int()? | v2.get_safe_int()?)?,
+		(Num(v1), BitXor, Num(v2)) => Val::try_num(v1.get_safe_int()? ^ v2.get_safe_int()?)?,
+		#[expect(clippy::cast_sign_loss, reason = "rhs is checked to be non-negative")]
+		(Num(lhs), Lhs, Num(rhs)) => {
+			let lhs = lhs.get_safe_int()?;
+			let mut rhs = rhs.get_safe_int()?;
+			if rhs < 0 {
 				bail!("shift by negative exponent")
 			}
-			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shl(exp) as f64)?
+			rhs &= 63;
+			Val::try_num(lhs.wrapping_shl(rhs as u32))?
 		}
-		(Num(v1), Rhs, Num(v2)) => {
-			if v2.get() < 0.0 {
+		#[expect(clippy::cast_sign_loss, reason = "rhs is checked to be non-negative")]
+		(Num(lhs), Rhs, Num(rhs)) => {
+			let lhs = lhs.get_safe_int()?;
+			let mut rhs = rhs.get_safe_int()?;
+			if rhs < 0 {
 				bail!("shift by negative exponent")
 			}
-			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shr(exp) as f64)?
+			rhs &= 63;
+			Val::try_num(lhs.wrapping_shr(rhs as u32))?
 		}
 
 		// Bigint X Bigint

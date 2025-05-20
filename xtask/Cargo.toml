@@ -10,10 +10,10 @@ workspace = true
 
 [dependencies]
 anyhow.workspace = true
+clap = { workspace = true, features = ["derive"] }
 indexmap.workspace = true
 itertools.workspace = true
 proc-macro2.workspace = true
 quote.workspace = true
 ungrammar.workspace = true
 xshell.workspace = true
-clap = {workspace = true, features = ["derive"]}

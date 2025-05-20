@@ -1,12 +1,13 @@
 use std::{
+	any::Any,
 	ffi::{c_void, CStr},
 	os::raw::{c_char, c_int},
 };
 
 use jrsonnet_evaluator::{
 	error::{Error, ErrorKind},
-	function::builtin::{NativeCallback, NativeCallbackHandler},
-	typed::Typed,
+	function::{NativeCallback, NativeCallbackHandler},
+	typed::FromUntyped,
 	IStr, Val,
 };
 
@@ -62,7 +63,7 @@ impl NativeCallbackHandler for JsonnetNativeCallbackHandler {
 /// `name` should be a NUL-terminated string
 /// `cb` should be a function pointer
 /// `raw_params` should point to a NULL-terminated array of NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_native_callback(
 	vm: &VM,
 	name: *const c_char,
@@ -86,8 +87,7 @@ pub unsafe extern "C" fn jsonnet_native_callback(
 	}
 
 	let any_resolver = vm.state.context_initializer();
-	any_resolver
-		.as_any()
+	(any_resolver as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_native(

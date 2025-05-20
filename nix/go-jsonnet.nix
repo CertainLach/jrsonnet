@@ -2,27 +2,29 @@
   buildGoModule,
   fetchFromGitHub,
   makeWrapper,
-}:
-buildGoModule rec {
+}: let
   pname = "go-jsonnet";
-  version = "0.20.0";
+  version = "0.21.0";
+in
+  buildGoModule rec {
+    inherit pname version;
 
-  src = fetchFromGitHub {
-    owner = "google";
-    repo = pname;
-    rev = "v${version}";
-    hash = "sha256-P69tguBrFF/CSCOfHjCfBT5710oJdhZDh3kMCbc32eE=";
-  };
-  vendorHash = "sha256-j1fTOUpLx34TgzW94A/BctLrg9XoTtb3cBizhVJoEEI=";
+    src = fetchFromGitHub {
+      owner = "google";
+      repo = pname;
+      rev = "refs/tags/v${version}";
+      hash = "sha256-J92xNDpCidbiSsN6NveS6BX6Tx+qDQqkgm6pjk1wBTQ=";
+    };
+    vendorHash = "sha256-Uh2rAXdye9QmmZuEqx1qeokE9Z9domyHsSFlU7YZsZw=";
 
-  buildInputs = [makeWrapper];
+    buildInputs = [makeWrapper];
 
-  postInstall = ''
-    mv $out/bin/jsonnet $out/bin/go-jsonnet
-    wrapProgram $out/bin/go-jsonnet --add-flags "--max-stack 200000"
-  '';
+    postInstall = ''
+      mv $out/bin/jsonnet $out/bin/go-jsonnet
+      wrapProgram $out/bin/go-jsonnet --add-flags "--max-stack 200000"
+    '';
 
-  doCheck = false;
+    doCheck = false;
 
-  subPackages = ["cmd/jsonnet"];
-}
+    subPackages = ["cmd/jsonnet"];
+  }

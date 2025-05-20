@@ -16,6 +16,8 @@ enum Opts {
 		callgrind: bool,
 		#[arg(long)]
 		cachegrind: bool,
+		#[arg(long)]
+		massif: bool,
 		#[arg(long, default_value = env!("TARGET_PLATFORM"))]
 		target: String,
 		args: Vec<String>,
@@ -45,6 +47,7 @@ fn main() -> Result<()> {
 			hyperfine,
 			callgrind,
 			cachegrind,
+			massif,
 			args,
 			target,
 		} => {
@@ -69,10 +72,21 @@ fn main() -> Result<()> {
 				cmd!(sh, "kcachegrind {callgrind_out}").run()?;
 			}
 			if cachegrind {
+				let args = args.clone();
 				let mut cachegrind_out = out.path().to_owned();
 				cachegrind_out.push("cachegrind.out.1");
 				cmd!(sh, "valgrind --tool=cachegrind --cachegrind-out-file={cachegrind_out} {built} {args...}").run()?;
 				cmd!(sh, "kcachegrind {cachegrind_out}").run()?;
+			}
+			if massif {
+				let mut cachegrind_out = out.path().to_owned();
+				cachegrind_out.push("massif.out.1");
+				cmd!(
+					sh,
+					"valgrind --tool=massif --massif-out-file={cachegrind_out} {built} {args...}"
+				)
+				.run()?;
+				cmd!(sh, "massif-visualizer {cachegrind_out}").run()?;
 			}
 
 			Ok(())

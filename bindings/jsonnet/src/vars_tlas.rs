@@ -1,9 +1,8 @@
 //! Manipulate external variables and top level arguments
 
-use std::{ffi::CStr, os::raw::c_char};
+use std::{any::Any, ffi::CStr, os::raw::c_char};
 
 use jrsonnet_evaluator::{function::TlaArg, IStr};
-use jrsonnet_parser::{ParserSettings, Source};
 
 use crate::VM;
 
@@ -14,14 +13,13 @@ use crate::VM;
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let value = unsafe { CStr::from_ptr(value) };
 
 	let any_initializer = vm.state.context_initializer();
-	any_initializer
-		.as_any()
+	(any_initializer as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_ext_str(
@@ -37,14 +35,13 @@ pub unsafe extern "C" fn jsonnet_ext_var(vm: &VM, name: *const c_char, value: *c
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let code = unsafe { CStr::from_ptr(code) };
 
 	let any_initializer = vm.state.context_initializer();
-	any_initializer
-		.as_any()
+	(any_initializer as &dyn Any)
 		.downcast_ref::<jrsonnet_stdlib::ContextInitializer>()
 		.expect("only stdlib context initializer supported")
 		.add_ext_code(
@@ -61,7 +58,7 @@ pub unsafe extern "C" fn jsonnet_ext_code(vm: &VM, name: *const c_char, code: *c
 /// # Safety
 ///
 /// `name`, `value` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let value = unsafe { CStr::from_ptr(value) };
@@ -78,20 +75,13 @@ pub unsafe extern "C" fn jsonnet_tla_var(vm: &mut VM, name: *const c_char, value
 /// # Safety
 ///
 /// `name`, `code` should be a NUL-terminated strings
-#[no_mangle]
+#[unsafe(no_mangle)]
 pub unsafe extern "C" fn jsonnet_tla_code(vm: &mut VM, name: *const c_char, code: *const c_char) {
 	let name = unsafe { CStr::from_ptr(name) };
 	let code = unsafe { CStr::from_ptr(code) };
 
 	let name: IStr = name.to_str().expect("name is not utf-8").into();
-	let code: IStr = code.to_str().expect("code is not utf-8").into();
-	let code = jrsonnet_parser::parse(
-		&code,
-		&ParserSettings {
-			source: Source::new_virtual(format!("<top-level-arg:{name}>").into(), code.clone()),
-		},
-	)
-	.expect("can't parse TLA code");
+	let code: String = code.to_str().expect("code is not utf-8").to_owned();
 
-	vm.tla_args.insert(name, TlaArg::Code(code));
+	vm.tla_args.insert(name, TlaArg::InlineCode(code));
 }

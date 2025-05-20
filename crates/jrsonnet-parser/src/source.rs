@@ -13,7 +13,6 @@ use crate::location::{location_to_offset, offset_to_location, CodeLocation};
 
 macro_rules! any_ext_methods {
 	($T:ident) => {
-		fn as_any(&self) -> &dyn Any;
 		fn dyn_hash(&self, hasher: &mut dyn Hasher);
 		fn dyn_eq(&self, other: &dyn $T) -> bool;
 		fn dyn_debug(&self, fmt: &mut std::fmt::Formatter<'_>) -> std::fmt::Result;
@@ -21,17 +20,14 @@ macro_rules! any_ext_methods {
 }
 macro_rules! any_ext_impl {
 	($T:ident) => {
-		fn as_any(&self) -> &dyn Any {
-			self
-		}
 		fn dyn_hash(&self, mut hasher: &mut dyn Hasher) {
 			self.hash(&mut hasher)
 		}
 		fn dyn_eq(&self, other: &dyn $T) -> bool {
-			let Some(other) = other.as_any().downcast_ref::<Self>() else {
+			let Some(other) = (other as &dyn Any).downcast_ref::<Self>() else {
 				return false;
 			};
-			let this = <Self as $T>::as_any(self)
+			let this = (self as &dyn Any)
 				.downcast_ref::<Self>()
 				.expect("restricted by impl");
 			this == other
@@ -56,7 +52,7 @@ macro_rules! any_ext {
 		impl Eq for dyn $T {}
 	};
 }
-pub trait SourcePathT: Trace + Debug + Display {
+pub trait SourcePathT: Trace + Debug + Display + Any {
 	/// This method should be checked by resolver before panicking with bad SourcePath input
 	/// if `true` - then resolver may threat this path as default, and default is usally a CWD
 	fn is_default(&self) -> bool;
@@ -86,7 +82,7 @@ impl SourcePath {
 		Self(Rc::new(inner))
 	}
 	pub fn downcast_ref<T: SourcePathT>(&self) -> Option<&T> {
-		self.0.as_any().downcast_ref()
+		(&*self.0 as &dyn Any).downcast_ref()
 	}
 	pub fn is_default(&self) -> bool {
 		self.0.is_default()
@@ -137,6 +133,23 @@ impl Display for SourceDefault {
 	}
 }
 impl SourcePathT for SourceDefault {
+	fn is_default(&self) -> bool {
+		true
+	}
+	fn path(&self) -> Option<&Path> {
+		None
+	}
+	any_ext_impl!(SourcePathT);
+}
+
+#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+pub struct SourceDefaultIgnoreJpath;
+impl Display for SourceDefaultIgnoreJpath {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "<default (ignoring jpath)>")
+	}
+}
+impl SourcePathT for SourceDefaultIgnoreJpath {
 	fn is_default(&self) -> bool {
 		true
 	}
