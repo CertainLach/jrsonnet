@@ -139,14 +139,36 @@ pub fn builtin_flatmap(
 	}
 }
 
-#[builtin]
-pub fn builtin_filter(func: NativeFn<((Val,), bool)>, arr: ArrValue) -> Result<ArrValue> {
+fn filter_strict(func: NativeFn<((Val,), bool)>, arr: ArrValue) -> Result<ArrValue> {
 	arr.filter(|val| func(val.clone()))
+}
+
+// Only useful when func does not reference value
+fn filter_lazy(func: NativeFn<((Thunk<Val>,), bool)>, arr: ArrValue) -> Result<ArrValue> {
+	let mut out = vec![];
+	for v in arr.iter_lazy() {
+		match func(v.clone()) {
+			Ok(true) => out.push(v),
+			Ok(false) => {}
+			Err(e) => return Err(e),
+		}
+	}
+	Ok(ArrValue::new(out))
+}
+
+#[builtin]
+pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
+	Ok(
+		match filter_strict(func.clone().into_native(), arr.clone()) {
+			Ok(v) => v,
+			Err(_) => filter_lazy(func.into_native(), arr)?,
+		},
+	)
 }
 
 #[builtin]
 pub fn builtin_filter_map(
-	filter_func: NativeFn<((Val,), bool)>,
+	filter_func: FuncVal,
 	map_func: FuncVal,
 	arr: ArrValue,
 ) -> Result<ArrValue> {
