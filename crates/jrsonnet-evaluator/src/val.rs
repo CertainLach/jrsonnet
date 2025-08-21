@@ -582,6 +582,13 @@ impl Val {
 			_ => None,
 		}
 	}
+	#[cfg(feature = "exp-bigint")]
+	pub fn as_bigint(&self) -> Option<num_bigint::BigInt> {
+		match self {
+			Self::BigInt(n) => Some(*n.clone()),
+			_ => None,
+		}
+	}
 	pub fn as_arr(&self) -> Option<ArrValue> {
 		match self {
 			Self::Arr(a) => Some(a.clone()),
