@@ -355,6 +355,11 @@ impl ManifestFormat for ToStringFormat {
 			out.push_str(&str);
 			return Ok(());
 		}
+		#[cfg(feature = "exp-bigint")]
+		if let Some(int) = val.as_bigint() {
+			out.push_str(&int.to_str_radix(10));
+			return Ok(());
+		}
 		JSON_TO_STRING.manifest_buf(val, out)
 	}
 	fn file_trailing_newline(&self) -> bool {
