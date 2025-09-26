@@ -1,7 +1,7 @@
 = jrsonnet
 
 ++++
-<p align="center"><a href="https://github.com/CertainLach/jrsonnet"><img alt="jrsonnet logo" src="./docs/logowide.svg" width="470px"></img></a></p>
+<p align="center"><a href="https://github.com/CertainLach/jrsonnet"><img alt="jrsonnet logo" src="./docs/logowide.svg" height="150"></img></a></p>
 <p align="center">
   <a href="https://github.com/CertainLach/jrsonnet/releases"><img alt="release" src="https://img.shields.io/github/v/tag/CertainLach/jrsonnet?color=%23fb4934&label=latest%20release&style=for-the-badge"></img></a>
   <a href="./LICENSE"><img alt="license" src="https://img.shields.io/github/license/CertainLach/jrsonnet?color=%2383a598&label=license&style=for-the-badge"></img></a>
