@@ -25,7 +25,7 @@ impl Default for RegexCacheInner {
 }
 pub type RegexCache = Rc<RegexCacheInner>;
 impl RegexCacheInner {
-	fn parse(&self, pattern: IStr) -> Result<Rc<Regex>> {
+	pub fn parse(&self, pattern: IStr) -> Result<Rc<Regex>> {
 		let mut cache = self.cache.borrow_mut();
 		if let Some(found) = cache.get(&pattern) {
 			return Ok(found.clone());

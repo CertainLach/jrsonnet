@@ -31,6 +31,7 @@ pub use types::*;
 
 #[cfg(feature = "exp-regex")]
 pub use crate::regex::*;
+pub use crate::tanka::*;
 
 mod arrays;
 mod compat;
@@ -47,6 +48,7 @@ mod regex;
 mod sets;
 mod sort;
 mod strings;
+mod tanka;
 mod types;
 
 #[allow(clippy::too_many_lines)]
