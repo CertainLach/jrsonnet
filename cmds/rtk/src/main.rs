@@ -1,6 +1,9 @@
 use clap::{Parser, Subcommand};
 use anyhow::Result;
 
+mod spec;
+mod env;
+
 #[derive(Parser)]
 #[command(name = "rtk")]
 #[command(about = "Tanka dummy CLI", long_about = None)]
@@ -675,17 +678,57 @@ fn main() -> Result<()> {
             anyhow::bail!("not implemented");
         }
         Commands::Env { command, .. } => match command {
-            EnvCommands::Add { .. } => {
-                anyhow::bail!("not implemented");
+            EnvCommands::Add {
+                path,
+                server,
+                server_from_context,
+                context_name,
+                namespace,
+                diff_strategy,
+                inject_labels,
+                inline,
+                ..
+            } => {
+                let final_server = server.or(server_from_context);
+                env::add_env(
+                    &path,
+                    final_server,
+                    context_name,
+                    namespace,
+                    diff_strategy,
+                    inject_labels,
+                    inline,
+                )?;
+                Ok(())
             }
-            EnvCommands::Set { .. } => {
-                anyhow::bail!("not implemented");
+            EnvCommands::Set {
+                path,
+                server,
+                server_from_context,
+                context_name,
+                namespace,
+                diff_strategy,
+                inject_labels,
+                ..
+            } => {
+                let final_server = server.or(server_from_context);
+                env::set_env(
+                    &path,
+                    final_server,
+                    context_name,
+                    namespace,
+                    diff_strategy,
+                    inject_labels,
+                )?;
+                Ok(())
             }
-            EnvCommands::List { .. } => {
-                anyhow::bail!("not implemented");
+            EnvCommands::List { path, .. } => {
+                env::list_envs(path)?;
+                Ok(())
             }
-            EnvCommands::Remove { .. } => {
-                anyhow::bail!("not implemented");
+            EnvCommands::Remove { path, .. } => {
+                env::remove_env(&path)?;
+                Ok(())
             }
         },
         Commands::Status { .. } => {
