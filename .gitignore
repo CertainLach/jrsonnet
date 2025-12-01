@@ -9,3 +9,5 @@ cache
 jsonnet-cpp
 jsonnet-sjsonnet
 benchmarks
+
+.tk-compare-workspace

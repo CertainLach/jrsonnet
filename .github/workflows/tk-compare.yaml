@@ -1,0 +1,68 @@
+name: Compare with Tanka
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+jobs:
+  compare:
+    name: Compare with Grafana Tanka
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout rustanka
+        uses: actions/checkout@v4.1.4
+        with:
+          path: rustanka
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
+
+      - name: Install Grafana Tanka
+        run: |
+          TK_VERSION=$(curl -s https://api.github.com/repos/grafana/tanka/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+          curl -fSL -o "/usr/local/bin/tk" "https://github.com/grafana/tanka/releases/latest/download/tk-linux-amd64"
+          chmod +x /usr/local/bin/tk
+          tk --version
+
+      - name: Clone deployment_tools
+        # Note: deployment_tools is a Grafana internal repository
+        # This step will fail if you don't have access
+        # You can replace this with your own test repository
+        run: |
+          git clone --depth=1 https://github.com/grafana/deployment_tools.git
+        continue-on-error: true
+
+      - name: Check if deployment_tools exists
+        id: check_deployment_tools
+        run: |
+          if [ -d "deployment_tools" ]; then
+            echo "exists=true" >> $GITHUB_OUTPUT
+            echo "path=$(pwd)/deployment_tools" >> $GITHUB_OUTPUT
+          else
+            echo "exists=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Run comparison
+        if: steps.check_deployment_tools.outputs.exists == 'true'
+        working-directory: rustanka
+        run: |
+          make tk-compare-grafana DEPLOYMENT_TOOLS_PATH=${{ steps.check_deployment_tools.outputs.path }} TK_PATH=/usr/local/bin/tk
+        continue-on-error: true
+
+      - name: Skip comparison (no deployment_tools)
+        if: steps.check_deployment_tools.outputs.exists == 'false'
+        run: |
+          echo "Skipping comparison: deployment_tools repository not accessible"
+          echo "This is expected if you don't have access to Grafana's internal repositories"
+
+      - name: Upload workspace on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: tk-compare-workspace
+          path: rustanka/.tk-compare-workspace/
+          if-no-files-found: ignore
+

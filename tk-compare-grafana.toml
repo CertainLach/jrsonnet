@@ -1,0 +1,43 @@
+# Configuration for comparing Grafana Tanka (tk) with rustanka (rtk)
+# This config runs against grafana/deployment_tools
+#
+# Usage with Makefile (recommended):
+#   make tk-compare-grafana DEPLOYMENT_TOOLS_PATH=/path/to/deployment_tools TK_PATH=/path/to/tk
+#
+# Environment variables:
+#   TK_PATH                - Path to tk executable (required)
+#   DEPLOYMENT_TOOLS_PATH  - Path to deployment_tools directory (required)
+
+# Path to Grafana's Tanka (from TK_PATH env var)
+tk_exec_1 = "${TK_PATH}"
+
+# Path to rustanka's rtk
+tk_exec_2 = "target/release/rtk"
+
+# Working directory for all commands (from DEPLOYMENT_TOOLS_PATH env var)
+working_dir = "${DEPLOYMENT_TOOLS_PATH}"
+
+# Commands to test
+# These commands test various Tanka functionality against real Grafana infrastructure configs
+# Optional 'runs' parameter specifies how many times to run the command for benchmark statistics
+
+[[commands]]
+args = ["env", "list", "ksonnet/environments/cortex/ops-eu-south-0.mimir-ops-03", "--json"]
+runs = 5
+
+[[commands]]
+args = ["env", "list", "ksonnet/environments/grafana-o11y", "--json"]
+runs = 5
+
+[[commands]]
+args = ["env", "list", "ksonnet/environments", "--json"]
+runs = 3
+
+[[commands]]
+args = ["eval", "ksonnet/environments/cortex/ops-eu-south-0.mimir-ops-03"]
+runs = 5
+
+[[commands]]
+args = ["eval", "ksonnet/environments/grafana-o11y"]
+runs = 3
+
