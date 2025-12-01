@@ -7,6 +7,11 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
 jobs:
   compare:
     name: Compare with Grafana Tanka
@@ -47,16 +52,97 @@ jobs:
 
       - name: Run comparison
         if: steps.check_deployment_tools.outputs.exists == 'true'
+        id: run_comparison
         working-directory: rustanka
         run: |
-          make tk-compare-grafana DEPLOYMENT_TOOLS_PATH=${{ steps.check_deployment_tools.outputs.path }} TK_PATH=/usr/local/bin/tk
+          set +e
+          make tk-compare-grafana DEPLOYMENT_TOOLS_PATH=${{ steps.check_deployment_tools.outputs.path }} TK_PATH=/usr/local/bin/tk > ../comparison-output.txt 2>&1
+          echo "exit_code=$?" >> $GITHUB_OUTPUT
+          cat ../comparison-output.txt
         continue-on-error: true
+
+      - name: Prepare comment body
+        if: steps.check_deployment_tools.outputs.exists == 'true'
+        id: prepare_comment
+        run: |
+          if [ -f comparison-output.txt ]; then
+            echo "comment<<EOF" >> $GITHUB_OUTPUT
+            echo "## 🔬 Tanka Comparison Results" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo "Comparing [Grafana Tanka](https://github.com/grafana/tanka) with rustanka:" >> $GITHUB_OUTPUT
+            echo "" >> $GITHUB_OUTPUT
+            echo '```' >> $GITHUB_OUTPUT
+            cat comparison-output.txt >> $GITHUB_OUTPUT
+            echo '```' >> $GITHUB_OUTPUT
+            echo "EOF" >> $GITHUB_OUTPUT
+          else
+            echo "comment=No comparison output available" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Post PR comment
+        if: steps.check_deployment_tools.outputs.exists == 'true' && github.event_name == 'pull_request'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `${{ steps.prepare_comment.outputs.comment }}`;
+            
+            // Find existing comment
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(comment => 
+              comment.user.type === 'Bot' && 
+              comment.body.includes('🔬 Tanka Comparison Results')
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+            }
+
+      - name: Post commit comment
+        if: steps.check_deployment_tools.outputs.exists == 'true' && github.event_name == 'push'
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const comment = `${{ steps.prepare_comment.outputs.comment }}`;
+            
+            await github.rest.repos.createCommitComment({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              commit_sha: context.sha,
+              body: comment
+            });
 
       - name: Skip comparison (no deployment_tools)
         if: steps.check_deployment_tools.outputs.exists == 'false'
         run: |
           echo "Skipping comparison: deployment_tools repository not accessible"
           echo "This is expected if you don't have access to Grafana's internal repositories"
+
+      - name: Upload comparison output
+        if: steps.check_deployment_tools.outputs.exists == 'true'
+        uses: actions/upload-artifact@v4
+        with:
+          name: tk-compare-output
+          path: comparison-output.txt
+          if-no-files-found: ignore
 
       - name: Upload workspace on failure
         if: failure()

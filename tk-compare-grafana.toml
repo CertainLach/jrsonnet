@@ -29,15 +29,17 @@ runs = 5
 args = ["env", "list", "ksonnet/environments/grafana-o11y", "--json"]
 runs = 5
 
+# This one is slow, so we only run it once
 [[commands]]
 args = ["env", "list", "ksonnet/environments", "--json"]
-runs = 3
+runs = 1
 
 [[commands]]
 args = ["eval", "ksonnet/environments/cortex/ops-eu-south-0.mimir-ops-03"]
-runs = 5
+runs = 3
 
+# This one is slow, so we only run it once
 [[commands]]
 args = ["eval", "ksonnet/environments/grafana-o11y"]
-runs = 3
+runs = 1
 
