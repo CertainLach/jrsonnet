@@ -1,0 +1,41 @@
+apiVersion: v1
+data:
+  plugins.yml: |
+    apiVersion: 1
+    apps:
+        - disabled: false
+          jsonData:
+            backendUrl: https://bt-xdyg-ugivcfhfrc-fano-wtpjbhj.wj-wocv.hiz.zusvzgn.drhue:80
+            policiesOnly: false
+            remoteWriteUrl: https://iecbfzj.txs.jodowjw-miq.rpo/ctbnxktiach/vssa
+          org_id: 1
+          org_name: Main Org.
+          secureJsonData:
+            accessToken: $GEL_PLUGIN_ACCESS_TOKEN
+          type: grafana-enterprise-logs-app
+        - disabled: false
+          jsonData:
+            backendUrl: https://yv-isbyyf-pquoi-fsnupcplnk-kvdfknw.pj-vmyrbo.cki.kdymqav.ronbg:3100
+            policiesOnly: false
+            remoteWriteUrl: https://qltypuo.ybg.irejowp-dau.tzh/wfjrarnchdo/duepwj
+          org_id: 1
+          org_name: Main Org.
+          secureJsonData:
+            accessToken: $GET_PLUGIN_ACCESS_TOKEN
+          type: grafana-enterprise-traces-app
+        - disabled: false
+          jsonData:
+            backendUrl: https://qw-inpphor-emgtq-xeciyzn.kz-qiajxjs.svp.eorplkr.yrmok:80
+            policiesOnly: false
+            remoteWriteUrl: https://gwhsmhy.nbk.xpwzmmv-zue.pbe/qskdodqoaxe/nuecpzi
+          org_id: 1
+          org_name: Main Org.
+          secureJsonData:
+            accessToken: $GEM_PLUGIN_ACCESS_TOKEN
+          type: grafana-metrics-enterprise-app
+kind: ConfigMap
+metadata:
+  labels:
+    tanka.dev/environment: 9c16e63ab7c3331e498a406bf3dfa6f130b20fbe34d8d09d
+  name: ge-grafana-plugins-config
+  namespace: ge-grafana

@@ -1,0 +1,5915 @@
+{
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {
+          "type": "grafana",
+          "uid": "-- Grafana --"
+        },
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "builtIn": 1,
+        "datasource": "-- Grafana --",
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "type": "dashboard"
+      },
+      {
+        "datasource": "$loki_datasource",
+        "enable": true,
+        "expr": "{cluster=\"$cluster\", container=\"kube-diff-logger\"} | json | namespace_extracted=\"$namespace\" | notes!~\".*Replicas.*\"",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "name": "K8s Changes",
+        "showIn": 0,
+        "target": {}
+      },
+      {
+        "datasource": "$loki_datasource",
+        "enable": false,
+        "expr": "{cluster=\"$cluster\", container=\"kube-diff-logger\"} | json | namespace_extracted=\"$namespace\" | notes=~\".*Replicas.*\"",
+        "hide": false,
+        "iconColor": "rgba(255, 96, 96, 1)",
+        "name": "K8s Changes(Replicas)",
+        "showIn": 0,
+        "target": {},
+        "float": 0.95
+      }
+    ]
+  },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": 379,
+  "links": [],
+  "panels": [
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 0
+      },
+      "id": 71,
+      "panels": [
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 7,
+            "x": 0,
+            "y": 1
+          },
+          "id": 73,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Cloud Logs Export (CLE)\n\n* [Repository Link](https://lqcjoo.bbl/jcucttq/mosrz-xboz-sugktpqe)\n\n## How export works\n\nOnce a tenant has CLE enabled, a goroutine will be triggered\nto export data for every interval. This triggering is controlled\nby the `sync.list_objects_period` configuration. The interval will be\ndictated by the `sync.interval` configuration.\n\nIf `sync.list_objects_period` is `10m` and `sync.interval` is `20m`,\nevery 10 minutes a goroutine will check if 20 minutes has passed since\nthe last interval. If that happened, it will spawn a new Copy Iteration.\n\n### Copy Iteration\n\nThe copy iteration will:\n- List index files for the current interval\n- Make a list of all chunks that are part of the current interval.\n  If PSE (per-stream export) is configured for this tenant and a valid filter\n  is found, only chunks that are expected by the filter will be kept.\n- Copy all chunks in the list above\n- If the interval is crossing midnight, an audit of the current index will be triggered.\n  If the audit fails because a chunk is missing, the timestamp position for this\n  tenant is resetted to be 0:00:00 of that day. If it fails for another error it won't proceed\n  but won't be resetted either.\n- If all steps above succeed, the position is moved `sync.interval` minutes forward.\n",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "type": "text"
+        },
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 7,
+            "x": 7,
+            "y": 1
+          },
+          "id": 72,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Audit\n\n## What audit is\n\nAudit is a process that checks the integrity of a tenant state. We only\nprogress our export to a given tenant for a given day if its integrity is validated.\n\nTwo types of integrity checks are performed:\n1. Index validation (New). This new checkage, implemented\nas part of the PSE project, validates the exported index based on the original index present on our bucket.\nThe following checks are done:\n  1.1 the stats of the copied index do match with the original index.\nThe stats have: number of chunks, bytes, entries, and streams.\n  1.2 the chunkrefs are the same in both indexes.\n  obs: If the tenant has PSE enabled, we use the configured filter when looking at the original index.\n  For instance, when checking the stats, if the tenant has PSE configured, we will use the configured\n  filter with the original index vs the filtered index without filters.\n2. Chunks validation. This checkage iterates over the exported index list of\nchunks and makes sure all of them are present in the customer bucket with the same size\nas the chunk on our bucket.\n\n`Obs: Audit uses the new Thanos object storage client.`\n",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "type": "text"
+        },
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 4,
+            "x": 14,
+            "y": 1
+          },
+          "id": 70,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Per-Stream Export (PSE)\n\nPSE is a new CLE feature that allows exporting\nonly data matching a especific stream selector. \n\nBoth the export and the audit code had to be adapted\nto support the per-stream filtering capability.\n",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "type": "text"
+        }
+      ],
+      "title": "Concepts",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 1
+      },
+      "id": 2,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 2
+          },
+          "id": 48,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "time() - max(cloud_logs_archiver_last_synced_file_timestamp_seconds{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\", tenant=~\"$tenant\"}) by(tenant)",
+              "legendFormat": "timestamp of last sync for tenant {{tenant}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Age of last sync",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "blue",
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 35,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 8,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "dateTimeAsIso"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 4,
+            "y": 2
+          },
+          "id": 20,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(tenant)(cloud_logs_archiver_last_synced_file_timestamp_seconds{cluster=\"$cluster\", namespace=\"$namespace\", tenant=\"$tenant\"} * 1000)",
+              "legendFormat": "TS | {{tenant}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Last Sync Timestamp",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 9,
+            "y": 2
+          },
+          "id": 49,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(cloud_logs_archiver_files_listed{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\", tenant=~\"$tenant\"}[$__range]))by(tenant, type)",
+              "legendFormat": "{{type}} files listed | tenant={{tenant}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(cloud_logs_archiver_files_copied{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\", tenant=~\"$tenant\"}[$__range]))by(tenant, type)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{type}} files copied | tenant={{tenant}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Export / Files Sync",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 14,
+            "y": 2
+          },
+          "id": 51,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (direction, tenant) (increase(cloud_logs_archiver_transferred_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\", tenant=~\"$tenant\"}[$__range]))",
+              "legendFormat": "{{direction}} bytes | tenant={{tenant}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Exported Data",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "blue",
+                "mode": "shades",
+                "seriesBy": "last"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 1,
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "continuous-reds",
+                      "seriesBy": "max"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "G"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "mode": "continuous-reds",
+                      "seriesBy": "max"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 26
+          },
+          "id": 12,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", tenant=\"$tenant\", status=\"succeeded\"}[$__rate_interval]))",
+              "legendFormat": "iteration {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", tenant=\"$tenant\", status!=\"succeeded\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "iteration {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", tenant=\"$tenant\", namespace=\"$namespace\", cluster=\"$cluster\", status=\"success\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "index audit {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", tenant=\"$tenant\", namespace=\"$namespace\", cluster=\"$cluster\", status!=\"success\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "index audit {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(error)(increase(cloud_logs_archiver_audit_unexpected_events{container=\"cloud-logs-archiver\", tenant=\"$tenant\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit error {{error}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", tenant=\"$tenant\", status=\"success\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", tenant=\"$tenant\", status!=\"success\"}[$__rate_interval]))",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit {{status}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "G"
+            }
+          ],
+          "title": "General / Runs",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "continuous-BlPu",
+                "seriesBy": "max"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 32,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "noValue": "0",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 4,
+            "y": 26
+          },
+          "id": 19,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, tenant, table)(increase(cloud_logs_archiver_audit_chunks_validated{container=\"cloud-logs-archiver\", tenant=\"$tenant\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__range]))",
+              "legendFormat": "chunks validated | {{table}} | {{tenant}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Audit / Verified Chunks",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 1,
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "barWidthFactor": 0.2,
+                "drawStyle": "line",
+                "fillOpacity": 50,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 9,
+            "y": 26
+          },
+          "id": 54,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "1.0 - (sum by(table, tenant)(\n    cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\",tenant=\"$tenant\", type=\"matching\"}) /\n    sum by(table, tenant)(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\",tenant=\"$tenant\", type=\"not-matching-filter\"}))",
+              "legendFormat": "ratio of data filtered | {{table}} | tenant={{tenant}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "PSE / % of data filtered",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.2,
+                "drawStyle": "line",
+                "fillOpacity": 50,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 14,
+            "y": 26
+          },
+          "id": 53,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(type, table, tenant)(increase(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\" ,tenant=\"$tenant\", type!~\"total|not-in-range|not-matching-filter|in-range\"}[$__range]))",
+              "legendFormat": "matching | {{table}} | {{type}} | {{tenant}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(type, table, tenant)(increase(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\" ,tenant=\"$tenant\", type!~\"not-matching-filter\"}[$__range]))",
+              "hide": false,
+              "legendFormat": "not matching | {{table}} | {{type}} | {{tenant}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "PSE / Chunks Filtered",
+          "type": "timeseries"
+        }
+      ],
+      "title": "CLE Tenant View",
+      "type": "row"
+    },
+    {
+      "collapsed": false,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 2
+      },
+      "id": 3,
+      "panels": [],
+      "title": "CLE Cell View",
+      "type": "row"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "s"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 3
+      },
+      "id": 52,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "time() - max(cloud_logs_archiver_last_synced_file_timestamp_seconds{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\"}) by(tenant)",
+          "legendFormat": "timestamp of last sync for tenant {{tenant}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Export / Age of last sync",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 35,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 8,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "dateTimeAsIso"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 4,
+        "y": 3
+      },
+      "id": 21,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(tenant)(cloud_logs_archiver_last_synced_file_timestamp_seconds{cluster=\"$cluster\", namespace=\"$namespace\"} * 1000)",
+          "legendFormat": "TS | {{tenant}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Export / Last Sync Timestamp",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 9,
+        "y": 3
+      },
+      "id": 55,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(cloud_logs_archiver_files_listed{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\"}[$__range]))by(tenant, type)",
+          "legendFormat": "{{type}} files listed | tenant={{tenant}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum(increase(cloud_logs_archiver_files_copied{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\"}[$__range]))by(tenant, type)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{type}} files copied | tenant={{tenant}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Export / Files Sync",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 14,
+        "y": 3
+      },
+      "id": 58,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by (direction, tenant) (increase(cloud_logs_archiver_transferred_bytes{cluster=\"$cluster\", namespace=\"$namespace\", container=\"cloud-logs-archiver\"}[$__range]))",
+          "legendFormat": "{{direction}} bytes | tenant={{tenant}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Export / Exported Data",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "fixedColor": "blue",
+            "mode": "palette-classic",
+            "seriesBy": "last"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 11,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-reds",
+                  "seriesBy": "max"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "G"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "mode": "continuous-reds",
+                  "seriesBy": "max"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 9
+      },
+      "id": 47,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status=\"succeeded\"}[$__range]))",
+          "legendFormat": "iteration {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status!=\"succeeded\"}[$__range]))",
+          "hide": false,
+          "legendFormat": "iteration {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status=\"success\"}[$__range]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "index audit {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status!=\"success\"}[$__range]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "index audit {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "D"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(error)(increase(cloud_logs_archiver_audit_unexpected_events{container=\"cloud-logs-archiver\", tenant=\"$tenant\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__range]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "audit error {{error}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "E"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status=\"success\"}[$__range]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "audit {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "F"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(status, tenant)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\", status!=\"success\"}[$__range]))",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "audit {{status}} | tenant={{tenant}}",
+          "range": true,
+          "refId": "G"
+        }
+      ],
+      "title": "General / Runs",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlPu",
+            "seriesBy": "last"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 23,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "min": 0,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 4,
+        "y": 9
+      },
+      "id": 17,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(namespace, cluster, tenant, table)(increase(cloud_logs_archiver_audit_chunks_validated{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__range]))",
+          "legendFormat": "chunks validated | {{tenant}} | {{table}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Audit / Verified Chunks",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "barWidthFactor": 0.2,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "percentunit"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 9,
+        "y": 9
+      },
+      "id": 56,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "1.0 - (sum by(table, tenant)(\n    cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\", type=\"matching\"}) /\n    sum by(table, tenant)(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\", type=\"not-matching-filter\"}))",
+          "legendFormat": "tenant={{tenant}} | ratio of data filtered | {{table}}",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "PSE / % of data filtered out",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.2,
+            "drawStyle": "line",
+            "fillOpacity": 50,
+            "gradientMode": "opacity",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineStyle": {
+              "fill": "solid"
+            },
+            "lineWidth": 1,
+            "pointSize": 3,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 14,
+        "y": 9
+      },
+      "id": 57,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(type, table, tenant)(increase(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\", type!~\"total|not-in-range|not-matching-filter|in-range\"}[$__range]))",
+          "legendFormat": "matching | {{table}} | {{type}} | {{tenant}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(type, table, tenant)(increase(cloud_logs_archiver_total_chunks_filtered{cluster=~\"$cluster\",namespace=\"$namespace\", type!~\"not-matching-filter\"}[$__range]))",
+          "hide": false,
+          "legendFormat": "not matching | {{table}} | {{type}} | {{tenant}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "PSE / Chunks Filtered",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-BlPu"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "axisSoftMax": 1,
+            "axisSoftMin": 0,
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 17,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "bytes"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byFrameRefID",
+              "options": "B"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "purple",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 4,
+        "x": 0,
+        "y": 15
+      },
+      "id": 27,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "max by(pod) (container_memory_working_set_bytes{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"})",
+          "hide": false,
+          "legendFormat": "usage {{pod}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "min(kube_pod_container_resource_requests{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\", resource=\"memory\"} > 0)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "requests",
+          "range": true,
+          "refId": "B"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "min(container_spec_memory_limit_bytes{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"} > 0)",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "limit",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Hardware / Mem Usage",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "sishort"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 4,
+        "y": 15
+      },
+      "id": 22,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_gcs_request_duration_seconds_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval]))",
+          "hide": false,
+          "legendFormat": "gcs | {{operation}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_s3_request_duration_seconds_bucket{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval]))",
+          "hide": false,
+          "legendFormat": "{{operation}} | {{status_code}}",
+          "range": true,
+          "refId": "C"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_azure_blob_request_duration_seconds_count{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval]))",
+          "hide": false,
+          "legendFormat": "{{operation}} | {{status_code}}",
+          "range": true,
+          "refId": "B"
+        }
+      ],
+      "title": "Export / Rate of Object Storage Operations (Chunks Client)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 30,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          },
+          "unit": "short"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 5,
+        "x": 9,
+        "y": 15
+      },
+      "id": 5,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": true
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "exemplar": false,
+          "expr": "sum by(namespace, cluster, operation, bucket)(rate(cloud_logs_archiver_objstore_bucket_operations_total{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval])) > 0",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "legendFormat": "{{bucket}} | op={{operation}}",
+          "range": true,
+          "refId": "A"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(namespace, cluster, operation, bucket)(rate(cloud_logs_archiver_objstore_bucket_operation_failures_total{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[$__rate_interval])) > 0",
+          "hide": false,
+          "legendFormat": "failures - {{bucket}} | op={{operation}}",
+          "range": true,
+          "refId": "C"
+        }
+      ],
+      "title": "Bucket / Rate of Bucket Operations (Thanos)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 2,
+        "x": 14,
+        "y": 15
+      },
+      "id": 9,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "editorMode": "code",
+          "expr": "sum by(pod)(increase(kube_pod_container_status_restarts_total{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"}[10m]) > 0)",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Pod Crashes",
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "datasource": {
+        "type": "prometheus",
+        "uid": "$prometheus"
+      },
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisBorderShow": false,
+            "axisCenteredZero": false,
+            "axisColorMode": "text",
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "barWidthFactor": 0.6,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "insertNulls": false,
+            "lineInterpolation": "linear",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "none"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              },
+              {
+                "color": "red",
+                "value": 80
+              }
+            ]
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 16,
+        "y": 15
+      },
+      "id": 74,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom",
+          "showLegend": false
+        },
+        "tooltip": {
+          "mode": "single",
+          "sort": "none"
+        }
+      },
+      "pluginVersion": "11.4.0-78936",
+      "targets": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "${DS_MIMIR-OPS-03}"
+          },
+          "editorMode": "code",
+          "expr": "sum by(image)(kube_pod_container_info{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"})",
+          "legendFormat": "__auto",
+          "range": true,
+          "refId": "A"
+        }
+      ],
+      "title": "Image Running",
+      "transparent": true,
+      "type": "timeseries"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 21
+      },
+      "id": 36,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "dark-green",
+                "mode": "shades"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 0,
+            "y": 226
+          },
+          "id": 1,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operations_total{container=\"cloud-logs-archiver\", operation=~\"attributes|exists\", bucket!=\"\"}[$__rate_interval]))",
+              "legendFormat": "{{cluster}}.{{namespace}} op={{operation}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operation_failures_total{container=\"cloud-logs-archiver\", operation=~\"attributes|exists\", bucket!=\"\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{cluster}}.{{namespace}} op={{operation}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Rate of HEAD Operations (Thanos Client)",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "dark-green",
+                "mode": "shades"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "C"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 4,
+            "y": 226
+          },
+          "id": 33,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operations_total{container=\"cloud-logs-archiver\", bucket!=\"\", operation=~\"get|get_range|iter\"}[$__rate_interval]))",
+              "legendFormat": "{{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operation_failures_total{container=\"cloud-logs-archiver\", bucket!=\"\", operation=~\"get|get_range|iter\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "fail {{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Rate of GET/LIST Operations (Thanos Client)",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "dark-green",
+                "mode": "shades"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 5,
+            "w": 4,
+            "x": 8,
+            "y": 226
+          },
+          "id": 34,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operations_total{container=\"cloud-logs-archiver\", bucket!=\"\", operation=~\"upload|delete\"}[$__rate_interval]))",
+              "legendFormat": "{{cluster}}.{{namespace}} op={{operation}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(cloud_logs_archiver_objstore_bucket_operation_failures_total{container=\"cloud-logs-archiver\", bucket!=\"\", operation=~\"upload|delete\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{cluster}}.{{namespace}} op={{operation}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Rate of POST Operations (Thanos Client)",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 11,
+            "w": 10,
+            "x": 12,
+            "y": 226
+          },
+          "id": 28,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Storage Operations Visualization\n\nCLE interacts with the object storage on two situations:\n1. On every export, which happens in intervals along the day. This process is also named \"sync\".\n2. During the data validation process, also named \"audit\".\n\n## Expected operations during sync'ing\nCLE sync process interacts with the storage through the old Loki chunk client, so its metrics are\nthe ones exposed by it. The expected operations are:\n\n- A `LIST` to list all indexes files. Send to our bucket.\n- A `GET` to download the index file. Send to our bucket.\n- A `GET` to download every chunk file. Send to our bucket.\n- A `POST` to upload every chunk file. Send to the customer bucket.\n- A `POST` to upload schema files. Send to the customer bucket.\n- A `POST` to upload the index file. Send to the customer bucket.\n- A `HEAD` to every chunk file. Send to the customer bucket.\n- A `POST` to update the positions file. Send to our bucket.\n\n## Expected operations during audit\nCLE validates the exported data everytime the position for a tenant crosses midnight.\nThere's an index validation and a chunks validation. The index validation is newer\nand not enabled everywhere yet.\n\nThe index validation is expected to do the following operations:\n\n- A `GET` to download the index file. Send to our bucket.\n- A `GET` to download the index file. Send to the customer bucket.\n\nThe chunk validation is expected to do the following operations:\n\n- A `GET` to download the index file. Send to the customer bucket.\n- An `ATTRIBUTES` (`HEAD`) to every chunk file. Sent to our bucket.\n- An `ATTRIBUTES` (`HEAD`) to every chunk file. Sent to the customer bucket.",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "dark-green",
+                "mode": "shades"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 30,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "sishort"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "F"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "E"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 0,
+            "y": 231
+          },
+          "id": 23,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster)(rate(loki_gcs_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=\"GET\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "gcs GET | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(loki_azure_blob_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=~\"azure.ObjectExists|azure.GetObject|azure.GetAttributes\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(loki_s3_request_duration_seconds_bucket{container=\"cloud-logs-archiver\", operation=~\"S3.GetAttributes|S3.GetObject|S3.ObjectExists\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, status_code)(rate(loki_gcs_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=\"GET\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "gcs GET | {{status_code}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_azure_blob_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=~\"azure.ObjectExists|azure.GetObject\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}}  - {{status_code}}| {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_s3_request_duration_seconds_bucket{container=\"cloud-logs-archiver\", operation=~\"S3.GetAttributes|S3.GetObject|S3.ObjectExists\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} - {{status_code}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "F"
+            }
+          ],
+          "title": "Rate of HEAD/GET Storage Operations (Chunk Client)",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "dark-green",
+                "mode": "shades"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 30,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "sishort"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "F"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "E"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "dark-red",
+                      "mode": "shades"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 6,
+            "x": 6,
+            "y": 231
+          },
+          "id": 35,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster)(rate(loki_gcs_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=\"POST\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "gcs POST | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(loki_azure_blob_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation!~\"azure.ObjectExists|azure.GetObject|azure.GetAttributes\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation)(rate(loki_s3_request_duration_seconds_bucket{container=\"cloud-logs-archiver\", operation!~\"S3.GetAttributes|S3.GetObject|S3.ObjectExists\", status_code=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, status_code)(rate(loki_gcs_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation=\"POST\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "gcs POST | {{status_code}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_azure_blob_request_duration_seconds_count{container=\"cloud-logs-archiver\", operation!~\"azure.ObjectExists|azure.GetObject|azure.GetAttributes\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}}  - {{status_code}}| {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster, operation, status_code)(rate(loki_s3_request_duration_seconds_bucket{container=\"cloud-logs-archiver\", operation!~\"S3.GetAttributes|S3.GetObject|S3.ObjectExists\", status_code!=\"200\"}[$__rate_interval]))",
+              "hide": false,
+              "legendFormat": "{{operation}} - {{status_code}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "F"
+            }
+          ],
+          "title": "Rate of POST Storage Operations (Chunk Client)",
+          "transparent": true,
+          "type": "timeseries"
+        }
+      ],
+      "title": "Global Object Storage View",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 22
+      },
+      "id": 4,
+      "panels": [
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 23
+          },
+          "id": 59,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "time() - max(cloud_logs_archiver_last_synced_file_timestamp_seconds{container=\"cloud-logs-archiver\"}) by(cluster, namespace)",
+              "legendFormat": "timestamp of last sync for {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Last Sync Age",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "blue",
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 35,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 8,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "dateTimeAsIso"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 4,
+            "y": 23
+          },
+          "id": 69,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(cluster, namespace)(cloud_logs_archiver_last_synced_file_timestamp_seconds{container=\"cloud-logs-archiver\"} * 1000)",
+              "legendFormat": "TS | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Last Sync Timestamp",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 9,
+            "y": 23
+          },
+          "id": 63,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(cloud_logs_archiver_files_listed{ container=\"cloud-logs-archiver\"}[$__range]))by(cluster, namespace, type)",
+              "legendFormat": "{{type}} files listed | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum(increase(cloud_logs_archiver_files_copied{ container=\"cloud-logs-archiver\"}[$__range]))by(cluster, namespace, type)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{type}} files copied | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Export / Files Sync",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 14,
+            "y": 23
+          },
+          "id": 68,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by (direction, cluster, namespace) (increase(cloud_logs_archiver_transferred_bytes{ container=\"cloud-logs-archiver\"}[$__range]))",
+              "legendFormat": "{{direction}} bytes | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Export / Transferred Data",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "fixedColor": "blue",
+                "mode": "palette-classic",
+                "seriesBy": "last"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 1,
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 11,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "none"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "light-red",
+                      "mode": "fixed",
+                      "seriesBy": "max"
+                    }
+                  }
+                ]
+              },
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "G"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "light-red",
+                      "mode": "shades",
+                      "seriesBy": "max"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 29
+          },
+          "id": 60,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", status=\"succeeded\"}[$__range])) > 0",
+              "legendFormat": "iteration {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_loop_iterations_count{container=\"cloud-logs-archiver\", status!=\"succeeded\"}[$__range])) > 0",
+              "hide": false,
+              "legendFormat": "iteration {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", status=\"success\"}[$__range])) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "index audit {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "C"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_validate_index_total{container=\"cloud-logs-archiver\", status!=\"success\"}[$__range])) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "index audit {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "D"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(error, cluster, namespace)(increase(cloud_logs_archiver_audit_unexpected_events{container=\"cloud-logs-archiver\", tenant=\"$tenant\"}[$__range])) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit error {{error}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "E"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", status=\"success\"}[$__range])) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "F"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(status, cluster, namespace)(increase(cloud_logs_archiver_auditing_runs{container=\"cloud-logs-archiver\", status!=\"success\"}[$__range])) > 0",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "audit {{status}} | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "G"
+            }
+          ],
+          "title": "General / Runs",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "continuous-BlPu",
+                "seriesBy": "last"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 23,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "min": 0,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 4,
+            "y": 29
+          },
+          "id": 62,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster)(increase(cloud_logs_archiver_audit_chunks_validated{container=\"cloud-logs-archiver\"}[$__range]))",
+              "legendFormat": "chunks validated | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Audit / Verified Chunks",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 1,
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "barWidthFactor": 0.2,
+                "drawStyle": "line",
+                "fillOpacity": 50,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "percentunit"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 9,
+            "y": 29
+          },
+          "id": 65,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "1.0 - (sum by(cluster, namespace)(\n    cloud_logs_archiver_total_chunks_filtered{type=\"matching\"}) /\n    sum by(cluster, namespace)(cloud_logs_archiver_total_chunks_filtered{ type=\"not-matching-filter\"}))",
+              "legendFormat": "{{cluster}}.{{namespace}} | ratio of data filtered out",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "PSE / % of data filtered out",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.2,
+                "drawStyle": "line",
+                "fillOpacity": 50,
+                "gradientMode": "opacity",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 5,
+            "x": 14,
+            "y": 29
+          },
+          "id": 66,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(type, cluster, namespace)(increase(cloud_logs_archiver_total_chunks_filtered{type!~\"total|not-in-range|not-matching-filter|in-range\"}[$__range]))",
+              "legendFormat": "matching | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "sum by(type, cluster, namespace)(increase(cloud_logs_archiver_total_chunks_filtered{type=\"matching\"}[$__range]))",
+              "hide": false,
+              "legendFormat": "not matching | {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "PSE / Chunks Filtered",
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "continuous-BlPu"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "axisSoftMax": 1,
+                "axisSoftMin": 0,
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 4,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "B"
+                },
+                "properties": [
+                  {
+                    "id": "color",
+                    "value": {
+                      "fixedColor": "purple",
+                      "mode": "fixed"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 6,
+            "w": 4,
+            "x": 0,
+            "y": 35
+          },
+          "id": 61,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by(cluster, namespace) (container_memory_working_set_bytes{container=~\"cloud-logs-archiver\"})",
+              "hide": false,
+              "legendFormat": "usage {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(kube_pod_container_resource_requests{container=~\"cloud-logs-archiver\", resource=\"memory\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "requests for {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(container_spec_memory_limit_bytes{ container=~\"cloud-logs-archiver\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "limit for {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Hardware / Mem Usage",
+          "type": "timeseries"
+        }
+      ],
+      "title": "Global CLE View",
+      "type": "row"
+    },
+    {
+      "collapsed": true,
+      "gridPos": {
+        "h": 1,
+        "w": 24,
+        "x": 0,
+        "y": 23
+      },
+      "id": 37,
+      "panels": [
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 2,
+            "w": 20,
+            "x": 0,
+            "y": 24
+          },
+          "id": 39,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# ${cluster}.${namespace} view\n",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "transparent": true,
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "custom.axisCenteredZero",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 5,
+            "x": 0,
+            "y": 26
+          },
+          "id": 42,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "max by(namespace, cluster) (container_memory_working_set_bytes{container=~\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"})",
+              "legendFormat": "{{cluster}}.{{namespace}} usage",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(kube_pod_container_resource_requests{container=~\"cloud-logs-archiver\", resource=\"memory\", namespace=\"$namespace\", cluster=\"$cluster\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} requests",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(container_spec_memory_limit_bytes{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} limits",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Mem Usage",
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "auto",
+                "keepTime": false,
+                "replace": false,
+                "source": "Value"
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "custom.axisCenteredZero",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 5,
+            "x": 5,
+            "y": 26
+          },
+          "id": 43,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(cluster, namespace) (rate(container_cpu_usage_seconds_total{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"}[$__rate_interval]))",
+              "legendFormat": "{{cluster}}.{{namespace}} usage",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(kube_pod_container_resource_requests{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\", resource=\"cpu\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} requests",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(container_spec_cpu_quota{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"} / container_spec_cpu_period{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"})",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} limits",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "CPU",
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "auto",
+                "keepTime": false,
+                "replace": false,
+                "source": "Value"
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "area"
+                }
+              },
+              "mappings": [],
+              "max": 15000,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 4000.0002
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 6,
+            "x": 10,
+            "y": 26
+          },
+          "id": 46,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": false,
+              "width": 150
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by(cluster, namespace)(go_goroutines{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"})",
+              "format": "time_series",
+              "instant": true,
+              "legendFormat": "{{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Go Routines",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 3,
+            "x": 16,
+            "y": 26
+          },
+          "id": 7,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": false
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(image)(kube_pod_container_info{container=\"cloud-logs-archiver\", namespace=\"$namespace\", cluster=\"$cluster\"})",
+              "legendFormat": "__auto",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Image Running",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "fieldConfig": {
+            "defaults": {},
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 2,
+            "w": 19,
+            "x": 0,
+            "y": 34
+          },
+          "id": 38,
+          "options": {
+            "code": {
+              "language": "plaintext",
+              "showLineNumbers": false,
+              "showMiniMap": false
+            },
+            "content": "# Resource-level view for all environments (based on selected datasource)",
+            "mode": "markdown"
+          },
+          "pluginVersion": "11.4.0-78936",
+          "title": "",
+          "transparent": true,
+          "type": "text"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisGridShow": false,
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 8,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "custom.axisCenteredZero",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 36
+          },
+          "id": 40,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "width": 150
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "max by(namespace, cluster) (container_memory_working_set_bytes{container=~\"cloud-logs-archiver\"})",
+              "legendFormat": "{{cluster}}.{{namespace}} usage",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(kube_pod_container_resource_requests{container=~\"cloud-logs-archiver\", resource=\"memory\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} requests",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(container_spec_memory_limit_bytes{cluster=~\"$cluster\", namespace=~\"$namespace\", container=~\"cloud-logs-archiver\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} limits",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Hardware / Mem Usage",
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "auto",
+                "keepTime": false,
+                "replace": false,
+                "source": "Value"
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              },
+              "unit": "short"
+            },
+            "overrides": [
+              {
+                "matcher": {
+                  "id": "byFrameRefID",
+                  "options": "D"
+                },
+                "properties": [
+                  {
+                    "id": "custom.axisPlacement",
+                    "value": "right"
+                  },
+                  {
+                    "id": "unit",
+                    "value": "short"
+                  },
+                  {
+                    "id": "custom.axisCenteredZero",
+                    "value": true
+                  }
+                ]
+              }
+            ]
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 36
+          },
+          "id": 41,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "width": 150
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(cluster, namespace) (rate(container_cpu_usage_seconds_total{container=~\"cloud-logs-archiver\"}[$__rate_interval]))",
+              "legendFormat": "{{cluster}}.{{namespace}} usage",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(kube_pod_container_resource_requests{container=~\"cloud-logs-archiver\", resource=\"cpu\"} > 0)",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} requests",
+              "range": true,
+              "refId": "B"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "min by(cluster, namespace)(container_spec_cpu_quota{container=~\"cloud-logs-archiver\"} / container_spec_cpu_period{container=~\"cloud-logs-archiver\"})",
+              "hide": false,
+              "instant": false,
+              "legendFormat": "{{cluster}}.{{namespace}} limits",
+              "range": true,
+              "refId": "C"
+            }
+          ],
+          "title": "Hardware / CPU Usage",
+          "transformations": [
+            {
+              "id": "extractFields",
+              "options": {
+                "format": "auto",
+                "keepTime": false,
+                "replace": false,
+                "source": "Value"
+              }
+            }
+          ],
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "normal"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 16,
+            "y": 36
+          },
+          "id": 6,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(image, namespace, cluster)(kube_pod_container_info{container=\"cloud-logs-archiver\"})",
+              "legendFormat": "{{image}} - {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Image Running",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 80
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 4,
+            "w": 3,
+            "x": 16,
+            "y": 40
+          },
+          "id": 8,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom",
+              "showLegend": true
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "${DS_MIMIR-OPS-03}"
+              },
+              "editorMode": "code",
+              "expr": "sum by(namespace, cluster)(increase(kube_pod_container_status_restarts_total{container=\"cloud-logs-archiver\"}[10m]) > 0)",
+              "legendFormat": "{{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Pod Crashes",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "area"
+                }
+              },
+              "mappings": [],
+              "max": 15000,
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  },
+                  {
+                    "color": "red",
+                    "value": 4000.0002
+                  }
+                ]
+              }
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 44
+          },
+          "id": 44,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "width": 150
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by(cluster, namespace)(go_goroutines{container=\"cloud-logs-archiver\"})",
+              "format": "time_series",
+              "instant": true,
+              "legendFormat": "{{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            }
+          ],
+          "title": "Go / Go Routines",
+          "transparent": true,
+          "type": "timeseries"
+        },
+        {
+          "datasource": {
+            "type": "prometheus",
+            "uid": "$prometheus"
+          },
+          "fieldConfig": {
+            "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisBorderShow": false,
+                "axisCenteredZero": false,
+                "axisColorMode": "text",
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "barWidthFactor": 0.6,
+                "drawStyle": "line",
+                "fillOpacity": 0,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "insertNulls": false,
+                "lineInterpolation": "linear",
+                "lineStyle": {
+                  "fill": "solid"
+                },
+                "lineWidth": 1,
+                "pointSize": 3,
+                "scaleDistribution": {
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {
+                  "group": "A",
+                  "mode": "none"
+                },
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "green",
+                    "value": null
+                  }
+                ]
+              },
+              "unit": "bytes"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 44
+          },
+          "id": 45,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "right",
+              "showLegend": true,
+              "width": 150
+            },
+            "tooltip": {
+              "mode": "single",
+              "sort": "none"
+            }
+          },
+          "pluginVersion": "11.4.0-78936",
+          "targets": [
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by(namespace, cluster)(rate(container_network_receive_bytes_total{pod=~\"cloud-logs-archiver.*\"}[$__rate_interval]))",
+              "format": "time_series",
+              "instant": true,
+              "legendFormat": "received bytes {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "A"
+            },
+            {
+              "datasource": {
+                "type": "prometheus",
+                "uid": "$prometheus"
+              },
+              "editorMode": "code",
+              "exemplar": false,
+              "expr": "sum by(namespace, cluster)(rate(container_network_transmit_bytes_total{pod=~\"cloud-logs-archiver.*\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": true,
+              "legendFormat": "transmited bytes {{cluster}}.{{namespace}}",
+              "range": true,
+              "refId": "B"
+            }
+          ],
+          "title": "Network / Transferred Bytes",
+          "transparent": true,
+          "type": "timeseries"
+        }
+      ],
+      "title": "Resources/Hardware",
+      "type": "row"
+    }
+  ],
+  "preload": false,
+  "refresh": "10s",
+  "schemaVersion": 40,
+  "tags": [
+    "loki"
+  ],
+  "templating": {
+    "list": [
+      {
+        "current": {},
+        "description": "",
+        "label": "Datasource",
+        "name": "datasource",
+        "options": [],
+        "query": "prometheus",
+        "refresh": 1,
+        "regex": ".*cortex.*",
+        "type": "datasource"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$prometheus"
+        },
+        "definition": "label_values(kube_pod_container_info,cluster)",
+        "description": "",
+        "label": "Cluster",
+        "name": "cluster",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(kube_pod_container_info,cluster)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "",
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$prometheus"
+        },
+        "definition": "label_values(loki_build_info{cluster=\"$cluster\"},namespace)",
+        "description": "",
+        "label": "Namespace",
+        "name": "namespace",
+        "options": [],
+        "query": {
+          "qryType": 1,
+          "query": "label_values(loki_build_info{cluster=\"$cluster\"},namespace)",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "loki.*",
+        "type": "query"
+      },
+      {
+        "current": {},
+        "datasource": {
+          "type": "prometheus",
+          "uid": "$prometheus"
+        },
+        "definition": "query_result(sum by (id) (grafanacloud_logs_instance_info) and sum(label_replace(loki_tenant:active_streams{cluster=\"$cluster\",namespace=\"$namespace\"},\"id\",\"$1\",\"tenant\",\"(.*)\")) by(id))",
+        "description": "",
+        "label": "Tenant",
+        "name": "tenant",
+        "options": [],
+        "query": {
+          "qryType": 3,
+          "query": "query_result(sum by (id) (grafanacloud_logs_instance_info) and sum(label_replace(loki_tenant:active_streams{cluster=\"$cluster\",namespace=\"$namespace\"},\"id\",\"$1\",\"tenant\",\"(.*)\")) by(id))",
+          "refId": "PrometheusVariableQueryEditor-VariableQuery"
+        },
+        "refresh": 1,
+        "regex": "/\"([^\"]+)\"/",
+        "sort": 1,
+        "type": "query"
+      },
+      {
+        "name": "loki_datasource",
+        "options": [],
+        "query": "loki",
+        "refresh": 1,
+        "regex": "",
+        "type": "datasource"
+      }
+    ]
+  },
+  "time": {
+    "from": "now-12h",
+    "to": "now"
+  },
+  "timepicker": {},
+  "timezone": "",
+  "title": "CLE / Headquarters",
+  "uid": "f8aead52e79f15a9cbbdd3ffd4367a7e",
+  "version": 1,
+  "weekStart": ""
+}

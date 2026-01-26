@@ -1,0 +1,92 @@
+apiVersion: v1
+data:
+  config.json: |-
+    {
+        "database": {
+            "host": "localhost",
+            "name": "myapp",
+            "port": 5432
+        },
+        "features": {
+            "enableCache": true,
+            "float": 8.1,
+            "max_series": 3333333.3333333335
+        },
+        "servers": [
+            {
+                "dependencies": [
+                    {
+                        "dependencies": [
+                            {
+                                "description": "This is a dependency description.\nThis is a second line.\n",
+                                "name": "dependency2",
+                                "version": "2.0.0"
+                            }
+                        ],
+                        "name": "dependency1",
+                        "version": "1.0.0"
+                    },
+                    {
+                        "dependencies": [
+                            {
+                                "description": "This is a dependency description.\nThis is a second line.\n",
+                                "name": "dependency4",
+                                "version": "4.0.0"
+                            }
+                        ],
+                        "description": "This is a dependency description.\nThis is a second line.\n",
+                        "name": "dependency3",
+                        "version": "3.0.0"
+                    }
+                ],
+                "ip": "10.0.0.1",
+                "name": "server1"
+            },
+            {
+                "ip": "10.0.0.2",
+                "name": "server2"
+            }
+        ]
+    }
+  config.yaml: |-
+    "database":
+      "host": "localhost"
+      "name": "myapp"
+      "port": 5432
+    "features":
+      "enableCache": true
+      "float": 8.1
+      "max_series": 3333333.3333333335
+    "servers":
+    - "dependencies":
+      - "dependencies":
+        - "description": |
+            This is a dependency description.
+            This is a second line.
+          "name": "dependency2"
+          "version": "2.0.0"
+        "name": "dependency1"
+        "version": "1.0.0"
+      - "dependencies":
+        - "description": |
+            This is a dependency description.
+            This is a second line.
+          "name": "dependency4"
+          "version": "4.0.0"
+        "description": |
+          This is a dependency description.
+          This is a second line.
+        "name": "dependency3"
+        "version": "3.0.0"
+      "ip": "10.0.0.1"
+      "name": "server1"
+    - "ip": "10.0.0.2"
+      "name": "server2"
+  multilineMangled.txt: "\"multilineMangled\": |\n  This is a multiline string.\n
+    \ This is a second line. It has an intentional trailing space. tk mangles it.
+    \n\"otherField\": \"otherValue\""
+  simple.txt: Hello, World!
+kind: ConfigMap
+metadata:
+  name: app-config
+  namespace: default

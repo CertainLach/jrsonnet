@@ -1,0 +1,11 @@
+apiVersion: example.io/v1
+kind: WildcardConfig
+metadata:
+  name: wildcard-test
+  namespace: default
+spec:
+  allowedPrincipal: '*'
+  patterns:
+  - '*'
+  - prefix-*
+  - '*-suffix'

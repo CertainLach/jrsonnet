@@ -1,0 +1,4 @@
+apiVersion: v2
+name: test-chart
+description: A test chart that uses apiVersions conditional rendering
+version: 0.1.0

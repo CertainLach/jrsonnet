@@ -1,0 +1,5 @@
+apiVersion: v2
+name: list-chart
+description: Test chart for List kind expansion in helmTemplate
+version: 0.1.0
+appVersion: "1.0.0"

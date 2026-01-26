@@ -1,0 +1,5 @@
+apiVersion: v2
+name: test-chart
+description: A minimal test chart for helmTemplate testing
+version: 0.1.0
+appVersion: "1.0.0"

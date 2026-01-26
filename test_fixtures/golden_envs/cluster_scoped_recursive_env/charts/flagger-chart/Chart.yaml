@@ -1,0 +1,5 @@
+apiVersion: v2
+name: flagger-chart
+description: A test chart for flagger with CRDs
+version: 0.1.0
+appVersion: "1.0.0"

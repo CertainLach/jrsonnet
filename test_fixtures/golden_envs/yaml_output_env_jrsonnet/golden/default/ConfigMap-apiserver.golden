@@ -1,0 +1,9 @@
+apiVersion: v1
+data:
+  name: apiserver
+  rules: |2+
+
+kind: ConfigMap
+metadata:
+  name: apiserver
+  namespace: default

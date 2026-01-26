@@ -1,0 +1,62 @@
+apiVersion: v1
+data:
+  critical-prometheus.yml: |-
+    "apiVersion": 1
+    "datasources":
+    - "access": "proxy"
+      "editable": false
+      "isDefault": false
+      "jsonData":
+        "exemplarTraceIdDestinations":
+        - "datasourceUid": "tempo-ops-01"
+          "name": "traceID"
+        "httpMethod": "GET"
+      "name": "critical-prometheus"
+      "type": "prometheus"
+      "uid": "critical-prometheus"
+      "url": "http://kypgheec-jzdqyrxqbv.kytetmeffwytz.fxo.bnlvxho.tjyxz./ohrhjzzp-glvsooyjym/"
+      "version": 1
+  grafana-billing-svc.yml: |-
+    "apiVersion": 1
+    "datasources":
+    - "access": "proxy"
+      "basicAuth": true
+      "basicAuthUser": "1"
+      "editable": false
+      "isDefault": false
+      "jsonData":
+        "httpMethod": "POST"
+        "manageAlerts": false
+      "name": "grafana-billing-svc"
+      "secureJsonData":
+        "basicAuthPassword": "$BILLING_VIEW_KEY"
+      "type": "prometheus"
+      "uid": "grafana-billing-svc"
+      "url": "http://qqnfgzt-eibuplrd.wqdjcyf-ioq.enc.hola-nbmqlh-1.mclha/kdw/ukze"
+      "version": 1
+  loki-ops.yml: |-
+    "apiVersion": 1
+    "datasources":
+    - "access": "proxy"
+      "basicAuth": true
+      "basicAuthUser": "29"
+      "editable": false
+      "isDefault": false
+      "jsonData":
+        "derivedFields":
+        - "datasourceUid": "tempo-ops-01"
+          "matcherRegex": "(?:traceID|trace_id|tid)=(\\w+)"
+          "name": "TraceID"
+          "url": "$${__value.raw}"
+        "httpMethod": "GET"
+      "name": "loki-ops"
+      "secureJsonData":
+        "basicAuthPassword": "$GRAFANA_LOKI_READ_KEY_LOG"
+      "type": "loki"
+      "uid": "loki-ops"
+      "url": "https://ebjp-wey-002.wpotaca-ige.rxt"
+      "version": 1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: default

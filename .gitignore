@@ -1,4 +1,6 @@
 /target
+/target-base
+/target-base-src
 
 .idea
 .vscode

@@ -41,6 +41,7 @@ macro_rules! ensure_val_eq {
 }
 
 #[builtin]
+#[allow(dead_code)]
 fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 	match lazy.evaluate() {
 		Ok(_) => {
@@ -55,6 +56,7 @@ fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 }
 
 #[builtin]
+#[allow(dead_code)]
 fn param_names(fun: FuncVal) -> Vec<String> {
 	match fun {
 		FuncVal::Id => vec!["x".to_string()],
@@ -78,6 +80,7 @@ fn param_names(fun: FuncVal) -> Vec<String> {
 }
 
 #[derive(Trace)]
+#[allow(dead_code)]
 pub struct ContextInitializer;
 impl ContextInitializerT for ContextInitializer {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {

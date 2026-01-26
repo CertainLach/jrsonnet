@@ -11,6 +11,7 @@ version.workspace = true
 workspace = true
 
 [features]
+default = []
 experimental = [
     "exp-preserve-order",
     "exp-destruct",
@@ -18,7 +19,6 @@ experimental = [
     "exp-object-iteration",
     "exp-bigint",
     "exp-apply",
-    "exp-regex",
 ]
 # Use mimalloc as allocator
 mimalloc = ["mimallocator"]
@@ -33,8 +33,6 @@ exp-destruct = ["jrsonnet-evaluator/exp-destruct"]
 exp-object-iteration = ["jrsonnet-evaluator/exp-object-iteration"]
 # Bigint type
 exp-bigint = ["jrsonnet-evaluator/exp-bigint", "jrsonnet-cli/exp-bigint"]
-# std.regex and co.
-exp-regex = ["jrsonnet-cli/exp-regex"]
 # obj?.field, obj?.['field']
 exp-null-coaelse = [
     "jrsonnet-evaluator/exp-null-coaelse",

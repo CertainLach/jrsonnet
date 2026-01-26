@@ -1,0 +1,16 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "nested-block-scalar-test"
+  },
+  "spec": {
+    "apiServer": "https://zrlczmair",
+    "namespace": "default",
+    "resourceDefaults": {
+      "annotations": {
+        "my-annotation": "my-value"
+      }
+    }
+  }
+}

@@ -204,6 +204,7 @@ impl ArrayLike for ExprArray {
 	}
 }
 
+#[allow(dead_code)]
 #[derive(Trace, Debug)]
 pub struct ExtendedArray {
 	pub a: ArrValue,
@@ -211,6 +212,7 @@ pub struct ExtendedArray {
 	split: usize,
 	len: usize,
 }
+#[allow(dead_code)]
 impl ExtendedArray {
 	pub fn new(a: ArrValue, b: ArrValue) -> Self {
 		let a_len = a.len();

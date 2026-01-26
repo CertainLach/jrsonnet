@@ -1,0 +1,15 @@
+{
+    "version": 1,
+    "dependencies": [
+        {
+            "source": {
+                "git": {
+                    "remote": "https://tgwkgv.uiq/pibcuni/bakyeui-fxor.wnr",
+                    "subdir": "tanka-util"
+                }
+            },
+            "version": "master"
+        }
+    ],
+    "legacyImports": true
+}

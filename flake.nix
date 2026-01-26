@@ -2,39 +2,51 @@
   description = "Jrsonnet";
   inputs = {
     nixpkgs.url = "github:nixos/nixpkgs";
+
     rust-overlay = {
       url = "github:oxalica/rust-overlay";
       inputs.nixpkgs.follows = "nixpkgs";
     };
+
     flake-parts = {
       url = "github:hercules-ci/flake-parts";
       inputs.nixpkgs-lib.follows = "nixpkgs";
     };
+
     crane = {
       url = "github:ipetkov/crane";
-      inputs.nixpkgs.follows = "nixpkgs";
     };
+
     shelly = {
       url = "github:CertainLach/shelly";
-      inputs = {
-        flake-parts.follows = "flake-parts";
-        nixpkgs.follows = "nixpkgs";
-      };
+    };
+
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
     };
   };
+
   outputs = inputs @ {
-    nixpkgs,
-    flake-parts,
-    rust-overlay,
     crane,
+    flake-parts,
+    nixpkgs,
+    rust-overlay,
     shelly,
+    treefmt-nix,
     ...
   }:
     flake-parts.lib.mkFlake {inherit inputs;} {
-      imports = [shelly.flakeModule];
-      systems = ["x86_64-linux" "aarch64-linux" "armv7l-linux" "armv6l-linux" "mingw-w64"];
+      imports = [
+        shelly.flakeModule
+        treefmt-nix.flakeModule
+      ];
+
+      systems = nixpkgs.lib.systems.flakeExposed;
+
       perSystem = {
         config,
+        lib,
         system,
         ...
       }: let
@@ -43,14 +55,19 @@
           overlays = [rust-overlay.overlays.default];
           config.allowUnsupportedSystem = true;
         };
+
         rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
+
         craneLib = (crane.mkLib pkgs).overrideToolchain rust;
       in {
         legacyPackages = {
           jsonnetImpls = {
             go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix {};
+
             sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix {};
+
             jsonnet = pkgs.callPackage ./nix/jsonnet.nix {};
+
             # I didn't managed to build it, and nixpkgs version is marked as broken
             # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
             rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix {};
@@ -58,25 +75,6 @@
         };
         packages = rec {
           default = jrsonnet;
-
-          jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
-          };
-          jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
-            withNightlyFeatures = true;
-          };
-          jrsonnet-experimental = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
-            withExperimentalFeatures = true;
-          };
-
-          jrsonnet-release = pkgs.callPackage ./nix/jrsonnet-release.nix {
-            rustPlatform = pkgs.makeRustPlatform {
-              rustc = rust;
-              cargo = rust;
-            };
-          };
 
           benchmarks = pkgs.callPackage ./nix/benchmarks.nix {
             inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
@@ -87,16 +85,7 @@
               }
             ];
           };
-          benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
-            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
-            quick = true;
-            jrsonnetVariants = [
-              {
-                drv = jrsonnet.override {forBenchmarks = true;};
-                name = "";
-              }
-            ];
-          };
+
           benchmarks-against-release = pkgs.callPackage ./nix/benchmarks.nix {
             inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             jrsonnetVariants = [
@@ -114,6 +103,18 @@
               }
             ];
           };
+
+          benchmarks-quick = pkgs.callPackage ./nix/benchmarks.nix {
+            inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
+            quick = true;
+            jrsonnetVariants = [
+              {
+                drv = jrsonnet.override {forBenchmarks = true;};
+                name = "";
+              }
+            ];
+          };
+
           benchmarks-quick-against-release = pkgs.callPackage ./nix/benchmarks.nix {
             inherit (config.legacyPackages.jsonnetImpls) go-jsonnet sjsonnet jsonnet rsjsonnet;
             quick = true;
@@ -132,14 +133,65 @@
               }
             ];
           };
+
+          jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
+            inherit craneLib;
+          };
+
+          jrsonnet-experimental = pkgs.callPackage ./nix/jrsonnet.nix {
+            inherit craneLib;
+            withExperimentalFeatures = true;
+          };
+
+          jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
+            inherit craneLib;
+            withNightlyFeatures = true;
+          };
+
+          jrsonnet-release = pkgs.callPackage ./nix/jrsonnet-release.nix {
+            rustPlatform = pkgs.makeRustPlatform {
+              rustc = rust;
+              cargo = rust;
+            };
+          };
+
+          rtk = pkgs.callPackage ./nix/rtk.nix {
+            inherit craneLib;
+          };
+          rtk-benchmarks = pkgs.callPackage ./nix/rtk-benchmarks.nix {
+            inherit (config) packages;
+          };
+
+          tanka = pkgs.callPackage ./nix/tanka.nix {};
         };
+
+        apps = {
+          rtk-benchmarks = {
+            type = "app";
+            program = "${config.packages.rtk-benchmarks}/bin/rtk-benchmarks";
+          };
+        };
+
+        treefmt = {
+          projectRootFile = "flake.nix";
+          programs = {
+            alejandra.enable = true;
+            rustfmt = {
+              enable = true;
+              package = pkgs.rust-bin.nightly.latest.rustfmt;
+              edition = "2021";
+            };
+            shfmt.enable = true;
+          };
+        };
+
         shelly.shells.default = {
           factory = craneLib.devShell;
           packages = with pkgs;
             [
               alejandra
               cargo-edit
-              cargo-asm
+              cargo-show-asm
               cargo-outdated
               cargo-watch
               cargo-insta
@@ -147,9 +199,10 @@
               hyperfine
               graphviz
             ]
+            ++ config.packages.rtk.testInputs
             ++ lib.optionals (!stdenv.isDarwin) [
               valgrind
-              kcachegrind
+              kdePackages.kcachegrind
             ];
         };
       };

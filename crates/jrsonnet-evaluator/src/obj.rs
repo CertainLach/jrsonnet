@@ -1,6 +1,6 @@
 use std::{
 	any::Any,
-	cell::RefCell,
+	cell::{Cell, RefCell},
 	fmt::Debug,
 	hash::{Hash, Hasher},
 	ptr::addr_of,
@@ -10,6 +10,34 @@ use jrsonnet_gcmodule::{Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::FxHashMap;
+
+// Thread-local flag to disable assertion checking
+// This is used to match Go Tanka's behavior of not running assertions during manifest generation
+thread_local! {
+	static SKIP_ASSERTIONS: Cell<bool> = const { Cell::new(false) };
+	static LENIENT_SUPER: Cell<bool> = const { Cell::new(false) };
+}
+
+/// Set whether to skip assertion checks (for manifest generation compatibility with Go Tanka)
+pub fn set_skip_assertions(skip: bool) {
+	SKIP_ASSERTIONS.with(|s| s.set(skip));
+}
+
+/// Check if assertions should be skipped
+fn should_skip_assertions() -> bool {
+	SKIP_ASSERTIONS.with(std::cell::Cell::get)
+}
+
+/// Set whether to use lenient mode for super field access (return empty object instead of error)
+/// This works around go-jsonnet compatibility issues where mixins reference super fields that don't exist yet
+pub fn set_lenient_super(lenient: bool) {
+	LENIENT_SUPER.with(|s| s.set(lenient));
+}
+
+/// Check if lenient super mode is enabled
+pub fn should_use_lenient_super() -> bool {
+	LENIENT_SUPER.with(std::cell::Cell::get)
+}
 
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
@@ -420,6 +448,10 @@ impl ObjValue {
 	}
 
 	pub fn run_assertions(&self) -> Result<()> {
+		// Skip assertions if globally disabled (for Tanka compatibility)
+		if should_skip_assertions() {
+			return Ok(());
+		}
 		// FIXME: Should it use `self.0.this()` in case of standalone super?
 		self.run_assertions_raw(self.clone())
 	}
@@ -522,6 +554,8 @@ impl ObjValue {
 			.filter(|(_, (visible, _))| include_hidden || *visible)
 			.map(|(k, _)| k)
 			.collect();
+		// Sort keys lexicographically to match Go/tk behavior
+		// Note: Go sorts strings lexicographically, so "100" < "67" because '1' < '6'
 		fields.sort_unstable();
 		fields
 	}

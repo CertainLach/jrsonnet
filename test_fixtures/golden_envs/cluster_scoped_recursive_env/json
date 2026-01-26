@@ -1,0 +1,30 @@
+{
+   "env-dev-region-0": {
+      "apiVersion": "tanka.dev/v1alpha1",
+      "kind": "Environment",
+      "metadata": {
+         "labels": {
+            "cluster": "dev-region-0"
+         },
+         "name": "flagger-dev-region-0"
+      },
+      "spec": {
+         "apiServer": "https://uda-xihhex-0.dvxrcsn.bac:6443",
+         "namespace": "flagger"
+      }
+   },
+   "env-prod-region-3": {
+      "apiVersion": "tanka.dev/v1alpha1",
+      "kind": "Environment",
+      "metadata": {
+         "labels": {
+            "cluster": "prod-region-3"
+         },
+         "name": "flagger-prod-region-3"
+      },
+      "spec": {
+         "apiServer": "https://ghqt-argwuw-3.rnhosiz.ayz:6443",
+         "namespace": "flagger"
+      }
+   }
+}

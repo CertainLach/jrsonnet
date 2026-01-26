@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  config.yaml: |-
+    "added": "by_dev"
+    "querier":
+      "multi_tenant": true
+kind: ConfigMap
+metadata:
+  name: test
+  namespace: default

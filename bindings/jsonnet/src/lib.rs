@@ -47,7 +47,7 @@ pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.20.0\0"
 }
 
-unsafe fn parse_path(input: &CStr) -> Cow<Path> {
+unsafe fn parse_path(input: &CStr) -> Cow<'_, Path> {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
@@ -61,7 +61,7 @@ unsafe fn parse_path(input: &CStr) -> Cow<Path> {
 	}
 }
 
-unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
+unsafe fn unparse_path(input: &Path) -> Cow<'_, CStr> {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;

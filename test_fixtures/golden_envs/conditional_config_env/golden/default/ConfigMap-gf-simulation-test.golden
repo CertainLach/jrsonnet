@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  index-gateway.yaml: |-
+    "name": "index-gateway"
+    "replicas": 3
+  selector.yaml: '"name": "index-gateway"'
+kind: ConfigMap
+metadata:
+  name: gf-simulation-test
+  namespace: default

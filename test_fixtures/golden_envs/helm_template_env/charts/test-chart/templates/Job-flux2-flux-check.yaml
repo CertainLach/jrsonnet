@@ -1,0 +1,18 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: flux2-flux-check-o11y-ingest
+  namespace: default
+spec:
+  jobTemplate:
+    spec:
+      template:
+        spec:
+          containers:
+          - args:
+            - --reason=Removing Flux ignores before scheduled rollout of this cell
+            - --namespace=metrics-ops-03
+            - --selector=app.kubernetes.io/name=mimir
+            image: bitnami/kubectl:1.25
+            name: kubectl
+  schedule: 0 9 * * 1-5

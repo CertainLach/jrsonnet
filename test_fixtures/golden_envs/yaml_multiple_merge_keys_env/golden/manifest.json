@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-test-multiple-merge-keys.golden": "main.jsonnet"
+}

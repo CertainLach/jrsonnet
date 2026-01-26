@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  native.yaml: |
+    key: value
+    nested:
+        a: 1
+kind: ConfigMap
+metadata:
+  name: native-test
+  namespace: default

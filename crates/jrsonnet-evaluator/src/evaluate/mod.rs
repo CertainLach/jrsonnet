@@ -500,9 +500,15 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					#[cfg(feature = "exp-null-coaelse")]
 					None if part.null_coaelse => return Ok(Val::Null),
 					None => {
-						let suggestions = suggest_object_fields(super_obj, name.clone());
-
-						bail!(NoSuchField(name, suggestions))
+						// Workaround for go-jsonnet compatibility: in lenient mode, return empty object
+						// instead of error when super field doesn't exist. This allows mixins that reference
+						// super fields that don't exist yet to continue evaluating.
+						if crate::should_use_lenient_super() {
+							Val::Obj(crate::ObjValue::new_empty())
+						} else {
+							let suggestions = suggest_object_fields(super_obj, name.clone());
+							bail!(NoSuchField(name, suggestions))
+						}
 					}
 				}
 			} else {

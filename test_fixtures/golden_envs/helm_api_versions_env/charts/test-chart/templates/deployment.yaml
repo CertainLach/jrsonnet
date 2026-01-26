@@ -1,0 +1,28 @@
+{{- /*
+  This template conditionally uses different apiVersions based on what's available.
+  If apps/v1 is available (via --api-versions flag), use it.
+  Otherwise fall back to extensions/v1beta1 (old deprecated version).
+  This mimics real-world charts like pgbouncer that do this.
+*/ -}}
+{{- if .Capabilities.APIVersions.Has "apps/v1/Deployment" }}
+apiVersion: apps/v1
+{{- else }}
+apiVersion: extensions/v1beta1
+{{- end }}
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-test
+  namespace: {{ .Release.Namespace }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      labels:
+        app: test
+    spec:
+      containers:
+      - name: test
+        image: nginx:1.25

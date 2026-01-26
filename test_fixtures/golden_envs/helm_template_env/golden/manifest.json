@@ -1,0 +1,17 @@
+{
+    "_cluster/CustomResourceDefinition-testresources.example.com.golden": "main.jsonnet",
+    "default/ConfigMap-alerting-rules-unquoted.golden": "main.jsonnet",
+    "default/ConfigMap-alerting-rules.golden": "main.jsonnet",
+    "default/ConfigMap-app-config.golden": "main.jsonnet",
+    "default/ConfigMap-dashboards.golden": "main.jsonnet",
+    "default/ConfigMap-envoy-config.golden": "main.jsonnet",
+    "default/ConfigMap-html-content.golden": "main.jsonnet",
+    "default/ConfigMap-nested-yaml-config.golden": "main.jsonnet",
+    "default/ConfigMap-nested-yaml-manifest-yaml-from-json-config.golden": "main.jsonnet",
+    "default/ConfigMap-overrides.golden": "main.jsonnet",
+    "default/Deployment-csp-test.golden": "main.jsonnet",
+    "default/Deployment-myrelease-deployment.golden": "main.jsonnet",
+    "default/Deployment-test-k8s-deployment.golden": "main.jsonnet",
+    "default/Job-flux2-flux-check-o11y-ingest.golden": "main.jsonnet",
+    "default/Service-myrelease-service.golden": "main.jsonnet"
+}

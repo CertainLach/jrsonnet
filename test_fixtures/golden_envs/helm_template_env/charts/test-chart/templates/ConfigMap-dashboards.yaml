@@ -1,0 +1,193 @@
+apiVersion: v1
+data:
+  dashboard-to-string.json: '{"annotations": {"list": [{"builtIn": 1, "datasource":
+    "-- Grafana --", "enable": true, "hide": true, "iconColor": "rgba(0, 211, 255,
+    1)", "name": "Annotations & Alerts", "target": {"limit": 100, "matchAny": false,
+    "tags": [ ], "type": "dashboard"}, "type": "dashboard"}]}, "editable": true, "fiscalYearStartMonth":
+    0, "gnetId": null, "graphTooltip": 0, "id": null, "iteration": 1633698678946,
+    "links": [{"asDropdown": true, "icon": "external link", "includeVars": true, "keepTime":
+    true, "tags": ["Insight-Logs"], "targetBlank": false, "title": "Dashboards", "type":
+    "dashboards"}], "liveNow": false, "panels": [{"collapsed": false, "datasource":
+    null, "gridPos": {"h": 1, "w": 24, "x": 0, "y": 0}, "id": 7, "panels": [ ], "repeat":
+    null, "title": "Targets & Files", "type": "row"}, {"aliasColors": { }, "bars":
+    false, "dashLength": 10, "dashes": false, "datasource": "${metrics_datasource}",
+    "fill": 1, "fillGradient": 0, "gridPos": {"h": 7, "w": 12, "x": 0, "y": 1}, "hiddenSeries":
+    false, "id": 1, "legend": {"avg": false, "current": false, "max": false, "min":
+    false, "show": true, "total": false, "values": false}, "lines": true, "linewidth":
+    1, "links": [ ], "nullPointMode": "null as zero", "options": {"alertThreshold":
+    true}, "percentage": false, "pluginVersion": "8.2.0-35787beta.2", "pointradius":
+    5, "points": false, "renderer": "flot", "seriesOverrides": [ ], "spaceLength":
+    10, "stack": false, "steppedLine": false, "targets": [{"exemplar": true, "expr":
+    "sum(promtail_targets_active_total{cluster=~\"$cluster\",job=\"insight-logs/promtail-insight-logs\"})",
+    "format": "time_series", "interval": "", "intervalFactor": 2, "legendFormat":
+    "Active Targets", "legendLink": null, "refId": "A", "step": 10}], "thresholds":
+    [ ], "timeFrom": null, "timeRegions": [ ], "timeShift": null, "title": "Active
+    Targets", "tooltip": {"shared": false, "sort": 0, "value_type": "individual"},
+    "type": "graph", "xaxis": {"buckets": null, "mode": "time", "name": null, "show":
+    true, "values": [ ]}, "yaxes": [{"format": "short", "label": null, "logBase":
+    1, "max": null, "min": 0, "show": true}, {"format": "short", "label": null, "logBase":
+    1, "max": null, "min": null, "show": false}], "yaxis": {"align": false, "alignLevel":
+    null}}, {"targets": [{"legendFormat": "{{ "{{" }}status{{ "}}" }}"}]}]}'
+  dashboard.json:
+    annotations:
+      list:
+      - builtIn: 1
+        datasource: -- Grafana --
+        enable: true
+        hide: true
+        iconColor: rgba(0, 211, 255, 1)
+        name: Annotations & Alerts
+        target:
+          limit: 100
+          matchAny: false
+          tags: []
+          type: dashboard
+        type: dashboard
+    editable: true
+    fiscalYearStartMonth: 0
+    gnetId: null
+    graphTooltip: 0
+    id: null
+    iteration: 1.633698678946e+12
+    links:
+    - asDropdown: true
+      icon: external link
+      includeVars: true
+      keepTime: true
+      tags:
+      - Insight-Logs
+      targetBlank: false
+      title: Dashboards
+      type: dashboards
+    liveNow: false
+    panels:
+    - collapsed: false
+      datasource: null
+      gridPos:
+        h: 1
+        w: 24
+        x: 0
+        "y": 0
+      id: 7
+      panels: []
+      repeat: null
+      title: Targets & Files
+      type: row
+    - aliasColors: {}
+      bars: false
+      dashLength: 10
+      dashes: false
+      datasource: ${metrics_datasource}
+      fill: 1
+      fillGradient: 0
+      gridPos:
+        h: 7
+        w: 12
+        x: 0
+        "y": 1
+      hiddenSeries: false
+      id: 1
+      legend:
+        avg: false
+        current: false
+        max: false
+        min: false
+        show: true
+        total: false
+        values: false
+      lines: true
+      linewidth: 1
+      links: []
+      nullPointMode: null as zero
+      options:
+        alertThreshold: true
+      percentage: false
+      pluginVersion: 8.2.0-35787beta.2
+      pointradius: 5
+      points: false
+      renderer: flot
+      seriesOverrides: []
+      spaceLength: 10
+      stack: false
+      steppedLine: false
+      targets:
+      - exemplar: true
+        expr: sum(promtail_targets_active_total{cluster=~"$cluster",job="insight-logs/promtail-insight-logs"})
+        format: time_series
+        interval: ""
+        intervalFactor: 2
+        legendFormat: Active Targets
+        legendLink: null
+        refId: A
+        step: 10
+      thresholds: []
+      timeFrom: null
+      timeRegions: []
+      timeShift: null
+      title: Active Targets
+      tooltip:
+        shared: false
+        sort: 0
+        value_type: individual
+      type: graph
+      xaxis:
+        buckets: null
+        mode: time
+        name: null
+        show: true
+        values: []
+      yaxes:
+      - format: short
+        label: null
+        logBase: 1
+        max: null
+        min: 0
+        show: true
+      - format: short
+        label: null
+        logBase: 1
+        max: null
+        min: null
+        show: false
+      yaxis:
+        align: false
+        alignLevel: null
+    - targets:
+      - legendFormat: '{{ "{{" }}status{{ "}}" }}'
+      - legendFormat: '{{ "{{" }}cluster{{ "}}" }}.{{ "{{" }}namespace{{ "}}" }}'
+    refresh: 10s
+    schemaVersion: 31
+    style: dark
+    tags:
+    - Insight-Logs
+    templating:
+      list:
+      - current:
+          selected: false
+          text: dev-cortex
+          value: dev-cortex
+        description: null
+        error: null
+        hide: 0
+        includeAll: false
+        label: null
+        multi: false
+        name: metrics_datasource
+        options: []
+        query: prometheus
+        queryValue: ""
+        refresh: 1
+        regex: cortex-dev.+|ops-cortex
+        skipUrlSync: false
+        type: datasource
+    time:
+      from: now-1h
+      to: now
+    timezone: ""
+    title: Promtail
+    uid: 739c15a23c04c6ace0d03f6e14ba26e8
+    version: 6
+kind: ConfigMap
+metadata:
+  name: dashboards
+  namespace: default

@@ -1,0 +1,11 @@
+apiVersion: v1
+data:
+  overrides.yaml: |
+    tenant_limits:
+        max_samples: 1.5e+06
+        max_series: 3.3333333333333335e+06
+        small_value: 999999
+kind: ConfigMap
+metadata:
+  name: overrides
+  namespace: default

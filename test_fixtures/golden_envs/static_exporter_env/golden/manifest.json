@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-httpd-config.golden": "main.jsonnet"
+}

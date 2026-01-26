@@ -1,0 +1,8 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: flagger-{{ .Values.clusterName }}
+rules:
+  - apiGroups: ["flagger.app"]
+    resources: ["canaries"]
+    verbs: ["get", "list", "watch"]

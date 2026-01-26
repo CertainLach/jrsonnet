@@ -4,6 +4,8 @@ mod toml;
 mod xml;
 mod yaml;
 
+use std::{cell::RefCell, rc::Rc};
+
 pub use ini::IniFormat;
 use jrsonnet_evaluator::{
 	function::builtin,
@@ -14,6 +16,8 @@ pub use python::{PythonFormat, PythonVarsFormat};
 pub use toml::TomlFormat;
 pub use xml::XmlJsonmlFormat;
 pub use yaml::YamlFormat;
+
+use crate::Settings;
 
 #[builtin]
 pub fn builtin_escape_string_json(str_: IStr) -> Result<String> {
@@ -79,8 +83,11 @@ pub fn builtin_manifest_json_minified(
 	))
 }
 
-#[builtin]
+#[builtin(fields(
+	settings: Rc<RefCell<Settings>>,
+))]
 pub fn builtin_manifest_yaml_doc(
+	this: &builtin_manifest_yaml_doc,
 	value: Val,
 	#[default(false)] indent_array_in_object: bool,
 	#[default(true)] quote_keys: bool,
@@ -89,17 +96,36 @@ pub fn builtin_manifest_yaml_doc(
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
 ) -> Result<String> {
-	value.manifest(YamlFormat::std_to_yaml(
+	use crate::QuoteValuesBehavior;
+
+	// Determine quote_values based on the configured behavior
+	let quote_values = match this
+		.settings
+		.borrow()
+		.manifest_yaml_doc_formatting
+		.quote_values_behavior
+	{
+		// go-jsonnet always quotes values regardless of quote_keys
+		QuoteValuesBehavior::GoJsonnet => true,
+		// jrsonnet: quote_values follows quote_keys
+		QuoteValuesBehavior::Jrsonnet => quote_keys,
+	};
+
+	value.manifest(YamlFormat::std_to_yaml_with_settings(
 		indent_array_in_object,
 		quote_keys,
+		quote_values,
 		#[cfg(feature = "exp-preserve-order")]
 		preserve_order,
 	))
 }
 
-#[builtin]
+#[builtin(fields(
+	settings: Rc<RefCell<Settings>>,
+))]
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn builtin_manifest_yaml_stream(
+	this: &builtin_manifest_yaml_stream,
 	value: Val,
 	#[default(false)] indent_array_in_object: bool,
 	#[default(true)] c_document_end: bool,
@@ -109,14 +135,36 @@ pub fn builtin_manifest_yaml_stream(
 	#[cfg(feature = "exp-preserve-order")]
 	preserve_order: bool,
 ) -> Result<String> {
+	use crate::{ManifestYamlStreamEmptyBehavior, QuoteValuesBehavior};
+
+	let settings = this.settings.borrow();
+
+	// Determine quote_values based on the configured behavior (same as manifestYamlDoc)
+	let quote_values = match settings.manifest_yaml_doc_formatting.quote_values_behavior {
+		// go-jsonnet always quotes values regardless of quote_keys
+		QuoteValuesBehavior::GoJsonnet => true,
+		// jrsonnet: quote_values follows quote_keys
+		QuoteValuesBehavior::Jrsonnet => quote_keys,
+	};
+
+	// Determine empty array behavior
+	let use_jrsonnet_empty = matches!(
+		settings.manifest_yaml_stream_formatting.empty_behavior,
+		ManifestYamlStreamEmptyBehavior::Jrsonnet
+	);
+
+	drop(settings); // Release borrow before calling manifest
+
 	value.manifest(YamlStreamFormat::std_yaml_stream(
-		YamlFormat::std_to_yaml(
+		YamlFormat::std_to_yaml_with_settings(
 			indent_array_in_object,
 			quote_keys,
+			quote_values,
 			#[cfg(feature = "exp-preserve-order")]
 			preserve_order,
 		),
 		c_document_end,
+		use_jrsonnet_empty,
 	))
 }
 

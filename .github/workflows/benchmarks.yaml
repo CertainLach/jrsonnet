@@ -1,0 +1,141 @@
+name: Benchmarks
+
+on:
+  pull_request:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pull-requests: write
+  issues: write
+
+jobs:
+  benchmark:
+    name: ${{ matrix.benchmark.name }}
+    runs-on: ubuntu-x64
+    strategy:
+      fail-fast: false
+      matrix:
+        benchmark:
+          - name: "Env List"
+            config: "rtk-benchmarks/env-list.yaml"
+            id: "env-list"
+          - name: "Eval"
+            config: "rtk-benchmarks/eval.yaml"
+            id: "eval"
+          - name: "Export (Full)"
+            config: "rtk-benchmarks/export-full.yaml"
+            id: "export-full"
+          - name: "Export (Replace)"
+            config: "rtk-benchmarks/export-replace.yaml"
+            id: "export-replace"
+          - name: "Tool Importers"
+            config: "rtk-benchmarks/tool-importers.yaml"
+            id: "tool-importers"
+    steps:
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.4
+        with:
+          # Fetch full history to allow building rtk from base branch
+          fetch-depth: 0
+
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+
+      - name: Install Tanka
+        run: |
+          curl -fSL -o "/usr/local/bin/tk" "https://github.com/grafana/tanka/releases/latest/download/tk-linux-amd64"
+          chmod +x /usr/local/bin/tk
+          tk --version
+
+      - name: Install dependencies
+        run: |
+          # Install hyperfine
+          wget https://github.com/sharkdp/hyperfine/releases/download/v1.18.0/hyperfine_1.18.0_amd64.deb
+          sudo dpkg -i hyperfine_1.18.0_amd64.deb
+          # Install uv for Python script
+          curl -LsSf https://astral.sh/uv/install.sh | sh
+          # jq is pre-installed on ubuntu-latest
+
+      - name: Run benchmark
+        id: benchmark
+        env:
+          BENCHMARK_MARKDOWN_OUTPUT: benchmark-results.md
+          # On PRs, also build and benchmark rtk from the base branch (master)
+          BENCHMARK_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
+        run: |
+          # Run benchmark (markdown output goes to BENCHMARK_MARKDOWN_OUTPUT)
+          ./rtk-benchmarks/run-benchmark.py ${{ matrix.benchmark.config }} | tee benchmark-results.md
+          
+          # Prepare comment body from markdown output
+          {
+            echo "## 📊 Benchmark Results: ${{ matrix.benchmark.name }}"
+            echo ""
+            cat benchmark-results.md
+            echo ""
+            echo "---"
+            echo "_Benchmark run on commit \`${{ github.event.pull_request.head.sha || github.sha }}\`_"
+            echo "<!-- BENCHMARK_ID: ${{ matrix.benchmark.id }} -->"
+          } > comment-body.txt
+
+      - name: Set comment body output
+        id: comment
+        run: |
+          # Use delimiter approach for multiline output
+          {
+            echo "body<<GITHUB_OUTPUT_EOF"
+            cat comment-body.txt
+            echo "GITHUB_OUTPUT_EOF"
+          } >> $GITHUB_OUTPUT
+
+      - name: Post PR comment
+        if: github.event_name == 'pull_request'
+        uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
+        env:
+          COMMENT_BODY: ${{ steps.comment.outputs.body }}
+          BENCHMARK_ID: ${{ matrix.benchmark.id }}
+        with:
+          script: |
+            const benchmarkId = process.env.BENCHMARK_ID;
+            const commentMarker = `<!-- BENCHMARK_ID: ${benchmarkId} -->`;
+            const comment = process.env.COMMENT_BODY;
+            
+            // Find existing comment for this specific benchmark
+            const { data: comments } = await github.rest.issues.listComments({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              issue_number: context.issue.number,
+            });
+            
+            const botComment = comments.find(c => 
+              c.user.type === 'Bot' && 
+              c.body.includes(commentMarker)
+            );
+            
+            if (botComment) {
+              // Update existing comment
+              await github.rest.issues.updateComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                comment_id: botComment.id,
+                body: comment
+              });
+              console.log(`Updated existing comment for benchmark: ${benchmarkId}`);
+            } else {
+              // Create new comment
+              await github.rest.issues.createComment({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: context.issue.number,
+                body: comment
+              });
+              console.log(`Created new comment for benchmark: ${benchmarkId}`);
+            }
+
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
+        with:
+          name: benchmark-${{ matrix.benchmark.id }}
+          path: benchmark-results.md
+          if-no-files-found: warn

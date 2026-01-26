@@ -1,0 +1,20 @@
+name: "Eval"
+id: "eval"
+description: "Comparing rtk with tk for environment evaluation."
+
+fixtures:
+  static_envs: 1
+  inline_files: 1
+  envs_per_inline_file: 10
+  resources_per_env: 20
+
+tests:
+  - name: "Single Static Environment"
+    description: "Evaluating a single static environment with {resources_per_env} resources (3 Kubernetes objects each)."
+    warmup: 2
+    command: "eval {single_static_dir}"
+
+  - name: "Inline Environment File"
+    description: "Evaluating an inline environment file containing {envs_per_inline_file} environments."
+    warmup: 2
+    command: "eval {single_inline_file}"

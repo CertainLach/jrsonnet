@@ -1,0 +1,33 @@
+# This CRD has multi-line quoted strings that trigger the YAML parser bug
+# Error: "invalid indentation in quoted scalar"
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: canaries.flagger.app
+spec:
+  group: flagger.app
+  names:
+    kind: Canary
+    listKind: CanaryList
+    plural: canaries
+    singular: canary
+  scope: Namespaced
+  versions:
+    - name: v1beta1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          description: Canary is the Schema for the Canary API.
+          type: object
+          properties:
+            apiVersion:
+              description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://foe.t8r.am/ssvacuneo/fbimkgokkymi/ynicp/axr-blhucyubyahg/ate-hepvdsgowiy.lf#ttxwdyfjd'
+              type: string
+            kind:
+              description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://saj.s8v.mm/wgcswuhdw/yjvtzdzszblr/nvlcq/uka-npdnluowenfx/qui-tzryponxsik.hc#iohyo-stvmk'
+              type: string

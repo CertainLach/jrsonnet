@@ -1,0 +1,4 @@
+{
+    "_cluster/CustomResourceDefinition-mergetests.example.com.golden": "main.jsonnet",
+    "default/ConfigMap-myrelease-config.golden": "main.jsonnet"
+}

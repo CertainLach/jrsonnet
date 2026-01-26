@@ -1,0 +1,17 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: index-gateway-headless
+  namespace: default
+spec:
+  clusterIP: None
+  ports:
+  - name: index-gateway-http-metrics
+    port: 3100
+    targetPort: 3100
+  - name: index-gateway-grpc
+    port: 9095
+    targetPort: 9095
+  selector:
+    name: index-gateway
+    rollout-group: index-gateway

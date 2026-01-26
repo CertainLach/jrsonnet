@@ -133,7 +133,7 @@ impl Display for ComplexValType {
 			Self::Sum(v) => write_union(f, false, v.iter())?,
 			Self::SumRef(v) => write_union(f, false, v.iter().copied())?,
 			Self::Lazy(lazy) => write!(f, "Lazy<{lazy}>")?,
-		};
+		}
 		Ok(())
 	}
 }

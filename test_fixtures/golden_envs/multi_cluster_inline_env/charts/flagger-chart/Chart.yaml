@@ -1,0 +1,4 @@
+apiVersion: v2
+name: flagger-chart
+description: Test chart for std.thisFile absolute path test
+version: 0.1.0

@@ -1,0 +1,11 @@
+apiVersion: v1
+data:
+  checks.yaml: |-
+    "conditionalValue": "also-yes"
+    "hasHidden": false
+    "hasHiddenAll": true
+    "hasVisible": true
+kind: ConfigMap
+metadata:
+  name: has-all-test
+  namespace: default

@@ -1,0 +1,54 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: testresources.example.com
+spec:
+  group: example.com
+  names:
+    kind: TestResource
+    listKind: TestResourceList
+    plural: testresources
+    singular: testresource
+  scope: Namespaced
+  versions:
+  - name: v1
+    schema:
+      openAPIV3Schema:
+        properties:
+          spec:
+            properties:
+              hello:
+                maximum: 1
+                minimum: 1e-05
+                type: number
+              message:
+                description: 'Selects a field of the pod: supports metadata.name,
+                  metadata.namespace, `metadata.labels[''<KEY>'']`, `metadata.annotations[''<KEY>'']`,
+                  spec.nodeName, spec.serviceAccountName, status.hostIP, status.podIP,
+                  status.podIPs.'
+                type: string
+              other:
+                description: Other == 'field'
+                type: string
+              replicas:
+                description: Number of pod's replicas to create
+                type: integer
+              storageInfo:
+                description: 'EmptyDir represents a temporary directory that shares
+                  a pod''s lifetime. More info: https://dcmdlltizb.xo/rdmc/rjutlsgw/cbvhyjc/hdmioul#fllgviwv'
+                type: string
+              volumePath:
+                description: 'Required: Path within the container at which the volume
+                  should be mounted. Must not contain the ''..'' path. Must be utf-8
+                  encoded. The first item of the relative path must not start with
+                  ''..'''
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true

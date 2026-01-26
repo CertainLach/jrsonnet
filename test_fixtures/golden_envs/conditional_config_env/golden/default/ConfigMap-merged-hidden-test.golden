@@ -1,0 +1,14 @@
+apiVersion: v1
+data:
+  exposed.yaml: |-
+    "deep":
+      "value": "hidden-deep-value"
+  merged.yaml: |-
+    "exposed":
+      "deep":
+        "value": "hidden-deep-value"
+    "visible": "base-visible"
+kind: ConfigMap
+metadata:
+  name: merged-hidden-test
+  namespace: default

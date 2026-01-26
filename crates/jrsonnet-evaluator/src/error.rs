@@ -311,12 +311,17 @@ impl Display for Error {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
-			write!(f, "\t{}", el.desc)?;
 			if let Some(loc) = &el.location {
-				write!(f, "at {}", loc.0 .0 .0)?;
-				loc.0.map_source_locations(&[loc.1, loc.2]);
+				let [start, _end] = loc.0.map_source_locations(&[loc.1, loc.2]);
+				write!(
+					f,
+					"\t{}:{}:{}",
+					loc.0.source_path(),
+					start.line,
+					start.column
+				)?;
 			}
-			writeln!(f)?;
+			writeln!(f, "\t{}", el.desc)?;
 		}
 		Ok(())
 	}

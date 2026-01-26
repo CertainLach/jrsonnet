@@ -1,0 +1,35 @@
+{
+    "deeply_nested": {
+        "a": {
+            "b": {
+                "c": { }
+            }
+        }
+    },
+    "mixed": {
+        "keep": 1,
+        "nested": {
+            "keep": 2
+        }
+    },
+    "nested_null_new_field": {
+        "nodeAffinity": { }
+    },
+    "nested_null_partial": {
+        "nodeAffinity": {
+            "other": 1
+        }
+    },
+    "remove_existing": {
+        "b": 2
+    },
+    "remove_nested_existing": {
+        "affinity": {
+            "nodeAffinity": {
+                "preferred": [
+                    3
+                ]
+            }
+        }
+    }
+}

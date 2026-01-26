@@ -225,9 +225,11 @@ thread_local! {
 	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, BuildHasherDefault::default()));
 }
 
+/// Interop utilities for cross-thread VM migration.
+///
 /// Jrsonnet golang bindings require that it is possible to move jsonnet
 /// VM between OS threads, and this is not possible due to usage of
-/// `thread_local`. Instead, there is two methods added, one should be
+/// `thread_local`. Instead, there are two methods added: one should be
 /// called at the end of current thread work, and one that should be
 /// used when using other thread.
 pub mod interop {

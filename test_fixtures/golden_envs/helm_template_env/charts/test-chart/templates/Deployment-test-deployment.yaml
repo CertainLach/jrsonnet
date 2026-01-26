@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-k8s-deployment
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - args:
+        - '-hosted_grafana_api_config=[{"address": "http://btc-nvssqkig.vwk-himevujo.kyc.aotsdcr.gqiel.","slug":
+          "prod-region-0","token": "$(HG_CLUSTER_TOKEN)"}]'
+        - kubectl config set-cluster test-cluster --embed-certs=true --certificate-authority=/var/run/certs/kubernetes/ca.pem.crt
+          --server=https://chljforwj.tzuq.avr.jvdeidd.xreij.:443 --kubeconfig=/var/run/secrets/kubernetes/kubeconfig
+        - -forward.selectors={{ "{{" }}__name__="target_info"{{ "}}" }},{{ "{{" }}__name__="traces_info"{{ "}}" }}
+        env: []
+        name: test-container
+        volumeMounts: []
+      initContainers:
+      - args:
+        - chown -R nobody:nobody /var/run/secrets/database;cp /var/run/certs/database/ca.crt
+          /var/run/secrets/database/ca.crt;chown nobody:nobody /var/run/secrets/database/ca.crt;chmod
+          600 /var/run/secrets/database/ca.crt;cp /var/run/certs/database/client.root.crt
+          /var/run/secrets/database/client.root.crt;chown nobody:nobody /var/run/secrets/database/client.root.crt;chmod
+          600 /var/run/secrets/database/client.root.crt;cp /var/run/certs/database/client.root.key
+          /var/run/secrets/database/client.root.key;chown nobody:nobody /var/run/secrets/database/client.root.key;chmod
+          600 /var/run/secrets/database/client.root.key
+        command:
+        - /bin/sh
+        - -exc
+        image: busybox:1.34
+        name: secrets-copier
+      volumes: []

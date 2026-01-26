@@ -1,0 +1,397 @@
+apiVersion: v1
+data:
+  overrides.yaml: |
+    configs:
+        "77387":
+            limited_log_push_errors: true
+        "159662":
+            log_duplicate_metrics: true
+            log_duplicate_stream_info: true
+        "317664":
+            limited_log_push_errors: true
+        "317762":
+            limited_log_push_errors: true
+        "317763":
+            limited_log_push_errors: true
+    overrides:
+        "29":
+            allow_structured_metadata: true
+        "7804":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 31
+            ingestion_rate_mb: 28
+            max_concurrent_tail_requests: 15
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 64
+            max_query_series: 5000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 512
+            tsdb_sharding_strategy: bounded
+        "7806":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7807":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7808":
+            bloom_gateway_enable_filtering: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 5000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7809":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7810":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7811":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 62
+            ingestion_rate_mb: 56
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7812":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7813":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7814":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 17
+            ingestion_rate_mb: 15
+            max_concurrent_tail_requests: 10
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_lookback: 366d
+            max_query_parallelism: 48
+            max_query_series: 2000
+            min_sharding_lookback: 0s
+            retention_stream:
+                - period: 367d
+                  priority: 0
+                  selector: '{environment="pro"}'
+            split_queries_by_interval: 45m
+            tsdb_max_query_parallelism: 256
+        "7815":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 41
+            ingestion_rate_mb: 37
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 80000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7817":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 39
+            ingestion_rate_mb: 35
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7816":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 30
+            ingestion_rate_mb: 20
+            max_concurrent_tail_requests: 10
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 48
+            max_query_series: 2000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 45m
+            tsdb_max_query_parallelism: 256
+        "7818":
+            bloom_gateway_enable_filtering: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 5000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7819":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7820":
+            bloom_gateway_enable_filtering: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 5000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7821":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 129
+            ingestion_rate_mb: 117
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7822":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7824":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 66
+            ingestion_rate_mb: 60
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7825":
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+        "7826":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 98
+            ingestion_rate_mb: 89
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7827":
+            bloom_creation_enabled: true
+            bloom_gateway_enable_filtering: false
+            discover_log_levels: false
+            ingestion_burst_size_mb: 104
+            ingestion_rate_mb: 94
+            max_concurrent_tail_requests: 20
+            max_global_streams_per_user: 15000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 128
+            max_query_series: 10000
+            min_sharding_lookback: 0s
+            query_ready_index_num_days: 30
+            shard_streams:
+                desired_rate: 128KB
+                enabled: true
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 1024
+            tsdb_sharding_strategy: bounded
+        "7828":
+            bloom_gateway_enable_filtering: false
+            ingestion_burst_size_mb: 20
+            ingestion_rate_mb: 10
+            max_concurrent_tail_requests: 5
+            max_global_streams_per_user: 5000
+            max_queriers_per_tenant: 0
+            max_query_capacity: 0.8
+            max_query_parallelism: 32
+            max_query_series: 1000
+            min_sharding_lookback: 0s
+            split_queries_by_interval: 1h
+            tsdb_max_query_parallelism: 128
+kind: ConfigMap
+metadata:
+  annotations:
+    my-annotation: my-value
+  labels:
+    tanka.dev/environment: 641a6f0053ec9da0c0e1fececdcbe97d82e17ed6fd35f833
+  name: parallel-read-path-overrides
+  namespace: loki-prod

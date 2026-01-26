@@ -1,0 +1,23 @@
+apiVersion: v1
+data:
+  config.yaml: |-
+    "routes":
+      "/api/v1":
+        "handler": "v1"
+      "/api/v10":
+        "handler": "v10"
+      "/api/v2":
+        "handler": "v2"
+    "servers":
+      "server-200":
+        "port": 8080
+      "server-30":
+        "port": 8081
+      "server-5":
+        "port": 8082
+  endpoints.txt: 10:http://aealzzh-10.skafi/bexn,100:http://qdxcpoy-100.lqsdo/qhtb,105:http://xzvqjou-105.abpmn/vdpw,132:http://occktec-132.eitus/rwkm,188:http://tqjoqtn-188.dzwdu/uyrx,67:http://gnohnko-67.mnxdk/nkvi
+  ids.txt: 10,100,105,132,188,67
+kind: ConfigMap
+metadata:
+  name: config-ordering-test
+  namespace: default

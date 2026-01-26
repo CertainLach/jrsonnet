@@ -1,0 +1,15 @@
+apiVersion: v1
+data:
+  rules: |+
+    alert: TestAlert
+    expr: up == 1
+
+  rules-triple: |+
+    alert: TestAlert
+    expr: up == 1
+
+
+kind: ConfigMap
+metadata:
+  name: multiple-trailing-newlines
+  namespace: default

@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  rules: |2+
+      alert: TestAlert
+      expr: up == 1
+
+kind: ConfigMap
+metadata:
+  name: rules-starting-with-spaces
+  namespace: default

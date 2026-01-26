@@ -1,0 +1,27 @@
+apiVersion: v1
+data:
+  parsed-labels: |-
+    {
+      "app": "test-app",
+      "component": "backend",
+      "version": "1.0"
+    }
+  parsed-volumes: |-
+    [
+      {
+        "name": "cert-secret-volume",
+        "secret": {
+          "secretName": "my-cert-secret"
+        }
+      },
+      {
+        "configMap": {
+          "name": "my-config"
+        },
+        "name": "config-volume"
+      }
+    ]
+kind: ConfigMap
+metadata:
+  name: test-values
+  namespace: default

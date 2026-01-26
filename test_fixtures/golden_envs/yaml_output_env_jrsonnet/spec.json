@@ -1,0 +1,14 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "configmap-yaml-test",
+    "labels": {
+      "cluster_name": "test-cluster"
+    }
+  },
+  "spec": {
+    "namespace": "default",
+    "exportJsonnetImplementation": "binary:/usr/local/bin/jrsonnet"
+  }
+}

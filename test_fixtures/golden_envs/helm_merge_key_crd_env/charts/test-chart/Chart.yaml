@@ -1,0 +1,4 @@
+apiVersion: v2
+name: test-chart
+description: A test chart with CRD containing YAML merge keys
+version: 0.1.0

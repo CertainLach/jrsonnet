@@ -1,0 +1,76 @@
+# Test CRD with YAML merge keys (mimics clickhouse-operator CRDs)
+# This tests that helm CRD output with !!merge tags is properly expanded
+
+# Anchors for reusable type definitions
+x-anchors:
+  TypeStringBool: &TypeStringBool
+    type: string
+    enum:
+      - ""
+      - "0"
+      - "1"
+      - "false"
+      - "true"
+      - "no"
+      - "yes"
+      - "off"
+      - "on"
+      - "False"
+      - "True"
+      - "No"
+      - "Yes"
+      - "Off"
+      - "On"
+
+  TypeObjectsCleanup: &TypeObjectsCleanup
+    type: string
+    enum:
+      - ""
+      - "Retain"
+      - "Delete"
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: mergetests.example.com
+spec:
+  group: example.com
+  names:
+    kind: MergeTest
+    listKind: MergeTestList
+    plural: mergetests
+    singular: mergetest
+  scope: Namespaced
+  versions:
+    - name: v1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              properties:
+                # Test simple merge key
+                enabled:
+                  !!merge <<: *TypeStringBool
+                  description: |
+                    Whether this resource is enabled.
+                    Supports various boolean representations.
+                # Test nested merge key with additional properties
+                cleanup:
+                  type: object
+                  properties:
+                    pvc:
+                      !!merge <<: *TypeObjectsCleanup
+                      description: "Behavior policy for PVC cleanup"
+                    configMap:
+                      !!merge <<: *TypeObjectsCleanup
+                      description: "Behavior policy for ConfigMap cleanup"
+                # Test merge key without !!merge tag (simple form)
+                suspended:
+                  <<: *TypeStringBool
+                  description: Suspend reconciliation

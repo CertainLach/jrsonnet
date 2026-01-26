@@ -1,0 +1,13 @@
+{
+    "default/ConfigMap-array-hidden-test.golden": "main.jsonnet",
+    "default/ConfigMap-comprehension-test.golden": "main.jsonnet",
+    "default/ConfigMap-deep-hidden-test.golden": "main.jsonnet",
+    "default/ConfigMap-dollar-access-test.golden": "main.jsonnet",
+    "default/ConfigMap-gf-simulation-test.golden": "main.jsonnet",
+    "default/ConfigMap-has-all-test.golden": "main.jsonnet",
+    "default/ConfigMap-merged-hidden-test.golden": "main.jsonnet",
+    "default/ConfigMap-native-test.golden": "main.jsonnet",
+    "default/ConfigMap-recursive-test.golden": "main.jsonnet",
+    "default/ConfigMap-super-binding-test.golden": "main.jsonnet",
+    "default/PodDisruptionBudget-index-gateway-pdb.golden": "main.jsonnet"
+}

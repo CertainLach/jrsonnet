@@ -1,0 +1,11 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "environments/static-exporter"
+  },
+  "spec": {
+    "apiServer": "https://agjgyeyijk.dapxnfe.mrw",
+    "namespace": "default"
+  }
+}

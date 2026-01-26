@@ -1,0 +1,4 @@
+{
+    "default/Deployment-myapp.golden": "main.jsonnet",
+    "default/Job-database-migration-abc123-2363a3f222.golden": "main.jsonnet"
+}

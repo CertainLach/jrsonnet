@@ -1,0 +1,10 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "spec": {
+    "namespace": "default"
+  },
+  "metadata": {
+    "name": "environments/error_override_env"
+  }
+}

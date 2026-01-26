@@ -1,0 +1,61 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  labels:
+    tanka.dev/environment: 8d726d264395f3aea4cb4d8b3c0b93b071ad8b115bf37810
+  name: ingester-zone-a
+  namespace: metrics-ops-03
+spec:
+  advanced:
+    horizontalPodAutoscalerConfig:
+      behavior:
+        scaleDown:
+          policies:
+          - periodSeconds: 1800
+            type: Percent
+            value: 15
+          selectPolicy: Max
+          stabilizationWindowSeconds: 3600
+        scaleUp:
+          policies:
+          - periodSeconds: 600
+            type: Percent
+            value: 100
+          selectPolicy: Min
+          stabilizationWindowSeconds: 600
+  maxReplicaCount: 1256
+  minReplicaCount: 190
+  pollingInterval: 10
+  scaleTargetRef:
+    apiVersion: rollout-operator.grafana.com/v1
+    kind: ReplicaTemplate
+    name: ingester-zone-a
+  triggers:
+  - metadata:
+      ignoreNullValues: "false"
+      metricName: cortex_ingester_zone_a_replicas_hpa_mimir_ops_03_0
+      query: |-
+        max_over_time(min_over_time((
+            max(
+                sum by (pod) (cortex_ingester_owned_series{cluster="ops-eu-south-0", namespace="metrics-ops-03", job="metrics-ops-03/ingester-zone-a", container="ingester"})
+                and
+                sum by (pod) (kube_pod_status_ready{cluster="ops-eu-south-0", namespace="metrics-ops-03", pod=~"ingester-zone-a.*", condition="true"}) > 0
+            )
+            *
+            max(cortex_partition_ring_partitions{cluster="ops-eu-south-0", namespace="metrics-ops-03", state="Active", container="distributor", name="ingester-partitions"})
+        )
+        [5m:])[2h:5m])
+      serverAddress: http://jyzhtzlh-ugtivyxyvv.euduubjzobslx.ecj.kxnfgez.rlqqi.:9090/fipzjxkz-doceyhvxvm
+      threshold: "3375000"
+    metricType: AverageValue
+    name: cortex_ingester_zone_a_replicas_hpa_mimir_ops_03_0
+    type: prometheus
+  - metadata:
+      ignoreNullValues: "false"
+      metricName: cortex_ingester_zone_a_replicas_hpa_mimir_ops_03_1
+      query: mimir_limits_operator_desired_min_ingesters{namespace="metrics-ops-03"}
+      serverAddress: http://jyzhtzlh-ugtivyxyvv.euduubjzobslx.ecj.kxnfgez.rlqqi.:9090/fipzjxkz-doceyhvxvm
+      threshold: "1"
+    metricType: AverageValue
+    name: cortex_ingester_zone_a_replicas_hpa_mimir_ops_03_1
+    type: prometheus

@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: csp-test
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - env:
+        - name: CSP_HEADER
+          value: 'frame-ancestors https://ukdjnfoax.xiqyfqdujuq.tge https://lyfryqatkp.adlzjhb.hsc;
+            script-src ''self'' ''strict-dynamic'' ''unsafe-eval'' ''report-sample''
+            *.googleadservices.com *.marketo.net *.facebook.net *.google-analytics.com
+            https://*.cxpcyryeev.prf https://iqt.ngryxwgw.jmv https://uloq.odhhc.kas
+            https://rhs.hacwub-hcbkcqhiv.pgr/exssphzpz.ng https://dd.vnl.nnoxbvuu.dbm
+            https://xkz.dhggroen.fio https://hcozrdb.uracyhfn.ppg https://m.bfmamizz.ojn
+            https://wxzrv.wpe https://gjgbsx.rbxkb.bsp https://qqfbqcfc.tcvhmds.hst
+            object-src ''none''; upgrade-insecure-requests; report-to csp-endpoint;
+            report-uri /api/csp-reports; '
+        name: nginx

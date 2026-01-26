@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flagger-prod-region-3
+  namespace: flagger
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flagger
+  template:
+    metadata:
+      labels:
+        app: flagger
+    spec:
+      containers:
+      - image: ghcr.io/fluxcd/flagger:1.35.0
+        name: flagger
+      serviceAccountName: flagger-prod-region-3

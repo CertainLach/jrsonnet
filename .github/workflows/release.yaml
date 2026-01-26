@@ -1,140 +1,143 @@
 name: Release
+
 on:
   push:
-    tags: [ 'v*' ]
+    tags:
+      - 'v*'
+
 jobs:
-  tests:
-    uses: ./.github/workflows/test.yaml
-
-  cargo-release:
-    if: !endsWith(github.ref, '-test')
-    needs: [ tests ]
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.1.4
-      - name: Install stable toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
-        with:
-          toolchain: stable
-      - run: cargo install cargo-release
-      - run: cargo login ${{ secrets.CARGO_TOKEN }}
-      - run: cargo release --no-dev-version --skip-push --skip-tag --no-confirm
-
-  github-release:
-    needs: [ tests ]
-    strategy:
-      matrix:
-        target:
-          # Linux build notes:
-          # While musl targets are not as supported as gnu, those are most relevant to users,
-          # which want to download binaries from github, as glibc has compatibility issues
-          # with older distros
-
-          # Tier 1
-          - i686-pc-windows-msvc
-          - x86_64-apple-darwin
-          - x86_64-pc-windows-msvc
-
-          # Tier 2
-          - aarch64-apple-darwin
-          - aarch64-unknown-linux-musl
-          - i686-unknown-linux-musl
-          - x86_64-unknown-linux-musl
-        include:
-          # Linux
-          - target: aarch64-unknown-linux-musl
-            os: ubuntu-latest
-            bin: jrsonnet
-            name: jrsonnet-linux-aarch64
-          - target: i686-unknown-linux-musl
-            os: ubuntu-latest
-            bin: jrsonnet
-            name: jrsonnet-linux-i686
-          - target: x86_64-unknown-linux-musl
-            os: ubuntu-latest
-            bin: jrsonnet
-            name: jrsonnet-linux-amd64
-
-          # Windows
-          - target: i686-pc-windows-msvc
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-i686.exe
-          - target: x86_64-pc-windows-msvc
-            os: windows-latest
-            bin: jrsonnet.exe
-            name: jrsonnet-windows-amd64.exe
-
-          # Apple
-          - target: aarch64-apple-darwin
-            os: macOS-latest
-            bin: jrsonnet
-            name: jrsonnet-darwin-aarch64
-          - target: x86_64-apple-darwin
-            os: macOS-latest
-            bin: jrsonnet
-            name: jrsonnet-darwin-amd64
+  build:
+    name: Build ${{ matrix.target }}
     runs-on: ${{ matrix.os }}
+    permissions:
+      contents: read
+      id-token: write
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - target: x86_64-unknown-linux-gnu
+            os: ubuntu-22.04
+            artifact_name: rtk
+            asset_name: rtk-linux-amd64
+            platform: linux-amd64
+            docker_platform: linux/amd64
+          - target: aarch64-unknown-linux-gnu
+            os: ubuntu-22.04
+            artifact_name: rtk
+            asset_name: rtk-linux-arm64
+            platform: linux-arm64
+            docker_platform: linux/arm64
+          - target: x86_64-apple-darwin
+            os: macos-latest
+            artifact_name: rtk
+            asset_name: rtk-darwin-amd64
+          - target: aarch64-apple-darwin
+            os: macos-latest
+            artifact_name: rtk
+            asset_name: rtk-darwin-arm64
+
     steps:
-      - name: Fetch apt repo updates
-        if: ${{ startsWith(matrix.os, 'ubuntu-') }}
-        run: sudo apt update
+      - name: Checkout
+        uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.4
 
-      - name: Install stable toolchain
-        uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
-        with:
-          toolchain: stable
-          target: ${{ matrix.target }}
-
-      - uses: actions/checkout@v4.1.4
-
-      - name: Add experimental flags
-        if: ${{ endsWith(github.ref, '-test' )}}
-        run: echo 'EXPERIMENTAL_FLAGS=--features=experimental' >> $GITHUB_ENV
-
-      - name: Linux x86 cross compiler
-        if: ${{ startsWith(matrix.target, 'i686-unknown-linux-') }}
-        run: sudo apt install gcc-multilib
-
-      - name: ARM cross compiler
-        if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        uses: actions-rs/cargo@v1
-        with:
-          command: install
-          args: cross
-
-      - name: ARM gcc
-        if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        run: sudo apt install gcc-aarch64-linux-gnu
-
-      - name: Musl gcc
-        if: ${{ endsWith(matrix.target, '-musl') }}
-        run: sudo apt install musl musl-tools
-
-      - name: Run cross build
-        if: ${{ startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        shell: bash
-        run: cross build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
-      - name: Run build
-        if: ${{ !startsWith(matrix.target, 'aarch64-unknown-linux-') }}
-        run: cargo build --bin=jrsonnet --release --target ${{ matrix.target }} ${{ env.EXPERIMENTAL_FLAGS }}
-
-      - name: Package
-        shell: bash
+      - name: Set version from tag
         run: |
-          cd target/${{ matrix.target }}/release
+          VERSION=${GITHUB_REF_NAME#v}
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" cmds/rtk/Cargo.toml
+          rm cmds/rtk/Cargo.toml.bak
+          echo "Set rtk version to $VERSION"
+          grep "^version" cmds/rtk/Cargo.toml
 
-          cp ${{ matrix.bin }} ../../../${{ matrix.name }}
-          cd -
-
-      - name: Generate SHA-256
-        run: shasum -a 256 ${{ matrix.name }} > ${{ matrix.name }}.sha256
-
-      - name: Publish
-        uses: softprops/action-gh-release@v2.0.4
+      - name: Set up Rust toolchain
+        uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
         with:
-          draft: true
-          files: "jrsonnet*"
+          target: ${{ matrix.target }}
+          cache: false
+
+      - name: Install cross-compilation tools
+        if: matrix.target == 'aarch64-unknown-linux-gnu'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y gcc-aarch64-linux-gnu
+
+      - name: Build rtk
+        run: cargo build --release --package rtk --target ${{ matrix.target }}
         env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
+        with:
+          name: ${{ matrix.asset_name }}
+          path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
+
+      - name: Prepare binary for Docker
+        if: matrix.platform != ''
+        run: |
+          mkdir -p docker-bin
+          cp target/${{ matrix.target }}/release/rtk docker-bin/rtk
+          chmod +x docker-bin/rtk
+
+      - name: Inject slug/short variables
+        if: matrix.platform != ''
+        uses: rlespinasse/github-slug-action@6f7a8d2348e2a4aa5defafcdaafe5aef3f83bd4b # v5.4.0
+
+      - name: Set tag names
+        if: matrix.platform != ''
+        id: set_tag
+        run: |
+          VERSION=${GITHUB_REF_NAME#v}
+          echo "tag=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "platform_tag=${{ matrix.platform }}-$VERSION" >> "$GITHUB_OUTPUT"
+
+      - name: Build and push Docker image
+        if: matrix.platform != ''
+        # See doc at: https://github.com/grafana/shared-workflows/tree/main/actions/docker-build-push-image
+        uses: grafana/shared-workflows/actions/docker-build-push-image@docker-build-push-image/v0.3.0
+        with:
+          platforms: ${{ matrix.docker_platform }}
+          gar-environment: prod
+          gar-image: rustanka
+          context: .
+          cache-to: type=inline
+          push: true
+          build-args: |
+            VERSION=${{ steps.set_tag.outputs.tag }}
+            BRANCH=${{ github.ref_name }}
+            REVISION=${{ github.sha }}
+          tags: |-
+            "${{ steps.set_tag.outputs.platform_tag }}"
+          registries: gar
+
+  release:
+    name: Create Release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - name: Download release artifacts
+        uses: actions/download-artifact@c850b930e6ba138125429b7e5c93fc707a7f8427 # v4
+        with:
+          path: artifacts
+          pattern: rtk-*
+          merge-multiple: false
+
+      - name: Prepare release assets
+        run: |
+          mkdir -p release
+          for dir in artifacts/*/; do
+            name=$(basename "$dir")
+            cp "$dir"/* "release/$name"
+            chmod +x "release/$name"
+          done
+          ls -la release/
+
+      - name: Create Release
+        uses: softprops/action-gh-release@c95fe1489396fe8a9eb87c0abf8aa5b2ef267fda # v2.2.1
+        with:
+          files: release/*
+          generate_release_notes: true
+          draft: false
+          prerelease: ${{ contains(github.ref_name, '-') }}

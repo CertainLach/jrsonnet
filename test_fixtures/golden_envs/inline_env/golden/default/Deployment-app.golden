@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: app
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: app
+  template:
+    metadata:
+      labels:
+        app: app
+    spec:
+      containers:
+      - image: nginx:1.25
+        name: app

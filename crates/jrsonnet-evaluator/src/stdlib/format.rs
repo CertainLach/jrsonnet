@@ -9,6 +9,7 @@ use thiserror::Error;
 use crate::{
 	bail,
 	error::{format_found, suggest_object_fields, ErrorKind::*},
+	manifest,
 	typed::Typed,
 	Error, ObjValue, Result, Val,
 };
@@ -423,21 +424,39 @@ pub fn render_float(
 	#[allow(clippy::bool_to_int_with_if)]
 	let dot_size = if precision == 0 && !ensure_pt { 0 } else { 1 };
 	padding = padding.saturating_sub(dot_size + precision);
-	render_decimal(out, n.floor(), padding, 0, blank, sign);
+
 	if precision == 0 {
+		// When precision is 0, round to nearest integer (matching Go's %0.0f behavior)
+		render_decimal(out, n.round(), padding, 0, blank, sign);
 		if ensure_pt {
 			out.push('.');
 		}
 		return;
 	}
+
+	// For precision > 0, we need to handle rounding of the fractional part
+	// The fractional part is rounded by adding 0.5 and flooring
 	let frac = n
 		.fract()
+		.abs()
 		.mul_add(10.0_f64.powf(precision as f64), 0.5)
 		.floor();
-	if trailing || frac > 0.0 {
+
+	// Check if fractional rounding causes carry to the integer part
+	let max_frac = 10.0_f64.powf(precision as f64);
+	let (int_part, frac_part) = if frac >= max_frac {
+		// Fractional part rounded up to next integer
+		(n.signum() * (n.abs().floor() + 1.0), 0.0)
+	} else {
+		(n.signum() * n.abs().floor(), frac)
+	};
+
+	render_decimal(out, int_part, padding, 0, blank, sign);
+
+	if trailing || frac_part > 0.0 {
 		out.push('.');
 		let mut frac_str = String::new();
-		render_decimal(&mut frac_str, frac, precision, 0, false, false);
+		render_decimal(&mut frac_str, frac_part, precision, 0, false, false);
 		let mut trim = frac_str.len();
 		if !trailing {
 			for b in frac_str.as_bytes().iter().rev() {
@@ -505,7 +524,30 @@ pub fn format_code(
 	let mut tmp_out = String::new();
 
 	match code.convtype {
-		ConvTypeV::String => tmp_out.push_str(&value.clone().to_string()?),
+		ConvTypeV::String => {
+			// For numbers, match Go's unparseNumber behavior from go-jsonnet:
+			// if v == math.Floor(v) { return fmt.Sprintf("%.0f", v) }
+			// return fmt.Sprintf("%.17g", v)
+			if let Some(n) = value.as_num() {
+				// Check if it's an integer (no fractional part)
+				if n.fract() == 0.0 && n.abs() < 1e15 {
+					// Format as integer without decimal point
+					tmp_out.push_str(&format!("{:.0}", n));
+				} else {
+					// Use Go-style %.17g format if enabled, otherwise use Rust's Display (shortest)
+					if manifest::should_use_go_style_floats() {
+						tmp_out.push_str(&manifest::format_float_go_g17(n));
+					} else {
+						// Use Rust's Display formatting (ryu algorithm) which produces
+						// the shortest decimal representation, avoiding precision artifacts
+						// like 0.80000000000000004 -> 0.8
+						tmp_out.push_str(&format!("{}", n));
+					}
+				}
+			} else {
+				tmp_out.push_str(&value.clone().to_string()?);
+			}
+		}
 		ConvTypeV::Decimal => {
 			let value = f64::from_untyped(value.clone())?;
 			render_decimal(

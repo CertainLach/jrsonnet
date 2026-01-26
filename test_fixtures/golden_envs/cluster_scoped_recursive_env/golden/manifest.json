@@ -1,0 +1,10 @@
+{
+    "_cluster/ClusterRole-flagger-dev-region-0.golden": "main.jsonnet",
+    "_cluster/ClusterRole-flagger-prod-region-3.golden": "main.jsonnet",
+    "_cluster/CustomResourceDefinition-canaries-dev-region-0.flagger.app.golden": "main.jsonnet",
+    "_cluster/CustomResourceDefinition-canaries-prod-region-3.flagger.app.golden": "main.jsonnet",
+    "flagger/Deployment-flagger-dev-region-0.golden": "main.jsonnet",
+    "flagger/Deployment-flagger-prod-region-3.golden": "main.jsonnet",
+    "flagger/ServiceAccount-flagger-dev-region-0.golden": "main.jsonnet",
+    "flagger/ServiceAccount-flagger-prod-region-3.golden": "main.jsonnet"
+}

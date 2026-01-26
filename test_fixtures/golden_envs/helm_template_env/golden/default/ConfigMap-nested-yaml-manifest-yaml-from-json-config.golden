@@ -1,0 +1,23 @@
+apiVersion: v1
+data:
+  rules.yml: |
+    enabled: true
+    rules:
+        - labels:
+            clientId: $3
+            partition: $5
+            topic: $4
+          name: test_rule_1
+          nested_again:
+            - hello: world
+            - hello: world
+          pattern: 'server<type=metrics, listener=(.+), processor=(.+)><>(.+):'
+kind: ConfigMap
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: nested-yaml-manifest-yaml-from-json-config
+  namespace: default

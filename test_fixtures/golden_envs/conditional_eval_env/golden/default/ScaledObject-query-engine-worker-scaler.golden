@@ -1,0 +1,14 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: query-engine-worker-scaler
+  namespace: default
+spec:
+  maxReplicaCount: 10
+  minReplicaCount: 1
+  scaleTargetRef:
+    name: query-engine-worker
+  triggers:
+  - metadata:
+      query: sum(rate(requests_total[5m]))
+    type: prometheus

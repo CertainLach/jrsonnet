@@ -1,0 +1,26 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": {
+        "git": {
+          "remote": "https://tgwkgv.uiq/pibcuni/bakyeui-fxor.wnr",
+          "subdir": "tanka-util"
+        }
+      },
+      "version": "250f0f400a1c837086e844ae65f6a0e07d857ace",
+      "sum": "ShSIissXdvCy1izTCDZX6tY7qxCoepE5L+WJ52Hw7ZQ="
+    },
+    {
+      "source": {
+        "git": {
+          "remote": "https://adcwer.bls/renebjl-zblg/vhvdlyrnt.xeh",
+          "subdir": "doc-util"
+        }
+      },
+      "version": "6ac6c69685b8c29c54515448eaca583da2d88150",
+      "sum": "BrAL/k23jq+xy9oA7TWIhUx07dsA/QLm3g7ktCwe//U="
+    }
+  ],
+  "legacyImports": false
+}

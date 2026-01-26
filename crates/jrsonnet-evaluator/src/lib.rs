@@ -321,9 +321,18 @@ impl State {
 			);
 		}
 		let parsed = file.parsed.as_ref().expect("just set").clone();
-		if file.evaluating {
-			bail!(InfiniteRecursionDetected)
-		}
+		// RELAXED: Allow re-importing files during evaluation to support lazy evaluation patterns.
+		// In Jsonnet, it's valid to have apparent "circular" imports as long as they're in lazy
+		// thunks that don't get evaluated. For example:
+		//   { value: if cond then (import 'self.libsonnet').other else 42 }
+		// The original check was too strict and prevented legitimate patterns that Go Tanka handles.
+		// Real infinite recursion is still caught by:
+		// 1. Thunk Pending state (val.rs:105)
+		// 2. Stack depth limits (stack.rs)
+		// 3. Pending value access (dynamic.rs:44)
+		// if file.evaluating {
+		// 	bail!(InfiniteRecursionDetected)
+		// }
 		file.evaluating = true;
 		// Dropping file cache guard here, as evaluation may use this map too
 		drop(file_cache);

@@ -1,6 +1,69 @@
-use std::{borrow::Cow, fmt::Write, ptr};
+use std::{borrow::Cow, cell::Cell, fmt::Write, ptr};
 
 use crate::{bail, in_description_frame, Result, ResultExt, Val};
+
+// Thread-local flag to control float formatting style in std.toString
+// When true (default), uses Go's %.17g format (e.g., 0.59999999999999998)
+// When false, uses Rust's shortest representation (e.g., 0.6)
+thread_local! {
+	static USE_GO_STYLE_FLOATS: Cell<bool> = const { Cell::new(true) };
+}
+
+/// Set whether to use Go-style float formatting in std.toString
+/// - true (default): Use Go's %.17g format (matches go-jsonnet)
+/// - false: Use Rust's Display (shortest representation, matches jrsonnet binary)
+pub fn set_use_go_style_floats(use_go_style: bool) {
+	USE_GO_STYLE_FLOATS.with(|s| s.set(use_go_style));
+}
+
+/// Check if Go-style float formatting is enabled
+pub(crate) fn should_use_go_style_floats() -> bool {
+	USE_GO_STYLE_FLOATS.with(Cell::get)
+}
+
+/// Format a float like Go's %.17g format
+/// This matches go-jsonnet's unparseNumber function for non-integer values
+pub(crate) fn format_float_go_g17(v: f64) -> String {
+	// Go's %.17g format:
+	// - Uses 17 significant digits maximum
+	// - Chooses %e or %f based on exponent (uses %e if exp < -4 or exp >= precision)
+	// - Trims trailing zeros and unnecessary decimal point
+	// - Uses 2-digit exponent padding (e-05 not e-5)
+
+	// Get the exponent to decide format
+	let exp = if v == 0.0 {
+		0
+	} else {
+		v.abs().log10().floor() as i32
+	};
+
+	if exp < -4 || exp >= 17 {
+		// Use scientific notation like %e
+		let formatted = format!("{:.16e}", v);
+		// Parse and clean up: "3.1415926535897930e0" -> "3.141592653589793e0"
+		if let Some((mantissa, exp_str)) = formatted.split_once('e') {
+			let mantissa = mantissa.trim_end_matches('0').trim_end_matches('.');
+			let exp_val: i32 = exp_str.parse().unwrap_or(0);
+			if exp_val == 0 {
+				mantissa.to_string()
+			} else {
+				// Go uses 2-digit minimum exponent: e-05 not e-5
+				format!("{}e{:+03}", mantissa, exp_val)
+			}
+		} else {
+			formatted
+		}
+	} else {
+		// Use decimal notation like %f but with 17 significant digits
+		// Calculate digits after decimal point needed for 17 sig figs
+		let digits_after_decimal = (16 - exp).max(0) as usize;
+		let formatted = format!("{:.prec$}", v, prec = digits_after_decimal);
+		// Trim trailing zeros but keep at least one digit after decimal if there was one
+		let trimmed = formatted.trim_end_matches('0');
+		let trimmed = trimmed.trim_end_matches('.');
+		trimmed.to_string()
+	}
+}
 
 pub trait ManifestFormat {
 	fn manifest_buf(&self, val: Val, buf: &mut String) -> Result<()>;
@@ -210,7 +273,30 @@ fn manifest_json_ex_buf(
 				escape_string_json_buf(&flat, buf);
 			}
 		}
-		Val::Num(n) => write!(buf, "{n}").unwrap(),
+		Val::Num(n) => {
+			let v = n.get();
+			match mtype {
+				// std.toString uses Go's unparseNumber: %.0f for integers, %.17g for floats
+				// This is critical for config_hash compatibility (std.md5(std.toString(...)))
+				// The go-style formatting can be disabled via set_use_go_style_floats(false)
+				// to match upstream jrsonnet binary behavior
+				ToString => {
+					if v == v.floor() {
+						write!(buf, "{:.0}", v).unwrap();
+					} else if should_use_go_style_floats() {
+						buf.push_str(&format_float_go_g17(v));
+					} else {
+						// Use Rust's shortest representation (matches jrsonnet binary)
+						write!(buf, "{}", v).unwrap();
+					}
+				}
+				// std.manifestJson uses strconv.FormatFloat('f', -1) - shortest decimal
+				// Rust's default Display is similar (uses ryu algorithm)
+				Manifest | Std | Minify => {
+					write!(buf, "{}", v).unwrap();
+				}
+			}
+		}
 		#[cfg(feature = "exp-bigint")]
 		Val::BigInt(n) => {
 			if options.preserve_bigints {
@@ -280,25 +366,34 @@ fn manifest_json_ex_buf(
 			cur_padding.push_str(&options.padding);
 
 			let mut had_fields = false;
-			for (i, (key, value)) in obj
-				.iter(
-					#[cfg(feature = "exp-preserve-order")]
-					options.preserve_order,
-				)
-				.enumerate()
-			{
-				had_fields = true;
-				let value = value.with_description(|| format!("field <{key}> evaluation"))?;
+			let mut field_count = 0;
+			for (key, value) in obj.iter(
+				#[cfg(feature = "exp-preserve-order")]
+				options.preserve_order,
+			) {
+				// Skip fields that evaluate to runtime errors (e.g., error statements in unused conditionals)
+				// This matches Go Tanka's behavior where these fields are silently ignored during manifest
+				// Note: This may hide legitimate configuration errors, but is needed for tk compatibility
+				let value = match value.with_description(|| format!("field <{key}> evaluation")) {
+					Ok(v) => v,
+					Err(e) if matches!(e.error(), crate::error::ErrorKind::RuntimeError(_)) => {
+						// Skip this field silently - tk doesn't manifest fields with runtime errors
+						continue;
+					}
+					Err(e) => return Err(e),
+				};
 
-				if i != 0 {
+				had_fields = true;
+				if field_count > 0 {
 					buf.push(',');
 				}
+				field_count += 1;
 				match mtype {
 					Manifest | Std => {
 						buf.push_str(options.newline);
 						buf.push_str(cur_padding);
 					}
-					ToString if i != 0 => buf.push(' '),
+					ToString if field_count > 1 => buf.push(' '),
 					Minify | ToString => {}
 				}
 
@@ -387,14 +482,18 @@ pub struct YamlStreamFormat<I> {
 	inner: I,
 	c_document_end: bool,
 	end_newline: bool,
+	/// When true, empty arrays produce "\n" (jrsonnet behavior)
+	/// When false, empty arrays produce "---\n\n" (go-jsonnet behavior)
+	jrsonnet_empty: bool,
 }
 impl<I> YamlStreamFormat<I> {
-	pub fn std_yaml_stream(inner: I, c_document_end: bool) -> Self {
+	pub fn std_yaml_stream(inner: I, c_document_end: bool, jrsonnet_empty: bool) -> Self {
 		Self {
 			inner,
 			c_document_end,
 			// Stdlib format always inserts useless newline at the end
 			end_newline: true,
+			jrsonnet_empty,
 		}
 	}
 	pub fn cli(inner: I) -> Self {
@@ -402,6 +501,7 @@ impl<I> YamlStreamFormat<I> {
 			inner,
 			c_document_end: true,
 			end_newline: false,
+			jrsonnet_empty: false,
 		}
 	}
 }
@@ -413,7 +513,16 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 				val.value_type()
 			)
 		};
-		if !arr.is_empty() {
+		if arr.is_empty() {
+			if self.jrsonnet_empty {
+				// jrsonnet binary outputs "\n" for empty arrays (just a newline)
+				// or "...\n" when c_document_end is true
+				// (no document marker for empty arrays)
+			} else {
+				// go-jsonnet outputs "---\n\n" for empty arrays (document marker + empty document)
+				out.push_str("---\n\n");
+			}
+		} else {
 			for (i, v) in arr.iter().enumerate() {
 				let v = v.with_description(|| format!("elem <{i}> evaluation"))?;
 				out.push_str("---\n");
@@ -427,8 +536,12 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 		if self.c_document_end {
 			out.push_str("...");
 		}
-		if self.end_newline {
-			out.push('\n');
+		// For jrsonnet empty mode: always add trailing newline
+		// For go-jsonnet mode: only add trailing newline if c_document_end is true
+		if self.jrsonnet_empty || self.c_document_end {
+			if self.end_newline {
+				out.push('\n');
+			}
 		}
 		Ok(())
 	}
