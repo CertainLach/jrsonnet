@@ -1,0 +1,16 @@
+{
+    "default/ConfigMap-alerting-rules-unquoted.golden": "main.jsonnet",
+    "default/ConfigMap-alerting-rules.golden": "main.jsonnet",
+    "default/ConfigMap-apiserver.golden": "main.jsonnet",
+    "default/ConfigMap-app-config.golden": "main.jsonnet",
+    "default/ConfigMap-dashboards-parse-and-output.golden": "main.jsonnet",
+    "default/ConfigMap-dashboards.golden": "main.jsonnet",
+    "default/ConfigMap-grafana-dashboard-provisioning.golden": "main.jsonnet",
+    "default/ConfigMap-grafana-datasources.golden": "main.jsonnet",
+    "default/ConfigMap-html-content.golden": "main.jsonnet",
+    "default/ConfigMap-nested-yaml-config.golden": "main.jsonnet",
+    "default/CronJob-remove-flux-ignores-before-rollout.golden": "main.jsonnet",
+    "default/Deployment-test-deployment.golden": "main.jsonnet",
+    "default/ScaledObject-test-scaled.golden": "main.jsonnet",
+    "default/WildcardConfig-wildcard-test.golden": "main.jsonnet"
+}

@@ -1,0 +1,8 @@
+{
+    "default/ConfigMap-limit-updater-deny-lists.golden": "main.jsonnet",
+    "default/ConfigMap-loki-autoscaler-metrics.golden": "main.jsonnet",
+    "default/Deployment-query-tee.golden": "main.jsonnet",
+    "default/ScaledObject-partition-ingester-a.golden": "main.jsonnet",
+    "default/ScaledObject-query-engine-worker.golden": "main.jsonnet",
+    "default/StatefulSet-ruler.golden": "main.jsonnet"
+}

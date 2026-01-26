@@ -1,0 +1,19 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: live-store
+  namespace: default
+spec:
+  template:
+    spec:
+      containers:
+      - env:
+        - name: GOGC
+          value: "100"
+        - name: GOMEMLIMIT
+          value: 7730941133B
+        image: cloud-traces:latest
+        name: live-store
+        resources:
+          limits:
+            memory: 9Gi

@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  child.txt: parent-name-extended
+  parent.txt: parent-name
+kind: ConfigMap
+metadata:
+  name: super-binding-test
+  namespace: default

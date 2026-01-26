@@ -1,0 +1,10 @@
+apiVersion: v1
+data:
+  result.yaml: |-
+    "item1": "v1"
+    "item2": "v2"
+    "item3": "v3"
+kind: ConfigMap
+metadata:
+  name: comprehension-test
+  namespace: default

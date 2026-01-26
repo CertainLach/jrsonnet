@@ -1,0 +1,14 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: database-migration
+  namespace: default
+spec:
+  backoffLimit: 0
+  template:
+    spec:
+      containers:
+      - name: migration
+        image: myapp/migration:main
+        command: ["python", "manage.py", "migrate"]
+      restartPolicy: Never

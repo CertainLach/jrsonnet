@@ -1,0 +1,4 @@
+{
+    "default/ConfigMap-rounding-test.golden": "main.jsonnet",
+    "default/StatefulSet-live-store.golden": "main.jsonnet"
+}

@@ -1,0 +1,8 @@
+{
+    "default/ConfigMap-test-config.golden": "main.jsonnet",
+    "default/PodDisruptionBudget-index-gateway-pdb.golden": "main.jsonnet",
+    "default/ScaledObject-index-gateway-scaler.golden": "main.jsonnet",
+    "default/ScaledObject-query-engine-worker-scaler.golden": "main.jsonnet",
+    "default/Service-index-gateway-headless.golden": "main.jsonnet",
+    "default/Service-index-gateway.golden": "main.jsonnet"
+}

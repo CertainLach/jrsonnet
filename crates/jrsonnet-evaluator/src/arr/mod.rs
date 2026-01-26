@@ -75,21 +75,23 @@ impl ArrValue {
 	}
 
 	pub fn extended(a: Self, b: Self) -> Self {
-		// TODO: benchmark for an optimal value, currently just a arbitrary choice
-		const ARR_EXTEND_THRESHOLD: usize = 100;
+		// Always flatten arrays immediately like go-jsonnet does.
+		// This avoids deep nesting and expensive recursive get() calls in comprehensions.
+		// Trade-off: Pay O(n) cost during concatenation for O(1) access later.
 
 		if a.is_empty() {
 			b
 		} else if b.is_empty() {
 			a
-		} else if a.len() + b.len() > ARR_EXTEND_THRESHOLD {
-			Self::new(ExtendedArray::new(a, b))
 		} else if let (Some(a), Some(b)) = (a.iter_cheap(), b.iter_cheap()) {
+			// Both arrays are cheap to iterate - create eager array
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a);
 			out.extend(b);
 			Self::eager(out)
 		} else {
+			// At least one array requires evaluation - create lazy array
+			// Still flatten, but with lazy thunks
 			let mut out = Vec::with_capacity(a.len() + b.len());
 			out.extend(a.iter_lazy());
 			out.extend(b.iter_lazy());

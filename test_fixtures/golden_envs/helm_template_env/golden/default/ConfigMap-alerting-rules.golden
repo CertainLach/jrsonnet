@@ -1,0 +1,47 @@
+apiVersion: v1
+data:
+  "12": test
+  "12.5": test2
+  alerts.rules: |-
+    "groups":
+    - "name": "prometheus-extra"
+      "rules":
+      - "alert": "PromScrapeFailed"
+        "annotations":
+          "message": "Prometheus failed to scrape a target {{ $labels.job }} / {{ $labels.instance }}"
+        "expr": "up != 1"
+        "for": "15m"
+        "labels":
+          "severity": "warning"
+      - "alert": "PromScrapeFlapping"
+        "annotations":
+          "message": "Prometheus target flapping {{ $labels.job }} / {{ $labels.instance }}"
+          "runbook_url": "https://uctufr.xhf/omiuwrh/vkyybhbzkm_icgsw/kgup/muoeie/hxrr/ixsnsm/lheqpcyb.de#UfzvntcMmtoQiravxdvryiy"
+        "expr": "avg_over_time(up[5m]) < 1"
+        "for": "15m"
+        "labels":
+          "severity": "warning"
+  bytes_threshold: 7.5e+06
+  description: Automatic connection preference. Set to true for 'ACCEPT_AUTOMATIC'
+    or false for 'ACCEPT_MANUAL'
+  expr: max by (namespace, provider, collector) (cloudcost_exporter_collector_last_scrape_duration_seconds)
+    > 50
+  message: There are running tests that don't have any metric rows inserted for 10
+    minutes
+  message2: No new in-progress runners for over 20m while jobs remain queued. This
+    might indicate rate limiting, scheduling issues, etc.
+  test: "00:00"
+  test2: externalIPs is a list of IP addresses for which nodes in the cluster will
+    also accept traffic for this service.  These IPs are not managed by Kubernetes.  The
+    user is responsible for ensuring that traffic arrives at a node with this IP.  A
+    common example is external load-balancers that are not part of the Kubernetes
+    system.
+kind: ConfigMap
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: alerting-rules
+  namespace: default

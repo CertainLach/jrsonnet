@@ -1,0 +1,12 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: ruler
+  namespace: default
+spec:
+  command:
+  - /bin/bash
+  - -c
+  - 'echo -n "The current WAL directory size is: "; du -sh /data/wal/ | cut -f1; echo
+    "Deleting WALs for all tenants"; rm -rf /data/wal/*; echo -n "After the delete
+    the current WAL directory size is: "; du -sh /data/wal/ | cut -f1'

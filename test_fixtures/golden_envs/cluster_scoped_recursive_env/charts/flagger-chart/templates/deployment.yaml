@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: flagger-{{ .Values.clusterName }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: flagger
+  template:
+    metadata:
+      labels:
+        app: flagger
+    spec:
+      serviceAccountName: flagger-{{ .Values.clusterName }}
+      containers:
+        - name: flagger
+          image: ghcr.io/fluxcd/flagger:1.35.0

@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  component.yaml: |-
+    "config":
+      "labelSelector":
+        "matchLabels":
+          "name": "test-component"
+      "replicas": 3
+    "name": "test-component"
+kind: ConfigMap
+metadata:
+  name: recursive-test
+  namespace: default

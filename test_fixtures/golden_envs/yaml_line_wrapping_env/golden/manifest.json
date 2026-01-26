@@ -1,0 +1,7 @@
+{
+    "default/Deployment-query-tee.golden": "main.jsonnet",
+    "default/ScaledObject-partition-ingester-a.golden": "main.jsonnet",
+    "default/ScaledObject-partition-ingester-b.golden": "main.jsonnet",
+    "default/StatefulSet-memcached-extstore.golden": "main.jsonnet",
+    "default/StatefulSet-ruler.golden": "main.jsonnet"
+}

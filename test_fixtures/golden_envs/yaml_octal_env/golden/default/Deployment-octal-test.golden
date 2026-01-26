@@ -1,0 +1,26 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octal-test
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octal-test
+  template:
+    metadata:
+      labels:
+        app: octal-test
+    spec:
+      containers:
+      - image: busybox:latest
+        name: test
+        volumeMounts:
+        - mountPath: /scripts
+          name: scripts
+      volumes:
+      - configMap:
+          defaultMode: 493
+          name: scripts
+        name: scripts

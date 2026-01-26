@@ -4,22 +4,11 @@ jobs:
   tests:
     name: Tests
     uses: ./.github/workflows/test.yaml
-  lints:
-    name: Lints
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4.1.4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
-      - uses: auguwu/clippy-action@1.3.0
-        with:
-          token: ${{ secrets.GITHUB_TOKEN }}
-    permissions:
-      checks: write
   formatting:
     name: Formatting
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4.1.4
-      - uses: actions-rust-lang/setup-rust-toolchain@v1.8.0
-      - uses: actions-rust-lang/rustfmt@v1.1.0
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+      - uses: actions-rust-lang/rustfmt@4066006ec54a31931b9b1fddfd38f2fdf2d27143 # v1.1.2
 

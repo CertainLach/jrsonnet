@@ -1,0 +1,12 @@
+apiVersion: v1
+data:
+  rules-empty-yaml: '{}'
+  rules-empty-yaml-extra-newline: |
+    {}
+  rules-just-newlines: |2+
+
+
+kind: ConfigMap
+metadata:
+  name: empty-rules
+  namespace: default

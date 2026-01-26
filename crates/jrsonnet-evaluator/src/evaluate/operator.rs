@@ -7,11 +7,21 @@ use crate::{
 	bail,
 	error::ErrorKind::*,
 	evaluate,
+	manifest::format_float_go_g17,
 	stdlib::std_format,
 	typed::Typed,
 	val::{equals, StrValue},
 	Context, Result, Val,
 };
+
+/// Format a number like Go's unparseNumber: %.0f for integers, %.17g for floats
+fn format_num_go_style(n: f64) -> String {
+	if n.fract() == 0.0 && n.abs() < 1e15 {
+		format!("{:.0}", n)
+	} else {
+		format_float_go_g17(n)
+	}
+}
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	use UnaryOpType::*;
@@ -30,8 +40,9 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 	Ok(match (a, b) {
 		(Str(v1), Str(v2)) => Str(StrValue::concat(v1.clone(), v2.clone())),
 
-		(Num(a), Str(b)) => Val::string(format!("{a}{b}")),
-		(Str(a), Num(b)) => Val::string(format!("{a}{b}")),
+		// Use Go-style number formatting for string concatenation to match go-jsonnet
+		(Num(a), Str(b)) => Val::string(format!("{}{b}", format_num_go_style(a.get()))),
+		(Str(a), Num(b)) => Val::string(format!("{a}{}", format_num_go_style(b.get()))),
 
 		(Str(a), o) | (o, Str(a)) if a.is_empty() => Val::string(o.clone().to_string()?),
 		(Str(a), o) => Val::string(format!("{a}{}", o.clone().to_string()?)),

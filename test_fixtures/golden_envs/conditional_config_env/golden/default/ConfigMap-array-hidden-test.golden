@@ -1,0 +1,9 @@
+apiVersion: v1
+data:
+  extracted.yaml: |-
+    - "h1"
+    - "h2"
+kind: ConfigMap
+metadata:
+  name: array-hidden-test
+  namespace: default

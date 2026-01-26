@@ -1,0 +1,12 @@
+apiVersion: example.io/v1
+kind: RulesConfig
+metadata:
+  name: multiple-trailing-newlines-in-array
+  namespace: default
+spec:
+  items:
+  - name: test-item
+    rules: |+
+      alert: TestAlert
+      expr: up == 1
+

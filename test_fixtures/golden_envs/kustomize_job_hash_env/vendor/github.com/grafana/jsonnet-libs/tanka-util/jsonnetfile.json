@@ -1,0 +1,15 @@
+{
+  "version": 1,
+  "dependencies": [
+    {
+      "source": {
+        "git": {
+          "remote": "https://adcwer.bls/renebjl-zblg/vhvdlyrnt.xeh",
+          "subdir": "doc-util"
+        }
+      },
+      "version": "master"
+    }
+  ],
+  "legacyImports": true
+}

@@ -1,0 +1,65 @@
+# Build artifacts - must exclude target directory
+target
+target/
+**/target
+**/target/
+
+# Git
+.git
+.git/
+.gitignore
+
+# CI/CD
+.github
+.github/
+
+# Documentation
+docs
+docs/
+*.md
+*.adoc
+README*
+
+# Test files and fixtures (exclude test content but keep tests/Cargo.toml and tests/src/lib.rs)
+test_fixtures
+test_fixtures/
+tests/golden
+tests/suite
+tests/tests
+**/testdata
+**/testdata/
+**/*_test.rs
+**/*.snap
+**/snapshots
+**/snapshots/
+
+# Development files
+.envrc
+.cursor
+.cursor/
+.vscode
+.vscode/
+.idea
+.idea/
+*.swp
+*.swo
+*~
+
+# Build config (not needed in image)
+.cargo
+.cargo/
+flake.nix
+flake.lock
+nix
+nix/
+
+# Python scripts
+*.py
+anonymize.py
+
+# Other config files
+Makefile
+clippy.toml
+.rustfmt.toml
+.editorconfig
+CLAUDE.md

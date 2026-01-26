@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-test-values.golden": "main.jsonnet"
+}

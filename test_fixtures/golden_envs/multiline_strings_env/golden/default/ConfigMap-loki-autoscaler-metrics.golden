@@ -1,0 +1,17 @@
+apiVersion: v1
+data:
+  metrics.yaml: |-
+    "metrics":
+    - "name": "cpu_utilization"
+      "query": "sum(rate(container_cpu_usage_seconds_total{namespace=\"loki\"}[5m])) by (pod)"
+      "threshold": 0.8
+    - "name": "memory_utilization"
+      "query": "sum(container_memory_working_set_bytes{namespace=\"loki\"}) by (pod) / sum(container_spec_memory_limit_bytes{namespace=\"loki\"}) by (pod)"
+      "threshold": 0.9
+    - "name": "disk_utilization"
+      "query": "1 - (sum(kubelet_volume_stats_available_bytes{namespace=\"loki\"}) by (persistentvolumeclaim) / sum(kubelet_volume_stats_capacity_bytes{namespace=\"loki\"}) by (persistentvolumeclaim))"
+      "threshold": 0.85
+kind: ConfigMap
+metadata:
+  name: loki-autoscaler-metrics
+  namespace: default

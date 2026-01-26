@@ -1,0 +1,10 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "spec": {
+    "namespace": "default"
+  },
+  "metadata": {
+    "name": "environments/eager_error_eval_env"
+  }
+}

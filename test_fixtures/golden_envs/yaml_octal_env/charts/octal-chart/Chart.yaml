@@ -1,0 +1,5 @@
+apiVersion: v2
+name: octal-chart
+description: Test chart for YAML 1.1 octal number parsing
+version: 1.0.0
+appVersion: "1.0"

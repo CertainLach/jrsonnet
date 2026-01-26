@@ -1,0 +1,54 @@
+apiVersion: v1
+data:
+  "12": test
+  "12.5": test2
+  alerts.rules: "\"groups\":\n- \"name\": \"prometheus-extra\"\n  \"rules\":\n  -
+    \"alert\": \"PromScrapeFailed\"\n    \"annotations\":\n      \"message\": \"Prometheus
+    failed to scrape a target's job {{ $labels.job }} / {{ $labels.instance }} 0.8\"\n
+    \     \"message2\": \"hello'\"\n      \"message3\": \"hello,\"\n      \"runbook_url\":
+    \"https://uctufr.xhf/omiuwrh/vkyybhbzkm_icgsw/kgup/muoeie/hxrr/ixsnsm/lheqpcyb.de#UfzvntcMmtoQiravxdvryiy\"\n
+    \   \"expr\": \"up != 1\"\n    \"for\": \"15m\"\n    \"labels\":\n      \"bytes_threshold\":
+    7500000\n      \"expr\": \"max by (namespace, provider, collector) (cloudcost_exporter_collector_last_scrape_duration_seconds)
+    > 50\"\n      \"expr2\": \"vector(1)\"\n      \"message\": \"There are running
+    tests that don't have any metric rows inserted for 10 minutes\"\n      \"message2\":
+    \"No new in-progress runners for over 20m while jobs remain queued. This might
+    indicate rate limiting, scheduling issues, etc.\"\n      \"message3\": \"ChatOps
+    proxy experiencing 502,503,504 errors\"\n      \"message4\": |\n        This is
+    a multiline string.\n        This is a second line. It has an intentional trailing
+    space. tk mangles it.\n        \n      \"rules\": |\n        alert: TestAlert\n
+    \       expr: up == 1\n        \n      \"severity\": \"warning\"\n      \"summary\":
+    \"PersistentVolume has been in \\\"released\\\" state for more than a week.\"\n
+    \ - \"alert\": \"PromScrapeFlapping\"\n    \"annotations\":\n      \"description\":
+    \"{{ printf \\\"%.1f\\\" $value }}% minimum errors while sending alerts from any
+    Prometheus server in HA group {{$labels.job}} in {{$labels.cluster}} to any Alertmanager.\"\n
+    \     \"description2\": \"The 95th percentile of LZ allocation step duration has
+    been >= 290ms for the last 20 minutes.\"\n      \"message\": \"Prometheus target
+    flapping {{ $labels.job }} / {{ $labels.instance }}\"\n    \"expr\": \"avg_over_time(up[5m])
+    < 1\"\n    \"for\": \"15m\"\n    \"labels\":\n      \"severity\": \"warning\"\n
+    \   \"record\": \"cluster_job:adaptive_logs_gateway_request_duration_seconds:50quantile\""
+  test:
+    name: prometheus-extra
+    rules: "---\nalert: PromScrapeFailed\nannotations:\n  message: \"Prometheus failed
+      to scrape a target's job {{ $labels.job }} / {{ $labels.instance }} 0.8\"\n
+      \ message2: \"hello'\"\n  message3: \"hello,\"\n  runbook_url: \"https://uctufr.xhf/omiuwrh/vkyybhbzkm_icgsw/kgup/muoeie/hxrr/ixsnsm/lheqpcyb.de#UfzvntcMmtoQiravxdvryiy\"\nexpr:
+      up != 1\nfor: 15m\nlabels:\n  bytes_threshold: 7500000\n  expr: \"max by (namespace,
+      provider, collector) (cloudcost_exporter_collector_last_scrape_duration_seconds)
+      > 50\"\n  expr2: vector(1)\n  message: \"There are running tests that don't
+      have any metric rows inserted for 10 minutes\"\n  message2: \"No new in-progress
+      runners for over 20m while jobs remain queued. This might indicate rate limiting,
+      scheduling issues, etc.\"\n  message3: \"ChatOps proxy experiencing 502,503,504
+      errors\"\n  message4: |\n    This is a multiline string.\n    This is a second
+      line. It has an intentional trailing space. tk mangles it.\n   \n  rules: |\n
+      \   alert: TestAlert\n    expr: up == 1\n   \n  severity: warning\n  summary:
+      \"PersistentVolume has been in \\\"released\\\" state for more than a week.\"\n---\nalert:
+      PromScrapeFlapping\nannotations:\n  description: \"{{ printf \\\"%.1f\\\" $value
+      }}% minimum errors while sending alerts from any Prometheus server in HA group
+      {{$labels.job}} in {{$labels.cluster}} to any Alertmanager.\"\n  description2:
+      The 95th percentile of LZ allocation step duration has been >= 290ms for the
+      last 20 minutes.\n  message: \"Prometheus target flapping {{ $labels.job }}
+      / {{ $labels.instance }}\"\nexpr: \"avg_over_time(up[5m]) < 1\"\nfor: 15m\nlabels:\n
+      \ severity: warning\nrecord: \"cluster_job:adaptive_logs_gateway_request_duration_seconds:50quantile\"\n"
+kind: ConfigMap
+metadata:
+  name: alerting-rules
+  namespace: default

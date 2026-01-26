@@ -29,8 +29,7 @@ pub use sort::*;
 pub use strings::*;
 pub use types::*;
 
-#[cfg(feature = "exp-regex")]
-pub use crate::regex::*;
+pub use crate::{regex::*, tanka::*};
 
 mod arrays;
 mod compat;
@@ -42,11 +41,11 @@ mod misc;
 mod objects;
 mod operator;
 mod parse;
-#[cfg(feature = "exp-regex")]
 mod regex;
 mod sets;
 mod sort;
 mod strings;
+mod tanka;
 mod types;
 
 #[allow(clippy::too_many_lines)]
@@ -165,8 +164,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("manifestJsonEx", builtin_manifest_json_ex::INST),
 		("manifestJson", builtin_manifest_json::INST),
 		("manifestJsonMinified", builtin_manifest_json_minified::INST),
-		("manifestYamlDoc", builtin_manifest_yaml_doc::INST),
-		("manifestYamlStream", builtin_manifest_yaml_stream::INST),
+		// manifestYamlDoc and manifestYamlStream are registered separately below because they need settings
 		("manifestTomlEx", builtin_manifest_toml_ex::INST),
 		("manifestToml", builtin_manifest_toml::INST),
 		("toString", builtin_to_string::INST),
@@ -214,7 +212,6 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("setDiff", builtin_set_diff::INST),
 		("setUnion", builtin_set_union::INST),
 		// Regex
-		#[cfg(feature = "exp-regex")]
 		("regexQuoteMeta", builtin_regex_quote_meta::INST),
 		// Compat
 		("__compare", builtin___compare::INST),
@@ -245,36 +242,45 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 			settings: settings.clone(),
 		},
 	);
+	builder.method(
+		"manifestYamlDoc",
+		builtin_manifest_yaml_doc {
+			settings: settings.clone(),
+		},
+	);
+	builder.method(
+		"manifestYamlStream",
+		builtin_manifest_yaml_stream {
+			settings: settings.clone(),
+		},
+	);
 	builder.method("trace", builtin_trace { settings });
 	builder.method("id", FuncVal::Id);
 
-	#[cfg(feature = "exp-regex")]
-	{
-		// Regex
-		let regex_cache = RegexCache::default();
-		builder.method(
-			"regexFullMatch",
-			builtin_regex_full_match {
-				cache: regex_cache.clone(),
-			},
-		);
-		builder.method(
-			"regexPartialMatch",
-			builtin_regex_partial_match {
-				cache: regex_cache.clone(),
-			},
-		);
-		builder.method(
-			"regexReplace",
-			builtin_regex_replace {
-				cache: regex_cache.clone(),
-			},
-		);
-		builder.method(
-			"regexGlobalReplace",
-			builtin_regex_global_replace { cache: regex_cache },
-		);
-	};
+	// Regex
+	let regex_cache = RegexCache::default();
+	builder.method(
+		"regexFullMatch",
+		builtin_regex_full_match {
+			cache: regex_cache.clone(),
+		},
+	);
+	builder.method(
+		"regexPartialMatch",
+		builtin_regex_partial_match {
+			cache: regex_cache.clone(),
+		},
+	);
+	builder.method(
+		"regexReplace",
+		builtin_regex_replace {
+			cache: regex_cache.clone(),
+		},
+	);
+	builder.method(
+		"regexGlobalReplace",
+		builtin_regex_global_replace { cache: regex_cache },
+	);
 
 	builder.build()
 }
@@ -309,6 +315,44 @@ impl TracePrinter for StdTracePrinter {
 	}
 }
 
+/// Controls how quote_values is determined in manifestYamlDoc
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum QuoteValuesBehavior {
+	/// Values are always quoted regardless of quote_keys (matches go-jsonnet)
+	#[default]
+	GoJsonnet,
+	/// quote_values follows quote_keys: when quote_keys=false, quote_values=false
+	/// This matches the jrsonnet binary behavior
+	Jrsonnet,
+}
+
+/// Settings for std.manifestYamlDoc formatting
+/// These settings control how YAML is formatted when using std.manifestYamlDoc
+#[derive(Debug, Clone, Default)]
+pub struct ManifestYamlDocFormatting {
+	/// Controls how quote_values is determined.
+	/// - GoJsonnet (default): values are always quoted
+	/// - Jrsonnet: quote_values follows quote_keys
+	pub quote_values_behavior: QuoteValuesBehavior,
+}
+
+/// Controls how empty arrays are formatted in manifestYamlStream
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum ManifestYamlStreamEmptyBehavior {
+	/// Empty arrays produce "---\n\n" (document marker + empty line) - matches go-jsonnet
+	#[default]
+	GoJsonnet,
+	/// Empty arrays produce "\n" (just a newline) - matches jrsonnet binary
+	Jrsonnet,
+}
+
+/// Settings for std.manifestYamlStream formatting
+#[derive(Debug, Clone, Default)]
+pub struct ManifestYamlStreamFormatting {
+	/// Controls how empty arrays are formatted
+	pub empty_behavior: ManifestYamlStreamEmptyBehavior,
+}
+
 pub struct Settings {
 	/// Used for `std.extVar`
 	pub ext_vars: HashMap<IStr, TlaArg>,
@@ -318,6 +362,10 @@ pub struct Settings {
 	pub trace_printer: Box<dyn TracePrinter>,
 	/// Used for `std.thisFile`
 	pub path_resolver: PathResolver,
+	/// Used for `std.manifestYamlDoc` formatting options
+	pub manifest_yaml_doc_formatting: ManifestYamlDocFormatting,
+	/// Used for `std.manifestYamlStream` formatting options
+	pub manifest_yaml_stream_formatting: ManifestYamlStreamFormatting,
 }
 
 fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
@@ -338,6 +386,8 @@ impl ContextInitializer {
 			ext_natives: HashMap::new(),
 			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
+			manifest_yaml_doc_formatting: ManifestYamlDocFormatting::default(),
+			manifest_yaml_stream_formatting: ManifestYamlStreamFormatting::default(),
 		};
 		let settings = Rc::new(RefCell::new(settings));
 		let stdlib_obj = stdlib_uncached(settings.clone());
@@ -346,10 +396,10 @@ impl ContextInitializer {
 			settings,
 		}
 	}
-	pub fn settings(&self) -> Ref<Settings> {
+	pub fn settings(&self) -> Ref<'_, Settings> {
 		self.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<Settings> {
+	pub fn settings_mut(&self) -> RefMut<'_, Settings> {
 		self.settings.borrow_mut()
 	}
 	pub fn add_ext_var(&self, name: IStr, value: Val) {
@@ -385,6 +435,14 @@ impl ContextInitializer {
 		self.settings_mut()
 			.ext_natives
 			.insert(name.into(), cb.into());
+	}
+	/// Set the manifest YAML doc formatting options
+	pub fn set_manifest_yaml_doc_formatting(&self, formatting: ManifestYamlDocFormatting) {
+		self.settings_mut().manifest_yaml_doc_formatting = formatting;
+	}
+	/// Set the manifest YAML stream formatting options
+	pub fn set_manifest_yaml_stream_formatting(&self, formatting: ManifestYamlStreamFormatting) {
+		self.settings_mut().manifest_yaml_stream_formatting = formatting;
 	}
 }
 impl jrsonnet_evaluator::ContextInitializer for ContextInitializer {

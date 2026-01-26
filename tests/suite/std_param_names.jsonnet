@@ -155,6 +155,13 @@ local names = {
     objectKeysValuesAll: ['o'],
     objectRemoveKey: ['obj', 'key'],
 
+    // Regex
+    regexQuoteMeta: ['pattern'],
+    regexFullMatch: ['pattern', 'str'],
+    regexPartialMatch: ['pattern', 'str'],
+    regexReplace: ['str', 'pattern', 'to'],
+    regexGlobalReplace: ['str', 'pattern', 'to'],
+
     // C++ jsonnet undocumented
     __compare: ['v1', 'v2'],
     __compare_array: ['arr1', 'arr2'],

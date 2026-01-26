@@ -1,0 +1,3 @@
+{
+    "default/Deployment-myrelease-test.golden": "main.jsonnet"
+}

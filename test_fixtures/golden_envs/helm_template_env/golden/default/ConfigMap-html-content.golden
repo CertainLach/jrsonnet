@@ -1,0 +1,24 @@
+apiVersion: v1
+data:
+  index.html: |
+    <html>
+      <head>
+        <style>
+          body { font-family: sans-serif; }
+          .container { margin: 1rem; }
+        </style>
+      </head>
+      <body>
+        <h1>Test Page</h1>
+        <p class="description">This is a test page with HTML content.</p>
+      </body>
+    </html>
+kind: ConfigMap
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: html-content
+  namespace: default

@@ -1,0 +1,21 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: test-deployment
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: test
+  template:
+    metadata:
+      annotations:
+        config_hash: b25e918270ab8cfcfc2beaee3de0421f
+      labels:
+        app: test
+    spec:
+      containers:
+      - env: []
+        image: test:latest
+        name: test

@@ -30,7 +30,7 @@ name = "jsonnet"
 crate-type = ["cdylib", "staticlib"]
 
 [features]
-default = ["interop-common", "interop-wasm", "interop-threading"]
+default = ["interop-common", "interop-threading"]
 # Export additional functions for native integration, i.e ability to set custom trace format
 interop-common = []
 # Provide ability to statically override callbacks from WASM (by using imports)

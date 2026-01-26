@@ -1,0 +1,5 @@
+{
+    "kube-system/ConfigMap-test-config.golden": "main.jsonnet",
+    "kube-system/IngressClass-alb.golden": "main.jsonnet",
+    "kube-system/IngressClassParams-alb.golden": "main.jsonnet"
+}

@@ -1,0 +1,25 @@
+apiVersion: v1
+data:
+  alerts.rules: |-
+    groups:
+    - name: "prometheus-extra"
+      rules:
+      - alert: "PromScrapeFailed"
+        annotations:
+          message: "Prometheus failed to scrape a target {{ "{{" }} $labels.job {{ "}}" }} / {{ "{{" }} $labels.instance {{ "}}" }}"
+        expr: "up != 1"
+        for: "15m"
+        labels:
+          severity: "warning"
+      - alert: "PromScrapeFlapping"
+        annotations:
+          message: "Prometheus target flapping {{ "{{" }} $labels.job {{ "}}" }} / {{ "{{" }} $labels.instance {{ "}}" }}"
+          runbook_url: "https://uctufr.xhf/omiuwrh/vkyybhbzkm_icgsw/kgup/muoeie/hxrr/ixsnsm/lheqpcyb.de#UfzvntcMmtoQiravxdvryiy"
+        expr: "avg_over_time(up[5m]) < 1"
+        for: "15m"
+        labels:
+          severity: "warning"
+kind: ConfigMap
+metadata:
+  name: alerting-rules-unquoted
+  namespace: default

@@ -1,0 +1,23 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: query-tee
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: query-tee
+  template:
+    metadata:
+      labels:
+        name: query-tee
+    spec:
+      containers:
+      - args:
+        - -backend.endpoints=http://hjvsl-prqlnxrk-1.lwoi.jih.dxgkdxr.ywfgg:3100,xpix://syqtj-dgjhlfja-2.wrei.bbr.jweuypd.asjpp:3100
+        - -backend.preferred=http://okfbi-pdcmpcsu-1.vbee.zsj.chdrynt.tzthy:3100
+        - -proxy.compare-responses=true
+        - -proxy.value-comparison-tolerance=0.001
+        image: grafana/query-tee:latest
+        name: query-tee

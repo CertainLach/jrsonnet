@@ -121,6 +121,55 @@ impl StdOpts {
 		for ext in &self.ext_code_file {
 			ctx.add_ext_code(&ext.name as &str, &ext.value as &str)?;
 		}
+
+		// Add Tanka-compatible native functions
+		{
+			use jrsonnet_stdlib::{
+				builtin_tanka_helm_template, builtin_tanka_kustomize_build,
+				builtin_tanka_manifest_json_from_json, builtin_tanka_manifest_yaml_from_json,
+				builtin_tanka_parse_json, builtin_tanka_parse_yaml, builtin_tanka_sha256,
+			};
+
+			// Parse functions
+			ctx.add_native("parseJson", builtin_tanka_parse_json::INST);
+			ctx.add_native("parseYaml", builtin_tanka_parse_yaml::INST);
+
+			// Manifest functions
+			ctx.add_native(
+				"manifestJsonFromJson",
+				builtin_tanka_manifest_json_from_json::INST,
+			);
+			ctx.add_native(
+				"manifestYamlFromJson",
+				builtin_tanka_manifest_yaml_from_json::INST,
+			);
+
+			// Hash functions
+			ctx.add_native("sha256", builtin_tanka_sha256::INST);
+
+			// Helm and Kustomize
+			ctx.add_native("helmTemplate", builtin_tanka_helm_template::INST);
+			ctx.add_native("kustomizeBuild", builtin_tanka_kustomize_build::INST);
+		}
+
+		// Add Tanka-compatible regex functions
+		use jrsonnet_stdlib::{
+			builtin_escape_string_regex, builtin_tanka_regex_match, builtin_tanka_regex_subst,
+		};
+		ctx.add_native("escapeStringRegex", builtin_escape_string_regex::INST);
+		ctx.add_native(
+			"regexMatch",
+			builtin_tanka_regex_match {
+				cache: jrsonnet_stdlib::RegexCache::default(),
+			},
+		);
+		ctx.add_native(
+			"regexSubst",
+			builtin_tanka_regex_subst {
+				cache: jrsonnet_stdlib::RegexCache::default(),
+			},
+		);
+
 		Ok(Some(ctx))
 	}
 }

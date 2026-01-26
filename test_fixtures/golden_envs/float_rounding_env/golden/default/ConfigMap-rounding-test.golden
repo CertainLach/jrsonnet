@@ -1,0 +1,18 @@
+apiVersion: v1
+data:
+  gomemlimit: 7730941133B
+  rounding-tests.json: |-
+    {
+      "aboveHalf": "3",
+      "belowHalf": "2",
+      "halfDown": "2",
+      "halfUp": "3",
+      "largeDown": "6764573491",
+      "largeUp": "7730941133",
+      "negativeDown": "-3",
+      "negativeUp": "-2"
+    }
+kind: ConfigMap
+metadata:
+  name: rounding-test
+  namespace: default

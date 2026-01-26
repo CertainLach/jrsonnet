@@ -1,0 +1,16 @@
+apiVersion: v1
+data:
+  memcached-config: |-
+    {
+      "connect_timeout": "10s",
+      "max_idle_connections": 150,
+      "timeout": "750ms",
+      "tls_cert_path": "/mnt/secrets/certs/tls.crt",
+      "tls_enabled": true,
+      "tls_key_path": "/mnt/secrets/certs/tls.key",
+      "tls_server_name": "my-server.example.com"
+    }
+kind: ConfigMap
+metadata:
+  name: test-multiple-merge-keys
+  namespace: default

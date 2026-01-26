@@ -141,6 +141,22 @@ impl ImportResolver for FileImportResolver {
 				return Ok(cloned);
 			}
 		}
+
+		// Workaround for Go jsonnet compatibility: if path starts with ../, also try
+		// stripping the ../ prefix and searching from library paths.
+		// This handles cases where a file does `import '../foo.libsonnet'` but foo.libsonnet
+		// is actually in the same directory (library path), not the parent.
+		if path.starts_with("../") {
+			let stripped_path = path.trim_start_matches("../");
+			for library_path in &self.library_paths {
+				let mut cloned = library_path.clone();
+				cloned.push(stripped_path);
+				if let Some(cloned) = check_path(&cloned)? {
+					return Ok(cloned);
+				}
+			}
+		}
+
 		bail!(ImportFileNotFound(from.clone(), path.to_owned()))
 	}
 	fn resolve(&self, path: &Path) -> Result<SourcePath> {

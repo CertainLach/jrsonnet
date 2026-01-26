@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: memcached-extstore
+  namespace: default
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      name: memcached-extstore
+  serviceName: memcached
+  template:
+    metadata:
+      labels:
+        name: memcached-extstore
+    spec:
+      containers:
+      - args:
+        - -m
+        - "4096"
+        - -c
+        - "16384"
+        - -I
+        - 32m
+        - --extended=ext_path=/extstore/extstore:64G,ext_wbuf_size=8,ext_threads=4,ext_item_size=512,ext_item_age=3600,ext_low_ttl=3600,ext_recache_rate=1000,ext_max_frag=0.9,ext_drop_unread=true,slab_automove=2,lru_crawler,lru_maintainer
+        image: memcached:1.6
+        name: memcached
+        resources:
+          limits:
+            memory: 5Gi
+          requests:
+            cpu: "1"
+            memory: 5Gi

@@ -1,0 +1,12 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "simple-test",
+    "labels": {}
+  },
+  "spec": {
+    "namespace": "default"
+  }
+}
+

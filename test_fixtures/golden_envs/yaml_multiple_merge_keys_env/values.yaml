@@ -1,0 +1,19 @@
+# Test case for YAML multiple merge keys
+# When two << merge keys are specified in the same mapping, both should be merged
+
+memcachedClientConfig: &memcachedClientConfig
+  timeout: 1s
+  connect_timeout: 10s
+  max_idle_connections: 150
+
+tlsConfig: &tlsConfig
+  tls_enabled: true
+  tls_cert_path: /mnt/secrets/certs/tls.crt
+  tls_key_path: /mnt/secrets/certs/tls.key
+
+# This tests the multiple merge key bug - both anchors should be merged
+memcached:
+  <<: *memcachedClientConfig
+  <<: *tlsConfig
+  timeout: 750ms
+  tls_server_name: my-server.example.com

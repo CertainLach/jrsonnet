@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: octal-test
+  namespace: default
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: octal-test
+  template:
+    metadata:
+      labels:
+        app: octal-test
+    spec:
+      containers:
+        - name: test
+          image: busybox:latest
+          volumeMounts:
+            - name: scripts
+              mountPath: /scripts
+      volumes:
+        - name: scripts
+          configMap:
+            name: scripts
+            # YAML 1.1 octal notation: 0755 should be parsed as 493 (decimal)
+            defaultMode: 0755

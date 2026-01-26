@@ -1,0 +1,12 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: test-scaled
+  namespace: default
+spec:
+  triggers:
+  - metadata:
+      query: (1 - (min(kubelet_volume_stats_available_bytes{cluster="test-cluster",
+        namespace="test-ns", persistentvolumeclaim=~"store-gateway-.*"}/kubelet_volume_stats_capacity_bytes{cluster="test-cluster",namespace="test-ns",
+        persistentvolumeclaim=~"store-gateway-.*"}))) * 100
+    type: prometheus

@@ -1,0 +1,16 @@
+---
+description: Project guidelines from CLAUDE.md
+globs:
+  - "**/*"
+alwaysApply: true
+---
+
+# CLAUDE.md Guidelines
+
+Always read and follow the `CLAUDE.md` file at the root of the repository strictly. This file contains critical project-specific guidelines, conventions, and instructions that must be adhered to when working on this codebase.
+
+Before making any changes or suggestions, review `CLAUDE.md` for:
+- Build and test commands
+- Code style and conventions
+- Project-specific rules and constraints
+- Architecture decisions

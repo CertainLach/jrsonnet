@@ -1,0 +1,14 @@
+apiVersion: v1
+data:
+  deny-lists.yaml: |-
+    "deny_lists":
+      "ingestion_rate":
+      - "high-volume-tenant"
+      "retention_period":
+      - "tenant-1"
+      - "tenant-2"
+      - "tenant-3"
+kind: ConfigMap
+metadata:
+  name: limit-updater-deny-lists
+  namespace: default

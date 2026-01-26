@@ -1,0 +1,23 @@
+# Shared YAML Anchors - these test the merge key expansion bug
+certVolume: &certVolume
+  name: cert-secret-volume
+
+configVolume: &configVolume
+  name: config-volume
+
+commonLabels: &commonLabels
+  app: test-app
+  version: "1.0"
+
+# Values that use merge keys
+deployment:
+  volumes:
+    - <<: *certVolume
+      secret:
+        secretName: my-cert-secret
+    - <<: *configVolume
+      configMap:
+        name: my-config
+  labels:
+    <<: *commonLabels
+    component: backend

@@ -1,0 +1,11 @@
+{
+    "default/ConfigMap-k8s-monitoring-static-usages.golden": "main.jsonnet",
+    "ge-grafana/ConfigMap-ge-grafana-plugins-config.golden": "main.jsonnet",
+    "loki-prod/ConfigMap-parallel-read-path-overrides.golden": "main.jsonnet",
+    "metrics-cd/Workflow-patch-test-patch.golden": "main.jsonnet",
+    "metrics-ops-03/ConfigMap-k8s-monitoring-static-usages.golden": "main.jsonnet",
+    "metrics-ops-03/ConfigMap-metrics-emojis.golden": "main.jsonnet",
+    "metrics-ops-03/ConfigMap-overrides.golden": "main.jsonnet",
+    "metrics-ops-03/ScaledObject-ingester-zone-a.golden": "main.jsonnet",
+    "tracing-cd/CronWorkflow-tempo-create-deployment-thursday-prod.golden": "main.jsonnet"
+}

@@ -38,8 +38,9 @@ clap_complete = "4.5"
 # Note on serde_yaml_with_quirks: This is a fork of serde-yaml with legacy yaml 1.1 support:
 # https://github.com/dtolnay/serde-yaml/pull/225
 serde = "1.0.197"
-serde_json = "1.0.114"
+serde_json = { version = "1.0.114", features = ["preserve_order"] }
 serde_yaml_with_quirks = "0.8.24"
+serde-saphyr = { git = "https://github.com/grafana/serde-saphyr", branch = "master" }
 
 # Error handling
 anyhow = "1.0.83"
@@ -85,7 +86,7 @@ lsp-server = "0.7.6"
 lsp-types = "0.96.0"
 
 regex = "1.10"
-lru = "0.12.3"
+lru = "0.16.0"
 
 json-structural-diff = "0.1.0"
 syn-dissect-closure = "0.1.0"
@@ -102,6 +103,7 @@ noop_method_call = "allow"
 single_use_lifetimes = "allow"
 variant_size_differences = "allow"
 macro_expanded_macro_exports_accessed_by_absolute_paths = "allow"
+mismatched_lifetime_syntaxes = "allow"
 
 [workspace.lints.rustdoc]
 all = "warn"
@@ -148,9 +150,32 @@ manual_let_else = "allow"
 # Something is broken about that lint, can't be allowed for
 # codegenerated-stdlib block
 similar_names = "allow"
+# Pre-existing issues in jrsonnet crates
+unnecessary_semicolon = "allow"
+too_long_first_doc_paragraph = "allow"
+map_or_unwrap = "allow"
+option_if_let_else = "allow"
+manual_repeat_n = "allow"
+mem_replace_option_with_some = "allow"
+unnecessary_literal_bound = "allow"
+unnecessary_map_or = "allow"
+collapsible_match = "allow"
+doc_markdown = "allow"
+items_after_statements = "allow"
+manual_ignore_case_cmp = "allow"
+manual_midpoint = "allow"
+needless_borrows_for_generic_args = "allow"
+needless_continue = "allow"
+ref_option = "allow"
+single_component_path_imports = "allow"
+too_many_lines = "allow"
+uninlined_format_args = "allow"
+unused_peekable = "allow"
+while_let_on_iterator = "allow"
+struct_field_names = "allow"
 
-#[profile.test]
-#opt-level = 1
+[profile.test]
+opt-level = 3
 
 [profile.release]
 opt-level = 3

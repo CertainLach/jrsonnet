@@ -1,0 +1,11 @@
+apiVersion: v1
+data:
+  config.yaml: |-
+    "extra_field": "added"
+    "querier": {}
+    "query_engine":
+      "storage_start_date": "2025-01-08"
+kind: ConfigMap
+metadata:
+  name: test-config
+  namespace: default

@@ -1,0 +1,21 @@
+{
+    "default/ConfigMap-alerting-rules-unquoted.golden": "main.jsonnet",
+    "default/ConfigMap-alerting-rules.golden": "main.jsonnet",
+    "default/ConfigMap-apiserver.golden": "main.jsonnet",
+    "default/ConfigMap-app-config.golden": "main.jsonnet",
+    "default/ConfigMap-dashboards.golden": "main.jsonnet",
+    "default/ConfigMap-empty-rules.golden": "main.jsonnet",
+    "default/ConfigMap-envoy-config.golden": "main.jsonnet",
+    "default/ConfigMap-html-content.golden": "main.jsonnet",
+    "default/ConfigMap-multiple-trailing-newlines.golden": "main.jsonnet",
+    "default/ConfigMap-nested-yaml-config.golden": "main.jsonnet",
+    "default/ConfigMap-nested-yaml-manifest-yaml-from-json-config.golden": "main.jsonnet",
+    "default/ConfigMap-overrides.golden": "main.jsonnet",
+    "default/ConfigMap-rules-starting-with-spaces.golden": "main.jsonnet",
+    "default/CronJob-remove-flux-ignores-before-rollout.golden": "main.jsonnet",
+    "default/Deployment-csp-test.golden": "main.jsonnet",
+    "default/Deployment-test-deployment.golden": "main.jsonnet",
+    "default/RulesConfig-multiple-trailing-newlines-in-array.golden": "main.jsonnet",
+    "default/ScaledObject-test-scaled.golden": "main.jsonnet",
+    "default/WildcardConfig-wildcard-test.golden": "main.jsonnet"
+}

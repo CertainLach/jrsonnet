@@ -1,0 +1,7 @@
+{
+    "_cluster/CustomResourceDefinition-canaries.flagger.app.golden": "main.jsonnet",
+    "flagger/Deployment-flagger-dev-region-3.golden": "main.jsonnet",
+    "flagger/Deployment-flagger-prod-region-3.golden": "main.jsonnet",
+    "flagger/ServiceAccount-flagger-dev-region-3.golden": "main.jsonnet",
+    "flagger/ServiceAccount-flagger-prod-region-3.golden": "main.jsonnet"
+}

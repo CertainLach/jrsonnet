@@ -23,9 +23,6 @@ exp-null-coaelse = [
     "jrsonnet-evaluator/exp-null-coaelse",
     "jrsonnet-stdlib/exp-null-coaelse",
 ]
-exp-regex = [
-    "jrsonnet-stdlib/exp-regex",
-]
 
 [dependencies]
 jrsonnet-evaluator = { workspace = true, features = ["explaining-traces"] }

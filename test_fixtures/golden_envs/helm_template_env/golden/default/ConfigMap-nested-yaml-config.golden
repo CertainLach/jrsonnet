@@ -1,0 +1,52 @@
+apiVersion: v1
+data:
+  RATE_LIMIT_ORG_OVERRIDES2: test
+  description: Cell of type alert-manager on cluster prod-us-east-3 and namespace
+    alertmanager
+  pruneTest: {}
+  rules.yml: |-
+    enabled: true
+    rules:
+    - labels:
+        clientId: "$3"
+        partition: "$5"
+        topic: "$4"
+      name: "test_rule_1"
+      nested_again:
+      - hello: "world"
+      - hello: "world"
+      pattern: "server<type=metrics, listener=(.+), processor=(.+)><>(.+):"
+  rules.yml.quoted: |-
+    "enabled": true
+    "rules":
+    - "labels":
+        "clientId": "$3"
+        "partition": "$5"
+        "topic": "$4"
+      "name": "test_rule_1"
+      "nested_again":
+      - "hello": "world"
+      - "hello": "world"
+      "pattern": "server<type=metrics, listener=(.+), processor=(.+)><>(.+):"
+  rules.yml.quoted.indented: |-
+    "enabled": true
+    "rules":
+      - "labels":
+          "clientId": "$3"
+          "partition": "$5"
+          "topic": "$4"
+        "name": "test_rule_1"
+        "nested_again":
+          - "hello": "world"
+          - "hello": "world"
+        "pattern": "server<type=metrics, listener=(.+), processor=(.+)><>(.+):"
+  test_quoting: :9121
+kind: ConfigMap
+metadata:
+  annotations:
+    kustomize.toolkit.fluxcd.io/reconcile: disabled
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-by: platform-federal
+    kustomize.toolkit.fluxcd.io/reconcile-disabled-reason: Ignored with the withFluxIgnore
+      jsonnet utility. Flux not running in federal clusters
+  name: nested-yaml-config
+  namespace: default

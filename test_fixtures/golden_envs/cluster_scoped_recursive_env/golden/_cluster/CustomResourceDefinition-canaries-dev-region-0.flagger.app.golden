@@ -1,0 +1,36 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: canaries-dev-region-0.flagger.app
+spec:
+  group: flagger.app
+  names:
+    kind: Canary
+    listKind: CanaryList
+    plural: canaries
+    singular: canary
+  scope: Namespaced
+  versions:
+  - name: v1beta1
+    schema:
+      openAPIV3Schema:
+        description: Canary is the Schema for the Canary API.
+        properties:
+          apiVersion:
+            description: APIVersion defines the versioned schema of this representation
+              of an object.
+            type: string
+          kind:
+            description: Kind is a string value representing the REST resource this
+              object represents.
+            type: string
+          metadata:
+            type: object
+          spec:
+            properties:
+              targetRef:
+                type: object
+            type: object
+        type: object
+    served: true
+    storage: true

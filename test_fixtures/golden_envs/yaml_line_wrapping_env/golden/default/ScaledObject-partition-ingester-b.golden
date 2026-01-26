@@ -1,0 +1,19 @@
+apiVersion: keda.sh/v1alpha1
+kind: ScaledObject
+metadata:
+  name: partition-ingester-b
+  namespace: default
+spec:
+  maxReplicaCount: 10
+  minReplicaCount: 1
+  scaleTargetRef:
+    name: partition-ingester-b
+  triggers:
+  - metadata:
+      query: "(\n  100 - (\n    min(rate(container_cpu_usage_seconds_total{cluster=~\"prod-region-4\",
+        namespace=~\"loki-prod-039\", container=\"partition-ingester\", pod=~\"partition-ingester-a.*\"}[1m]))[15m:]\n
+        \ )\n  and on()\n  (\n    up{job=~\"loki-prod-039/rollout-operator\"} > 0\n
+        \ )\n) * 100      \n"
+      serverAddress: http://qmoojsnjst:9090
+      threshold: "80"
+    type: prometheus
