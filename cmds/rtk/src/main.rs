@@ -19,7 +19,7 @@ pub mod test_utils;
 #[derive(Parser)]
 #[command(name = "rtk")]
 #[command(about = "Tanka dummy CLI", long_about = None)]
-#[command(version)]
+#[command(version = env!("RTK_VERSION"))]
 struct Cli {
 	#[command(subcommand)]
 	command: Commands,

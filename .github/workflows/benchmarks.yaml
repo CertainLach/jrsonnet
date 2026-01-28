@@ -65,7 +65,6 @@ jobs:
           # On PRs, also build and benchmark rtk from the base branch (master)
           BENCHMARK_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
         run: |
-          # Run benchmark (markdown output goes to BENCHMARK_MARKDOWN_OUTPUT)
           ./rtk-benchmarks/run-benchmark.py ${{ matrix.benchmark.config }} | tee benchmark-results.md
           
           # Prepare comment body from markdown output

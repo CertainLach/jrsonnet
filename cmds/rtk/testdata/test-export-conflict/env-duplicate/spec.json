@@ -1,0 +1,10 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "test-export-conflict/env-duplicate"
+  },
+  "spec": {
+    "namespace": "default"
+  }
+}

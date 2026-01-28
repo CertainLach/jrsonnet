@@ -6,7 +6,7 @@ fixtures:
   static_envs: 100
   inline_files: 5
   envs_per_inline_file: 20
-  resources_per_env: 10
+  resources_per_env: 20
 
 # Setup exports all environments first, then we benchmark re-exporting
 setup: "export {export_dir} {all_static_env_paths} {all_inline_file_paths} --recursive"

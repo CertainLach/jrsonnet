@@ -878,6 +878,562 @@ fn test_export_fails_on_invalid_k8s_object() {
 	}
 }
 
+// ============================================================================
+// Replace-envs idempotency tests
+// ============================================================================
+//
+// These tests verify that replace-envs is idempotent (re-exporting unchanged
+// jsonnet produces identical output) and that changes are properly reflected.
+
+/// Helper to collect all files and their contents from a directory
+fn collect_files_with_content(dir: &Path) -> HashMap<String, String> {
+	let mut files = HashMap::new();
+	for entry in walkdir::WalkDir::new(dir) {
+		let entry = entry.unwrap();
+		if entry.file_type().is_file() {
+			let rel_path = entry
+				.path()
+				.strip_prefix(dir)
+				.unwrap()
+				.to_string_lossy()
+				.to_string();
+			let content = fs::read_to_string(entry.path()).unwrap();
+			files.insert(rel_path, content);
+		}
+	}
+	files
+}
+
+/// Test replace-envs idempotency for a single static environment
+/// Verifies: export -> re-export (identical) -> change -> re-export (reflects change)
+#[test]
+fn test_replace_envs_idempotent_single_static_env() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let static_env_path = testdata_path("test-export-envs/static-env");
+
+	// STEP 1: Initial export
+	let mut ext_code = HashMap::new();
+	ext_code.insert("deploymentName".to_string(), "'my-deployment'".to_string());
+	ext_code.insert("serviceName".to_string(), "'my-service'".to_string());
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(&[static_env_path.to_string_lossy().to_string()], opts).unwrap();
+	assert_eq!(result.successful, 1);
+	assert_eq!(result.failed, 0);
+
+	// Capture initial state
+	let files_after_initial = collect_files_with_content(output_dir);
+	assert_eq!(files_after_initial.len(), 3); // 2 manifests + manifest.json
+
+	// STEP 2: Re-export with replace-envs (unchanged jsonnet) - should be identical
+	let opts_replace = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[static_env_path.to_string_lossy().to_string()],
+		opts_replace.clone(),
+	)
+	.unwrap();
+	assert_eq!(result.successful, 1);
+
+	// Verify idempotency - files should be identical
+	let files_after_reexport = collect_files_with_content(output_dir);
+	assert_eq!(
+		files_after_initial, files_after_reexport,
+		"Re-export with unchanged jsonnet should produce identical files"
+	);
+
+	// STEP 3: Change ext_code and re-export - should reflect changes
+	let mut changed_ext_code = HashMap::new();
+	changed_ext_code.insert(
+		"deploymentName".to_string(),
+		"'changed-deployment'".to_string(),
+	);
+	changed_ext_code.insert("serviceName".to_string(), "'changed-service'".to_string());
+
+	let opts_changed = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code: changed_ext_code,
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[static_env_path.to_string_lossy().to_string()],
+		opts_changed,
+	)
+	.unwrap();
+	assert_eq!(result.successful, 1);
+
+	// Verify changes are reflected
+	let files_after_change = collect_files_with_content(output_dir);
+
+	// Old files should be gone, new files should exist
+	assert!(
+		!files_after_change.contains_key("static/my-deployment.yaml"),
+		"Old deployment file should be deleted"
+	);
+	assert!(
+		!files_after_change.contains_key("static/my-service.yaml"),
+		"Old service file should be deleted"
+	);
+	assert!(
+		files_after_change.contains_key("static/changed-deployment.yaml"),
+		"New deployment file should exist"
+	);
+	assert!(
+		files_after_change.contains_key("static/changed-service.yaml"),
+		"New service file should exist"
+	);
+
+	// Verify content contains new names
+	let deployment_content = &files_after_change["static/changed-deployment.yaml"];
+	assert!(
+		deployment_content.contains("name: changed-deployment"),
+		"Deployment content should reflect change"
+	);
+}
+
+/// Test replace-envs idempotency for all environments (static + inline)
+/// Verifies: export -> re-export (identical) -> change -> re-export (reflects change)
+#[test]
+fn test_replace_envs_idempotent_all_envs() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let envs_path = testdata_path("test-export-envs");
+
+	// STEP 1: Initial export of all environments
+	let mut ext_code = HashMap::new();
+	ext_code.insert(
+		"deploymentName".to_string(),
+		"'initial-deployment'".to_string(),
+	);
+	ext_code.insert("serviceName".to_string(), "'initial-service'".to_string());
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 4,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(&[envs_path.to_string_lossy().to_string()], opts).unwrap();
+	assert_eq!(result.successful, 3); // 1 static + 2 inline
+	assert_eq!(result.failed, 0);
+
+	// Capture initial state
+	let files_after_initial = collect_files_with_content(output_dir);
+	// 7 manifest files + manifest.json = 8
+	assert_eq!(files_after_initial.len(), 8);
+
+	// STEP 2: Re-export all with replace-envs (unchanged) - should be identical
+	let opts_replace = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 4,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[envs_path.to_string_lossy().to_string()],
+		opts_replace.clone(),
+	)
+	.unwrap();
+	assert_eq!(result.successful, 3);
+
+	// Verify idempotency
+	let files_after_reexport = collect_files_with_content(output_dir);
+	assert_eq!(
+		files_after_initial, files_after_reexport,
+		"Re-export with unchanged jsonnet should produce identical files"
+	);
+
+	// STEP 3: Change ext_code and re-export all
+	let mut changed_ext_code = HashMap::new();
+	changed_ext_code.insert(
+		"deploymentName".to_string(),
+		"'updated-deployment'".to_string(),
+	);
+	changed_ext_code.insert("serviceName".to_string(), "'updated-service'".to_string());
+
+	let opts_changed = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 4,
+		eval_opts: EvalOpts {
+			ext_code: changed_ext_code,
+			..Default::default()
+		},
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(&[envs_path.to_string_lossy().to_string()], opts_changed).unwrap();
+	assert_eq!(result.successful, 3);
+
+	// Verify changes are reflected for static env
+	let files_after_change = collect_files_with_content(output_dir);
+
+	// Static env files should be updated
+	assert!(
+		!files_after_change.contains_key("my-static-cluster/static/initial-deployment.yaml"),
+		"Old static deployment should be deleted"
+	);
+	assert!(
+		files_after_change.contains_key("my-static-cluster/static/updated-deployment.yaml"),
+		"New static deployment should exist"
+	);
+
+	// Inline env files should remain (they don't use ext_code)
+	assert!(
+		files_after_change.contains_key("my-cluster/inline-namespace1/my-deployment.yaml"),
+		"Inline env files should still exist"
+	);
+
+	// Verify manifest.json is updated correctly
+	let manifest_content = &files_after_change["manifest.json"];
+	assert!(
+		manifest_content.contains("updated-deployment.yaml"),
+		"Manifest should reference new files"
+	);
+	assert!(
+		!manifest_content.contains("initial-deployment.yaml"),
+		"Manifest should not reference old files"
+	);
+}
+
+/// Test replace-envs idempotency for inline environments only
+/// Verifies: export -> re-export (identical) -> change -> re-export (reflects change)
+#[test]
+fn test_replace_envs_idempotent_inline_env() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// Use the inline-envs directory (not the file) with recursive to export both inline sub-envs
+	let inline_env_path = testdata_path("test-export-envs/inline-envs");
+
+	// STEP 1: Initial export of inline environments
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: None,
+		recursive: true, // Need recursive since there are 2 inline sub-envs
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(&[inline_env_path.to_string_lossy().to_string()], opts).unwrap();
+	assert_eq!(result.successful, 2); // 2 inline sub-envs
+	assert_eq!(result.failed, 0);
+
+	// Capture initial state
+	let files_after_initial = collect_files_with_content(output_dir);
+	// inline-namespace1: 3 files (deployment, service, configmap)
+	// inline-namespace2: 2 files (deployment, service)
+	// + manifest.json = 6
+	assert_eq!(files_after_initial.len(), 6);
+
+	// STEP 2: Re-export with replace-envs (unchanged) - should be identical
+	let opts_replace = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[inline_env_path.to_string_lossy().to_string()],
+		opts_replace.clone(),
+	)
+	.unwrap();
+	assert_eq!(result.successful, 2);
+
+	// Verify idempotency
+	let files_after_reexport = collect_files_with_content(output_dir);
+	assert_eq!(
+		files_after_initial, files_after_reexport,
+		"Re-export with unchanged jsonnet should produce identical files"
+	);
+
+	// STEP 3: Re-export multiple times to ensure continued idempotency
+	for _ in 0..3 {
+		let result = export(
+			&[inline_env_path.to_string_lossy().to_string()],
+			opts_replace.clone(),
+		)
+		.unwrap();
+		assert_eq!(result.successful, 2);
+
+		let files = collect_files_with_content(output_dir);
+		assert_eq!(
+			files_after_initial, files,
+			"Multiple re-exports should remain idempotent"
+		);
+	}
+}
+
+/// Test replace-envs with parallel exports to verify thread safety
+/// Exports with different parallelism values and verifies identical results
+#[test]
+fn test_replace_envs_idempotent_parallel() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let envs_path = testdata_path("test-export-envs");
+
+	let mut ext_code = HashMap::new();
+	ext_code.insert(
+		"deploymentName".to_string(),
+		"'parallel-deployment'".to_string(),
+	);
+	ext_code.insert("serviceName".to_string(), "'parallel-service'".to_string());
+
+	// Initial export with parallelism=1
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(&[envs_path.to_string_lossy().to_string()], opts).unwrap();
+	assert_eq!(result.successful, 3);
+
+	let files_initial = collect_files_with_content(output_dir);
+
+	// Re-export with parallelism=8 using replace-envs
+	let opts_parallel = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.metadata.labels.cluster_name}}/{{env.spec.namespace}}/{{.metadata.name}}"
+			.to_string(),
+		parallelism: 8,
+		eval_opts: EvalOpts {
+			ext_code: ext_code.clone(),
+			..Default::default()
+		},
+		name: None,
+		recursive: true,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[envs_path.to_string_lossy().to_string()],
+		opts_parallel.clone(),
+	)
+	.unwrap();
+	assert_eq!(result.successful, 3);
+
+	let files_after_parallel = collect_files_with_content(output_dir);
+	assert_eq!(
+		files_initial, files_after_parallel,
+		"Parallel re-export should produce identical files"
+	);
+
+	// Re-export again with high parallelism
+	let result = export(&[envs_path.to_string_lossy().to_string()], opts_parallel).unwrap();
+	assert_eq!(result.successful, 3);
+
+	let files_final = collect_files_with_content(output_dir);
+	assert_eq!(
+		files_initial, files_final,
+		"Multiple parallel re-exports should remain idempotent"
+	);
+}
+
+/// Test that replace-envs correctly handles file removal when resources are deleted
+/// from the jsonnet output
+#[test]
+fn test_replace_envs_removes_deleted_resources() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// We'll use the static env and simulate resource removal by changing ext_code
+	// such that different files are produced
+	let static_env_path = testdata_path("test-export-envs/static-env");
+
+	// STEP 1: Initial export with two resources
+	let mut ext_code = HashMap::new();
+	ext_code.insert("deploymentName".to_string(), "'resource-a'".to_string());
+	ext_code.insert("serviceName".to_string(), "'resource-b'".to_string());
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code,
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(&[static_env_path.to_string_lossy().to_string()], opts).unwrap();
+	assert_eq!(result.successful, 1);
+
+	// Verify initial files
+	check_files(
+		output_dir,
+		&[
+			"static/resource-a.yaml",
+			"static/resource-b.yaml",
+			"manifest.json",
+		],
+	);
+
+	// STEP 2: Re-export with different resource names (simulates resource deletion + creation)
+	let mut changed_ext_code = HashMap::new();
+	changed_ext_code.insert("deploymentName".to_string(), "'resource-c'".to_string());
+	changed_ext_code.insert("serviceName".to_string(), "'resource-d'".to_string());
+
+	let opts_changed = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code: changed_ext_code,
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		..Default::default()
+	};
+
+	let result = export(
+		&[static_env_path.to_string_lossy().to_string()],
+		opts_changed,
+	)
+	.unwrap();
+	assert_eq!(result.successful, 1);
+
+	// Old files should be deleted, new files should exist
+	check_files(
+		output_dir,
+		&[
+			"static/resource-c.yaml",
+			"static/resource-d.yaml",
+			"manifest.json",
+		],
+	);
+
+	// Verify old files are actually gone
+	assert!(
+		!output_dir.join("static/resource-a.yaml").exists(),
+		"Old resource-a.yaml should be deleted"
+	);
+	assert!(
+		!output_dir.join("static/resource-b.yaml").exists(),
+		"Old resource-b.yaml should be deleted"
+	);
+}
+
 // Note: The following tests from the Go version are not yet implemented:
 // - Test_replaceTmplText (not needed in Rust implementation - different path handling)
 // - BenchmarkExportEnvironmentsWithReplaceEnvs (benchmark test - can be added later)
@@ -1182,4 +1738,175 @@ fn test_export_parallelism_determinism() {
 			path
 		);
 	}
+}
+
+// ============================================================================
+// Additional conflict detection tests
+// ============================================================================
+
+/// Test that export fails when a single environment outputs duplicate files
+/// (two resources mapping to the same path)
+#[test]
+fn test_export_duplicate_file_same_env() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-conflict/env-duplicate")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	);
+
+	// Should fail because two resources map to the same file path
+	match result {
+		Ok(r) => {
+			assert!(
+				r.failed > 0 || r.results.iter().any(|res| res.error.is_some()),
+				"Export should fail when two resources map to same path. Result: {:?}",
+				r
+			);
+			// Check error message mentions duplicate
+			let has_duplicate_error = r.results.iter().any(|res| {
+				res.error
+					.as_ref()
+					.is_some_and(|e| e.contains("duplicate") || e.contains("multiple"))
+			});
+			assert!(
+				has_duplicate_error,
+				"Error should mention duplicate file: {:?}",
+				r.results
+			);
+		}
+		Err(e) => {
+			let err_msg = e.to_string();
+			assert!(
+				err_msg.contains("duplicate") || err_msg.contains("multiple"),
+				"Error should mention duplicate file: {}",
+				err_msg
+			);
+		}
+	}
+}
+
+/// Test that replace-envs allows moving a manifest from one env to another
+/// The file content stays the same, only manifest.json ownership changes
+#[test]
+fn test_replace_envs_move_manifest_between_envs() {
+	use rtk::export::ExportMergeStrategy;
+
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// STEP 1: Export env1 to create initial file
+	let opts1 = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::None,
+		..Default::default()
+	};
+
+	let result1 = export(
+		&[testdata_path("test-export-conflict/env1")
+			.to_string_lossy()
+			.to_string()],
+		opts1,
+	);
+	result1.unwrap();
+
+	// Check manifest.json shows env1 owns the file
+	let manifest_path = output_dir.join("manifest.json");
+	let manifest_content: HashMap<String, String> =
+		serde_json::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+	assert!(
+		manifest_content
+			.values()
+			.any(|v| v.contains("test-export-conflict/env1")),
+		"manifest.json should show env1 ownership"
+	);
+
+	// Capture the file content
+	let file_path = output_dir.join("default/test-deployment.yaml");
+	let original_content = fs::read_to_string(&file_path).unwrap();
+
+	// STEP 2: Export env2 with replace-envs, also re-exporting env1 with merge-deleted-envs
+	// This simulates moving the resource from env1 to env2
+	// merge_deleted_envs needs the full path as stored in manifest.json
+	let env1_path = testdata_path("test-export-conflict/env1")
+		.to_string_lossy()
+		.to_string();
+	let opts2 = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		merge_strategy: ExportMergeStrategy::ReplaceEnvs,
+		merge_deleted_envs: vec![env1_path],
+		..Default::default()
+	};
+
+	let result2 = export(
+		&[testdata_path("test-export-conflict/env2")
+			.to_string_lossy()
+			.to_string()],
+		opts2,
+	);
+
+	// Should succeed - env1's file is "released" via merge_deleted_envs
+	assert!(
+		result2.is_ok(),
+		"Export should succeed when moving manifest via merge_deleted_envs: {:?}",
+		result2.err()
+	);
+	let r2 = result2.unwrap();
+	assert_eq!(r2.successful, 1);
+	assert_eq!(r2.failed, 0);
+
+	// Check file still exists with same content (env2 produces same output)
+	let new_content = fs::read_to_string(&file_path).unwrap();
+	assert_eq!(
+		original_content, new_content,
+		"File content should be unchanged after moving between envs"
+	);
+
+	// Check manifest.json now shows env2 ownership
+	let new_manifest_content: HashMap<String, String> =
+		serde_json::from_str(&fs::read_to_string(&manifest_path).unwrap()).unwrap();
+	assert!(
+		new_manifest_content
+			.values()
+			.any(|v| v.contains("test-export-conflict/env2")),
+		"manifest.json should now show env2 ownership"
+	);
+	assert!(
+		!new_manifest_content
+			.values()
+			.any(|v| v.contains("test-export-conflict/env1")),
+		"manifest.json should no longer show env1 ownership"
+	);
 }

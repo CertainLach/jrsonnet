@@ -4,7 +4,7 @@
 //! It evaluates environments and writes the resulting Kubernetes manifests to disk.
 
 use std::{
-	collections::{BTreeMap, HashMap},
+	collections::{BTreeMap, HashMap, HashSet},
 	fs,
 	path::PathBuf,
 	sync::{
@@ -334,33 +334,33 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 		}
 	}
 
-	// Delete files previously exported by the targeted environments
-	if opts.merge_strategy == ExportMergeStrategy::ReplaceEnvs {
-		trace!("Deleting previously exported manifests (merge_strategy=replace-envs)");
-		let delete_start = Instant::now();
-		delete_previously_exported_manifests(&opts.output_dir, &envs, opts.skip_manifest)?;
-		trace!(
-			"Deleted previously exported manifests in {}ms",
-			delete_start.elapsed().as_millis()
-		);
-	}
+	// Read the existing manifest to know which files belong to which environments
+	// This is used for conflict detection after exports complete
+	let existing_manifest: HashMap<String, String> = {
+		let manifest_path = opts.output_dir.join(MANIFEST_FILE);
+		if manifest_path.exists() {
+			let content = fs::read_to_string(&manifest_path)
+				.context("reading manifest.json for conflict detection")?;
+			serde_json::from_str(&content)
+				.context("parsing manifest.json for conflict detection")?
+		} else {
+			HashMap::new()
+		}
+	};
 
-	// Delete files from environments that have been deleted
+	// Collect files previously exported by the targeted environments
+	// These can be safely overwritten during re-export
+	let mut previously_exported = if opts.merge_strategy == ExportMergeStrategy::ReplaceEnvs {
+		collect_previously_exported_files(&opts.output_dir, &envs)?
+	} else {
+		HashSet::new()
+	};
+
+	// Also collect files from environments that have been deleted
 	if !opts.merge_deleted_envs.is_empty() {
-		trace!(
-			"Deleting files from {} deleted environments",
-			opts.merge_deleted_envs.len()
-		);
-		let delete_start = Instant::now();
-		delete_previously_exported_by_names(
-			&opts.output_dir,
-			&opts.merge_deleted_envs,
-			opts.skip_manifest,
-		)?;
-		trace!(
-			"Deleted files from deleted environments in {}ms",
-			delete_start.elapsed().as_millis()
-		);
+		let files =
+			collect_previously_exported_by_names(&opts.output_dir, &opts.merge_deleted_envs)?;
+		previously_exported.extend(files);
 	}
 
 	// Abort flag for early termination (Issue #3 & #5)
@@ -518,15 +518,78 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 		total_envs
 	);
 
+	// Check for file conflicts and collect files written
+	// Conflicts occur when:
+	// 1. Multiple environments in this export write the same file
+	// 2. A file was previously exported by a different environment (not being re-exported)
+	let mut all_files_written: HashMap<String, PathBuf> = HashMap::new();
+	for result in &results {
+		if result.error.is_none() {
+			for file in &result.files_written {
+				// Convert PathBuf to string with forward slashes (cross-platform)
+				let file_str = file
+					.components()
+					.map(|c| c.as_os_str().to_string_lossy())
+					.collect::<Vec<_>>()
+					.join("/");
+
+				// Check for conflicts between environments in this export
+				if let Some(existing_env) = all_files_written.get(&file_str) {
+					bail!(
+						"file '{}' written by multiple environments: '{}' and '{}'",
+						file_str,
+						existing_env.display(),
+						result.env_path.display()
+					);
+				}
+
+				// Check for conflicts with files from other environments (not being re-exported)
+				// A file in existing_manifest that's NOT in previously_exported belongs to another env
+				if existing_manifest.contains_key(&file_str)
+					&& !previously_exported.contains(&file_str)
+				{
+					let other_env = existing_manifest.get(&file_str).unwrap();
+					bail!(
+						"file '{}' already exists from environment '{}'. Aborting",
+						file_str,
+						other_env
+					);
+				}
+
+				all_files_written.insert(file_str.clone(), result.env_path.clone());
+				previously_exported.remove(&file_str);
+			}
+		}
+	}
+
+	// Delete files that were previously exported but not re-exported
+	// (deferred deletion - these are files whose environments were updated but the file is no longer produced)
+	let files_to_delete: Vec<String> = previously_exported.into_iter().collect();
+
+	if !files_to_delete.is_empty() {
+		trace!(
+			"Deleting {} files that were not re-exported",
+			files_to_delete.len()
+		);
+		for file in &files_to_delete {
+			let file_path = opts.output_dir.join(file);
+			// Ignore errors if file doesn't exist
+			let _ = fs::remove_file(&file_path);
+
+			// Try to clean up empty parent directories
+			if let Some(parent) = file_path.parent() {
+				if parent != opts.output_dir.as_path() {
+					let _ = fs::remove_dir(parent);
+				}
+			}
+		}
+	}
+
 	// Generate manifest.json file if not skipped
+	// Also removes entries for deleted files
 	if !opts.skip_manifest {
 		trace!("Writing manifest.json");
-		let manifest_start = Instant::now();
-		export_manifest_file(&opts.output_dir, &results)?;
-		trace!(
-			"Manifest.json written in {}ms",
-			manifest_start.elapsed().as_millis()
-		);
+		export_manifest_file(&opts.output_dir, &results, &files_to_delete)?;
 	}
 
 	trace!(
@@ -947,21 +1010,28 @@ fn export_single_env(
 			manifest_count
 		);
 		let write_start = Instant::now();
+		let mut files_skipped = 0usize;
 		for (relative_path, content) in processed_manifests {
 			let filepath = opts.output_dir.join(&relative_path);
-
-			// Check if file already exists on disk. We do not allow conflicts in any case.
-			if filepath.exists() {
-				return Err(ExportError::Fatal(format!(
-					"file '{}' already exists. Aborting",
-					filepath.display()
-				)));
-			}
 
 			// Create parent directories if needed
 			if let Some(parent) = filepath.parent() {
 				fs::create_dir_all(parent)
 					.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?;
+			}
+
+			// PERFORMANCE: Skip write if file exists with identical content
+			// This is a significant optimization for re-exports where most files don't change.
+			// On slow storage (e.g., EBS), reading to compare is much faster than writing.
+			if filepath.exists() {
+				if let Ok(existing_content) = fs::read_to_string(&filepath) {
+					if existing_content == content {
+						files_written.push(relative_path);
+						files_skipped += 1;
+						continue;
+					}
+				}
+				// File exists but content differs or couldn't be read - will be overwritten
 			}
 
 			// PERFORMANCE: Use BufWriter to reduce syscall overhead
@@ -987,6 +1057,14 @@ fn export_single_env(
 			// Track relative path for manifest.json
 			files_written.push(relative_path);
 		}
+		if files_skipped > 0 {
+			trace!(
+				"[{}:{}] Skipped {} unchanged files",
+				env_display,
+				env_name,
+				files_skipped
+			);
+		}
 		timing.write_ms += write_start.elapsed().as_millis();
 		trace!(
 			"[{}:{}] File writes completed in {}ms ({} files, {:.2}ms/file)",
@@ -1010,7 +1088,12 @@ fn export_single_env(
 
 /// Export manifest file that maps exported files to their environment
 /// Merges with existing manifest.json if present
-fn export_manifest_file(output_dir: &PathBuf, results: &[ExportEnvResult]) -> Result<()> {
+/// Also removes entries for files that were deleted (not re-exported)
+fn export_manifest_file(
+	output_dir: &PathBuf,
+	results: &[ExportEnvResult],
+	deleted_files: &[String],
+) -> Result<()> {
 	let manifest_path = output_dir.join(MANIFEST_FILE);
 
 	// Read existing manifest.json if it exists
@@ -1021,6 +1104,11 @@ fn export_manifest_file(output_dir: &PathBuf, results: &[ExportEnvResult]) -> Re
 	} else {
 		HashMap::new()
 	};
+
+	// Remove entries for files that were deleted (not re-exported)
+	for file in deleted_files {
+		file_to_env.remove(file);
+	}
 
 	// Add new entries from successful exports
 	for result in results {
@@ -1914,12 +2002,12 @@ fn is_dir_empty(dir: &PathBuf) -> Result<bool> {
 	Ok(entries.next().is_none())
 }
 
-/// Delete files previously exported by the given environments
-fn delete_previously_exported_manifests(
+/// Collect the relative paths of files previously exported by the given environments
+/// Returns a set of relative file paths (keys from manifest.json) that belong to these environments
+fn collect_previously_exported_files(
 	output_dir: &PathBuf,
 	envs: &[DiscoveredEnv],
-	skip_manifest: bool,
-) -> Result<()> {
+) -> Result<HashSet<String>> {
 	// Collect environment identifiers
 	let env_ids: Vec<String> = envs
 		.iter()
@@ -1937,30 +2025,30 @@ fn delete_previously_exported_manifests(
 		})
 		.collect();
 
-	delete_previously_exported_by_names(output_dir, &env_ids, skip_manifest)
+	collect_previously_exported_by_names(output_dir, &env_ids)
 }
 
-/// Delete files previously exported by environments with the given names
-fn delete_previously_exported_by_names(
+/// Collect the relative paths of files previously exported by environments with the given names
+/// Returns a set of relative file paths (keys from manifest.json) that belong to these environments
+fn collect_previously_exported_by_names(
 	output_dir: &PathBuf,
 	env_names: &[String],
-	skip_manifest: bool,
-) -> Result<()> {
+) -> Result<HashSet<String>> {
 	if env_names.is_empty() {
-		return Ok(());
+		return Ok(HashSet::new());
 	}
 
 	let manifest_path = output_dir.join(MANIFEST_FILE);
 	if !manifest_path.exists() {
-		// No manifest file, nothing to delete
-		return Ok(());
+		// No manifest file, nothing to collect
+		return Ok(HashSet::new());
 	}
 
 	// Read existing manifest
 	let manifest_content =
-		fs::read_to_string(&manifest_path).context("reading manifest.json for deletion")?;
+		fs::read_to_string(&manifest_path).context("reading manifest.json for collection")?;
 	let file_to_env: HashMap<String, String> =
-		serde_json::from_str(&manifest_content).context("parsing manifest.json for deletion")?;
+		serde_json::from_str(&manifest_content).context("parsing manifest.json for collection")?;
 
 	// Normalize environment names - convert to both absolute and relative forms
 	let cwd = std::env::current_dir().ok();
@@ -1986,48 +2074,27 @@ fn delete_previously_exported_by_names(
 		}
 	}
 
-	// Delete files belonging to these environments
-	let mut deleted_keys = Vec::new();
+	// Collect files belonging to these environments
+	let mut collected_files = HashSet::new();
 	for (file, env) in &file_to_env {
 		// Check for exact match or prefix match (for inline sub-environments)
-		// For example, if we're deleting "main.jsonnet", we should also delete
-		// "main.jsonnet:inline-namespace1" and "main.jsonnet:inline-namespace2"
-		let should_delete = normalized_names.contains(env)
+		// Also handle the case where user provides directory path but manifest has full main.jsonnet path
+		let should_collect = normalized_names.contains(env)
 			|| normalized_names.iter().any(|name| {
-				// Check if env starts with name followed by ':'
-				// This handles inline sub-environments like "main.jsonnet:env-name"
-				env.starts_with(&format!("{}:", name)) || 
-			// Also check without extension in case paths are normalized differently
-			env.starts_with(&format!("{}:", name.trim_end_matches(".jsonnet")))
+				// Match inline sub-envs like "path/to/env.jsonnet:subenv"
+				env.starts_with(&format!("{}:", name))
+					|| env.starts_with(&format!("{}:", name.trim_end_matches(".jsonnet")))
+					// Match when user provides directory and manifest has full path
+					|| *env == format!("{}/main.jsonnet", name)
+					|| *env == format!("{}/main.jsonnet", name.trim_end_matches('/'))
 			});
 
-		if should_delete {
-			deleted_keys.push(file.clone());
-			let file_path = output_dir.join(file);
-			// Ignore errors if file doesn't exist
-			let _ = fs::remove_file(&file_path);
-
-			// Try to clean up empty parent directories
-			if let Some(parent) = file_path.parent() {
-				if parent != output_dir {
-					let _ = fs::remove_dir(parent);
-				}
-			}
+		if should_collect {
+			collected_files.insert(file.clone());
 		}
 	}
 
-	// Update manifest.json by removing deleted entries
-	if !skip_manifest && !deleted_keys.is_empty() {
-		let mut updated_map = file_to_env;
-		for key in deleted_keys {
-			updated_map.remove(&key);
-		}
-		let content = serde_json::to_string_pretty(&updated_map)
-			.context("serializing updated manifest.json")?;
-		fs::write(&manifest_path, content).context("writing updated manifest.json")?;
-	}
-
-	Ok(())
+	Ok(collected_files)
 }
 
 #[cfg(test)]

@@ -79,10 +79,11 @@ class BenchmarkConfig:
 
 
 class BenchmarkRunner:
-    def __init__(self, config: BenchmarkConfig, repo_root: Path, hyperfine_args: list[str]):
+    def __init__(self, config: BenchmarkConfig, repo_root: Path, hyperfine_args: list[str], rtk_base_path: Path | None = None):
         self.config = config
         self.repo_root = repo_root
         self.hyperfine_args = hyperfine_args
+        self.rtk_base_path = rtk_base_path  # Pre-built rtk binary for baseline comparison
         self.rtk: Path | None = None
         self.rtk_base: Path | None = None
         self.fixtures_dir: Path | None = None
@@ -109,7 +110,21 @@ class BenchmarkRunner:
         self.rtk = self.repo_root / "target" / "release" / "rtk"
 
     def build_rtk_base(self) -> None:
-        """Build rtk from base branch if BENCHMARK_BASE_REF is set."""
+        """Build rtk from base branch if BENCHMARK_BASE_REF is set, or use --rtk-base-path if provided."""
+        # Use pre-built binary if provided via CLI
+        if self.rtk_base_path:
+            if not self.rtk_base_path.exists():
+                print(f"Error: rtk-base-path does not exist: {self.rtk_base_path}", file=sys.stderr)
+                sys.exit(1)
+            self.rtk_base = self.rtk_base_path.resolve()  # Make absolute
+            version = subprocess.run(
+                [str(self.rtk_base), "--version"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            print(f"Using pre-built rtk-base: {self.rtk_base} ({version})", file=sys.stderr)
+            return
+
         base_ref = os.environ.get("BENCHMARK_BASE_REF", "")
         if not base_ref:
             self.rtk_base = None
@@ -548,20 +563,21 @@ class BenchmarkRunner:
 def main():
     parser = argparse.ArgumentParser(
         description="Run benchmarks from YAML config",
-        usage="%(prog)s config [-- hyperfine_args...]",
+        usage="%(prog)s config [--rtk-base-path PATH] [-- hyperfine_args...]",
     )
     parser.add_argument("config", type=Path, help="Path to benchmark YAML config file")
-    parser.add_argument("hyperfine_args", nargs=argparse.REMAINDER, help="Additional arguments to pass to hyperfine (after --)")
-    args = parser.parse_args()
+    parser.add_argument("--rtk-base-path", type=Path, help="Path to pre-built rtk binary for baseline comparison")
 
-    # Remove leading '--' if present
-    hyperfine_args = args.hyperfine_args
+    # Use parse_known_args to separate our args from hyperfine args
+    args, hyperfine_args = parser.parse_known_args()
+
+    # Remove leading '--' if present (used to separate our args from hyperfine args)
     if hyperfine_args and hyperfine_args[0] == "--":
         hyperfine_args = hyperfine_args[1:]
 
     repo_root = Path(__file__).parent.parent.resolve()
     config = BenchmarkConfig.from_yaml(args.config)
-    runner = BenchmarkRunner(config, repo_root, hyperfine_args)
+    runner = BenchmarkRunner(config, repo_root, hyperfine_args, rtk_base_path=args.rtk_base_path)
     runner.run()
 
 
