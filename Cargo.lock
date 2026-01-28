@@ -1267,6 +1267,7 @@ dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
+ "mimallocator",
  "rayon",
  "regex",
  "rstest",

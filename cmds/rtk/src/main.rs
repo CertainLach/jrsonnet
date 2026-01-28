@@ -16,6 +16,14 @@ mod spec;
 #[cfg(test)]
 pub mod test_utils;
 
+#[cfg(all(
+	target_os = "linux",
+	feature = "mimalloc",
+	not(feature = "system-alloc")
+))]
+#[global_allocator]
+static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
+
 #[derive(Parser)]
 #[command(name = "rtk")]
 #[command(about = "Tanka dummy CLI", long_about = None)]
