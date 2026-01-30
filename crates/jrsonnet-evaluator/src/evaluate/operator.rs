@@ -54,10 +54,6 @@ pub fn evaluate_add_op(a: &Val, b: &Val) -> Result<Val> {
 
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a + &**b)),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => BigInt(Box::new(&**a + &num_to_bigint(b)?)),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => BigInt(Box::new(&num_to_bigint(a)? + &**b)),
 
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Add,
@@ -74,10 +70,6 @@ pub fn evaluate_sub_op(a: &Val, b: &Val) -> Result<Val> {
 
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a - &**b)),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => BigInt(Box::new(&**a - &num_to_bigint(b)?)),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => BigInt(Box::new(&num_to_bigint(a)? - &**b)),
 
 		// TODO: Support objects and arrays
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
@@ -94,29 +86,10 @@ pub fn evaluate_mul_op(a: &Val, b: &Val) -> Result<Val> {
 		(Str(s), Num(c)) => Val::string(s.to_string().repeat(c.get() as usize)),
 		(Num(c), Str(s)) => Val::string(s.to_string().repeat(c.get() as usize)),
 
-		#[cfg(feature = "exp-bigint")]
-		(Str(s), BigInt(c)) => Val::string(
-			s.to_string().repeat(
-				c.to_usize()
-					.ok_or_else(|| runtime_error!("too big bigint"))?,
-			),
-		),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(c), Str(s)) => Val::string(
-			s.to_string().repeat(
-				c.to_usize()
-					.ok_or_else(|| runtime_error!("too big bigint"))?,
-			),
-		),
-
 		(Num(v1), Num(v2)) => Val::try_num(v1.get() * v2.get())?,
 
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a * &**b)),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => BigInt(Box::new(&**a * &num_to_bigint(b)?)),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => BigInt(Box::new(&num_to_bigint(a)? * &**b)),
 
 		_ => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Mul,
@@ -152,10 +125,6 @@ pub fn evaluate_div_op(a: &Val, b: &Val) -> Result<Val> {
 		(Num(a), Num(b)) => Val::try_num(a.get() / b.get())?,
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a / &**b)),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => BigInt(Box::new(&**a / &num_to_bigint(b)?)),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => BigInt(Box::new(&num_to_bigint(a)? / &**b)),
 		(a, b) => bail!(BinaryOperatorDoesNotOperateOnValues(
 			BinaryOpType::Div,
 			a.value_type(),
@@ -175,10 +144,6 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 		(Num(a), Num(b)) => Val::try_num(a.get() % b.get())?,
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => BigInt(Box::new(&**a % &**b)),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => BigInt(Box::new(&**a % &num_to_bigint(b)?)),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => BigInt(Box::new(&num_to_bigint(a)? % &**b)),
 		(Str(str), vals) => {
 			String::into_untyped(std_format(&str.clone().into_flat(), vals.clone())?)?
 		}
@@ -218,10 +183,6 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 
 		#[cfg(feature = "exp-bigint")]
 		(BigInt(a), BigInt(b)) => a.cmp(b),
-		#[cfg(feature = "exp-bigint")]
-		(Num(a), BigInt(b)) => num_to_bigint(a)?.cmp(b),
-		#[cfg(feature = "exp-bigint")]
-		(BigInt(a), Num(b)) => a.as_ref().cmp(&num_to_bigint(b)?),
 
 		(Arr(a), Arr(b)) => {
 			let ai = a.iter();
