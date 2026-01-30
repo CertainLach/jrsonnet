@@ -44,10 +44,14 @@ jobs:
       - name: Set version from tag
         run: |
           VERSION=${GITHUB_REF_NAME#v}
+          # Update version in workspace Cargo.toml (used by jrsonnet and jrsonnet-fmt)
+          sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          rm Cargo.toml.bak
+          # Update version in rtk Cargo.toml
           sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" cmds/rtk/Cargo.toml
           rm cmds/rtk/Cargo.toml.bak
-          echo "Set rtk version to $VERSION"
-          grep "^version" cmds/rtk/Cargo.toml
+          echo "Set versions to $VERSION"
+          grep "^version" Cargo.toml cmds/rtk/Cargo.toml
 
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
@@ -61,23 +65,32 @@ jobs:
           sudo apt-get update
           sudo apt-get install -y gcc-aarch64-linux-gnu
 
-      - name: Build rtk
-        run: cargo build --release --package rtk --target ${{ matrix.target }}
+      - name: Build binaries
+        run: |
+          cargo build --release --package rtk --target ${{ matrix.target }}
+          cargo build --release --package jrsonnet --target ${{ matrix.target }}
         env:
           CARGO_TARGET_AARCH64_UNKNOWN_LINUX_GNU_LINKER: aarch64-linux-gnu-gcc
 
-      - name: Upload artifact
+      - name: Upload rtk artifact
         uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
         with:
           name: ${{ matrix.asset_name }}
           path: target/${{ matrix.target }}/release/${{ matrix.artifact_name }}
 
-      - name: Prepare binary for Docker
+      - name: Upload jrsonnet artifact
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
+        with:
+          name: jrsonnet-${{ matrix.platform || matrix.target }}
+          path: target/${{ matrix.target }}/release/jrsonnet
+
+      - name: Prepare binaries for Docker
         if: matrix.platform != ''
         run: |
           mkdir -p docker-bin
           cp target/${{ matrix.target }}/release/rtk docker-bin/rtk
-          chmod +x docker-bin/rtk
+          cp target/${{ matrix.target }}/release/jrsonnet docker-bin/jrsonnet
+          chmod +x docker-bin/*
 
       - name: Inject slug/short variables
         if: matrix.platform != ''
@@ -121,13 +134,18 @@ jobs:
         uses: actions/download-artifact@c850b930e6ba138125429b7e5c93fc707a7f8427 # v4
         with:
           path: artifacts
-          pattern: rtk-*
-          merge-multiple: false
 
       - name: Prepare release assets
         run: |
           mkdir -p release
-          for dir in artifacts/*/; do
+          # Process rtk binaries
+          for dir in artifacts/rtk-*/; do
+            name=$(basename "$dir")
+            cp "$dir"/* "release/$name"
+            chmod +x "release/$name"
+          done
+          # Process jrsonnet binaries
+          for dir in artifacts/jrsonnet-*/; do
             name=$(basename "$dir")
             cp "$dir"/* "release/$name"
             chmod +x "release/$name"
