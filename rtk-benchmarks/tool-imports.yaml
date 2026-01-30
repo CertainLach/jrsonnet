@@ -1,0 +1,20 @@
+name: "Tool Imports"
+id: "tool-imports"
+description: "Comparing rtk with tk for tool imports command (listing transitive imports)."
+
+fixtures:
+  static_envs: 200
+  inline_files: 5
+  envs_per_inline_file: 20
+  resources_per_env: 10
+
+tests:
+  - name: "Single Static Environment"
+    description: "Listing all transitive imports for a single static environment."
+    warmup: 3
+    command: "tool imports {single_static_dir}"
+
+  - name: "Single Inline Environment File"
+    description: "Listing all transitive imports for a single inline environment file."
+    warmup: 3
+    command: "tool imports {single_inline_file}"

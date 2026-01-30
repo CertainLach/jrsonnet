@@ -420,6 +420,19 @@ class BenchmarkRunner:
         sys.stderr.flush()
         sys.exit(1)
 
+    def _check_rtk_base_supports_command(self, test: Test) -> bool:
+        """Check if rtk-base supports the given command (doesn't return 'not implemented')."""
+        if not self.rtk_base:
+            return False
+        rtk_base_command = self.expand_command(test.command, self.export_dir_rtk_base)
+        result = self.run_command(str(self.rtk_base), rtk_base_command)
+        if result.returncode != 0:
+            # Check if it's "not implemented" error
+            if "not implemented" in result.stderr.lower() or "not implemented" in result.stdout.lower():
+                print(f"  (rtk-base does not support this command, skipping from benchmark)", file=sys.stderr)
+                return False
+        return True
+
     def run_benchmark(self, test: Test, output_file: Path, index: int) -> dict:
         """Run hyperfine benchmark for a test. Returns summary dict."""
         tk_command = self.expand_command(test.command, self.export_dir_tk)
@@ -430,6 +443,9 @@ class BenchmarkRunner:
         print()
         print(description)
         print()
+
+        # Check if rtk-base supports this command
+        include_rtk_base = self.rtk_base and self.export_dir_rtk_base and self._check_rtk_base_supports_command(test)
 
         # Build hyperfine command - commands need to run from fixtures_dir
         temp_md = output_file.with_suffix(f".{index}")
@@ -443,7 +459,7 @@ class BenchmarkRunner:
             tk_prepare = self.expand_command(self.config.prepare, self.export_dir_tk)
             rtk_prepare = self.expand_command(self.config.prepare, self.export_dir_rtk)
             prepare_args = ["--prepare", f"sh -c '{tk_prepare}'", "--prepare", f"sh -c '{rtk_prepare}'"]
-            if self.rtk_base and self.export_dir_rtk_base:
+            if include_rtk_base:
                 rtk_base_prepare = self.expand_command(self.config.prepare, self.export_dir_rtk_base)
                 prepare_args.extend(["--prepare", f"sh -c '{rtk_base_prepare}'"])
 
@@ -459,7 +475,7 @@ class BenchmarkRunner:
             "-n", "rtk", f"sh -c '{cd_prefix}{self.rtk} {rtk_command} >/dev/null'",
         ]
 
-        if self.rtk_base and self.export_dir_rtk_base:
+        if include_rtk_base:
             rtk_base_command = self.expand_command(test.command, self.export_dir_rtk_base)
             args.extend(["-n", "rtk-base", f"sh -c '{cd_prefix}{self.rtk_base} {rtk_base_command} >/dev/null'"])
 

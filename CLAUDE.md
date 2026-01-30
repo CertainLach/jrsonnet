@@ -5,6 +5,7 @@ Project-specific context for AI agents working on rustanka (rtk).
 ## Agent Behavior
 
 - **Never run git commands** unless explicitly requested by the user
+- **Always run `make fmt`** after making changes
 
 ## Project Overview
 

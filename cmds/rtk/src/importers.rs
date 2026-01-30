@@ -27,6 +27,39 @@ pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
 	let root = fs::canonicalize(root).context("resolving root")?;
 	let root_str = root.to_string_lossy().to_string();
 
+	// Pre-compute the jsonnet files cache and canonical path cache ONCE before any recursion
+	let context = build_importers_context(&root_str)?;
+
+	find_importers_with_context(&root_str, files, &context)
+}
+
+/// Find importers for multiple files, returning a map of file -> list of importing environments.
+/// This is more efficient than calling find_importers repeatedly because it builds the context once.
+pub fn find_importers_batch(
+	root: &str,
+	files: Vec<String>,
+) -> Result<HashMap<String, Vec<String>>> {
+	let root = fs::canonicalize(root).context("resolving root")?;
+	let root_str = root.to_string_lossy().to_string();
+
+	// Pre-compute the jsonnet files cache and canonical path cache ONCE
+	let context = build_importers_context(&root_str)?;
+
+	let mut result = HashMap::new();
+	for file in files {
+		let importers = find_importers_with_context(&root_str, vec![file.clone()], &context)?;
+		result.insert(file, importers);
+	}
+
+	Ok(result)
+}
+
+fn find_importers_with_context(
+	root_str: &str,
+	files: Vec<String>,
+	context: &ImportersContext,
+) -> Result<Vec<String>> {
+	let root = Path::new(root_str);
 	let mut importers_set = HashSet::new();
 
 	// Handle files prefixed with `deleted:`. They need to be made absolute and we shouldn't try to find symlinks for them
@@ -59,11 +92,8 @@ pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
 	}
 
 	// Expand symlinks for existing files
-	let expanded_files = expand_symlinks_in_files(&root_str, existing_files)?;
+	let expanded_files = expand_symlinks_in_files(root_str, existing_files)?;
 	files_to_check.extend(expanded_files);
-
-	// Pre-compute the jsonnet files cache and canonical path cache ONCE before any recursion
-	let context = build_importers_context(&root_str)?;
 
 	// Cache for importers results to avoid recomputation
 	let mut importers_cache: HashMap<String, Vec<String>> = HashMap::new();
@@ -72,10 +102,10 @@ pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
 	for file in &files_to_check {
 		importers_set.insert(file.clone());
 		let new_importers = find_importers_recursive(
-			&root_str,
+			root_str,
 			file,
 			&mut HashSet::new(),
-			&context,
+			context,
 			&mut importers_cache,
 		)?;
 

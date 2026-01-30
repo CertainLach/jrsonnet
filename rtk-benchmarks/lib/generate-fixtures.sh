@@ -16,6 +16,9 @@ generate_fixtures() {
   
   echo "Generating test fixtures in ${fixtures_dir}..." >&2
 
+  # Initialize git repo (required by tk for tool imports command)
+  git init -q "${fixtures_dir}"
+
   # Create jsonnetfile.json at root (required by tk to identify project root)
   cat >"${fixtures_dir}/jsonnetfile.json" <<'EOF'
 {

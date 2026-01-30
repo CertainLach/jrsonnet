@@ -1,0 +1,30 @@
+name: "Tool Importers Count"
+id: "tool-importers-count"
+description: "Comparing rtk with tk for tool importers-count command (counting importers per file)."
+
+fixtures:
+  static_envs: 50
+  inline_files: 2
+  envs_per_inline_file: 10
+  resources_per_env: 5
+
+tests:
+  - name: "Single Lib Directory (Non-Recursive)"
+    description: "Counting importers for files in lib/global/ (single directory, non-recursive)."
+    warmup: 3
+    command: "tool importers-count lib/global"
+
+  - name: "Single Lib Directory (Recursive)"
+    description: "Counting importers for files in lib/global/ recursively."
+    warmup: 3
+    command: "tool importers-count lib/global --recursive"
+
+  - name: "Entire Lib Directory (Non-Recursive)"
+    description: "Counting importers for files in lib/ (top-level only)."
+    warmup: 2
+    command: "tool importers-count lib"
+
+  - name: "Entire Lib Directory (Recursive)"
+    description: "Counting importers for all files in lib/ recursively."
+    warmup: 1
+    command: "tool importers-count lib --recursive"

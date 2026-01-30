@@ -3,6 +3,7 @@ pub mod discover;
 pub mod eval;
 pub mod export;
 pub mod importers;
+pub mod imports;
 pub mod jpath;
 pub mod spec;
 pub mod tanka;

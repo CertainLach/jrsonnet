@@ -11,6 +11,7 @@ mod env;
 mod eval;
 mod export;
 mod importers;
+mod imports;
 mod jpath;
 mod spec;
 mod tanka;

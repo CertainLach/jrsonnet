@@ -11,3 +11,4 @@ cache
 jsonnet-cpp
 jsonnet-sjsonnet
 benchmarks
+__pycache__/
