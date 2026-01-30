@@ -11,17 +11,12 @@ use crate::{
 	arr::ArrValue,
 	bail,
 	error::ErrorKind::*,
-	evaluate, runtime_error,
+	evaluate,
 	stdlib::std_format,
 	typed::Typed,
-	val::{equals, primitive_equals, StrValue},
+	val::{equals, StrValue},
 	Context, Result, Val,
 };
-
-#[cfg(feature = "exp-bigint")]
-fn num_to_bigint(num: &NumValue) -> Result<num_bigint::BigInt> {
-	num_bigint::BigInt::from_f64(**num).ok_or_else(|| runtime_error!("bigint from number"))
-}
 
 pub fn evaluate_unary_op(op: UnaryOpType, b: &Val) -> Result<Val> {
 	use UnaryOpType::*;
