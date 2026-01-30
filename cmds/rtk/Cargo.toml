@@ -32,6 +32,7 @@ sha2 = "0.10"
 jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator" }
 jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib" }
 jrsonnet-parser = { path = "../../crates/jrsonnet-parser" }
+jrsonnet-macros = { path = "../../crates/jrsonnet-macros" }
 jrsonnet-gcmodule = { version = "0.3.7" }
 
 [target.'cfg(target_os = "linux")'.dependencies]

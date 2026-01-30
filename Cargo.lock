@@ -1265,6 +1265,7 @@ dependencies = [
  "indoc",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
+ "jrsonnet-macros",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
  "mimallocator",

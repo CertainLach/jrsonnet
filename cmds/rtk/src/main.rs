@@ -13,6 +13,7 @@ mod export;
 mod importers;
 mod jpath;
 mod spec;
+mod tanka;
 #[cfg(test)]
 pub mod test_utils;
 

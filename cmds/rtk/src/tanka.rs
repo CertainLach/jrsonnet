@@ -15,8 +15,11 @@ use jrsonnet_evaluator::{
 	IStr, ObjValue, Val,
 };
 use jrsonnet_macros::builtin;
+use jrsonnet_stdlib::RegexCacheInner;
 use serde_json;
 use sha2::{Digest, Sha256};
+
+use std::rc::Rc;
 
 // Global Helm template cache - caches raw YAML output from helm to avoid
 // redundant helm invocations (same optimization as Go Tanka)
@@ -218,10 +221,6 @@ fn to_snake_case(s: &str) -> String {
 
 	result
 }
-
-use std::rc::Rc;
-
-use crate::regex::RegexCacheInner;
 
 /// Tanka-compatible parseJson
 /// Parses a JSON string into a value

@@ -29,7 +29,7 @@ pub use sort::*;
 pub use strings::*;
 pub use types::*;
 
-pub use crate::{regex::*, tanka::*};
+pub use crate::regex::*;
 
 mod arrays;
 mod compat;
@@ -45,7 +45,6 @@ mod regex;
 mod sets;
 mod sort;
 mod strings;
-mod tanka;
 mod types;
 
 #[allow(clippy::too_many_lines)]

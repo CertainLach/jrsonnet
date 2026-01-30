@@ -283,12 +283,13 @@ fn apply_rtk_config(context_init: &ContextInitializer, config: &RtkConfig) {
 
 /// Register Tanka-compatible native functions
 pub fn register_native_functions(context: &ContextInitializer) {
-	use jrsonnet_stdlib::{
+	use crate::tanka::{
 		builtin_escape_string_regex, builtin_tanka_helm_template, builtin_tanka_kustomize_build,
 		builtin_tanka_manifest_json_from_json, builtin_tanka_manifest_yaml_from_json,
 		builtin_tanka_parse_json, builtin_tanka_parse_yaml, builtin_tanka_regex_match,
-		builtin_tanka_regex_subst, builtin_tanka_sha256, RegexCache,
+		builtin_tanka_regex_subst, builtin_tanka_sha256,
 	};
+	use jrsonnet_stdlib::RegexCache;
 
 	// Core parsing/manifest functions
 	context.add_native("parseJson", builtin_tanka_parse_json::INST);

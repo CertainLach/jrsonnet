@@ -5,3 +5,4 @@ pub mod export;
 pub mod importers;
 pub mod jpath;
 pub mod spec;
+pub mod tanka;
