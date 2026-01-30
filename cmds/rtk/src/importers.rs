@@ -9,11 +9,18 @@ use regex::Regex;
 
 const DEFAULT_ENTRYPOINT: &str = "main.jsonnet";
 
-#[derive(Clone)]
 struct CachedJsonnetFile {
 	base: String,
 	imports: Vec<String>,
 	is_main_file: bool,
+}
+
+/// Pre-computed data for the importers search, including jsonnet files and canonical path cache.
+struct ImportersContext {
+	/// Map of file path -> CachedJsonnetFile
+	jsonnet_files: HashMap<String, CachedJsonnetFile>,
+	/// Map of path -> canonical path (for symlink resolution without syscalls)
+	canonical_cache: HashMap<String, String>,
 }
 
 pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
@@ -55,9 +62,10 @@ pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
 	let expanded_files = expand_symlinks_in_files(&root_str, existing_files)?;
 	files_to_check.extend(expanded_files);
 
-	// Create a shared cache
-	let mut jsonnet_files_cache: HashMap<String, HashMap<String, CachedJsonnetFile>> =
-		HashMap::new();
+	// Pre-compute the jsonnet files cache and canonical path cache ONCE before any recursion
+	let context = build_importers_context(&root_str)?;
+
+	// Cache for importers results to avoid recomputation
 	let mut importers_cache: HashMap<String, Vec<String>> = HashMap::new();
 
 	// Loop through all given files and add their importers to the list
@@ -67,12 +75,17 @@ pub fn find_importers(root: &str, files: Vec<String>) -> Result<Vec<String>> {
 			&root_str,
 			file,
 			&mut HashSet::new(),
-			&mut jsonnet_files_cache,
+			&context,
 			&mut importers_cache,
 		)?;
 
 		for importer in new_importers {
-			let eval_importer = eval_symlinks(&importer)?;
+			// Use cached canonical lookup instead of syscall
+			let eval_importer = context
+				.canonical_cache
+				.get(&importer)
+				.cloned()
+				.unwrap_or_else(|| importer.clone());
 			importers_set.insert(eval_importer);
 		}
 	}
@@ -240,12 +253,12 @@ fn find_symlinks_from_map(
 	symlinks
 }
 
-fn find_importers_recursive(
+fn find_importers_recursive<'a>(
 	root: &str,
 	search_for_file: &str,
 	chain: &mut HashSet<String>,
-	jsonnet_files_cache: &mut HashMap<String, HashMap<String, CachedJsonnetFile>>,
-	importers_cache: &mut HashMap<String, Vec<String>>,
+	context: &ImportersContext,
+	importers_cache: &'a mut HashMap<String, Vec<String>>,
 ) -> Result<Vec<String>> {
 	// If we've already looked through this file in the current execution, don't do it again
 	if chain.contains(search_for_file) {
@@ -253,13 +266,23 @@ fn find_importers_recursive(
 	}
 	chain.insert(search_for_file.to_string());
 
-	// Check cache
+	// Check cache - return clone only if found (this is much cheaper than cloning the entire jsonnet_files HashMap)
 	let cache_key = format!("{}:{}", root, search_for_file);
 	if let Some(cached) = importers_cache.get(&cache_key) {
 		return Ok(cached.clone());
 	}
 
-	let jsonnet_files = create_jsonnet_file_cache(root, jsonnet_files_cache)?;
+	// Pre-compute canonical path for search_for_file once (avoid repeated lookups in path_matches)
+	// Use cache if available, otherwise compute via syscall (only done once per recursive call)
+	let search_for_file_canonical = context
+		.canonical_cache
+		.get(search_for_file)
+		.cloned()
+		.unwrap_or_else(|| {
+			fs::canonicalize(search_for_file)
+				.map(|p| p.to_string_lossy().to_string())
+				.unwrap_or_else(|_| search_for_file.to_string())
+		});
 
 	let mut importers = Vec::new();
 	let mut intermediate_importers = Vec::new();
@@ -308,7 +331,8 @@ fn find_importers_recursive(
 		.unwrap_or("")
 		.to_string();
 
-	let found_importers: Vec<(String, bool)> = jsonnet_files
+	let found_importers: Vec<(String, bool)> = context
+		.jsonnet_files
 		.par_iter()
 		.filter_map(|(jsonnet_file_path, jsonnet_file_content)| {
 			if jsonnet_file_content.imports.is_empty() {
@@ -358,8 +382,15 @@ fn find_importers_recursive(
 						.to_string_lossy()
 						.to_string();
 
-					is_importer = path_matches(search_for_file, &import_full_clean)
-						|| path_matches(search_for_file, &shallow_import_clean);
+					is_importer = path_matches_cached(
+						&search_for_file_canonical,
+						&import_full_clean,
+						&context.canonical_cache,
+					) || path_matches_cached(
+						&search_for_file_canonical,
+						&shallow_import_clean,
+						&context.canonical_cache,
+					);
 				}
 
 				// Match on imports to lib/ or vendor/
@@ -367,8 +398,15 @@ fn find_importers_recursive(
 				if !is_importer && !import_path.starts_with("..") {
 					let vendor_path = root_vendor.join(&import_path_clean);
 					let lib_path = root_lib.join(&import_path_clean);
-					is_importer = path_matches(search_for_file, &vendor_path.to_string_lossy())
-						|| path_matches(search_for_file, &lib_path.to_string_lossy());
+					is_importer = path_matches_cached(
+						&search_for_file_canonical,
+						&vendor_path.to_string_lossy(),
+						&context.canonical_cache,
+					) || path_matches_cached(
+						&search_for_file_canonical,
+						&lib_path.to_string_lossy(),
+						&context.canonical_cache,
+					);
 				}
 
 				// Match on imports to the base dir where the file is located
@@ -404,7 +442,11 @@ fn find_importers_recursive(
 						.unwrap_or(Path::new("/"));
 					let import_full_path = importer_dir.join(import_path);
 					let import_full_str = import_full_path.to_string_lossy().to_string();
-					is_importer = path_matches(search_for_file, &import_full_str);
+					is_importer = path_matches_cached(
+						&search_for_file_canonical,
+						&import_full_str,
+						&context.canonical_cache,
+					);
 				}
 
 				if is_importer {
@@ -431,7 +473,7 @@ fn find_importers_recursive(
 				root,
 				intermediate_importer,
 				chain,
-				jsonnet_files_cache,
+				context,
 				importers_cache,
 			)?;
 			importers.extend(new_importers);
@@ -450,7 +492,7 @@ fn find_importers_recursive(
 					.join(rel_path);
 				let vendored_in_env_str = vendored_in_env.to_string_lossy().to_string();
 
-				if !jsonnet_files.contains_key(&vendored_in_env_str) {
+				if !context.jsonnet_files.contains_key(&vendored_in_env_str) {
 					filtered.push(importer.clone());
 				}
 			}
@@ -464,20 +506,15 @@ fn find_importers_recursive(
 	Ok(filtered_importers)
 }
 
-fn create_jsonnet_file_cache(
-	root: &str,
-	cache: &mut HashMap<String, HashMap<String, CachedJsonnetFile>>,
-) -> Result<HashMap<String, CachedJsonnetFile>> {
-	if let Some(cached) = cache.get(root) {
-		return Ok(cached.clone());
-	}
-
+/// Build the importers context once for all files in the root directory.
+/// This includes the jsonnet file cache and a canonical path cache for symlink resolution.
+fn build_importers_context(root: &str) -> Result<ImportersContext> {
 	let files = find_jsonnet_files(Path::new(root))?;
 
 	// Compile regex once (thread-safe to share across threads)
 	let imports_regexp = Regex::new(r#"import(str)?\s+['"]([^'"%()]+)['"]"#)?;
 
-	// Process files in parallel
+	// Process files in parallel, also computing canonical paths
 	use rayon::prelude::*;
 	let results: Result<Vec<_>> = files
 		.par_iter()
@@ -492,6 +529,11 @@ fn create_jsonnet_file_cache(
 				}
 			}
 
+			// Compute canonical path for this file
+			let canonical = fs::canonicalize(file)
+				.map(|p| p.to_string_lossy().to_string())
+				.unwrap_or_else(|_| file.clone());
+
 			Ok((
 				file.clone(),
 				CachedJsonnetFile {
@@ -499,14 +541,31 @@ fn create_jsonnet_file_cache(
 					imports,
 					is_main_file,
 				},
+				canonical,
 			))
 		})
 		.collect();
 
-	let files_map: HashMap<String, CachedJsonnetFile> = results?.into_iter().collect();
+	let results = results?;
 
-	cache.insert(root.to_string(), files_map.clone());
-	Ok(files_map)
+	// Build both maps from the results
+	let mut jsonnet_files = HashMap::with_capacity(results.len());
+	let mut canonical_cache = HashMap::with_capacity(results.len() * 2);
+
+	for (file, cached, canonical) in results {
+		// Store original -> canonical mapping
+		canonical_cache.insert(file.clone(), canonical.clone());
+		// Also store canonical -> canonical (for lookups when we already have canonical)
+		if file != canonical {
+			canonical_cache.insert(canonical.clone(), canonical.clone());
+		}
+		jsonnet_files.insert(file, cached);
+	}
+
+	Ok(ImportersContext {
+		jsonnet_files,
+		canonical_cache,
+	})
 }
 
 fn find_jsonnet_files(dir: &Path) -> Result<Vec<String>> {
@@ -601,13 +660,31 @@ fn find_base(path: &str, root: &str) -> Result<String> {
 	Ok(root.to_string())
 }
 
-fn path_matches(path1: &str, path2: &str) -> bool {
-	if path1 == path2 {
+/// Check if two paths match, using a pre-computed canonical cache to avoid syscalls.
+/// `path1_canonical` should already be the canonical version of the first path.
+fn path_matches_cached(
+	path1_canonical: &str,
+	path2: &str,
+	canonical_cache: &HashMap<String, String>,
+) -> bool {
+	if path1_canonical == path2 {
 		return true;
 	}
 
-	let eval1 = eval_symlinks(path1).unwrap_or_else(|_| path1.to_string());
-	let eval2 = eval_symlinks(path2).unwrap_or_else(|_| path2.to_string());
+	// Look up path2's canonical form from cache
+	if let Some(path2_canonical) = canonical_cache.get(path2) {
+		return path1_canonical == path2_canonical;
+	}
 
-	eval1 == eval2
+	// For paths not in cache, try to canonicalize if the file exists.
+	// This handles text files and other non-jsonnet files that aren't in our cache.
+	// The syscall is acceptable here since:
+	// 1. Most paths are filtered by basename matching before reaching this point
+	// 2. This is only needed for files not in the jsonnet cache (rare case)
+	if let Ok(path2_canonical) = fs::canonicalize(path2) {
+		return path1_canonical == path2_canonical.to_string_lossy();
+	}
+
+	// Path doesn't exist, no match
+	false
 }
