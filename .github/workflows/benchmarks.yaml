@@ -7,8 +7,6 @@ on:
 
 permissions:
   contents: read
-  pull-requests: write
-  issues: write
 
 jobs:
   benchmark:
@@ -59,29 +57,67 @@ jobs:
           # jq is pre-installed on ubuntu-latest
 
       - name: Run benchmark
-        id: benchmark
         env:
           BENCHMARK_MARKDOWN_OUTPUT: benchmark-results.md
+          BENCHMARK_SUMMARY_OUTPUT: benchmark-summary.json
           # On PRs, also build and benchmark rtk from the base branch (master)
           BENCHMARK_BASE_REF: ${{ github.event_name == 'pull_request' && github.event.pull_request.base.ref || '' }}
         run: |
           ./rtk-benchmarks/run-benchmark.py ${{ matrix.benchmark.config }} | tee benchmark-results.md
-          
-          # Prepare comment body from markdown output
-          {
-            echo "## 📊 Benchmark Results: ${{ matrix.benchmark.name }}"
-            echo ""
-            cat benchmark-results.md
-            echo ""
-            echo "---"
-            echo "_Benchmark run on commit \`${{ github.event.pull_request.head.sha || github.sha }}\`_"
-            echo "<!-- BENCHMARK_ID: ${{ matrix.benchmark.id }} -->"
-          } > comment-body.txt
 
-      - name: Set comment body output
-        id: comment
+      - name: Upload benchmark output
+        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
+        with:
+          name: benchmark-${{ matrix.benchmark.id }}
+          path: |
+            benchmark-results.md
+            benchmark-summary.json
+          if-no-files-found: warn
+
+  summary:
+    name: Post Summary Comment
+    runs-on: ubuntu-latest
+    needs: benchmark
+    if: github.event_name == 'pull_request'
+    permissions:
+      pull-requests: write
+      issues: write
+    steps:
+      - name: Download all benchmark artifacts
+        uses: actions/download-artifact@fa0a91b85d4f404e444e00e005971372dc801d16 # v4
+        with:
+          pattern: benchmark-*
+          path: artifacts
+
+      - name: Generate summary comment
+        id: summary
         run: |
-          # Use delimiter approach for multiline output
+          # Build the comment body
+          {
+            echo "## Benchmark Results"
+            echo ""
+            echo "| Benchmark | Test | vs tk | vs base |"
+            echo "|:----------|:-----|------:|--------:|"
+            
+            # Process each benchmark summary and generate table rows
+            for dir in artifacts/benchmark-*/; do
+              if [ -f "$dir/benchmark-summary.json" ]; then
+                jq -r '
+                  .benchmark_name as $bench |
+                  .tests[] |
+                  "| \($bench) | \(.name) | \(.vs_tk)x faster | \(.vs_base // "-") |"
+                ' "$dir/benchmark-summary.json"
+              fi
+            done
+            
+            echo ""
+            echo "_Full results available in [workflow artifacts](${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }})._"
+            echo ""
+            echo "_Benchmark run on commit \`${{ github.event.pull_request.head.sha }}\`_"
+            echo "<!-- BENCHMARK_SUMMARY -->"
+          } > comment-body.txt
+          
+          # Output for next step
           {
             echo "body<<GITHUB_OUTPUT_EOF"
             cat comment-body.txt
@@ -89,18 +125,15 @@ jobs:
           } >> $GITHUB_OUTPUT
 
       - name: Post PR comment
-        if: github.event_name == 'pull_request'
         uses: actions/github-script@60a0d83039c74a4aee543508d2ffcb1c3799cdea # v7
         env:
-          COMMENT_BODY: ${{ steps.comment.outputs.body }}
-          BENCHMARK_ID: ${{ matrix.benchmark.id }}
+          COMMENT_BODY: ${{ steps.summary.outputs.body }}
         with:
           script: |
-            const benchmarkId = process.env.BENCHMARK_ID;
-            const commentMarker = `<!-- BENCHMARK_ID: ${benchmarkId} -->`;
+            const commentMarker = '<!-- BENCHMARK_SUMMARY -->';
             const comment = process.env.COMMENT_BODY;
             
-            // Find existing comment for this specific benchmark
+            // Find existing benchmark summary comment
             const { data: comments } = await github.rest.issues.listComments({
               owner: context.repo.owner,
               repo: context.repo.repo,
@@ -113,28 +146,19 @@ jobs:
             );
             
             if (botComment) {
-              // Update existing comment
               await github.rest.issues.updateComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 comment_id: botComment.id,
                 body: comment
               });
-              console.log(`Updated existing comment for benchmark: ${benchmarkId}`);
+              console.log('Updated existing benchmark summary comment');
             } else {
-              // Create new comment
               await github.rest.issues.createComment({
                 owner: context.repo.owner,
                 repo: context.repo.repo,
                 issue_number: context.issue.number,
                 body: comment
               });
-              console.log(`Created new comment for benchmark: ${benchmarkId}`);
+              console.log('Created new benchmark summary comment');
             }
-
-      - name: Upload benchmark output
-        uses: actions/upload-artifact@26f96dfa697d77e81fd5907df203aa23a56210a8 # v4
-        with:
-          name: benchmark-${{ matrix.benchmark.id }}
-          path: benchmark-results.md
-          if-no-files-found: warn

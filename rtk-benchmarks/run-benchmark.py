@@ -420,8 +420,8 @@ class BenchmarkRunner:
         sys.stderr.flush()
         sys.exit(1)
 
-    def run_benchmark(self, test: Test, output_file: Path, index: int) -> None:
-        """Run hyperfine benchmark for a test."""
+    def run_benchmark(self, test: Test, output_file: Path, index: int) -> dict:
+        """Run hyperfine benchmark for a test. Returns summary dict."""
         tk_command = self.expand_command(test.command, self.export_dir_tk)
         rtk_command = self.expand_command(test.command, self.export_dir_rtk)
         description = self.expand_command(test.description)
@@ -433,6 +433,7 @@ class BenchmarkRunner:
 
         # Build hyperfine command - commands need to run from fixtures_dir
         temp_md = output_file.with_suffix(f".{index}")
+        temp_json = output_file.with_suffix(f".{index}.json")
         cd_prefix = f"cd {self.fixtures_dir} && "
 
         # Build prepare commands if configured (each tool needs its own prepare)
@@ -453,6 +454,7 @@ class BenchmarkRunner:
             *self.hyperfine_args,
             *prepare_args,
             "--export-markdown", str(temp_md),
+            "--export-json", str(temp_json),
             "-n", "tk", f"sh -c '{cd_prefix}tk {tk_command} >/dev/null'",
             "-n", "rtk", f"sh -c '{cd_prefix}{self.rtk} {rtk_command} >/dev/null'",
         ]
@@ -468,6 +470,53 @@ class BenchmarkRunner:
         with open(temp_md) as f:
             print(f.read())
         print()
+
+        # Parse JSON and return summary
+        return self._parse_benchmark_json(test.name, temp_json)
+
+    def _parse_benchmark_json(self, test_name: str, json_path: Path) -> dict:
+        """Parse hyperfine JSON output and generate summary."""
+        import json
+        with open(json_path) as f:
+            data = json.load(f)
+
+        results = {}
+        for result in data["results"]:
+            name = result["command"]
+            # hyperfine uses the -n name as the command field
+            results[name] = {
+                "mean": result["mean"],
+                "stddev": result["stddev"],
+            }
+
+        summary = {"name": test_name}
+
+        # Calculate comparisons
+        if "tk" in results and "rtk" in results:
+            tk_mean = results["tk"]["mean"]
+            rtk_mean = results["rtk"]["mean"]
+            rtk_stddev = results["rtk"]["stddev"]
+            speedup = tk_mean / rtk_mean
+            summary["vs_tk"] = round(speedup, 2)
+            summary["rtk_mean"] = rtk_mean
+            summary["rtk_stddev"] = rtk_stddev
+
+        if "rtk-base" in results and "rtk" in results:
+            base_mean = results["rtk-base"]["mean"]
+            base_stddev = results["rtk-base"]["stddev"]
+            rtk_mean = results["rtk"]["mean"]
+            rtk_stddev = results["rtk"]["stddev"]
+            # Check if within 1 stddev (combined)
+            combined_stddev = (rtk_stddev**2 + base_stddev**2) ** 0.5
+            diff = abs(rtk_mean - base_mean)
+            if diff <= combined_stddev:
+                summary["vs_base"] = "equal"
+            elif rtk_mean < base_mean:
+                summary["vs_base"] = f"{round(base_mean / rtk_mean, 2)}x faster"
+            else:
+                summary["vs_base"] = f"{round(rtk_mean / base_mean, 2)}x slower"
+
+        return summary
 
     def print_header(self) -> None:
         """Print benchmark header."""
@@ -552,12 +601,29 @@ class BenchmarkRunner:
             print("## Benchmarks")
             print()
 
-            # Capture markdown output
-            markdown_lines = []
+            # Run benchmarks and collect summaries
+            summaries = []
             for i, test in enumerate(self.config.tests, 1):
-                self.run_benchmark(test, output_file, i)
+                summary = self.run_benchmark(test, output_file, i)
+                summaries.append(summary)
+
+        # Write summary JSON for CI to parse
+        summary_json_path = Path(os.environ.get("BENCHMARK_SUMMARY_OUTPUT", "benchmark-summary.json"))
+        self._write_summary_json(summaries, summary_json_path)
 
         print(f"Markdown output written to: {output_file}", file=sys.stderr)
+        print(f"Summary JSON written to: {summary_json_path}", file=sys.stderr)
+
+    def _write_summary_json(self, summaries: list[dict], output_path: Path) -> None:
+        """Write summary JSON file for CI to parse."""
+        import json
+        output = {
+            "benchmark_name": self.config.name,
+            "benchmark_id": self.config.id,
+            "tests": summaries,
+        }
+        with open(output_path, "w") as f:
+            json.dump(output, f, indent=2)
 
 
 def main():
