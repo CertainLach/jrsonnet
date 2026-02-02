@@ -16,6 +16,11 @@ use rustc_hash::FxHashMap;
 thread_local! {
 	static SKIP_ASSERTIONS: Cell<bool> = const { Cell::new(false) };
 	static LENIENT_SUPER: Cell<bool> = const { Cell::new(false) };
+	// Counter for how many assertions are currently being evaluated.
+	// When inside assertion evaluation (counter > 0), we skip triggering new assertions
+	// on field accesses to prevent infinite recursion when an assertion accesses a field
+	// that's currently being evaluated.
+	static ASSERTION_DEPTH: Cell<usize> = const { Cell::new(0) };
 }
 
 /// Set whether to skip assertion checks (for manifest generation compatibility with Go Tanka)
@@ -26,6 +31,27 @@ pub fn set_skip_assertions(skip: bool) {
 /// Check if assertions should be skipped
 fn should_skip_assertions() -> bool {
 	SKIP_ASSERTIONS.with(std::cell::Cell::get)
+}
+
+/// Check if we're currently inside assertion evaluation
+fn is_in_assertion() -> bool {
+	ASSERTION_DEPTH.with(|d| d.get() > 0)
+}
+
+/// RAII guard to increment/decrement ASSERTION_DEPTH during assertion evaluation
+struct AssertionGuard;
+
+impl AssertionGuard {
+	fn new() -> Self {
+		ASSERTION_DEPTH.with(|d| d.set(d.get() + 1));
+		Self
+	}
+}
+
+impl Drop for AssertionGuard {
+	fn drop(&mut self) {
+		ASSERTION_DEPTH.with(|d| d.set(d.get().saturating_sub(1)));
+	}
 }
 
 /// Set whether to use lenient mode for super field access (return empty object instead of error)
@@ -452,6 +478,12 @@ impl ObjValue {
 		if should_skip_assertions() {
 			return Ok(());
 		}
+		// Skip assertions if we're already inside assertion evaluation.
+		// This prevents infinite recursion when an assertion accesses a field
+		// that depends on the object being evaluated.
+		if is_in_assertion() {
+			return Ok(());
+		}
 		// FIXME: Should it use `self.0.this()` in case of standalone super?
 		self.run_assertions_raw(self.clone())
 	}
@@ -731,7 +763,16 @@ impl ObjectLike for OopObject {
 			return Ok(match v {
 				CacheValue::Cached(v) => Some(v.clone()),
 				CacheValue::NotFound => None,
-				CacheValue::Pending => bail!(InfiniteRecursionDetected),
+				CacheValue::Pending => {
+					// During assertion evaluation, if we hit a pending field,
+					// it means the assertion is trying to access a field that's
+					// currently being evaluated. In this case, we bubble up a
+					// special error that tells the assertion to defer.
+					if is_in_assertion() {
+						bail!(AssertionAccessedPendingField)
+					}
+					bail!(InfiniteRecursionDetected)
+				}
 				CacheValue::Errored(e) => return Err(e.clone()),
 			});
 		}
@@ -796,7 +837,21 @@ impl ObjectLike for OopObject {
 		}
 		if self.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.assertions.iter() {
+				// Use AssertionGuard to mark that we're inside assertion evaluation.
+				// This prevents infinite recursion when the assertion accesses fields
+				// that depend on the object being evaluated.
+				let _guard = AssertionGuard::new();
 				if let Err(e) = assertion.run(self.sup.clone(), Some(real_this.clone())) {
+					// If the assertion tried to access a field that's currently being
+					// evaluated (pending), we skip this assertion. It will be checked
+					// again during manifest when the field is fully evaluated.
+					// This matches go-jsonnet behavior for circular dependencies.
+					if matches!(
+						e.error(),
+						crate::error::ErrorKind::AssertionAccessedPendingField
+					) {
+						continue;
+					}
 					self.assertions_ran.borrow_mut().remove(&real_this);
 					return Err(e);
 				}

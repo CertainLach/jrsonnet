@@ -221,6 +221,10 @@ pub enum ErrorKind {
 	StackOverflow,
 	#[error("infinite recursion detected")]
 	InfiniteRecursionDetected,
+	/// Internal error: assertion tried to access a field that is currently being evaluated.
+	/// This is not shown to users; it's caught and handled by the assertion mechanism.
+	#[error("assertion accessed pending field")]
+	AssertionAccessedPendingField,
 	#[error("tried to index by fractional value")]
 	FractionalIndex,
 	#[error("attempted to divide by zero")]
