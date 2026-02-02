@@ -34,13 +34,16 @@ local inlinePromqlQuery = '(100 - (min(rate(container_cpu_usage_seconds_total{cl
 {
   // StatefulSet with ruler that has pre-stop hook with shell command
   'ruler-statefulset': {
+    assert self.kind == 'StatefulSet' : 'must be StatefulSet',
     apiVersion: 'apps/v1',
     kind: 'StatefulSet',
     metadata: {
+      assert std.length(self.name) > 0 : 'metadata.name required',
       name: 'ruler',
       namespace: 'default',
     },
     spec: {
+      assert self.serviceName == 'ruler' : 'serviceName should be ruler',
       serviceName: 'ruler',
       replicas: 1,
       selector: {
@@ -51,6 +54,7 @@ local inlinePromqlQuery = '(100 - (min(rate(container_cpu_usage_seconds_total{cl
       template: {
         metadata: {
           labels: {
+            assert self.name == 'ruler' : 'pod label name must match',
             name: 'ruler',
           },
           annotations: {
@@ -58,12 +62,15 @@ local inlinePromqlQuery = '(100 - (min(rate(container_cpu_usage_seconds_total{cl
           },
         },
         spec: {
+          assert std.length(self.containers) == 1 : 'should have exactly 1 container',
           containers: [{
+            assert self.name == 'ruler' : 'container name must be ruler',
             name: 'ruler',
             image: 'grafana/loki:latest',
             lifecycle: {
               preStop: {
                 exec: {
+                  assert std.length(self.command) == 3 : 'preStop command should have 3 parts',
                   // This command triggers different line wrapping
                   command: ['/bin/bash', '-c', rulerPreStopCommand],
                 },

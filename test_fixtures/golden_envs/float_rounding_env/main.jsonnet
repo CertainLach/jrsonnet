@@ -48,13 +48,16 @@ local roundingTests = {
 
 {
   'rounding-test-configmap': {
+    assert self.kind == 'ConfigMap' : 'must be ConfigMap',
     apiVersion: 'v1',
     kind: 'ConfigMap',
     metadata: {
+      assert self.namespace == 'default' : 'namespace must be default',
       name: 'rounding-test',
       namespace: 'default',
     },
     data: {
+      assert std.endsWith(self.gomemlimit, 'B') : 'gomemlimit must end with B',
       // The main GOMEMLIMIT calculation that exposed the issue
       gomemlimit: memoryLimitPercent(testMemory, testPercent) + 'B',
       // Additional rounding test cases
@@ -62,6 +65,7 @@ local roundingTests = {
     },
   },
   'statefulset-live-store': {
+    assert self.kind == 'StatefulSet' : 'must be StatefulSet',
     apiVersion: 'apps/v1',
     kind: 'StatefulSet',
     metadata: {
@@ -72,13 +76,15 @@ local roundingTests = {
       template: {
         spec: {
           containers: [{
+            assert std.length(self.env) == 2 : 'should have 2 env vars',
             name: 'live-store',
             image: 'cloud-traces:latest',
             env: [
-              { name: 'GOGC', value: '100' },
-              { name: 'GOMEMLIMIT', value: memoryLimitPercent(testMemory, testPercent) + 'B' },
+              { assert self.name == 'GOGC' : 'first env should be GOGC', name: 'GOGC', value: '100' },
+              { assert self.name == 'GOMEMLIMIT' : 'second env should be GOMEMLIMIT', name: 'GOMEMLIMIT', value: memoryLimitPercent(testMemory, testPercent) + 'B' },
             ],
             resources: {
+              assert std.objectHas(self.limits, 'memory') : 'must have memory limit',
               limits: {
                 memory: testMemory,
               },

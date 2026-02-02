@@ -14,9 +14,12 @@ local withFluxIgnore(ignoredBy, ignoredReason='') = {
 };
 
 local makeConfigMap(name, data) = {
+  assert std.isString(name) : 'name must be a string',
+  assert std.length(name) > 0 : 'name must not be empty',
   apiVersion: 'v1',
   kind: 'ConfigMap',
   metadata: {
+    assert self.name == name : 'metadata.name should match input',
     name: name,
     namespace: 'default',
   },
@@ -24,6 +27,8 @@ local makeConfigMap(name, data) = {
 };
 
 local makeDeployment(name, image) = {
+  assert std.isString(name) : 'deployment name must be a string',
+  assert std.isString(image) : 'image must be a string',
   apiVersion: 'apps/v1',
   kind: 'Deployment',
   metadata: {
@@ -31,9 +36,11 @@ local makeDeployment(name, image) = {
     namespace: 'default',
   },
   spec: {
+    assert self.replicas >= 1 : 'replicas must be at least 1',
     replicas: 1,
     selector: {
       matchLabels: {
+        assert std.objectHas(self, 'app') : 'matchLabels must have app',
         app: name,
       },
     },
@@ -44,7 +51,9 @@ local makeDeployment(name, image) = {
         },
       },
       spec: {
+        assert std.length(self.containers) > 0 : 'must have at least one container',
         containers: [{
+          assert std.length(self.name) > 0 : 'container name required',
           name: name,
           image: image,
         }],

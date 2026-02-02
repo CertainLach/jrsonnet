@@ -3,11 +3,16 @@
 // Prometheus alerting rules structure - tests deeply nested object-in-array indentation
 // This structure specifically tests: array -> object -> field with array value -> object -> nested object
 local alertingRulesData = {
+  assert std.length(self.groups) > 0 : 'must have at least one group',
   groups: [{
+    assert std.isString(self.name) : 'group name must be string',
+    assert std.length(self.rules) >= 1 : 'group must have rules',
     name: 'prometheus-extra',
     rules: [{
+      assert std.startsWith(self.alert, 'Prom') : 'alert name should start with Prom',
       alert: 'PromScrapeFailed',
       annotations: {
+        assert std.objectHas(self, 'message') : 'must have message annotation',
         message: 'Prometheus failed to scrape a target {{ $labels.job }} / {{ $labels.instance }}',
         test: 0.00002,
         test2: '%s' % 0.00002,
@@ -23,6 +28,7 @@ local alertingRulesData = {
       expr: 'up != 1',
       'for': '15m',
       labels: {
+        assert self.severity == 'warning' || self.severity == 'critical' : 'severity must be warning or critical',
         severity: 'warning',
       },
     }, {
@@ -194,13 +200,17 @@ local emptyYamlDocMultipleNewlines = std.manifestYamlDoc({}) + '\n';  // "{}\n\n
 
 {
   configmap: {
+    assert self.apiVersion == 'v1' : 'must be v1 API',
+    assert self.kind == 'ConfigMap' : 'must be ConfigMap',
     apiVersion: 'v1',
     kind: 'ConfigMap',
     metadata: {
+      assert std.isString(self.name) : 'name must be string',
       name: 'app-config',
       namespace: 'default',
     },
     data: {
+      assert std.objectHas(self, 'config.yaml') : 'must have config.yaml',
       rules:
         std.foldl(
           function(acc, fn)
@@ -490,16 +500,20 @@ local emptyYamlDocMultipleNewlines = std.manifestYamlDoc({}) + '\n';  // "{}\n\n
   // Test large float scientific notation: tk uses 3.333333333333333e+06, rtk uses 3333333.333333333
   // This tests the outer YAML serializer (Tanka's manifestYamlFromJson path)
   'overrides-configmap': {
+    assert self.kind == 'ConfigMap' : 'must be ConfigMap',
     apiVersion: 'v1',
     kind: 'ConfigMap',
     metadata: {
+      assert self.name == 'overrides' : 'name must be overrides',
       name: 'overrides',
       namespace: 'default',
     },
     data: {
+      assert std.objectHas(self, 'overrides.yaml') : 'must have overrides.yaml',
       // Uses manifestYamlFromJson (Tanka's YAML path with scientific notation threshold)
       'overrides.yaml': std.native('manifestYamlFromJson')(std.manifestJson({
         tenant_limits: {
+          assert self.max_series > 1000000 : 'max_series should be > 1M',
           max_series: 10000000 / 3,  // ~3.33 million - above threshold
           max_samples: 1500000,  // 1.5 million - above threshold
           small_value: 999999,  // below 1 million threshold
@@ -538,16 +552,22 @@ local emptyYamlDocMultipleNewlines = std.manifestYamlDoc({}) + '\n';  // "{}\n\n
   },
   // Test long string wrapping and continuation line indentation
   scaledobject: {
+    assert self.apiVersion == 'keda.sh/v1alpha1' : 'must use keda.sh/v1alpha1',
+    assert self.kind == 'ScaledObject' : 'must be ScaledObject',
     apiVersion: 'keda.sh/v1alpha1',
     kind: 'ScaledObject',
     metadata: {
+      assert std.length(self.name) > 0 : 'name is required',
       name: 'test-scaled',
       namespace: 'default',
     },
     spec: {
+      assert std.length(self.triggers) >= 1 : 'must have at least one trigger',
       triggers: [{
+        assert self.type == 'prometheus' : 'trigger type should be prometheus',
         type: 'prometheus',
         metadata: {
+          assert std.length(self.query) > 50 : 'query should be a long string',
           // Long query string that triggers line wrapping - tests continuation indentation
           // tk uses 8-space indent for continuation, rtk uses 4-space
           query: '(1 - (min(kubelet_volume_stats_available_bytes{cluster="test-cluster", namespace="test-ns", persistentvolumeclaim=~"store-gateway-.*"}/kubelet_volume_stats_capacity_bytes{cluster="test-cluster",namespace="test-ns", persistentvolumeclaim=~"store-gateway-.*"}))) * 100',
@@ -580,16 +600,24 @@ local emptyYamlDocMultipleNewlines = std.manifestYamlDoc({}) + '\n';  // "{}\n\n
   },
   // Test case for long string wrapping behavior (tk wraps at ~80 chars, rtk doesn't)
   deployment: {
+    assert self.apiVersion == 'apps/v1' : 'must use apps/v1',
+    assert self.kind == 'Deployment' : 'must be Deployment',
     apiVersion: 'apps/v1',
     kind: 'Deployment',
     metadata: {
+      assert self.namespace == 'default' : 'namespace should be default',
       name: 'test-deployment',
       namespace: 'default',
     },
     spec: {
       template: {
         spec: {
+          assert std.length(self.containers) == 1 : 'should have 1 container',
+          assert std.length(self.initContainers) == 1 : 'should have 1 init container',
           containers: [{
+            assert self.name == 'test-container' : 'container name mismatch',
+            assert std.isArray(self.env) : 'env must be array',
+            assert std.length(self.args) == 3 : 'should have 3 args',
             name: 'test-container',
             // Test empty arrays - tk uses [], rtk uses block style
             env: [],
@@ -604,6 +632,8 @@ local emptyYamlDocMultipleNewlines = std.manifestYamlDoc({}) + '\n';  // "{}\n\n
             ],
           }],
           initContainers: [{
+            assert self.name == 'secrets-copier' : 'init container name must match',
+            assert std.length(self.command) == 2 : 'command should have 2 parts',
             name: 'secrets-copier',
             image: 'busybox:1.34',
             command: ['/bin/sh', '-exc'],

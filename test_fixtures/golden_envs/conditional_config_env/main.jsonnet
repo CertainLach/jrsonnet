@@ -35,10 +35,10 @@ local topLevelAccess = {
       },
     },
   },
-  
+
   // Access via $ which should reference the top of this object
   publicConfig: $._private.configData,
-  
+
   // Nested access via $
   deepValue: $._private.configData.nested.deep,
 };
@@ -90,7 +90,7 @@ local hasAllCheck = {
   hasVisible: std.objectHas(objWithHidden, 'visible'),
   hasHidden: std.objectHas(objWithHidden, 'hidden'),  // false for objectHas
   hasHiddenAll: std.objectHasAll(objWithHidden, 'hidden'),  // true for objectHasAll
-  
+
   // Conditional based on hidden field existence
   conditionalValue: if std.objectHasAll(objWithHidden, 'hidden') then objWithHidden.hidden else 'fallback',
 };
@@ -103,7 +103,7 @@ local recursive = {
     name: 'test-component',
     replicas: 3,
   },
-  
+
   component: {
     name: $._base.name,
     config: {
@@ -124,9 +124,9 @@ local parent = {
   _config:: {
     name: 'parent-name',
   },
-  
+
   getName():: self._config.name,
-  
+
   result: self.getName(),
 };
 
@@ -134,7 +134,7 @@ local child = parent {
   _config+:: {
     extra: 'child-extra',
   },
-  
+
   // Override to also include parent's name
   result: super.result + '-extended',
 };
@@ -191,24 +191,24 @@ local gfSimulation = {
       },
     },
   },
-  
+
   // Get component, returns null if not enabled
-  getComponent(name):: 
+  getComponent(name)::
     local comp = $._components[name];
     if std.objectHas($._components, name) && comp.enabled then comp else null,
-  
+
   // Build resources for a component
   buildConfig(comp)::
     if comp != null then {
       name: comp.name,
       replicas: comp.config.replicas,
     } else {},
-  
+
   // The actual config - this is where empty {} might come from
   indexGatewayConfig: $.buildConfig($.getComponent('indexGateway')),
-  
-  // Service selector - this is where empty matchLabels might come from  
-  serviceSelector: 
+
+  // Service selector - this is where empty matchLabels might come from
+  serviceSelector:
     local comp = $.getComponent('indexGateway');
     if comp != null then { name: comp.name } else {},
 };
@@ -219,13 +219,17 @@ local gfSimulation = {
 {
   // Test 1: Merged with hidden overlay
   'configmap-merged-hidden': {
+    assert self.apiVersion == 'v1' : 'must be core v1 API',
+    assert self.kind == 'ConfigMap' : 'must be ConfigMap kind',
     apiVersion: 'v1',
     kind: 'ConfigMap',
     metadata: {
+      assert std.endsWith(self.name, '-test') : 'test configmaps should end with -test',
       name: 'merged-hidden-test',
       namespace: 'default',
     },
     data: {
+      assert std.objectHas(self, 'merged.yaml') : 'must have merged.yaml',
       'merged.yaml': std.manifestYamlDoc(merged1),
       'exposed.yaml': std.manifestYamlDoc(merged1.exposed),
     },

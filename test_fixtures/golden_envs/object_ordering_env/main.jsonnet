@@ -51,9 +51,11 @@ local arrayWithNumericKeys = [
 {
   // Deployment with args that depend on object field ordering
   'metrics-mapper-deployment': {
+    assert self.apiVersion == 'apps/v1' : 'must use apps/v1',
     apiVersion: 'apps/v1',
     kind: 'Deployment',
     metadata: {
+      assert std.length(self.name) > 0 : 'name is required',
       name: 'metrics-instance-mapper',
       namespace: 'default',
     },
@@ -61,6 +63,8 @@ local arrayWithNumericKeys = [
       template: {
         spec: {
           containers: [{
+            assert std.isString(self.image) : 'image must be string',
+            assert std.length(self.args) == 2 : 'should have exactly 2 args',
             name: 'mapper',
             image: 'mapper:latest',
             args: [

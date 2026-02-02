@@ -36,9 +36,13 @@ local helmResources = std.native('helmTemplate')(
 
 // Inline environment with helm resources and resourceDefaults
 local env = {
+  assert self.kind == 'Environment' : 'must be Environment kind',
+  assert self.apiVersion == 'tanka.dev/v1alpha1' : 'must use tanka.dev/v1alpha1',
   apiVersion: 'tanka.dev/v1alpha1',
   kind: 'Environment',
   metadata: {
+    assert std.isString(self.name) : 'metadata.name must be string',
+    assert std.objectHas(self.labels, 'cluster') : 'must have cluster label',
     name: 'helm-test',
     labels: {
       cluster: 'test-cluster',
@@ -46,6 +50,7 @@ local env = {
     },
   },
   spec: {
+    assert std.startsWith(self.apiServer, 'https://') : 'apiServer must use https',
     apiServer: 'https://fwnkiegyk:6443',
     namespace: 'default',
   },

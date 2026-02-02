@@ -18,13 +18,17 @@ local makeLabels(name) =
 {
   // PodDisruptionBudget that should have non-empty matchLabels
   'pdb-with-labels': {
+    assert self.apiVersion == 'policy/v1' : 'must use policy/v1',
+    assert self.kind == 'PodDisruptionBudget' : 'must be PDB',
     apiVersion: 'policy/v1',
     kind: 'PodDisruptionBudget',
     metadata: {
+      assert std.endsWith(self.name, '-pdb') : 'PDB names should end with -pdb',
       name: 'index-gateway-pdb',
       namespace: 'default',
     },
     spec: {
+      assert self.maxUnavailable >= 1 : 'maxUnavailable must be at least 1',
       maxUnavailable: 1,
       selector: {
         matchLabels: makeLabels(indexGatewayName),
@@ -96,6 +100,7 @@ local makeLabels(name) =
 
   // Service with potentially empty selector
   'service-with-selector': {
+    assert self.kind == 'Service' : 'must be Service',
     apiVersion: 'v1',
     kind: 'Service',
     metadata: {
@@ -103,11 +108,14 @@ local makeLabels(name) =
       namespace: 'default',
     },
     spec: {
+      assert std.length(self.ports) == 2 : 'should have exactly 2 ports',
       ports: [{
+        assert self.port > 0 && self.port < 65536 : 'port must be valid',
         name: 'http-metrics',
         port: 3100,
         targetPort: 3100,
       }, {
+        assert self.name == 'grpc' : 'second port should be grpc',
         name: 'grpc',
         port: 9095,
         targetPort: 9095,
@@ -144,16 +152,20 @@ local makeLabels(name) =
 
   // Deployment with empty/conditional env
   'deployment-conditional-env': {
+    assert self.apiVersion == 'apps/v1' : 'must use apps/v1',
     apiVersion: 'apps/v1',
     kind: 'Deployment',
     metadata: {
+      assert std.isString(self.name) && std.length(self.name) > 0 : 'name required',
       name: 'test-deployment',
       namespace: 'default',
     },
     spec: {
+      assert self.replicas >= 0 : 'replicas must be non-negative',
       replicas: 1,
       selector: {
         matchLabels: {
+          assert std.objectHas(self, 'app') : 'must have app label',
           app: 'test',
         },
       },
@@ -163,6 +175,7 @@ local makeLabels(name) =
             app: 'test',
           },
           annotations: {
+            assert std.length(self.config_hash) == 32 : 'md5 hash should be 32 chars',
             // Config hash that depends on underlying ConfigMap content
             config_hash: std.md5(std.manifestJson({
               setting1: 'value1',
@@ -171,7 +184,9 @@ local makeLabels(name) =
           },
         },
         spec: {
+          assert std.isArray(self.containers) : 'containers must be array',
           containers: [{
+            assert self.name == 'test' : 'container name must be test',
             name: 'test',
             image: 'test:latest',
             // Empty env array

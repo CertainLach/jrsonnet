@@ -117,9 +117,7 @@ pub fn eval_with_resolver(
 	spec: Option<Environment>,
 	opts: EvalOpts,
 ) -> Result<EvalResult> {
-	// Skip assertions during manifest generation to match Go Tanka's behavior
-	// This prevents circular dependency errors in autoscaling configs and other complex patterns
-	set_skip_assertions(true);
+	set_skip_assertions(false);
 
 	// Enable lenient super mode to handle mixins that reference super fields that don't exist yet
 	// This works around go-jsonnet compatibility issues in libraries like k8s-libsonnet
