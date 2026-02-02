@@ -29,11 +29,11 @@ regex = "1.10"
 sha2 = "0.10"
 
 # jrsonnet dependencies for evaluation
-jrsonnet-evaluator = { path = "../../crates/jrsonnet-evaluator" }
-jrsonnet-stdlib = { path = "../../crates/jrsonnet-stdlib" }
-jrsonnet-parser = { path = "../../crates/jrsonnet-parser" }
-jrsonnet-macros = { path = "../../crates/jrsonnet-macros" }
-jrsonnet-gcmodule = { version = "0.3.7" }
+jrsonnet-evaluator.workspace = true
+jrsonnet-stdlib.workspace = true
+jrsonnet-parser.workspace = true
+jrsonnet-macros.workspace = true
+jrsonnet-gcmodule.workspace = true
 
 [target.'cfg(target_os = "linux")'.dependencies]
 mimallocator = { workspace = true, optional = true }
