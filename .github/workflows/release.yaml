@@ -130,10 +130,17 @@ jobs:
     permissions:
       contents: write
     steps:
-      - name: Download release artifacts
+      - name: Download rtk artifacts
         uses: actions/download-artifact@c850b930e6ba138125429b7e5c93fc707a7f8427 # v4
         with:
           path: artifacts
+          pattern: rtk-*
+
+      - name: Download jrsonnet artifacts
+        uses: actions/download-artifact@c850b930e6ba138125429b7e5c93fc707a7f8427 # v4
+        with:
+          path: artifacts
+          pattern: jrsonnet-*
 
       - name: Prepare release assets
         run: |
