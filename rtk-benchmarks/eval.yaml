@@ -11,10 +11,8 @@ fixtures:
 tests:
   - name: "Single Static Environment"
     description: "Evaluating a single static environment with {resources_per_env} resources (3 Kubernetes objects each)."
-    warmup: 2
     command: "eval {single_static_dir}"
 
   - name: "Inline Environment File"
     description: "Evaluating an inline environment file containing {envs_per_inline_file} environments."
-    warmup: 2
     command: "eval {single_inline_file}"

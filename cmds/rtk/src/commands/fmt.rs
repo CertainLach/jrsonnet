@@ -14,10 +14,6 @@ pub struct FmtArgs {
 	#[arg(short = 'e', long, default_values_t = vec!["**/.*".to_string(), ".*".to_string(), "**/vendor/**".to_string(), "vendor/**".to_string()])]
 	pub exclude: Vec<String>,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Print formatted contents to stdout instead of writing to disk
 	#[arg(long)]
 	pub stdout: bool,

@@ -11,10 +11,8 @@ fixtures:
 tests:
   - name: "Single Static Environment"
     description: "Listing all transitive imports for a single static environment."
-    warmup: 3
     command: "tool imports {single_static_dir}"
 
   - name: "Single Inline Environment File"
     description: "Listing all transitive imports for a single inline environment file."
-    warmup: 3
     command: "tool imports {single_inline_file}"

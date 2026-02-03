@@ -11,20 +11,16 @@ fixtures:
 tests:
   - name: "Single Lib Directory (Non-Recursive)"
     description: "Counting importers for files in lib/global/ (single directory, non-recursive)."
-    warmup: 3
     command: "tool importers-count lib/global"
 
   - name: "Single Lib Directory (Recursive)"
     description: "Counting importers for files in lib/global/ recursively."
-    warmup: 3
     command: "tool importers-count lib/global --recursive"
 
   - name: "Entire Lib Directory (Non-Recursive)"
     description: "Counting importers for files in lib/ (top-level only)."
-    warmup: 2
     command: "tool importers-count lib"
 
   - name: "Entire Lib Directory (Recursive)"
     description: "Counting importers for all files in lib/ recursively."
-    warmup: 1
     command: "tool importers-count lib --recursive"

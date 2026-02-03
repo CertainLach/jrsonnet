@@ -1,9 +1,9 @@
 use std::process::Command;
 
 fn main() {
-	// Re-run if git HEAD changes
-	println!("cargo:rerun-if-changed=.git/HEAD");
-	println!("cargo:rerun-if-changed=.git/refs/");
+	// Re-run if git HEAD changes (paths relative to repo root)
+	println!("cargo:rerun-if-changed=../../.git/HEAD");
+	println!("cargo:rerun-if-changed=../../.git/refs/");
 
 	let version = get_version();
 	println!("cargo:rustc-env=RTK_VERSION={}", version);

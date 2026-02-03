@@ -11,15 +11,12 @@ fixtures:
 tests:
   - name: "Single Inline Directory (--json)"
     description: "Listing {envs_per_inline_file} environments from a single inline env directory."
-    warmup: 3
     command: "env list --json {single_inline_dir}"
 
   - name: "Single Inline File (--json)"
     description: "Listing {envs_per_inline_file} environments from a single main.jsonnet file."
-    warmup: 3
     command: "env list --json {single_inline_file}"
 
   - name: "All Environments (--json)"
     description: "Listing all {total_envs} environments with JSON output."
-    warmup: 1
     command: "env list --json {fixtures_dir}"

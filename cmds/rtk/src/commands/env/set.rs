@@ -22,10 +22,6 @@ pub struct SetArgs {
 	#[arg(long)]
 	pub inject_labels: bool,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Namespace to create objects in
 	#[arg(long)]
 	pub namespace: Option<String>,

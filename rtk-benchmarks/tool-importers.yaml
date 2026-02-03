@@ -11,25 +11,20 @@ fixtures:
 tests:
   - name: "Global Lib File"
     description: "Finding importers of the global lib file (imported by all envs)."
-    warmup: 3
     command: "tool importers {global_lib_file}"
 
   - name: "Single Env-Specific Lib File"
     description: "Finding importers of a single env-specific lib file."
-    warmup: 3
     command: "tool importers {single_env_lib_file}"
 
   - name: "All Env-Specific Lib Files"
     description: "Finding importers of all {total_env_libs} env-specific lib files."
-    warmup: 2
     command: "tool importers {all_env_lib_files}"
 
   - name: "All Lib Files"
     description: "Finding importers of all {total_lib_files} lib files (1 global + {total_env_libs} env-specific)."
-    warmup: 2
     command: "tool importers {all_lib_files}"
 
   - name: "All Jsonnet Files"
     description: "Finding importers of all jsonnet files ({static_envs} static + {inline_files} inline + {total_lib_files} lib)."
-    warmup: 1
     command: "tool importers {all_jsonnet_files}"

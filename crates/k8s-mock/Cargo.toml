@@ -1,0 +1,16 @@
+[package]
+name = "k8s-mock"
+version = "0.1.0"
+edition = "2021"
+description = "Mock Kubernetes API server for testing"
+
+[dependencies]
+bon = "3.8.2"
+kube = { version = "3.0.0", features = ["client", "webpki-roots"] }
+serde = { version = "1.0", features = ["derive"] }
+serde_json = "1.0"
+tracing = "0.1.44"
+wiremock = "0.6.5"
+
+[dev-dependencies]
+k8s-openapi = { version = "0.27.0", features = ["v1_31"] }

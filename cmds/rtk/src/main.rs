@@ -2,7 +2,6 @@ use anyhow::Result;
 use clap::{Parser, Subcommand};
 use commands::util::BrokenPipeGuard;
 use jrsonnet_evaluator::FileImportResolver;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt, EnvFilter};
 
 mod commands;
 mod config;
@@ -13,10 +12,13 @@ mod export;
 mod importers;
 mod imports;
 mod jpath;
+mod k8s;
 mod spec;
 mod tanka;
+mod telemetry;
 #[cfg(test)]
 pub mod test_utils;
+mod yaml;
 
 #[cfg(all(
 	target_os = "linux",
@@ -31,6 +33,10 @@ static GLOBAL: mimallocator::Mimalloc = mimallocator::Mimalloc;
 #[command(about = "Tanka dummy CLI", long_about = None)]
 #[command(version = env!("RTK_VERSION"))]
 struct Cli {
+	/// Log level (error, warn, info, debug, trace). Falls back to RUST_LOG env var.
+	#[arg(long, global = true)]
+	log_level: Option<tracing::Level>,
+
 	#[command(subcommand)]
 	command: Commands,
 }
@@ -80,72 +86,24 @@ enum Commands {
 	Complete(commands::complete::CompleteArgs),
 }
 
-/// Initialize tracing with logfmt output format
-fn init_logger(level: &str) {
-	let level = match level.to_lowercase().as_str() {
-		"trace" => "trace",
-		"debug" => "debug",
-		"info" => "info",
-		"warn" | "warning" => "warn",
-		"error" => "error",
-		_ => "info",
-	};
-
-	let filter = EnvFilter::try_new(level).unwrap_or_else(|_| EnvFilter::new("info"));
-
-	tracing_subscriber::registry()
-		.with(filter)
-		.with(tracing_logfmt::layer())
-		.init();
-}
-
-/// Extract log level from command
-fn get_log_level(cmd: &Commands) -> &str {
-	match cmd {
-		Commands::Apply(args) => &args.log_level,
-		Commands::Show(args) => &args.log_level,
-		Commands::Diff(args) => &args.log_level,
-		Commands::Prune(args) => &args.log_level,
-		Commands::Delete(args) => &args.log_level,
-		Commands::Env(args) => &args.log_level,
-		Commands::Status(args) => &args.log_level,
-		Commands::Export(args) => &args.log_level,
-		Commands::Fmt(args) => &args.log_level,
-		Commands::Lint(args) => &args.log_level,
-		Commands::Eval(args) => &args.log_level,
-		Commands::Init(args) => &args.log_level,
-		Commands::Tool(args) => {
-			// Prefer log_level from subcommand if available, otherwise use ToolArgs log_level
-			match &args.command {
-				crate::commands::tool::ToolCommands::Importers(importers_args) => {
-					&importers_args.log_level
-				}
-				crate::commands::tool::ToolCommands::Imports(imports_args) => {
-					&imports_args.log_level
-				}
-				crate::commands::tool::ToolCommands::Jpath(jpath_args) => &jpath_args.log_level,
-				crate::commands::tool::ToolCommands::ImportersCount(importers_count_args) => {
-					&importers_count_args.log_level
-				}
-				crate::commands::tool::ToolCommands::Charts(_) => &args.log_level,
-			}
-		}
-		Commands::Complete(_) => "info",
-	}
-}
-
 fn main() -> Result<()> {
 	let cli = Cli::parse();
 
-	// Initialize logger based on log level
-	init_logger(get_log_level(&cli.command));
+	// Initialize telemetry (tracing + optional OpenTelemetry)
+	// Guard ensures traces are flushed on exit
+	let _telemetry_guard = telemetry::init(cli.log_level)?;
 
 	let stdout = BrokenPipeGuard::new(std::io::stdout());
 
 	match cli.command {
 		Commands::Apply(args) => commands::apply::run(args, stdout),
 		Commands::Show(args) => commands::show::run(args, stdout),
-		Commands::Diff(args) => commands::diff::run(args, stdout),
+		Commands::Diff(args) => {
+			if commands::diff::run(args, stdout)? {
+				std::process::exit(commands::diff::EXIT_CODE_DIFF_FOUND);
+			}
+			Ok(())
+		}
 		Commands::Prune(args) => commands::prune::run(args, stdout),
 		Commands::Delete(args) => commands::delete::run(args, stdout),
 		Commands::Env(args) => commands::env::run(args, stdout),

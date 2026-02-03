@@ -1,0 +1,16 @@
+name: "Diff"
+id: "diff"
+description: "Comparing rtk diff with tk diff using mock Kubernetes cluster."
+
+# Diff benchmarks use pre-existing test fixtures, not generated ones
+fixtures_dir: "cmds/rtk/tests/testdata/diff"
+
+# Each test fixture directory contains:
+#   environment/ - the Tanka environment
+#   cluster/     - YAML files representing cluster state (served by mock-k8s-server)
+
+tests:
+  - name: "cluster_scoped"
+  - name: "configmap_unchanged"
+  - name: "deployment_nested_changes"
+  

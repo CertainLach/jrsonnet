@@ -13,10 +13,6 @@ pub struct JpathArgs {
 	/// Show debug info
 	#[arg(short = 'd', long)]
 	pub debug: bool,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 }
 
 /// Run the jpath subcommand.

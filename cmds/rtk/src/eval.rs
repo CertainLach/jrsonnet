@@ -12,6 +12,7 @@ use jrsonnet_evaluator::{
 	State,
 };
 use jrsonnet_stdlib::ContextInitializer;
+use tracing::instrument;
 
 use crate::{
 	config::{uses_jrsonnet_binary, RtkConfig},
@@ -55,7 +56,7 @@ singleEnv(main)
 "#;
 
 /// Options for evaluation
-#[derive(Debug, Default, Clone)]
+#[derive(Debug, Default, Clone, PartialEq, Eq)]
 pub struct EvalOpts {
 	/// External variables (string values)
 	pub ext_str: HashMap<String, String>,
@@ -87,6 +88,7 @@ pub struct EvalResult {
 }
 
 /// Evaluate a tanka environment at the given path
+#[instrument(skip(opts), fields(path = %path))]
 pub fn eval(path: &str, opts: EvalOpts) -> Result<EvalResult> {
 	// Resolve jpath (find root, base, import paths)
 	let jpath_result = jpath::resolve(path)?;
@@ -110,6 +112,7 @@ pub fn eval(path: &str, opts: EvalOpts) -> Result<EvalResult> {
 ///
 /// This is the core evaluation function that can be used with any ImportResolver,
 /// enabling testing with in-memory resolvers.
+#[instrument(skip_all, fields(entrypoint = %entrypoint.display()))]
 pub fn eval_with_resolver(
 	import_resolver: impl ImportResolver,
 	entrypoint: &Path,
@@ -166,6 +169,7 @@ pub fn load_spec(jpath: &jpath::JpathResult) -> Result<Option<Environment>> {
 }
 
 /// Set up the jrsonnet evaluator state with proper configuration
+#[instrument(skip_all)]
 fn setup_state(
 	import_resolver: impl ImportResolver,
 	config_base: Option<&Path>,
@@ -326,6 +330,7 @@ pub fn register_native_functions(context: &ContextInitializer) {
 }
 
 /// Evaluate the entrypoint file
+#[instrument(skip_all)]
 fn evaluate_file(state: &State, entrypoint: &Path, opts: &EvalOpts) -> Result<String> {
 	// For import statements in eval scripts, use just the filename
 	// The import resolver will find it in the import paths
@@ -597,8 +602,10 @@ mod tests {
 			}"#,
 		);
 
-		let mut opts = EvalOpts::default();
-		opts.eval_expr = Some(".data.nested".to_string());
+		let opts = EvalOpts {
+			eval_expr: Some(".data.nested".to_string()),
+			..Default::default()
+		};
 
 		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
 		assert_eq!(result.value["value"], 42);

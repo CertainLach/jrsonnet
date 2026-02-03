@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: validate-config
+  namespace: default
+data:
+  key: old-value

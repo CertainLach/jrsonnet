@@ -5,22 +5,34 @@
 # ///
 """
 Benchmark runner that executes benchmarks defined in YAML config files.
+
+Supports two modes:
+1. Generated fixtures mode: Uses `fixtures` config to generate test environments
+2. Diff mode: Uses `fixtures_dir` to point to pre-existing test fixtures with mock K8s server
 """
 
 import argparse
+import json
 import os
+import signal
 import shutil
 import subprocess
 import sys
 import tempfile
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Literal
 
 import yaml
 
 
+# =============================================================================
+# Configuration Classes
+# =============================================================================
+
 @dataclass
-class Fixtures:
+class GeneratedFixtures:
+    """Configuration for dynamically generated fixtures."""
     static_envs: int
     inline_files: int
     envs_per_inline_file: int
@@ -32,127 +44,165 @@ class Fixtures:
 
     @property
     def total_env_libs(self) -> int:
-        """Number of env-specific lib files (one per static env + one per inline file)."""
         return self.static_envs + self.inline_files
 
     @property
     def total_lib_files(self) -> int:
-        """Total lib files including global lib."""
         return 1 + self.total_env_libs
 
 
 @dataclass
 class Test:
+    """A single benchmark test case."""
     name: str
-    description: str
-    warmup: int
-    command: str
+    description: str = ""
+    command: str = ""  # Empty for diff benchmarks (implicit command)
 
 
 @dataclass
 class BenchmarkConfig:
+    """Configuration for a benchmark suite."""
     name: str
     id: str
     description: str
-    fixtures: Fixtures
     tests: list[Test]
-    setup: str | None = None  # Optional setup command run once before benchmarks
-    prepare: str | None = None  # Optional prepare command run before each benchmark iteration
+    mode: Literal["generated", "diff"]
+    # Generated fixtures mode
+    fixtures: GeneratedFixtures | None = None
+    setup: str | None = None
+    prepare: str | None = None
+    # Diff mode
+    fixtures_dir: str | None = None
 
     @classmethod
-    def from_yaml(cls, path: Path) -> "BenchmarkConfig":
+    def from_yaml(cls, path: Path, repo_root: Path) -> "BenchmarkConfig":
         with open(path) as f:
             data = yaml.safe_load(f)
 
-        fixtures = Fixtures(**data["fixtures"])
-        tests = [Test(**t) for t in data["tests"]]
+        # Detect mode based on config
+        if "fixtures_dir" in data:
+            mode = "diff"
+            fixtures = None
+            fixtures_dir = str(repo_root / data["fixtures_dir"])
+            tests = [Test(name=t["name"]) for t in data["tests"]]
+        else:
+            mode = "generated"
+            fixtures = GeneratedFixtures(**data["fixtures"])
+            fixtures_dir = None
+            tests = [Test(**t) for t in data["tests"]]
 
         return cls(
             name=data["name"],
             id=data["id"],
             description=data["description"],
-            fixtures=fixtures,
             tests=tests,
+            mode=mode,
+            fixtures=fixtures,
+            fixtures_dir=fixtures_dir,
             setup=data.get("setup"),
             prepare=data.get("prepare"),
         )
 
 
+# =============================================================================
+# Benchmark Runner
+# =============================================================================
+
 class BenchmarkRunner:
-    def __init__(self, config: BenchmarkConfig, repo_root: Path, hyperfine_args: list[str], rtk_base_path: Path | None = None):
+    def __init__(
+        self,
+        config: BenchmarkConfig,
+        repo_root: Path,
+        hyperfine_args: list[str],
+        rtk_base_path: Path | None = None,
+    ):
         self.config = config
         self.repo_root = repo_root
         self.hyperfine_args = hyperfine_args
-        self.rtk_base_path = rtk_base_path  # Pre-built rtk binary for baseline comparison
+        self.rtk_base_path = rtk_base_path
         self.rtk: Path | None = None
         self.rtk_base: Path | None = None
+        self.mock_server: Path | None = None
+        self.mock_server_pid: int | None = None
         self.fixtures_dir: Path | None = None
         self.export_dir_tk: Path | None = None
         self.export_dir_rtk: Path | None = None
         self.export_dir_rtk_base: Path | None = None
 
+    # -------------------------------------------------------------------------
+    # Setup & Build
+    # -------------------------------------------------------------------------
+
     def check_dependencies(self) -> None:
         """Check that required commands are available."""
-        for cmd in ["tk", "hyperfine", "jq", "cargo"]:
+        required = ["tk", "hyperfine", "cargo"]
+        if self.config.mode == "generated":
+            required.append("jq")
+
+        for cmd in required:
             result = subprocess.run(["which", cmd], capture_output=True)
             if result.returncode != 0:
-                print(f"Error: {cmd} is required but not found in PATH", file=sys.stderr)
+                print(
+                    f"Error: {cmd} is required but not found in PATH", file=sys.stderr)
                 sys.exit(1)
 
-    def build_rtk(self) -> None:
-        """Build rtk in release mode."""
-        print("Building rtk in release mode...", file=sys.stderr)
+    def build_binaries(self) -> None:
+        """Build rtk (and mock-k8s-server for diff mode) in release mode."""
+        packages = ["rtk"]
+        if self.config.mode == "diff":
+            packages.append("mock-k8s-server")
+
+        print(
+            f"Building {', '.join(packages)} in release mode...", file=sys.stderr)
         subprocess.run(
-            ["cargo", "build", "--release", "-p", "rtk"],
+            ["cargo", "build", "--release"] + [f"-p={p}" for p in packages],
             cwd=self.repo_root,
             check=True,
         )
         self.rtk = self.repo_root / "target" / "release" / "rtk"
+        if self.config.mode == "diff":
+            self.mock_server = self.repo_root / "target" / "release" / "mock-k8s-server"
 
     def build_rtk_base(self) -> None:
-        """Build rtk from base branch if BENCHMARK_BASE_REF is set, or use --rtk-base-path if provided."""
-        # Use pre-built binary if provided via CLI
+        """Build rtk from base branch if BENCHMARK_BASE_REF is set, or use --rtk-base-path."""
         if self.rtk_base_path:
             if not self.rtk_base_path.exists():
-                print(f"Error: rtk-base-path does not exist: {self.rtk_base_path}", file=sys.stderr)
+                print(
+                    f"Error: rtk-base-path does not exist: {self.rtk_base_path}", file=sys.stderr)
                 sys.exit(1)
-            self.rtk_base = self.rtk_base_path.resolve()  # Make absolute
+            self.rtk_base = self.rtk_base_path.resolve()
             version = subprocess.run(
                 [str(self.rtk_base), "--version"],
                 capture_output=True,
                 text=True,
             ).stdout.strip()
-            print(f"Using pre-built rtk-base: {self.rtk_base} ({version})", file=sys.stderr)
+            print(
+                f"Using pre-built rtk-base: {self.rtk_base} ({version})", file=sys.stderr)
             return
 
         base_ref = os.environ.get("BENCHMARK_BASE_REF", "")
         if not base_ref:
-            self.rtk_base = None
             return
 
-        print(f"Building rtk from base branch ({base_ref})...", file=sys.stderr)
-
-        # Use git worktree to create a separate working directory
-        # This avoids checkout conflicts and doesn't require network access
+        print(
+            f"Building rtk from base branch ({base_ref})...", file=sys.stderr)
         worktree_dir = self.repo_root / "target-base-src"
 
-        # Remove existing worktree if present
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(worktree_dir)],
             cwd=self.repo_root,
-            capture_output=True,  # Ignore errors if worktree doesn't exist
+            capture_output=True,
         )
         if worktree_dir.exists():
             shutil.rmtree(worktree_dir)
 
-        # Create worktree at the base branch
         subprocess.run(
-            ["git", "worktree", "add", "--quiet", "--detach", str(worktree_dir), f"origin/{base_ref}"],
+            ["git", "worktree", "add", "--quiet", "--detach",
+                str(worktree_dir), f"origin/{base_ref}"],
             cwd=self.repo_root,
             check=True,
         )
 
-        # Build to separate target directory (in main repo, not worktree)
         env = os.environ.copy()
         env["CARGO_TARGET_DIR"] = str(self.repo_root / "target-base")
         subprocess.run(
@@ -164,7 +214,6 @@ class BenchmarkRunner:
 
         self.rtk_base = self.repo_root / "target-base" / "release" / "rtk"
 
-        # Clean up worktree
         subprocess.run(
             ["git", "worktree", "remove", "--force", str(worktree_dir)],
             cwd=self.repo_root,
@@ -178,11 +227,15 @@ class BenchmarkRunner:
         ).stdout.strip()
         print(f"Built rtk-base: {version}", file=sys.stderr)
 
+    # -------------------------------------------------------------------------
+    # Generated Fixtures Mode
+    # -------------------------------------------------------------------------
+
     def generate_fixtures(self, fixtures_dir: Path) -> None:
-        """Generate test fixtures."""
+        """Generate test fixtures for generated mode."""
+        assert self.config.fixtures is not None
         self.fixtures_dir = fixtures_dir
 
-        # Source the bash library and call generate_fixtures
         script = f"""
         set -euo pipefail
         NUM_STATIC_ENVS={self.config.fixtures.static_envs}
@@ -197,29 +250,20 @@ class BenchmarkRunner:
     def get_path_vars(self, export_dir: Path | None = None) -> dict[str, str]:
         """Get path variables for command substitution."""
         assert self.fixtures_dir is not None
+        assert self.config.fixtures is not None
 
-        lib_dir = self.fixtures_dir / "lib"
-
-        # Generate all static env paths
         all_static_env_paths = " ".join(
             str(self.fixtures_dir / f"static-{i:04d}")
             for i in range(1, self.config.fixtures.static_envs + 1)
         )
-
-        # Generate all inline file paths
         all_inline_file_paths = " ".join(
             str(self.fixtures_dir / f"inline-{i:02d}" / "main.jsonnet")
             for i in range(1, self.config.fixtures.inline_files + 1)
         )
-
-        # Generate all static env main.jsonnet paths (absolute for export commands)
         all_static_main_files = " ".join(
             str(self.fixtures_dir / f"static-{i:04d}" / "main.jsonnet")
             for i in range(1, self.config.fixtures.static_envs + 1)
         )
-
-        # Generate all env-specific lib file paths (lib/env-*/main.libsonnet)
-        # Use relative paths for tool importers (which runs from fixtures_dir)
         all_static_lib_files_rel = [
             f"lib/env-static-{i:04d}/main.libsonnet"
             for i in range(1, self.config.fixtures.static_envs + 1)
@@ -228,13 +272,10 @@ class BenchmarkRunner:
             f"lib/env-inline-{i:02d}/main.libsonnet"
             for i in range(1, self.config.fixtures.inline_files + 1)
         ]
-        all_env_lib_files = " ".join(all_static_lib_files_rel + all_inline_lib_files_rel)
-
-        # Global lib + all env-specific libs (relative paths)
+        all_env_lib_files = " ".join(
+            all_static_lib_files_rel + all_inline_lib_files_rel)
         global_lib_file = "lib/global/main.libsonnet"
         all_lib_files = f"{global_lib_file} {all_env_lib_files}"
-
-        # All jsonnet files for tool importers (relative paths, runs from fixtures_dir)
         all_static_main_files_rel = " ".join(
             f"static-{i:04d}/main.jsonnet"
             for i in range(1, self.config.fixtures.static_envs + 1)
@@ -280,16 +321,14 @@ class BenchmarkRunner:
 
     def run_command(self, binary: str, command: str) -> subprocess.CompletedProcess:
         """Run a command with the given binary."""
-        full_cmd = f"{binary} {command}"
         return subprocess.run(
-            ["sh", "-c", full_cmd],
+            ["sh", "-c", f"{binary} {command}"],
             capture_output=True,
             text=True,
             cwd=self.fixtures_dir,
         )
 
     def _clear_export_dir(self, export_dir: Path) -> None:
-        """Clear an export directory."""
         if export_dir.exists():
             shutil.rmtree(export_dir)
             export_dir.mkdir()
@@ -299,142 +338,103 @@ class BenchmarkRunner:
         if not self.config.setup:
             return
 
-        # Clear export directories before setup
         print("Clearing export directories...", file=sys.stderr, flush=True)
-        assert self.export_dir_tk is not None
-        assert self.export_dir_rtk is not None
+        assert self.export_dir_tk and self.export_dir_rtk
         self._clear_export_dir(self.export_dir_tk)
         self._clear_export_dir(self.export_dir_rtk)
         if self.export_dir_rtk_base:
             self._clear_export_dir(self.export_dir_rtk_base)
 
-        # Run setup with tk
-        tk_command = self.expand_command(self.config.setup, self.export_dir_tk)
-        print(f"Running setup: tk {tk_command}...", file=sys.stderr, flush=True)
-        tk_result = self.run_command("tk", tk_command)
-        if tk_result.returncode != 0:
-            print(f"ERROR: tk setup failed with exit code {tk_result.returncode}", file=sys.stderr)
-            print(f"stderr: {tk_result.stderr}", file=sys.stderr)
-            sys.exit(1)
-
-        # Run setup with rtk
-        rtk_command = self.expand_command(self.config.setup, self.export_dir_rtk)
-        print(f"Running setup: rtk {rtk_command}...", file=sys.stderr, flush=True)
-        rtk_result = self.run_command(str(self.rtk), rtk_command)
-        if rtk_result.returncode != 0:
-            print(f"ERROR: rtk setup failed with exit code {rtk_result.returncode}", file=sys.stderr)
-            print(f"stderr: {rtk_result.stderr}", file=sys.stderr)
-            sys.exit(1)
-
-        # Run setup with rtk-base if available
-        if self.rtk_base and self.export_dir_rtk_base:
-            rtk_base_command = self.expand_command(self.config.setup, self.export_dir_rtk_base)
-            print(f"Running setup: rtk-base {rtk_base_command}...", file=sys.stderr, flush=True)
-            rtk_base_result = self.run_command(str(self.rtk_base), rtk_base_command)
-            if rtk_base_result.returncode != 0:
-                print(f"ERROR: rtk-base setup failed with exit code {rtk_base_result.returncode}", file=sys.stderr)
-                print(f"stderr: {rtk_base_result.stderr}", file=sys.stderr)
+        for name, binary, export_dir in [
+            ("tk", "tk", self.export_dir_tk),
+            ("rtk", str(self.rtk), self.export_dir_rtk),
+            ("rtk-base", str(self.rtk_base)
+             if self.rtk_base else None, self.export_dir_rtk_base),
+        ]:
+            if binary is None or export_dir is None:
+                continue
+            command = self.expand_command(self.config.setup, export_dir)
+            print(f"Running setup: {name} {command}...",
+                  file=sys.stderr, flush=True)
+            result = self.run_command(binary, command)
+            if result.returncode != 0:
+                print(
+                    f"ERROR: {name} setup failed with exit code {result.returncode}", file=sys.stderr)
+                print(f"stderr: {result.stderr}", file=sys.stderr)
                 sys.exit(1)
 
         print("Setup complete.", file=sys.stderr)
 
     def validate_test(self, test: Test) -> None:
         """Validate that tk and rtk produce matching output."""
-        # Run prepare command before validation if configured (e.g., clear export dir)
         if self.config.prepare:
-            tk_prepare = self.expand_command(self.config.prepare, self.export_dir_tk)
-            rtk_prepare = self.expand_command(self.config.prepare, self.export_dir_rtk)
-            subprocess.run(["sh", "-c", tk_prepare], cwd=self.fixtures_dir, check=True)
-            subprocess.run(["sh", "-c", rtk_prepare], cwd=self.fixtures_dir, check=True)
+            tk_prepare = self.expand_command(
+                self.config.prepare, self.export_dir_tk)
+            rtk_prepare = self.expand_command(
+                self.config.prepare, self.export_dir_rtk)
+            subprocess.run(["sh", "-c", tk_prepare],
+                           cwd=self.fixtures_dir, check=True)
+            subprocess.run(["sh", "-c", rtk_prepare],
+                           cwd=self.fixtures_dir, check=True)
 
         tk_command = self.expand_command(test.command, self.export_dir_tk)
         rtk_command = self.expand_command(test.command, self.export_dir_rtk)
-        print(f"Validating {test.name}... ", end="", file=sys.stderr, flush=True)
+        print(f"Validating {test.name}... ",
+              end="", file=sys.stderr, flush=True)
 
         tk_result = self.run_command("tk", tk_command)
         rtk_result = self.run_command(str(self.rtk), rtk_command)
 
         if tk_result.returncode != 0:
-            print(f"ERROR: tk failed with exit code {tk_result.returncode}", file=sys.stderr)
-            print(f"stderr: {tk_result.stderr}", file=sys.stderr)
+            print(
+                f"ERROR: tk failed with exit code {tk_result.returncode}", file=sys.stderr)
             self._fail_validation(f"tk command failed: {tk_command}")
 
         if rtk_result.returncode != 0:
-            print(f"ERROR: rtk failed with exit code {rtk_result.returncode}", file=sys.stderr)
-            print(f"stderr: {rtk_result.stderr}", file=sys.stderr)
+            print(
+                f"ERROR: rtk failed with exit code {rtk_result.returncode}", file=sys.stderr)
             self._fail_validation(f"rtk command failed: {rtk_command}")
 
-        # For JSON output, compare parsed JSON for equality (order-independent)
-        # For export commands, output goes to files so skip stdout comparison
-        # Otherwise compare byte-for-byte
         if test.command.startswith("export "):
-            # Export commands write to files, stdout is just status output
             pass
         elif "--json" in test.command or test.command.startswith("eval "):
             if not self._json_equal(tk_result.stdout, rtk_result.stdout):
                 print("JSON MISMATCH!", file=sys.stderr)
-                self._show_diff("tk", "rtk", tk_result.stdout, rtk_result.stdout)
-                self._fail_validation(f"rtk JSON output differs from tk for: {test.command}")
+                self._fail_validation(
+                    f"rtk JSON output differs from tk for: {test.command}")
         else:
             if tk_result.stdout != rtk_result.stdout:
                 print("OUTPUT MISMATCH!", file=sys.stderr)
-                self._show_diff("tk", "rtk", tk_result.stdout, rtk_result.stdout)
-                self._fail_validation(f"rtk output differs from tk for: {test.command}")
+                self._fail_validation(
+                    f"rtk output differs from tk for: {test.command}")
 
         print("OK", file=sys.stderr, flush=True)
 
     def _json_equal(self, json1: str, json2: str) -> bool:
-        """Compare two JSON strings for equality (ignoring key order)."""
-        import json
         try:
             return json.loads(json1) == json.loads(json2)
         except json.JSONDecodeError:
-            # If not valid JSON, fall back to string comparison
             return json1 == json2
 
-    def _show_diff(self, name1: str, name2: str, output1: str, output2: str) -> None:
-        """Show a summary of differences between two outputs."""
-        lines1 = output1.splitlines()
-        lines2 = output2.splitlines()
-
-        print(f"\n--- {name1} ({len(lines1)} lines, {len(output1)} bytes)", file=sys.stderr)
-        print(f"+++ {name2} ({len(lines2)} lines, {len(output2)} bytes)", file=sys.stderr)
-
-        # Show first difference
-        for i, (l1, l2) in enumerate(zip(lines1, lines2)):
-            if l1 != l2:
-                print(f"\nFirst difference at line {i + 1}:", file=sys.stderr)
-                print(f"  {name1}: {l1[:200]!r}", file=sys.stderr)
-                print(f"  {name2}: {l2[:200]!r}", file=sys.stderr)
-                break
-        else:
-            if len(lines1) != len(lines2):
-                print(f"\nLine count differs: {len(lines1)} vs {len(lines2)}", file=sys.stderr)
-
-        sys.stderr.flush()
-
     def _fail_validation(self, message: str) -> None:
-        """Print validation failure and exit."""
         print(f"\n## Validation Failed\n\n{message}\n", flush=True)
-        sys.stdout.flush()
-        sys.stderr.flush()
         sys.exit(1)
 
     def _check_rtk_base_supports_command(self, test: Test) -> bool:
-        """Check if rtk-base supports the given command (doesn't return 'not implemented')."""
         if not self.rtk_base:
             return False
-        rtk_base_command = self.expand_command(test.command, self.export_dir_rtk_base)
+        rtk_base_command = self.expand_command(
+            test.command, self.export_dir_rtk_base)
         result = self.run_command(str(self.rtk_base), rtk_base_command)
         if result.returncode != 0:
-            # Check if it's "not implemented" error
             if "not implemented" in result.stderr.lower() or "not implemented" in result.stdout.lower():
-                print(f"  (rtk-base does not support this command, skipping from benchmark)", file=sys.stderr)
+                print(
+                    "  (rtk-base does not support this command, skipping)", file=sys.stderr)
                 return False
         return True
 
-    def run_benchmark(self, test: Test, output_file: Path, index: int) -> dict:
-        """Run hyperfine benchmark for a test. Returns summary dict."""
+    def run_generated_benchmark(self, test: Test, output_file: Path, index: int) -> dict:
+        """Run benchmark for generated fixtures mode."""
         tk_command = self.expand_command(test.command, self.export_dir_tk)
         rtk_command = self.expand_command(test.command, self.export_dir_rtk)
         description = self.expand_command(test.description)
@@ -444,85 +444,169 @@ class BenchmarkRunner:
         print(description)
         print()
 
-        # Check if rtk-base supports this command
-        include_rtk_base = self.rtk_base and self.export_dir_rtk_base and self._check_rtk_base_supports_command(test)
+        include_rtk_base = self.rtk_base and self.export_dir_rtk_base and self._check_rtk_base_supports_command(
+            test)
 
-        # Build hyperfine command - commands need to run from fixtures_dir
         temp_md = output_file.with_suffix(f".{index}")
         temp_json = output_file.with_suffix(f".{index}.json")
         cd_prefix = f"cd {self.fixtures_dir} && "
 
-        # Build prepare commands if configured (each tool needs its own prepare)
-        # Wrap in sh -c so shell operators like && work
         prepare_args = []
         if self.config.prepare:
-            tk_prepare = self.expand_command(self.config.prepare, self.export_dir_tk)
-            rtk_prepare = self.expand_command(self.config.prepare, self.export_dir_rtk)
-            prepare_args = ["--prepare", f"sh -c '{tk_prepare}'", "--prepare", f"sh -c '{rtk_prepare}'"]
+            tk_prepare = self.expand_command(
+                self.config.prepare, self.export_dir_tk)
+            rtk_prepare = self.expand_command(
+                self.config.prepare, self.export_dir_rtk)
+            prepare_args = [
+                "--prepare", f"sh -c '{tk_prepare}'", "--prepare", f"sh -c '{rtk_prepare}'"]
             if include_rtk_base:
-                rtk_base_prepare = self.expand_command(self.config.prepare, self.export_dir_rtk_base)
-                prepare_args.extend(["--prepare", f"sh -c '{rtk_base_prepare}'"])
+                rtk_base_prepare = self.expand_command(
+                    self.config.prepare, self.export_dir_rtk_base)
+                prepare_args.extend(
+                    ["--prepare", f"sh -c '{rtk_base_prepare}'"])
 
         args = [
-            "hyperfine",
-            "-N",
-            "--warmup", str(test.warmup),
+            "hyperfine", "-N",
             *self.hyperfine_args,
             *prepare_args,
             "--export-markdown", str(temp_md),
             "--export-json", str(temp_json),
+            "--warmup", "1",
             "-n", "tk", f"sh -c '{cd_prefix}tk {tk_command} >/dev/null'",
             "-n", "rtk", f"sh -c '{cd_prefix}{self.rtk} {rtk_command} >/dev/null'",
         ]
 
         if include_rtk_base:
-            rtk_base_command = self.expand_command(test.command, self.export_dir_rtk_base)
-            args.extend(["-n", "rtk-base", f"sh -c '{cd_prefix}{self.rtk_base} {rtk_base_command} >/dev/null'"])
+            rtk_base_command = self.expand_command(
+                test.command, self.export_dir_rtk_base)
+            args.extend(
+                ["-n", "rtk-base", f"sh -c '{cd_prefix}{self.rtk_base} {rtk_base_command} >/dev/null'"])
 
-        # Capture stdout to hide hyperfine's progress output from markdown
         subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
 
-        # Append markdown table to output
         with open(temp_md) as f:
             print(f.read())
         print()
 
-        # Parse JSON and return summary
-        return self._parse_benchmark_json(test.name, temp_json)
+        return self._parse_benchmark_json(test.name, temp_json, "tk", "rtk", "rtk-base")
 
-    def _parse_benchmark_json(self, test_name: str, json_path: Path) -> dict:
-        """Parse hyperfine JSON output and generate summary."""
-        import json
+    # -------------------------------------------------------------------------
+    # Diff Mode
+    # -------------------------------------------------------------------------
+
+    def start_mock_server(self, cluster_dir: Path, kubeconfig_path: Path, pid_file: Path) -> None:
+        """Start the mock Kubernetes server."""
+        assert self.mock_server is not None
+        # The mock server daemonizes by default. When it daemonizes, the parent
+        # process exits after writing the ready signal. We must use DEVNULL for
+        # stdio to prevent Python from waiting for the daemon's inherited file
+        # descriptors to close.
+        result = subprocess.run(
+            [str(self.mock_server), "-d", str(cluster_dir), "-k",
+             str(kubeconfig_path), "-p", str(pid_file)],
+            stdin=subprocess.DEVNULL,
+            stdout=subprocess.DEVNULL,
+            stderr=subprocess.DEVNULL,
+            timeout=10,
+        )
+        if result.returncode != 0:
+            print(
+                f"Failed to start mock server (exit code {result.returncode})", file=sys.stderr)
+            sys.exit(1)
+        self.mock_server_pid = int(pid_file.read_text().strip())
+
+    def stop_mock_server(self) -> None:
+        """Stop the mock Kubernetes server."""
+        if self.mock_server_pid:
+            try:
+                os.kill(self.mock_server_pid, signal.SIGTERM)
+            except ProcessLookupError:
+                pass
+            self.mock_server_pid = None
+
+    def run_diff_benchmark(self, test: Test, temp_dir: Path, output_file: Path, index: int) -> dict:
+        """Run benchmark for diff mode."""
+        assert self.config.fixtures_dir is not None
+        test_dir = Path(self.config.fixtures_dir) / test.name
+        env_dir = test_dir / "environment"
+        cluster_dir = test_dir / "cluster"
+
+        print(f"### {test.name}")
+        print()
+
+        if not cluster_dir.exists():
+            print("_Skipped (no cluster state)_")
+            print()
+            return {"name": test.name, "skipped": True}
+
+        kubeconfig = temp_dir / f"kubeconfig-{test.name}.yaml"
+        pid_file = temp_dir / f"mock-{test.name}.pid"
+
+        self.start_mock_server(cluster_dir, kubeconfig, pid_file)
+
+        try:
+            temp_md = output_file.with_suffix(f".{index}")
+            temp_json = output_file.with_suffix(f".{index}.json")
+
+            tk_cmd = f"cd {env_dir} && KUBECONFIG={kubeconfig} tk diff . </dev/null 2>/dev/null || true"
+            rtk_cmd = f"KUBECONFIG={kubeconfig} {self.rtk} diff {env_dir} </dev/null 2>/dev/null || true"
+
+            args = [
+                "hyperfine", "-N",
+                *self.hyperfine_args,
+                "--export-markdown", str(temp_md),
+                "--export-json", str(temp_json),
+                "-n", "tk diff", f"sh -c '{tk_cmd}'",
+                "-n", "rtk diff", f"sh -c '{rtk_cmd}'",
+            ]
+
+            if self.rtk_base:
+                rtk_base_cmd = f"KUBECONFIG={kubeconfig} {self.rtk_base} diff {env_dir} </dev/null 2>/dev/null || true"
+                check_result = subprocess.run(
+                    ["sh", "-c", rtk_base_cmd], capture_output=True, text=True, timeout=30)
+                if "not implemented" not in check_result.stderr.lower():
+                    args.extend(
+                        ["-n", "rtk-base diff", f"sh -c '{rtk_base_cmd}'"])
+
+            subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
+
+            with open(temp_md) as f:
+                print(f.read())
+            print()
+
+            return self._parse_benchmark_json(test.name, temp_json, "tk diff", "rtk diff", "rtk-base diff")
+
+        finally:
+            self.stop_mock_server()
+
+    # -------------------------------------------------------------------------
+    # Common
+    # -------------------------------------------------------------------------
+
+    def _parse_benchmark_json(self, test_name: str, json_path: Path, tk_name: str, rtk_name: str, rtk_base_name: str) -> dict:
+        """Parse hyperfine JSON output."""
         with open(json_path) as f:
             data = json.load(f)
 
         results = {}
         for result in data["results"]:
-            name = result["command"]
-            # hyperfine uses the -n name as the command field
-            results[name] = {
-                "mean": result["mean"],
-                "stddev": result["stddev"],
-            }
+            results[result["command"]] = {
+                "mean": result["mean"], "stddev": result["stddev"]}
 
         summary = {"name": test_name}
 
-        # Calculate comparisons
-        if "tk" in results and "rtk" in results:
-            tk_mean = results["tk"]["mean"]
-            rtk_mean = results["rtk"]["mean"]
-            rtk_stddev = results["rtk"]["stddev"]
-            speedup = tk_mean / rtk_mean
-            summary["vs_tk"] = round(speedup, 2)
+        if tk_name in results and rtk_name in results:
+            tk_mean = results[tk_name]["mean"]
+            rtk_mean = results[rtk_name]["mean"]
+            summary["vs_tk"] = round(tk_mean / rtk_mean, 2)
             summary["rtk_mean"] = rtk_mean
-            summary["rtk_stddev"] = rtk_stddev
+            summary["rtk_stddev"] = results[rtk_name]["stddev"]
 
-        if "rtk-base" in results and "rtk" in results:
-            base_mean = results["rtk-base"]["mean"]
-            base_stddev = results["rtk-base"]["stddev"]
-            rtk_mean = results["rtk"]["mean"]
-            rtk_stddev = results["rtk"]["stddev"]
-            # Check if within 1 stddev (combined)
+        if rtk_base_name in results and rtk_name in results:
+            base_mean = results[rtk_base_name]["mean"]
+            base_stddev = results[rtk_base_name]["stddev"]
+            rtk_mean = results[rtk_name]["mean"]
+            rtk_stddev = results[rtk_name]["stddev"]
             combined_stddev = (rtk_stddev**2 + base_stddev**2) ** 0.5
             diff = abs(rtk_mean - base_mean)
             if diff <= combined_stddev:
@@ -536,110 +620,116 @@ class BenchmarkRunner:
 
     def print_header(self) -> None:
         """Print benchmark header."""
-        print("<details>")
-        print("<summary>Test Configuration & Versions</summary>")
-        print()
-        print(f"**{self.config.name}**: {self.config.description}")
-        print()
-        print("### Test Configuration")
-        print()
-        print(f"- Static environments: {self.config.fixtures.static_envs}")
-        print(f"- Inline environment files: {self.config.fixtures.inline_files} "
-              f"({self.config.fixtures.envs_per_inline_file} envs each = "
-              f"{self.config.fixtures.inline_files * self.config.fixtures.envs_per_inline_file} total)")
-        print(f"- Resources per environment: {self.config.fixtures.resources_per_env}")
-        print(f"- Lib files: {self.config.fixtures.total_lib_files} "
-              f"(1 global + {self.config.fixtures.total_env_libs} env-specific)")
-        print(f"- Total environments: {self.config.fixtures.total_envs}")
-        print()
+        print("<details>", flush=True)
+        print("<summary>Test Configuration & Versions</summary>", flush=True)
+        print(flush=True)
+        print(f"**{self.config.name}**: {self.config.description}", flush=True)
+        print(flush=True)
+        print("### Test Configuration", flush=True)
+        print(flush=True)
+        if self.config.mode == "generated" and self.config.fixtures:
+            print(
+                f"- Static environments: {self.config.fixtures.static_envs}", flush=True)
+            print(f"- Inline environment files: {self.config.fixtures.inline_files} "
+                  f"({self.config.fixtures.envs_per_inline_file} envs each = "
+                  f"{self.config.fixtures.inline_files * self.config.fixtures.envs_per_inline_file} total)", flush=True)
+            print(
+                f"- Resources per environment: {self.config.fixtures.resources_per_env}", flush=True)
+            print(f"- Lib files: {self.config.fixtures.total_lib_files} "
+                  f"(1 global + {self.config.fixtures.total_env_libs} env-specific)", flush=True)
+            print(
+                f"- Total environments: {self.config.fixtures.total_envs}", flush=True)
+        else:
+            print(
+                f"- Fixtures directory: `{self.config.fixtures_dir}`", flush=True)
+            print(f"- Test cases: {len(self.config.tests)}", flush=True)
+        print(flush=True)
 
     def print_versions(self) -> None:
         """Print version information."""
-        # tk outputs version to stderr
         tk_result = subprocess.run(
-            ["tk", "--version"],
-            capture_output=True,
-            text=True,
-        )
+            ["tk", "--version"], capture_output=True, text=True)
         tk_version = (tk_result.stdout or tk_result.stderr).strip()
         rtk_version = subprocess.run(
-            [str(self.rtk), "--version"],
-            capture_output=True,
-            text=True,
-        ).stdout.strip()
+            [str(self.rtk), "--version"], capture_output=True, text=True).stdout.strip()
 
-        print("### Versions")
-        print()
-        print(f"- tk: {tk_version}")
-        print(f"- rtk: {rtk_version}")
+        print("### Versions", flush=True)
+        print(flush=True)
+        print(f"- tk: {tk_version}", flush=True)
+        print(f"- rtk: {rtk_version}", flush=True)
         if self.rtk_base:
             rtk_base_version = subprocess.run(
-                [str(self.rtk_base), "--version"],
-                capture_output=True,
-                text=True,
-            ).stdout.strip()
-            print(f"- rtk-base: {rtk_base_version}")
-        print()
-        print("</details>")
-        print()
+                [str(self.rtk_base), "--version"], capture_output=True, text=True).stdout.strip()
+            print(f"- rtk-base: {rtk_base_version}", flush=True)
+        print(flush=True)
+        print("</details>", flush=True)
+        print(flush=True)
 
     def run(self) -> None:
         """Run the benchmark."""
         self.check_dependencies()
-        self.build_rtk()
+        self.build_binaries()
         self.build_rtk_base()
 
         self.print_header()
         self.print_versions()
 
-        output_file = Path(os.environ.get("BENCHMARK_MARKDOWN_OUTPUT", tempfile.mktemp()))
+        output_file = Path(os.environ.get(
+            "BENCHMARK_MARKDOWN_OUTPUT", tempfile.mktemp()))
 
-        with tempfile.TemporaryDirectory() as tmpdir:
-            self.generate_fixtures(Path(tmpdir))
+        summaries = []
 
-            # Create separate export directories for each tool
-            self.export_dir_tk = Path(tmpdir) / "export-output-tk"
-            self.export_dir_tk.mkdir(exist_ok=True)
-            self.export_dir_rtk = Path(tmpdir) / "export-output-rtk"
-            self.export_dir_rtk.mkdir(exist_ok=True)
-            if self.rtk_base:
-                self.export_dir_rtk_base = Path(tmpdir) / "export-output-rtk-base"
-                self.export_dir_rtk_base.mkdir(exist_ok=True)
+        if self.config.mode == "generated":
+            with tempfile.TemporaryDirectory() as tmpdir:
+                self.generate_fixtures(Path(tmpdir))
 
-            # Run setup if configured (e.g., pre-export for replace benchmarks)
-            self.run_setup()
+                self.export_dir_tk = Path(tmpdir) / "export-output-tk"
+                self.export_dir_tk.mkdir(exist_ok=True)
+                self.export_dir_rtk = Path(tmpdir) / "export-output-rtk"
+                self.export_dir_rtk.mkdir(exist_ok=True)
+                if self.rtk_base:
+                    self.export_dir_rtk_base = Path(
+                        tmpdir) / "export-output-rtk-base"
+                    self.export_dir_rtk_base.mkdir(exist_ok=True)
 
-            print("Validating outputs match before benchmarking...", file=sys.stderr)
-            for test in self.config.tests:
-                self.validate_test(test)
-            print(file=sys.stderr)
+                self.run_setup()
 
-            print("## Benchmarks")
-            print()
+                print("Validating outputs match before benchmarking...",
+                      file=sys.stderr)
+                for test in self.config.tests:
+                    self.validate_test(test)
+                print(file=sys.stderr)
 
-            # Run benchmarks and collect summaries
-            summaries = []
-            for i, test in enumerate(self.config.tests, 1):
-                summary = self.run_benchmark(test, output_file, i)
-                summaries.append(summary)
+                print("## Benchmarks")
+                print()
 
-        # Write summary JSON for CI to parse
-        summary_json_path = Path(os.environ.get("BENCHMARK_SUMMARY_OUTPUT", "benchmark-summary.json"))
-        self._write_summary_json(summaries, summary_json_path)
+                for i, test in enumerate(self.config.tests, 1):
+                    summary = self.run_generated_benchmark(
+                        test, output_file, i)
+                    summaries.append(summary)
+        else:
+            print("## Benchmarks", flush=True)
+            print(flush=True)
 
-        print(f"Markdown output written to: {output_file}", file=sys.stderr)
-        print(f"Summary JSON written to: {summary_json_path}", file=sys.stderr)
+            with tempfile.TemporaryDirectory() as temp_dir:
+                for i, test in enumerate(self.config.tests, 1):
+                    summary = self.run_diff_benchmark(
+                        test, Path(temp_dir), output_file, i)
+                    summaries.append(summary)
 
-    def _write_summary_json(self, summaries: list[dict], output_path: Path) -> None:
-        """Write summary JSON file for CI to parse."""
-        import json
+        # Write summary JSON
+        summary_json_path = Path(os.environ.get(
+            "BENCHMARK_SUMMARY_OUTPUT", "benchmark-summary.json"))
         output = {
             "benchmark_name": self.config.name,
             "benchmark_id": self.config.id,
             "tests": summaries,
         }
-        with open(output_path, "w") as f:
+        with open(summary_json_path, "w") as f:
             json.dump(output, f, indent=2)
+
+        print(f"Markdown output written to: {output_file}", file=sys.stderr)
+        print(f"Summary JSON written to: {summary_json_path}", file=sys.stderr)
 
 
 def main():
@@ -647,19 +737,20 @@ def main():
         description="Run benchmarks from YAML config",
         usage="%(prog)s config [--rtk-base-path PATH] [-- hyperfine_args...]",
     )
-    parser.add_argument("config", type=Path, help="Path to benchmark YAML config file")
-    parser.add_argument("--rtk-base-path", type=Path, help="Path to pre-built rtk binary for baseline comparison")
+    parser.add_argument("config", type=Path,
+                        help="Path to benchmark YAML config file")
+    parser.add_argument("--rtk-base-path", type=Path,
+                        help="Path to pre-built rtk binary for baseline comparison")
 
-    # Use parse_known_args to separate our args from hyperfine args
     args, hyperfine_args = parser.parse_known_args()
 
-    # Remove leading '--' if present (used to separate our args from hyperfine args)
     if hyperfine_args and hyperfine_args[0] == "--":
         hyperfine_args = hyperfine_args[1:]
 
     repo_root = Path(__file__).parent.parent.resolve()
-    config = BenchmarkConfig.from_yaml(args.config)
-    runner = BenchmarkRunner(config, repo_root, hyperfine_args, rtk_base_path=args.rtk_base_path)
+    config = BenchmarkConfig.from_yaml(args.config, repo_root)
+    runner = BenchmarkRunner(
+        config, repo_root, hyperfine_args, rtk_base_path=args.rtk_base_path)
     runner.run()
 
 

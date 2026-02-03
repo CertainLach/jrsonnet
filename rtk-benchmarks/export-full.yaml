@@ -14,15 +14,12 @@ prepare: "rm -rf {export_dir} && mkdir -p {export_dir}"
 tests:
   - name: "Single Static Environment"
     description: "Exporting a single static environment with {resources_per_env} resources (3 Kubernetes objects each)."
-    warmup: 2
     command: "export {export_dir} {single_static_dir} --merge-strategy=fail-on-conflicts"
 
   - name: "Single Inline Environment"
     description: "Exporting a single inline environment file containing {envs_per_inline_file} environments."
-    warmup: 2
     command: "export {export_dir} {single_inline_file} --recursive --merge-strategy=fail-on-conflicts"
 
   - name: "All Environments"
     description: "Exporting all {total_envs} environments listed on command line."
-    warmup: 1
     command: "export {export_dir} {all_static_env_paths} {all_inline_file_paths} --recursive --merge-strategy=fail-on-conflicts"

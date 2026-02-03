@@ -40,10 +40,6 @@ pub struct DeleteArgs {
 	#[arg(long, default_value = "go")]
 	pub jsonnet_implementation: String,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Jsonnet VM max stack. Increase this if you get: max stack frames exceeded
 	#[arg(long, default_value = "500")]
 	pub max_stack: i32,

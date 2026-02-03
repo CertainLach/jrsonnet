@@ -82,9 +82,6 @@ indexmap = "2.2.3"
 itertools = "0.13.0"
 xshell = "0.2.6"
 
-lsp-server = "0.7.6"
-lsp-types = "0.96.0"
-
 regex = "1.10"
 lru = "0.16.0"
 

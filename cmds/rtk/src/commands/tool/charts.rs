@@ -9,10 +9,6 @@ use clap::{Args, Subcommand};
 pub struct ChartsArgs {
 	#[command(subcommand)]
 	pub command: ChartsCommands,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 }
 
 #[derive(Subcommand)]
@@ -37,20 +33,12 @@ pub enum ChartsCommands {
 }
 
 #[derive(Args)]
-pub struct ChartsInitArgs {
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-}
+pub struct ChartsInitArgs {}
 
 #[derive(Args)]
 pub struct ChartsAddArgs {
 	/// Charts to add (format: chart@version)
 	pub charts: Vec<String>,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 
 	/// Specify a local helm repository config file to use instead of the repositories in the chartfile.yaml. For use with private repositories
 	#[arg(long)]
@@ -64,18 +52,10 @@ pub struct ChartsAddRepoArgs {
 
 	/// Repository URL
 	pub url: String,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 }
 
 #[derive(Args)]
 pub struct ChartsVendorArgs {
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Also remove non-vendored files from the destination directory
 	#[arg(long)]
 	pub prune: bool,
@@ -86,18 +66,10 @@ pub struct ChartsVendorArgs {
 }
 
 #[derive(Args)]
-pub struct ChartsConfigArgs {
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-}
+pub struct ChartsConfigArgs {}
 
 #[derive(Args)]
 pub struct ChartsVersionCheckArgs {
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Pretty print json output with indents
 	#[arg(long)]
 	pub pretty_print: bool,

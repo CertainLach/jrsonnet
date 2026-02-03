@@ -257,7 +257,7 @@ fn build_symlink_map(root: &str) -> Result<HashMap<String, Vec<(String, String)>
 	// Build the final map
 	let mut symlink_map: HashMap<String, Vec<(String, String)>> = HashMap::new();
 	for (key, value) in symlink_entries {
-		symlink_map.entry(key).or_insert_with(Vec::new).push(value);
+		symlink_map.entry(key).or_default().push(value);
 	}
 
 	Ok(symlink_map)

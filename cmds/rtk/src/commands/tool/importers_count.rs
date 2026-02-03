@@ -21,10 +21,6 @@ pub struct ImportersCountArgs {
 	#[arg(long)]
 	pub filename_regex: Option<String>,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Find files recursively
 	#[arg(long)]
 	pub recursive: bool,
@@ -144,7 +140,6 @@ mod tests {
 				.to_string_lossy()
 				.to_string(),
 			filename_regex: None,
-			log_level: "info".to_string(),
 			recursive: true,
 			root: test_root().to_string_lossy().to_string(),
 		};
@@ -165,7 +160,6 @@ mod tests {
 				.to_string_lossy()
 				.to_string(),
 			filename_regex: None,
-			log_level: "info".to_string(),
 			recursive: true,
 			root: test_root().to_string_lossy().to_string(),
 		};
@@ -184,7 +178,6 @@ mod tests {
 		let args = ImportersCountArgs {
 			dir: test_root().join("lib/lib1").to_string_lossy().to_string(),
 			filename_regex: None,
-			log_level: "info".to_string(),
 			recursive: false,
 			root: test_root().to_string_lossy().to_string(),
 		};
@@ -203,7 +196,6 @@ mod tests {
 		let args = ImportersCountArgs {
 			dir: test_root().join("lib/lib1").to_string_lossy().to_string(),
 			filename_regex: None,
-			log_level: "info".to_string(),
 			recursive: true,
 			root: test_root().to_string_lossy().to_string(),
 		};

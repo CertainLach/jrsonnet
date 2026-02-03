@@ -18,10 +18,6 @@ pub struct ImportsArgs {
 	/// Git commit hash to check against (not implemented)
 	#[arg(short = 'c', long)]
 	pub check: Option<String>,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 }
 
 /// Run the imports subcommand.
@@ -56,7 +52,6 @@ mod tests {
 		let args = ImportsArgs {
 			path: test_root().to_string_lossy().to_string(),
 			check: None,
-			log_level: "info".to_string(),
 		};
 		let mut output = Vec::new();
 
@@ -84,7 +79,6 @@ mod tests {
 		let args = ImportsArgs {
 			path: test_root().to_string_lossy().to_string(),
 			check: Some("abc123".to_string()),
-			log_level: "info".to_string(),
 		};
 		let mut output = Vec::new();
 

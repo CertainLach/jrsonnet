@@ -1,0 +1,8 @@
+
+Added:
+  v1.ConfigMap.default.new-config
+
+Modified:
+  v1.ConfigMap.default.modified-config
+
+Total: 2 resource(s) with changes

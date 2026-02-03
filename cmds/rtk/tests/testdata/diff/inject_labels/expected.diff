@@ -1,0 +1,10 @@
+--- a/v1.ConfigMap.default.needs-label
++++ b/v1.ConfigMap.default.needs-label
+@@ -3,5 +3,7 @@
+   key: value
+ kind: ConfigMap
+ metadata:
++  labels:
++    tanka.dev/environment: 3d9735df8f3c14827a42a66acec5bc08f6d42146b8e7d489
+   name: needs-label
+   namespace: default

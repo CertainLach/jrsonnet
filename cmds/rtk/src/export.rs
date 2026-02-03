@@ -14,6 +14,8 @@ use std::{
 	thread,
 };
 
+use crate::yaml::sort_json_keys;
+
 use anyhow::{bail, Context, Result};
 use gtmpl::{FuncError, Value};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -24,7 +26,6 @@ use tracing::{debug, trace};
 use crate::{
 	discover::{find_environments_with_opts, DiscoveredEnv},
 	eval::{eval, EvalOpts},
-	jpath,
 };
 
 /// When exporting manifests to files, it becomes increasingly hard to map manifests back to its environment.
@@ -883,8 +884,7 @@ fn export_single_env(
 	// Extract Environment objects (matching Tanka's inline.go/static.go pattern)
 	trace!("[{}] Extracting Environment objects", env_display);
 	let extract_start = Instant::now();
-	let mut environments = extract_environments(&result.value, &result.spec)
-		.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?;
+	let mut environments = crate::spec::extract_environments(&result.value, &result.spec);
 	trace!(
 		"[{}] Extracted {} Environment objects in {}ms",
 		env_display,
@@ -892,23 +892,12 @@ fn export_single_env(
 		extract_start.elapsed().as_millis()
 	);
 
-	// For inline environments (those without spec.json), set metadata.namespace to the relative
-	// path from root to entrypoint. This matches Go Tanka's behavior in pkg/tanka/inline.go:inlineParse
-	// which calls spec.Parse with namespace = filepath.Rel(root, file)
+	// For inline environments, set metadata.namespace to file path
 	if result.spec.is_none() {
-		// This is an inline environment - resolve jpath to get root and entrypoint
-		if let Ok(jpath_result) = jpath::resolve(env.path.to_string_lossy().as_ref()) {
-			// Compute namespace as relative path from root to entrypoint
-			if let Ok(rel_entrypoint) = jpath_result.entrypoint.strip_prefix(&jpath_result.root) {
-				let namespace = rel_entrypoint.to_string_lossy().to_string();
-				// Set namespace on all extracted inline environments
-				for env_data in &mut environments {
-					if let Some(ref mut spec) = env_data.spec {
-						spec.metadata.namespace = Some(namespace.clone());
-					}
-				}
-			}
-		}
+		crate::spec::set_inline_env_namespace(
+			&mut environments,
+			env.path.to_string_lossy().as_ref(),
+		);
 	}
 
 	// If a specific env_name is requested, filter to only that environment
@@ -1059,14 +1048,14 @@ fn export_single_env(
 				inject_namespace(&mut manifest, &env_data.spec);
 
 				// Inject tanka.dev/environment label if needed (matching Tanka's behavior in pkg/process/process.go)
-				inject_environment_label(&mut manifest, &env_data.spec);
+				crate::spec::inject_environment_label(&mut manifest, &env_data.spec);
 
 				// Inject resourceDefaults annotations if present (matching Tanka's behavior)
 				inject_resource_defaults(&mut manifest, &env_data.spec);
 
 				// Strip null values from metadata.annotations and metadata.labels
 				// (standard Kubernetes YAML behavior - null fields should be omitted)
-				strip_null_metadata_fields(&mut manifest);
+				crate::spec::strip_null_metadata_fields(&mut manifest);
 
 				let rendered_filename = render_filename_simple(&tmpl, &manifest, &env_data.spec)
 					.map_err(|e| {
@@ -1085,7 +1074,7 @@ fn export_single_env(
 					.split('/')
 					.map(|part| part.trim())
 					.filter(|part| !part.is_empty())
-					.map(|part| sanitize_path_component(part))
+					.map(sanitize_path_component)
 					.filter(|part| !part.is_empty())
 					.collect();
 
@@ -1290,102 +1279,10 @@ fn export_manifest_file(
 	Ok(())
 }
 
-/// Extract Kubernetes manifests from evaluation result, keeping track of which Environment each came from
-/// Returns pairs of (manifest, env_spec) where env_spec is the Environment that contains this manifest
-/// Holds an Environment and its associated data for processing
-struct EnvironmentData {
-	spec: Option<crate::spec::Environment>,
-	data: JsonValue,
-}
-
-/// Extract Environment objects from evaluated Jsonnet (matching Tanka's inline.go extractEnvs)
-/// For static environments, returns a single EnvironmentData with the spec and all manifests
-/// For inline environments, returns multiple EnvironmentData, one per Environment object
-fn extract_environments(
-	value: &JsonValue,
-	default_env_spec: &Option<crate::spec::Environment>,
-) -> Result<Vec<EnvironmentData>> {
-	let mut environments = Vec::new();
-
-	// Recursively search for Environment objects
-	collect_environments_recursive(value, &mut environments);
-
-	// Deduplicate environments by name (same Environment can appear at multiple JSON paths
-	// due to Jsonnet object composition with +)
-	let mut seen_names = std::collections::HashSet::new();
-	environments.retain(|env_data| {
-		let name = env_data
-			.spec
-			.as_ref()
-			.and_then(|s| s.metadata.name.as_ref())
-			.cloned()
-			.unwrap_or_default();
-		seen_names.insert(name)
-	});
-
-	if !environments.is_empty() {
-		return Ok(environments);
-	}
-
-	// No Environment objects found - treat all output as belonging to default environment (static case)
-	environments.push(EnvironmentData {
-		spec: default_env_spec.clone(),
-		data: value.clone(),
-	});
-
-	Ok(environments)
-}
-
-/// Recursively search for Environment objects (matching Tanka's extractEnvs logic)
-fn collect_environments_recursive(value: &JsonValue, environments: &mut Vec<EnvironmentData>) {
-	match value {
-		JsonValue::Object(obj) => {
-			// Check if this object itself is an Environment
-			if obj.get("kind").and_then(|v| v.as_str()) == Some("Environment")
-				&& obj.contains_key("apiVersion")
-			{
-				// Extract data field
-				let data = obj.get("data").cloned().unwrap_or(JsonValue::Null);
-
-				// Parse this Environment object to get its spec
-				let env_spec: Result<crate::spec::Environment, _> =
-					serde_json::from_value(value.clone());
-				let env_spec_opt = match env_spec {
-					Ok(spec) => Some(spec),
-					Err(e) => {
-						eprintln!(
-							"Warning: Failed to parse Environment object: {}. Manifests will be processed without environment context.",
-							e
-						);
-						None
-					}
-				};
-
-				environments.push(EnvironmentData {
-					spec: env_spec_opt,
-					data,
-				});
-			} else {
-				// Recurse into object values
-				for v in obj.values() {
-					collect_environments_recursive(v, environments);
-				}
-			}
-		}
-		JsonValue::Array(arr) => {
-			// Recurse into array elements
-			for item in arr {
-				collect_environments_recursive(item, environments);
-			}
-		}
-		_ => {}
-	}
-}
-
 /// Extract Kubernetes manifests from evaluation result (legacy function for tests)
 #[allow(dead_code)]
 fn extract_manifests(value: &JsonValue) -> Result<Vec<JsonValue>> {
-	let environments = extract_environments(value, &None)?;
+	let environments = crate::spec::extract_environments(value, &None);
 	let mut all_manifests = Vec::new();
 	for env_data in environments {
 		collect_manifests_with_validation(&env_data.data, &mut all_manifests, "")?;
@@ -1546,182 +1443,6 @@ fn inject_namespace(manifest: &mut JsonValue, env_spec: &Option<crate::spec::Env
 	}
 }
 
-/// Inject tanka.dev/environment label into manifest metadata
-/// This replicates the behavior from Tanka's pkg/process/process.go
-fn inject_environment_label(manifest: &mut JsonValue, env_spec: &Option<crate::spec::Environment>) {
-	// Only inject if env_spec exists and injectLabels is true
-	let Some(env) = env_spec else { return };
-	if !env.spec.inject_labels.unwrap_or(false) {
-		return;
-	}
-
-	// Generate the label value using SHA256 hash of "name:namespace"
-	// This matches Tanka's NameLabel() implementation
-	let label_value = generate_environment_label(env);
-
-	// Inject the label
-	if let JsonValue::Object(ref mut obj) = manifest {
-		// Ensure metadata exists
-		if !obj.contains_key("metadata") {
-			obj.insert(
-				"metadata".to_string(),
-				JsonValue::Object(serde_json::Map::new()),
-			);
-		}
-
-		if let Some(JsonValue::Object(ref mut metadata)) = obj.get_mut("metadata") {
-			// Ensure labels exists
-			if !metadata.contains_key("labels") {
-				metadata.insert(
-					"labels".to_string(),
-					JsonValue::Object(serde_json::Map::new()),
-				);
-			}
-
-			// Add the tanka.dev/environment label
-			if let Some(JsonValue::Object(ref mut labels)) = metadata.get_mut("labels") {
-				labels.insert(
-					"tanka.dev/environment".to_string(),
-					JsonValue::String(label_value),
-				);
-			}
-		}
-	}
-}
-
-/// Generate the tanka.dev/environment label value
-/// This replicates Tanka's NameLabel() function which creates a SHA256 hash
-/// of the environment's metadata.name and metadata.namespace
-fn generate_environment_label(env: &crate::spec::Environment) -> String {
-	use sha2::{Digest, Sha256};
-
-	// By default, use metadata.name and metadata.namespace
-	// Format: "name:namespace"
-	let name = env.metadata.name.as_deref().unwrap_or("");
-	let namespace = env.metadata.namespace.as_deref().unwrap_or("");
-	let label_parts = format!("{}:{}", name, namespace);
-
-	// Compute SHA256 hash
-	let mut hasher = Sha256::new();
-	hasher.update(label_parts.as_bytes());
-	let result = hasher.finalize();
-
-	// Convert to hex and take first 48 characters
-	let hex = format!("{:x}", result);
-	hex.chars().take(48).collect()
-}
-
-/// Sort all JSON object keys recursively to match Go's yaml.v3 output order
-/// Go's yaml.v3 uses a "natural sort" algorithm (see sorter.go in gopkg.in/yaml.v3)
-fn sort_json_keys(value: JsonValue) -> JsonValue {
-	match value {
-		JsonValue::Object(map) => {
-			// Collect and sort keys using go-yaml v3's natural sort algorithm
-			let mut entries: Vec<(String, JsonValue)> = map.into_iter().collect();
-			entries.sort_by(|(a, _), (b, _)| yaml_v3_key_compare(a, b));
-
-			// Rebuild with sorted keys, recursively sorting nested values
-			let sorted: serde_json::Map<String, JsonValue> = entries
-				.into_iter()
-				.map(|(k, v)| (k, sort_json_keys(v)))
-				.collect();
-			JsonValue::Object(sorted)
-		}
-		JsonValue::Array(arr) => {
-			// Recursively sort keys in array elements
-			JsonValue::Array(arr.into_iter().map(sort_json_keys).collect())
-		}
-		// Primitive values remain unchanged
-		other => other,
-	}
-}
-
-/// Implements go-yaml v3's key comparison algorithm (from sorter.go)
-/// This is a "natural sort" where:
-/// - Numbers are sorted numerically
-/// - Letters are sorted before non-letters when transitioning from digits
-/// - Non-letters (like '_') are sorted before letters when not in digit context
-fn yaml_v3_key_compare(a: &str, b: &str) -> std::cmp::Ordering {
-	let ar: Vec<char> = a.chars().collect();
-	let br: Vec<char> = b.chars().collect();
-	let mut digits = false;
-
-	let min_len = ar.len().min(br.len());
-	for i in 0..min_len {
-		if ar[i] == br[i] {
-			digits = ar[i].is_ascii_digit();
-			continue;
-		}
-
-		let al = ar[i].is_alphabetic();
-		let bl = br[i].is_alphabetic();
-
-		if al && bl {
-			return ar[i].cmp(&br[i]);
-		}
-
-		if al || bl {
-			// One is a letter, one is not
-			if digits {
-				// After digits: letters come first
-				return if al {
-					std::cmp::Ordering::Less
-				} else {
-					std::cmp::Ordering::Greater
-				};
-			} else {
-				// Not after digits: non-letters come first
-				return if bl {
-					std::cmp::Ordering::Less
-				} else {
-					std::cmp::Ordering::Greater
-				};
-			}
-		}
-
-		// Both are non-letters - check for numeric sequences
-		// Handle leading zeros
-		let mut an: i64 = 0;
-		let mut bn: i64 = 0;
-
-		if ar[i] == '0' || br[i] == '0' {
-			// Check if previous chars were non-zero digits
-			let mut j = i;
-			while j > 0 && ar[j - 1].is_ascii_digit() {
-				j -= 1;
-				if ar[j] != '0' {
-					an = 1;
-					bn = 1;
-					break;
-				}
-			}
-		}
-
-		// Parse numeric sequences
-		let mut ai = i;
-		while ai < ar.len() && ar[ai].is_ascii_digit() {
-			an = an * 10 + (ar[ai] as i64 - '0' as i64);
-			ai += 1;
-		}
-
-		let mut bi = i;
-		while bi < br.len() && br[bi].is_ascii_digit() {
-			bn = bn * 10 + (br[bi] as i64 - '0' as i64);
-			bi += 1;
-		}
-
-		if an != bn {
-			return an.cmp(&bn);
-		}
-		if ai != bi {
-			return ai.cmp(&bi);
-		}
-		return ar[i].cmp(&br[i]);
-	}
-
-	ar.len().cmp(&br.len())
-}
-
 /// Inject resourceDefaults (annotations, labels, etc.) into manifest metadata
 /// This replicates Tanka's behavior for spec.resourceDefaults
 fn inject_resource_defaults(manifest: &mut JsonValue, env_spec: &Option<crate::spec::Environment>) {
@@ -1803,32 +1524,6 @@ fn inject_resource_defaults(manifest: &mut JsonValue, env_spec: &Option<crate::s
 						}
 					}
 				}
-			}
-		}
-	}
-}
-
-/// Check if a JSON value is null or an empty object
-fn is_null_or_empty_object(value: Option<&JsonValue>) -> bool {
-	match value {
-		Some(JsonValue::Null) => true,
-		Some(JsonValue::Object(m)) if m.is_empty() => true,
-		_ => false,
-	}
-}
-
-/// Strip null or empty values from metadata.annotations and metadata.labels
-/// This matches Tanka/Kubernetes behavior where null and empty fields are omitted from output
-fn strip_null_metadata_fields(manifest: &mut JsonValue) {
-	if let JsonValue::Object(ref mut obj) = manifest {
-		if let Some(JsonValue::Object(ref mut metadata)) = obj.get_mut("metadata") {
-			// Remove annotations if it's null or empty
-			if is_null_or_empty_object(metadata.get("annotations")) {
-				metadata.remove("annotations");
-			}
-			// Remove labels if it's null or empty
-			if is_null_or_empty_object(metadata.get("labels")) {
-				metadata.remove("labels");
 			}
 		}
 	}
@@ -1940,7 +1635,7 @@ fn specialize_template_for_env(
 	if let Some(env) = env_spec {
 		// Sort by length descending to avoid partial matches
 		let mut sorted_refs: Vec<_> = all_label_refs.iter().collect();
-		sorted_refs.sort_by(|a, b| b.len().cmp(&a.len()));
+		sorted_refs.sort_by_key(|b| std::cmp::Reverse(b.len()));
 
 		let labels = env.metadata.labels.as_ref();
 
@@ -4231,79 +3926,5 @@ mod tests {
 		assert_eq!(manifest_map.len(), 2);
 		assert!(manifest_map.contains_key("ConfigMap-config1.yaml"));
 		assert!(manifest_map.contains_key("Secret-secret1.yaml"));
-	}
-
-	#[test]
-	fn test_extract_environments_deduplicates_by_name() {
-		// Create a JSON structure with duplicate Environment objects (same name at different paths)
-		let value = serde_json::json!({
-			"env1": {
-				"apiVersion": "tanka.dev/v1alpha1",
-				"kind": "Environment",
-				"metadata": { "name": "my-env" },
-				"spec": { "namespace": "default" },
-				"data": {
-					"cm": {
-						"apiVersion": "v1",
-						"kind": "ConfigMap",
-						"metadata": { "name": "config1" }
-					}
-				}
-			},
-			"env2": {
-				"apiVersion": "tanka.dev/v1alpha1",
-				"kind": "Environment",
-				"metadata": { "name": "my-env" },  // Same name as env1
-				"spec": { "namespace": "default" },
-				"data": {
-					"cm": {
-						"apiVersion": "v1",
-						"kind": "ConfigMap",
-						"metadata": { "name": "config2" }
-					}
-				}
-			}
-		});
-
-		let environments = extract_environments(&value, &None).unwrap();
-
-		// Should deduplicate to just one environment (first one wins)
-		assert_eq!(environments.len(), 1);
-		assert_eq!(
-			environments[0]
-				.spec
-				.as_ref()
-				.unwrap()
-				.metadata
-				.name
-				.as_deref(),
-			Some("my-env")
-		);
-	}
-
-	#[test]
-	fn test_extract_environments_keeps_different_names() {
-		// Create a JSON structure with two Environment objects with different names
-		let value = serde_json::json!({
-			"env1": {
-				"apiVersion": "tanka.dev/v1alpha1",
-				"kind": "Environment",
-				"metadata": { "name": "env-a" },
-				"spec": { "namespace": "default" },
-				"data": {}
-			},
-			"env2": {
-				"apiVersion": "tanka.dev/v1alpha1",
-				"kind": "Environment",
-				"metadata": { "name": "env-b" },
-				"spec": { "namespace": "default" },
-				"data": {}
-			}
-		});
-
-		let environments = extract_environments(&value, &None).unwrap();
-
-		// Should keep both environments since they have different names
-		assert_eq!(environments.len(), 2);
 	}
 }

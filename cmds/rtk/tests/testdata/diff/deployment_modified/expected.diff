@@ -1,0 +1,18 @@
+--- a/apps.v1.Deployment.default.web-app
++++ b/apps.v1.Deployment.default.web-app
+@@ -4,7 +4,7 @@
+   name: web-app
+   namespace: default
+ spec:
+-  replicas: 1
++  replicas: 3
+   selector:
+     matchLabels:
+       app: web
+@@ -14,5 +14,5 @@
+         app: web
+     spec:
+       containers:
+-      - image: nginx:1.24
++      - image: nginx:1.25
+         name: nginx

@@ -1,0 +1,11 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: subset-config
+  namespace: default
+  labels:
+    added-by-controller: "true"
+  resourceVersion: "12345"
+data:
+  key: old-value
+  extra-key: ignored-in-subset

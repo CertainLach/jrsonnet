@@ -14,10 +14,6 @@ pub mod set;
 pub struct EnvArgs {
 	#[command(subcommand)]
 	pub command: EnvCommands,
-
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
 }
 
 #[derive(Subcommand)]

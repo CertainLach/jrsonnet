@@ -1,0 +1,7 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: needs-label
+  namespace: default
+data:
+  key: value

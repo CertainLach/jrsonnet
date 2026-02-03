@@ -12,10 +12,6 @@ pub struct ImportersArgs {
 	/// Files to check
 	pub files: Vec<String>,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Root directory to search for environments
 	#[arg(long, default_value = ".")]
 	pub root: String,
@@ -44,7 +40,6 @@ mod tests {
 	fn make_args() -> ImportersArgs {
 		ImportersArgs {
 			files: vec![],
-			log_level: "info".to_string(),
 			root: ".".to_string(),
 		}
 	}

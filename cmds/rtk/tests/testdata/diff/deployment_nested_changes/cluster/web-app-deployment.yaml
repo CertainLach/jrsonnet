@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        - name: nginx
+          image: nginx:1.24.0
+          ports:
+            - containerPort: 80
+          env:
+            - name: LOG_LEVEL
+              value: debug
+            - name: WORKERS
+              value: "2"
+          resources:
+            limits:
+              cpu: 250m
+              memory: 128Mi
+            requests:
+              cpu: 50m
+              memory: 64Mi
+        - name: sidecar
+          image: busybox:1.35
+          command:
+            - sh
+            - "-c"
+            - while true; do echo ping; sleep 60; done

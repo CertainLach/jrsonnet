@@ -14,10 +14,6 @@ pub struct LintArgs {
 	#[arg(short = 'e', long, default_values_t = vec!["**/.*".to_string(), ".*".to_string(), "**/vendor/**".to_string(), "vendor/**".to_string()])]
 	pub exclude: Vec<String>,
 
-	/// Log level (possible values: disabled, fatal, error, warn, info, debug, trace)
-	#[arg(long, default_value = "info")]
-	pub log_level: String,
-
 	/// Amount of workers
 	#[arg(short = 'n', long, default_value = "4")]
 	pub parallelism: i32,
