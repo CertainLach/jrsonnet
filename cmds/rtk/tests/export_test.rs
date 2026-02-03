@@ -2057,3 +2057,118 @@ fn test_export_filter_no_match_returns_error() {
 		err_msg
 	);
 }
+
+/// Test that export works with TLA functions that have default arguments
+/// without explicitly providing TLAs
+#[test]
+fn test_export_tla_function_with_defaults() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// No TLAs provided - the function has default arguments
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(), // No TLAs!
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-tla-defaults")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	)
+	.unwrap();
+
+	// Should export successfully even without TLAs
+	assert_eq!(
+		result.successful, 1,
+		"Should export environment with TLA defaults without providing TLAs"
+	);
+	assert_eq!(result.failed, 0);
+
+	// Check that expected files were created
+	check_files(
+		output_dir,
+		&[
+			"tla-test/tla-defaults-config.yaml",
+			"tla-test/tla-defaults-deployment.yaml",
+			"manifest.json",
+		],
+	);
+
+	// Verify the content uses the default values
+	let config_content =
+		fs::read_to_string(output_dir.join("tla-test/tla-defaults-config.yaml")).unwrap();
+	assert!(
+		config_content.contains("mode: default"),
+		"ConfigMap should use default mode value: {}",
+		config_content
+	);
+}
+
+/// Test that export works with TLA functions when TLAs are explicitly provided
+/// to override the defaults
+#[test]
+fn test_export_tla_function_with_overrides() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// Provide TLAs to override defaults
+	let mut tla_str = HashMap::new();
+	tla_str.insert("mode".to_string(), "production".to_string());
+
+	let mut tla_code = HashMap::new();
+	tla_code.insert("replicas".to_string(), "3".to_string());
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			tla_str,
+			tla_code,
+			..Default::default()
+		},
+		name: None,
+		recursive: false,
+		skip_manifest: false,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-tla-defaults")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	)
+	.unwrap();
+
+	// Should export successfully with TLA overrides
+	assert_eq!(result.successful, 1);
+	assert_eq!(result.failed, 0);
+
+	// Verify the content uses the overridden values
+	let config_content =
+		fs::read_to_string(output_dir.join("tla-test/tla-defaults-config.yaml")).unwrap();
+	assert!(
+		config_content.contains("mode: production"),
+		"ConfigMap should use overridden mode value: {}",
+		config_content
+	);
+
+	let deployment_content =
+		fs::read_to_string(output_dir.join("tla-test/tla-defaults-deployment.yaml")).unwrap();
+	assert!(
+		deployment_content.contains("replicas: 3"),
+		"Deployment should use overridden replicas value: {}",
+		deployment_content
+	);
+}

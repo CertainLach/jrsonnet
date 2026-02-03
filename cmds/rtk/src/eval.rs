@@ -368,12 +368,9 @@ main{}
 			.map_err(|e| anyhow::anyhow!("evaluation error:\n{}", e))?
 	};
 
-	// Apply TLA if specified
-	let result = if !opts.tla_str.is_empty() || !opts.tla_code.is_empty() {
-		apply_tla(state, result, opts)?
-	} else {
-		result
-	};
+	// Apply TLA - always attempt to invoke if result is a function
+	// This handles both explicit TLAs and functions with default arguments
+	let result = apply_tla(state, result, opts)?;
 
 	// Manifest the result to JSON
 	let manifest = result

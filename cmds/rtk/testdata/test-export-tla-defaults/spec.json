@@ -1,0 +1,11 @@
+{
+    "apiVersion": "tanka.dev/v1alpha1",
+    "kind": "Environment",
+    "metadata": {
+        "name": "tla-defaults-env"
+    },
+    "spec": {
+        "apiServer": "https://localhost",
+        "namespace": "tla-test"
+    }
+}
