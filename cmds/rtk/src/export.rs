@@ -291,11 +291,14 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 		trace!("Filtering environments by name: {}", name);
 		envs.into_iter()
 			.filter(|e| {
-				e.path
-					.file_name()
-					.and_then(|n| n.to_str())
-					.map(|n| n.contains(name))
-					.unwrap_or(false)
+				// For inline environments, check env_name (metadata.name)
+				if let Some(ref env_name) = e.env_name {
+					if env_name.contains(name) {
+						return true;
+					}
+				}
+				// Also allow filtering by path
+				e.path.to_string_lossy().contains(name)
 			})
 			.collect()
 	} else {

@@ -1910,3 +1910,150 @@ fn test_replace_envs_move_manifest_between_envs() {
 		"manifest.json should no longer show env1 ownership"
 	);
 }
+
+// ============================================================================
+// Name filtering tests
+// ============================================================================
+
+/// Test that export can filter inline environments by their env_name (metadata.name)
+/// This is the fix from PR #22 - previously only file_name was checked
+#[test]
+fn test_export_filter_inline_env_by_name() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	// Export only inline-namespace1 by filtering on its env_name
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{env.spec.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: Some("inline-namespace1".to_string()), // Filter by env_name
+		recursive: true,
+		skip_manifest: false,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-envs")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	)
+	.unwrap();
+
+	// Should export only 1 environment (inline-namespace1)
+	assert_eq!(
+		result.successful, 1,
+		"Should export exactly 1 environment matching the name filter"
+	);
+	assert_eq!(result.failed, 0);
+
+	// Check that only inline-namespace1 files were created (not inline-namespace2 or static-env)
+	check_files(
+		output_dir,
+		&[
+			"inline-namespace1/my-configmap.yaml",
+			"inline-namespace1/my-deployment.yaml",
+			"inline-namespace1/my-service.yaml",
+			"manifest.json",
+		],
+	);
+}
+
+/// Test that export can filter by full path (not just file_name)
+#[test]
+fn test_export_filter_by_path() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let mut ext_code = HashMap::new();
+	ext_code.insert(
+		"deploymentName".to_string(),
+		"'path-filter-deployment'".to_string(),
+	);
+	ext_code.insert(
+		"serviceName".to_string(),
+		"'path-filter-service'".to_string(),
+	);
+
+	// Filter using a path segment that matches static-env
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts {
+			ext_code,
+			..Default::default()
+		},
+		name: Some("static-env".to_string()), // Filter by path segment
+		recursive: true,
+		skip_manifest: false,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-envs")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	)
+	.unwrap();
+
+	// Should export only 1 environment (static-env)
+	assert_eq!(
+		result.successful, 1,
+		"Should export exactly 1 environment matching the path filter"
+	);
+	assert_eq!(result.failed, 0);
+
+	// Check that only static-env files were created
+	check_files(
+		output_dir,
+		&[
+			"static/path-filter-deployment.yaml",
+			"static/path-filter-service.yaml",
+			"manifest.json",
+		],
+	);
+}
+
+/// Test that name filter with no matches returns an error
+#[test]
+fn test_export_filter_no_match_returns_error() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		format: "{{.metadata.namespace}}/{{.metadata.name}}".to_string(),
+		parallelism: 1,
+		eval_opts: EvalOpts::default(),
+		name: Some("nonexistent-env-name".to_string()), // Filter that matches nothing
+		recursive: true,
+		skip_manifest: false,
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-envs")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	);
+
+	// Should fail with an error about no environments found
+	assert!(
+		result.is_err(),
+		"Should fail when no environments match filter"
+	);
+	let err_msg = result.unwrap_err().to_string();
+	assert!(
+		err_msg.contains("No environments found"),
+		"Error should mention no environments found: {}",
+		err_msg
+	);
+}
