@@ -14,6 +14,8 @@ use anyhow::{Context, Result};
 use tracing::trace;
 use walkdir::WalkDir;
 
+use crate::eval::EvalOpts;
+
 /// Files that indicate a Tanka environment
 const ENV_MARKERS: &[&str] = &["spec.json", "main.jsonnet"];
 
@@ -66,13 +68,29 @@ pub struct DiscoveredEnv {
 	/// The exportJsonnetImplementation from the inline environment spec, if present
 	/// This is used to determine whether to use jrsonnet-compatible output formatting
 	pub export_jsonnet_implementation: Option<String>,
+	/// Labels from the environment metadata (for selector filtering)
+	pub labels: std::collections::HashMap<String, String>,
 }
 
 /// Find all Tanka environments in the given paths
 ///
 /// This walks the directory tree looking for environments.
 /// When an environment is found, its subdirectories are not searched.
+///
+/// The optional `eval_opts` parameter allows passing TLAs and external variables
+/// that may be needed to evaluate main.jsonnet when it's a function.
+#[allow(dead_code)]
 pub fn find_environments(paths: &[String]) -> Result<Vec<DiscoveredEnv>> {
+	find_environments_with_opts(paths, &EvalOpts::default())
+}
+
+/// Find all Tanka environments in the given paths with eval options
+///
+/// This variant allows passing TLAs and external variables needed for discovery.
+pub fn find_environments_with_opts(
+	paths: &[String],
+	eval_opts: &EvalOpts,
+) -> Result<Vec<DiscoveredEnv>> {
 	let mut envs = Vec::new();
 	let mut seen_dirs: HashSet<PathBuf> = HashSet::new();
 
@@ -116,17 +134,18 @@ pub fn find_environments(paths: &[String]) -> Result<Vec<DiscoveredEnv>> {
 			if seen_dirs.insert(abs_path.clone()) {
 				let is_static = abs_path.join("spec.json").exists();
 				if is_static {
-					// Static environment - read exportJsonnetImplementation from spec.json
-					let export_impl = read_export_impl_from_spec(&abs_path);
+					// Static environment - read spec data from spec.json
+					let spec_data = read_spec_data(&abs_path);
 					envs.push(DiscoveredEnv {
 						is_static: true,
 						path: abs_path,
 						env_name: None,
-						export_jsonnet_implementation: export_impl,
+						export_jsonnet_implementation: spec_data.export_jsonnet_implementation,
+						labels: spec_data.labels,
 					});
 				} else {
 					// Inline environment(s) - discover sub-environments
-					match discover_inline_environments(&abs_path) {
+					match discover_inline_environments(&abs_path, eval_opts) {
 						Ok(inline_envs) => envs.extend(inline_envs),
 						Err(_) => {
 							// If discovery fails, add as single env with no name
@@ -135,6 +154,7 @@ pub fn find_environments(paths: &[String]) -> Result<Vec<DiscoveredEnv>> {
 								path: abs_path,
 								env_name: None,
 								export_jsonnet_implementation: None,
+								labels: std::collections::HashMap::new(),
 							});
 						}
 					}
@@ -179,17 +199,18 @@ pub fn find_environments(paths: &[String]) -> Result<Vec<DiscoveredEnv>> {
 				if seen_dirs.insert(canonical.clone()) {
 					let is_static = canonical.join("spec.json").exists();
 					if is_static {
-						// Static environment - read exportJsonnetImplementation from spec.json
-						let export_impl = read_export_impl_from_spec(&canonical);
+						// Static environment - read spec data from spec.json
+						let spec_data = read_spec_data(&canonical);
 						envs.push(DiscoveredEnv {
 							is_static: true,
 							path: canonical,
 							env_name: None,
-							export_jsonnet_implementation: export_impl,
+							export_jsonnet_implementation: spec_data.export_jsonnet_implementation,
+							labels: spec_data.labels,
 						});
 					} else {
 						// Inline environment(s) - discover sub-environments
-						match discover_inline_environments(&canonical) {
+						match discover_inline_environments(&canonical, eval_opts) {
 							Ok(inline_envs) => envs.extend(inline_envs),
 							Err(_) => {
 								// If discovery fails, add as single env with no name
@@ -198,6 +219,7 @@ pub fn find_environments(paths: &[String]) -> Result<Vec<DiscoveredEnv>> {
 									path: canonical,
 									env_name: None,
 									export_jsonnet_implementation: None,
+									labels: std::collections::HashMap::new(),
 								});
 							}
 						}
@@ -241,25 +263,69 @@ fn is_environment(path: &Path) -> bool {
 	false
 }
 
-/// Read exportJsonnetImplementation from spec.json if it exists
-fn read_export_impl_from_spec(path: &Path) -> Option<String> {
+/// Data read from spec.json for static environments
+struct SpecData {
+	export_jsonnet_implementation: Option<String>,
+	labels: std::collections::HashMap<String, String>,
+}
+
+/// Read spec data from spec.json if it exists
+fn read_spec_data(path: &Path) -> SpecData {
 	let spec_path = path.join("spec.json");
 	if !spec_path.exists() {
-		return None;
+		return SpecData {
+			export_jsonnet_implementation: None,
+			labels: std::collections::HashMap::new(),
+		};
 	}
 
-	let content = std::fs::read_to_string(&spec_path).ok()?;
-	let json: serde_json::Value = serde_json::from_str(&content).ok()?;
-	json.get("spec")?
-		.get("exportJsonnetImplementation")?
-		.as_str()
-		.map(|s| s.to_string())
+	let content = match std::fs::read_to_string(&spec_path) {
+		Ok(c) => c,
+		Err(_) => {
+			return SpecData {
+				export_jsonnet_implementation: None,
+				labels: std::collections::HashMap::new(),
+			}
+		}
+	};
+
+	let json: serde_json::Value = match serde_json::from_str(&content) {
+		Ok(j) => j,
+		Err(_) => {
+			return SpecData {
+				export_jsonnet_implementation: None,
+				labels: std::collections::HashMap::new(),
+			}
+		}
+	};
+
+	let export_impl = json
+		.get("spec")
+		.and_then(|s| s.get("exportJsonnetImplementation"))
+		.and_then(|v| v.as_str())
+		.map(|s| s.to_string());
+
+	let labels = json
+		.get("metadata")
+		.and_then(|m| m.get("labels"))
+		.and_then(|l| l.as_object())
+		.map(|obj| {
+			obj.iter()
+				.filter_map(|(k, v)| v.as_str().map(|s| (k.clone(), s.to_string())))
+				.collect()
+		})
+		.unwrap_or_default();
+
+	SpecData {
+		export_jsonnet_implementation: export_impl,
+		labels,
+	}
 }
 
 /// Discover inline environments within a main.jsonnet file
 /// Returns a list of DiscoveredEnv, one for each sub-environment found
-fn discover_inline_environments(path: &Path) -> Result<Vec<DiscoveredEnv>> {
-	use jrsonnet_evaluator::{manifest::JsonFormat, State};
+fn discover_inline_environments(path: &Path, eval_opts: &EvalOpts) -> Result<Vec<DiscoveredEnv>> {
+	use jrsonnet_evaluator::{manifest::JsonFormat, State, Val};
 	use jrsonnet_stdlib::ContextInitializer;
 
 	let main_path = path.join("main.jsonnet");
@@ -269,6 +335,7 @@ fn discover_inline_environments(path: &Path) -> Result<Vec<DiscoveredEnv>> {
 			path: path.to_path_buf(),
 			env_name: None,
 			export_jsonnet_implementation: None,
+			labels: std::collections::HashMap::new(),
 		}]);
 	}
 
@@ -297,20 +364,52 @@ fn discover_inline_environments(path: &Path) -> Result<Vec<DiscoveredEnv>> {
 	// Register native functions (helmTemplate, parseYaml, etc.) for discovery
 	crate::eval::register_native_functions(&ctx_init);
 
+	// Add external variables
+	for (key, value) in &eval_opts.ext_str {
+		ctx_init.add_ext_var(key.as_str().into(), Val::Str(value.as_str().into()));
+	}
+	for (key, code) in &eval_opts.ext_code {
+		let _ = ctx_init.add_ext_code(key.as_str().into(), code.as_str());
+	}
+
 	builder.context_initializer(ctx_init);
 
 	let state = builder.build();
 
-	// Evaluate with MetadataEvalScript to get environment list without data
-	let eval_script = format!(
-		"local main = (import '{}');\n{}",
-		main_path.file_name().unwrap().to_string_lossy(),
-		METADATA_EVAL_SCRIPT
-	);
+	// Check if we need TLAs - if so, we have to fully evaluate main.jsonnet first
+	let has_tlas = !eval_opts.tla_str.is_empty() || !eval_opts.tla_code.is_empty();
+
+	// Build the evaluation script based on whether TLAs are needed
+	let eval_script = if has_tlas {
+		// Slow path: TLAs require full evaluation first, then manifest, then metadata extraction
+		// This is because main.jsonnet might be a function that needs TLA arguments
+		let tla_args = build_tla_args(eval_opts)?;
+
+		let main_result = state
+			.import(main_path.to_string_lossy().as_ref())
+			.map_err(|e| anyhow::anyhow!("importing main.jsonnet for discovery: {}", e))?;
+
+		let main_value = jrsonnet_evaluator::apply_tla(state.clone(), &tla_args, main_result)
+			.map_err(|e| anyhow::anyhow!("applying TLAs for discovery: {}", e))?;
+
+		let main_json = main_value
+			.manifest(JsonFormat::cli(2))
+			.map_err(|e| anyhow::anyhow!("manifesting main.jsonnet for discovery: {}", e))?;
+
+		format!("local main = {};\n{}", main_json, METADATA_EVAL_SCRIPT)
+	} else {
+		// Fast path: use lazy evaluation by embedding the import directly in the script
+		// This allows the evaluator to only extract what's needed for metadata
+		format!(
+			"local main = (import '{}');\n{}",
+			main_path.file_name().unwrap().to_string_lossy(),
+			METADATA_EVAL_SCRIPT
+		)
+	};
 
 	let result = state
 		.evaluate_snippet("<metadata-eval>", &eval_script)
-		.map_err(|e| anyhow::anyhow!("evaluating jsonnet for environment discovery: {}", e))?;
+		.map_err(|e| anyhow::anyhow!("evaluating metadata extraction: {}", e))?;
 
 	let json_str = result
 		.manifest(JsonFormat::cli(2))
@@ -319,7 +418,7 @@ fn discover_inline_environments(path: &Path) -> Result<Vec<DiscoveredEnv>> {
 	let json_value: serde_json::Value =
 		serde_json::from_str(&json_str).context("parsing manifested JSON")?;
 
-	// Extract environment metadata (names and exportJsonnetImplementation)
+	// Extract environment metadata (names, exportJsonnetImplementation, labels)
 	let env_metadata = extract_environment_metadata(&json_value);
 
 	if env_metadata.is_empty() {
@@ -330,34 +429,83 @@ fn discover_inline_environments(path: &Path) -> Result<Vec<DiscoveredEnv>> {
 	// Get shared exportJsonnetImplementation (use first non-None value found)
 	let shared_export_impl = env_metadata
 		.iter()
-		.find_map(|(_, impl_opt)| impl_opt.clone());
+		.find_map(|m| m.export_jsonnet_implementation.clone());
 
 	if env_metadata.len() == 1 {
 		// Single environment - no need to specify name
+		let meta = &env_metadata[0];
 		return Ok(vec![DiscoveredEnv {
 			is_static: false,
 			path: path.to_path_buf(),
 			env_name: None,
 			export_jsonnet_implementation: shared_export_impl,
+			labels: meta.labels.clone(),
 		}]);
 	}
 
 	// Multiple environments - create one DiscoveredEnv per sub-environment
 	Ok(env_metadata
 		.into_iter()
-		.map(|(name, export_impl)| DiscoveredEnv {
+		.map(|meta| DiscoveredEnv {
 			is_static: false,
 			path: path.to_path_buf(),
-			env_name: Some(name),
+			env_name: Some(meta.name),
 			// Use per-env export_impl if set, otherwise fall back to shared
-			export_jsonnet_implementation: export_impl.or_else(|| shared_export_impl.clone()),
+			export_jsonnet_implementation: meta
+				.export_jsonnet_implementation
+				.or_else(|| shared_export_impl.clone()),
+			labels: meta.labels,
 		})
 		.collect())
 }
 
-/// Extract environment metadata (name, exportJsonnetImplementation) from a JSON value
-/// Returns a list of (name, Option<exportJsonnetImplementation>) tuples
-fn extract_environment_metadata(value: &serde_json::Value) -> Vec<(String, Option<String>)> {
+/// Build TLA arguments from eval options
+fn build_tla_args(
+	eval_opts: &EvalOpts,
+) -> Result<
+	jrsonnet_evaluator::gc::GcHashMap<
+		jrsonnet_evaluator::IStr,
+		jrsonnet_evaluator::function::TlaArg,
+	>,
+> {
+	use jrsonnet_evaluator::{function::TlaArg, gc::GcHashMap, IStr};
+
+	let mut tla_args: GcHashMap<IStr, TlaArg> = GcHashMap::new();
+
+	// Add string TLAs
+	for (key, value) in &eval_opts.tla_str {
+		tla_args.insert(key.as_str().into(), TlaArg::String(value.as_str().into()));
+	}
+
+	// Add code TLAs (need to parse as jsonnet)
+	for (key, value) in &eval_opts.tla_code {
+		let source = jrsonnet_parser::Source::new_virtual(
+			format!("<tla:{}>", key).into(),
+			value.as_str().into(),
+		);
+		let parsed = jrsonnet_parser::parse(
+			value,
+			&jrsonnet_parser::ParserSettings {
+				source: source.clone(),
+			},
+		)
+		.map_err(|e| anyhow::anyhow!("failed to parse TLA code '{}':\n{}", key, e))?;
+
+		tla_args.insert(key.as_str().into(), TlaArg::Code(parsed));
+	}
+
+	Ok(tla_args)
+}
+
+/// Metadata extracted from an inline environment
+struct EnvMetadata {
+	name: String,
+	export_jsonnet_implementation: Option<String>,
+	labels: std::collections::HashMap<String, String>,
+}
+
+/// Extract environment metadata (name, exportJsonnetImplementation, labels) from a JSON value
+fn extract_environment_metadata(value: &serde_json::Value) -> Vec<EnvMetadata> {
 	let mut metadata = Vec::new();
 
 	match value {
@@ -372,7 +520,25 @@ fn extract_environment_metadata(value: &serde_json::Value) -> Vec<(String, Optio
 							.and_then(|s| s.get("exportJsonnetImplementation"))
 							.and_then(|v| v.as_str())
 							.map(|s| s.to_string());
-						metadata.push((name.to_string(), export_impl));
+
+						// Extract labels from metadata
+						let labels = meta
+							.get("labels")
+							.and_then(|l| l.as_object())
+							.map(|obj| {
+								obj.iter()
+									.filter_map(|(k, v)| {
+										v.as_str().map(|s| (k.clone(), s.to_string()))
+									})
+									.collect()
+							})
+							.unwrap_or_default();
+
+						metadata.push(EnvMetadata {
+							name: name.to_string(),
+							export_jsonnet_implementation: export_impl,
+							labels,
+						});
 					}
 				}
 			}

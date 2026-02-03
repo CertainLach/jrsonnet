@@ -6,6 +6,7 @@ use anyhow::Result;
 use clap::Args;
 use jrsonnet_evaluator::ImportResolver;
 
+use super::util::UnimplementedArgs;
 use crate::{
 	eval::{self, EvalOpts},
 	spec::Environment,
@@ -67,6 +68,14 @@ pub fn run<W: Write, R: ImportResolver>(
 
 /// Build EvalOpts from EvalArgs.
 pub fn build_eval_opts(args: &EvalArgs) -> EvalOpts {
+	UnimplementedArgs {
+		jsonnet_implementation: Some(&args.jsonnet_implementation),
+		cache_envs: None,
+		cache_path: None,
+		mem_ballast_size_bytes: None,
+	}
+	.warn_if_set();
+
 	// Parse ext_code flags (format: key=value)
 	let mut ext_code_map = std::collections::HashMap::new();
 	for item in &args.ext_code {

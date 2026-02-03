@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-yml-config.yml": "main.jsonnet"
+}

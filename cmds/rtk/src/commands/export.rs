@@ -5,6 +5,7 @@ use std::{io::Write, path::PathBuf};
 use anyhow::Result;
 use clap::Args;
 
+use super::util::UnimplementedArgs;
 use crate::{
 	eval::EvalOpts,
 	export::{self as export_impl, ExportMergeStrategy, ExportOpts},
@@ -104,6 +105,14 @@ pub struct ExportArgs {
 
 /// Run the export command.
 pub fn run<W: Write>(args: ExportArgs, mut writer: W) -> Result<()> {
+	UnimplementedArgs {
+		jsonnet_implementation: Some(&args.jsonnet_implementation),
+		cache_envs: Some(&args.cache_envs),
+		cache_path: Some(&args.cache_path),
+		mem_ballast_size_bytes: Some(&args.mem_ballast_size_bytes),
+	}
+	.warn_if_set();
+
 	let opts = build_export_opts(&args)?;
 	let result = export_impl::export(&args.paths, opts)?;
 
@@ -222,7 +231,9 @@ fn build_export_opts(args: &ExportArgs) -> Result<ExportOpts> {
 		eval_opts,
 		name: args.name.clone(),
 		recursive: args.recursive,
+		selector: args.selector.clone(),
 		skip_manifest: args.skip_manifest,
+		target: args.target.clone(),
 		merge_strategy,
 		merge_deleted_envs: args.merge_deleted_envs.clone(),
 		show_timing: false,

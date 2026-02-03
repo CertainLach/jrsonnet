@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  environment: prod
+kind: ConfigMap
+metadata:
+  name: selector-prod-config
+  namespace: default

@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-tla-config.golden": "main.jsonnet"
+}

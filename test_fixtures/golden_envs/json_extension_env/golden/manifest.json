@@ -1,0 +1,4 @@
+{
+    "default/ConfigMap-json-config.json": "main.jsonnet",
+    "default/Deployment-json-app.json": "main.jsonnet"
+}

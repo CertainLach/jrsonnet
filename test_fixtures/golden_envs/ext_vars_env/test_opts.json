@@ -1,0 +1,8 @@
+{
+  "ext_str": {
+    "stringVar": "hello-world"
+  },
+  "ext_code": {
+    "codeVar": "{\"count\": 42, \"enabled\": true}"
+  }
+}

@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  code-arg: |-
+    {
+        "active": true,
+        "value": 100
+    }
+  combined: tla-value-100
+  string-arg: tla-value
+kind: ConfigMap
+metadata:
+  name: tla-config
+  namespace: default

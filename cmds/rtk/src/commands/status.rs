@@ -5,6 +5,8 @@ use std::io::Write;
 use anyhow::Result;
 use clap::Args;
 
+use super::util::UnimplementedArgs;
+
 #[derive(Args)]
 pub struct StatusArgs {
 	/// Path to check status
@@ -48,6 +50,14 @@ pub struct StatusArgs {
 }
 
 /// Run the status command.
-pub fn run<W: Write>(_args: StatusArgs, _writer: W) -> Result<()> {
+pub fn run<W: Write>(args: StatusArgs, _writer: W) -> Result<()> {
+	UnimplementedArgs {
+		jsonnet_implementation: Some(&args.jsonnet_implementation),
+		cache_envs: None,
+		cache_path: None,
+		mem_ballast_size_bytes: None,
+	}
+	.warn_if_set();
+
 	anyhow::bail!("not implemented")
 }

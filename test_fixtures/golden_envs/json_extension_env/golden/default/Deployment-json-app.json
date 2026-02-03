@@ -1,0 +1,18 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: json-app
+  namespace: default
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: json-app
+  template:
+    metadata:
+      labels:
+        app: json-app
+    spec:
+      containers:
+      - image: nginx:1.25
+        name: main

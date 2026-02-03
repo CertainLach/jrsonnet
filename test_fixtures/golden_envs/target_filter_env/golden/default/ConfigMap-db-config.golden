@@ -1,0 +1,7 @@
+apiVersion: v1
+data:
+  host: localhost
+kind: ConfigMap
+metadata:
+  name: db-config
+  namespace: default

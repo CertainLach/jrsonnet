@@ -1,0 +1,4 @@
+{
+    "default/ConfigMap-app-config.golden": "main.jsonnet",
+    "default/ConfigMap-db-config.golden": "main.jsonnet"
+}

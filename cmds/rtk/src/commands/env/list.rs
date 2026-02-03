@@ -5,6 +5,7 @@ use std::io::Write;
 use anyhow::Result;
 use clap::Args;
 
+use crate::commands::util::UnimplementedArgs;
 use crate::env as env_impl;
 
 #[derive(Args)]
@@ -55,6 +56,14 @@ pub struct ListArgs {
 
 /// Run the env list subcommand.
 pub fn run<W: Write>(args: ListArgs, writer: W) -> Result<()> {
+	UnimplementedArgs {
+		jsonnet_implementation: Some(&args.jsonnet_implementation),
+		cache_envs: None,
+		cache_path: None,
+		mem_ballast_size_bytes: None,
+	}
+	.warn_if_set();
+
 	env_impl::list_envs_to_writer(args.path, args.json, writer)
 }
 

@@ -1,0 +1,3 @@
+{
+    "default/ConfigMap-ext-vars-config.golden": "main.jsonnet"
+}

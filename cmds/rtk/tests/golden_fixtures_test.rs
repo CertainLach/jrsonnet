@@ -1,19 +1,57 @@
 use std::{
+	collections::HashMap,
 	fs,
 	path::{Path, PathBuf},
 };
 
 use rtk::{
-	discover::find_environments,
+	discover::find_environments_with_opts,
 	eval::EvalOpts,
 	export::{export, ExportOpts},
 };
+use serde::Deserialize;
 use similar::{ChangeTag, TextDiff};
 
 /// The export format for golden fixtures - matches GOLDEN_EXPORT_FORMAT in Makefile
 /// Uses default for namespace to handle cluster-scoped resources (CRDs, ClusterRoles, etc.)
 const EXPORT_FORMAT: &str =
 	"{{ .metadata.namespace | default \"_cluster\" }}/{{.kind}}-{{.metadata.name}}";
+
+/// Test options that can be specified in test_opts.json for each fixture
+/// These are CLI arguments that should be passed to both tk and rtk for consistency testing
+#[derive(Debug, Default, Deserialize)]
+#[serde(default)]
+struct TestOpts {
+	/// External variables (code values) - maps to --ext-code key=value
+	ext_code: HashMap<String, String>,
+	/// External variables (string values) - maps to --ext-str key=value
+	ext_str: HashMap<String, String>,
+	/// File extension - maps to --extension
+	extension: Option<String>,
+	/// Deleted environments for merge testing - maps to --merge-deleted-envs
+	merge_deleted_envs: Vec<String>,
+	/// Label selector - maps to --selector
+	selector: Option<String>,
+	/// Skip manifest.json generation - maps to --skip-manifest
+	skip_manifest: Option<bool>,
+	/// Regex filter on resources - maps to --target
+	target: Vec<String>,
+	/// Top-level arguments (code values) - maps to --tla-code key=value
+	tla_code: HashMap<String, String>,
+	/// Top-level arguments (string values) - maps to --tla-str key=value
+	tla_str: HashMap<String, String>,
+}
+
+/// Load test options from test_opts.json if it exists in the env directory
+fn load_test_opts(env_path: &Path) -> TestOpts {
+	let opts_path = env_path.join("test_opts.json");
+	if opts_path.exists() {
+		let content = fs::read_to_string(&opts_path).expect("Failed to read test_opts.json");
+		serde_json::from_str(&content).expect("Failed to parse test_opts.json")
+	} else {
+		TestOpts::default()
+	}
+}
 
 /// Helper function to get absolute path to test_fixtures
 fn fixtures_path(subpath: &str) -> PathBuf {
@@ -89,28 +127,53 @@ fn run_golden_test(env_path: &Path) {
 		golden_dir
 	);
 
-	let envs = find_environments(&[env_path.to_string_lossy().to_string()]).unwrap();
+	// Load test-specific options if they exist
+	let test_opts = load_test_opts(env_path);
+
+	// Build eval options from test_opts
+	let eval_opts = EvalOpts {
+		ext_str: test_opts.ext_str.clone(),
+		ext_code: test_opts.ext_code.clone(),
+		tla_str: test_opts.tla_str.clone(),
+		tla_code: test_opts.tla_code.clone(),
+		..Default::default()
+	};
+
+	let envs =
+		find_environments_with_opts(&[env_path.to_string_lossy().to_string()], &eval_opts).unwrap();
 	let env_count = envs.len();
 	let recursive = env_count > 1;
 
+	// Use extension from test_opts or default to "golden"
+	let extension = test_opts.extension.unwrap_or_else(|| "golden".to_string());
+
+	// Use skip_manifest from test_opts or default to true
+	let skip_manifest = test_opts.skip_manifest.unwrap_or(true);
+
 	let opts = ExportOpts {
 		output_dir: output_dir.to_path_buf(),
-		extension: "golden".to_string(),
+		extension,
 		format: EXPORT_FORMAT.to_string(),
 		parallelism: 1,
-		eval_opts: EvalOpts::default(),
+		eval_opts,
 		name: None,
 		recursive,
-		skip_manifest: true,
+		selector: test_opts.selector,
+		skip_manifest,
+		target: test_opts.target,
+		merge_deleted_envs: test_opts.merge_deleted_envs,
 		..Default::default()
 	};
 
 	let result = export(&[env_path.to_string_lossy().to_string()], opts).unwrap();
 
-	assert_eq!(
-		result.successful, env_count,
-		"Should export {} environment(s)",
-		env_count
+	// Note: When using --selector filter, we may export fewer environments than discovered
+	// The golden files represent the filtered output, so we compare against actual output
+	assert!(
+		result.successful > 0 || env_count == 0,
+		"Should export at least one environment (discovered {}, exported {})",
+		env_count,
+		result.successful
 	);
 	assert_eq!(result.failed, 0, "Should have no failures");
 

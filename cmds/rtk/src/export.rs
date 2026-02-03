@@ -22,7 +22,7 @@ use serde_json::Value as JsonValue;
 use tracing::{debug, trace};
 
 use crate::{
-	discover::{find_environments, DiscoveredEnv},
+	discover::{find_environments_with_opts, DiscoveredEnv},
 	eval::{eval, EvalOpts},
 	jpath,
 };
@@ -114,8 +114,12 @@ pub struct ExportOpts {
 	pub name: Option<String>,
 	/// Recursive mode - process all environments found
 	pub recursive: bool,
+	/// Label selector for filtering environments (kubectl-style syntax)
+	pub selector: Option<String>,
 	/// Skip generating manifest.json file that tracks exported files
 	pub skip_manifest: bool,
+	/// Regex filters on '<kind>/<name>' for filtering which resources to export
+	pub target: Vec<String>,
 	/// What to do when exporting to an existing directory
 	pub merge_strategy: ExportMergeStrategy,
 	/// Environments (main.jsonnet files) that have been deleted since the last export
@@ -135,7 +139,9 @@ impl Default for ExportOpts {
 			eval_opts: EvalOpts::default(),
 			name: None,
 			recursive: false,
+			selector: None,
 			skip_manifest: false,
+			target: vec![],
 			merge_strategy: ExportMergeStrategy::default(),
 			merge_deleted_envs: vec![],
 			show_timing: false,
@@ -230,6 +236,113 @@ enum ExportError {
 	EnvError(PathBuf, String),
 }
 
+/// A single selector requirement (parsed from kubectl-style selector)
+#[derive(Debug)]
+enum SelectorRequirement {
+	/// key=value (equality)
+	Equals(String, String),
+	/// key!=value (inequality)
+	NotEquals(String, String),
+	/// key (exists)
+	Exists(String),
+	/// !key (does not exist)
+	DoesNotExist(String),
+}
+
+/// Parse a kubectl-style label selector into requirements
+/// Supports: key=value, key!=value, key, !key (comma-separated)
+fn parse_label_selector(selector: &str) -> Result<Vec<SelectorRequirement>> {
+	let mut requirements = Vec::new();
+
+	for part in selector.split(',') {
+		let part = part.trim();
+		if part.is_empty() {
+			continue;
+		}
+
+		if let Some((key, value)) = part.split_once("!=") {
+			requirements.push(SelectorRequirement::NotEquals(
+				key.trim().to_string(),
+				value.trim().to_string(),
+			));
+		} else if let Some((key, value)) = part.split_once('=') {
+			requirements.push(SelectorRequirement::Equals(
+				key.trim().to_string(),
+				value.trim().to_string(),
+			));
+		} else if let Some(key) = part.strip_prefix('!') {
+			requirements.push(SelectorRequirement::DoesNotExist(key.trim().to_string()));
+		} else {
+			requirements.push(SelectorRequirement::Exists(part.to_string()));
+		}
+	}
+
+	Ok(requirements)
+}
+
+/// Check if labels match all selector requirements
+fn matches_label_selector(
+	labels: &HashMap<String, String>,
+	requirements: &[SelectorRequirement],
+) -> bool {
+	for req in requirements {
+		match req {
+			SelectorRequirement::Equals(key, value) => {
+				if labels.get(key) != Some(value) {
+					return false;
+				}
+			}
+			SelectorRequirement::NotEquals(key, value) => {
+				if labels.get(key) == Some(value) {
+					return false;
+				}
+			}
+			SelectorRequirement::Exists(key) => {
+				if !labels.contains_key(key) {
+					return false;
+				}
+			}
+			SelectorRequirement::DoesNotExist(key) => {
+				if labels.contains_key(key) {
+					return false;
+				}
+			}
+		}
+	}
+	true
+}
+
+/// Compile target patterns (regex patterns for kind/name filtering)
+fn compile_target_patterns(patterns: &[String]) -> Result<Vec<regex::Regex>> {
+	patterns
+		.iter()
+		.map(|p| {
+			regex::Regex::new(p).map_err(|e| anyhow::anyhow!("Invalid target regex '{}': {}", p, e))
+		})
+		.collect()
+}
+
+/// Check if a manifest matches any of the target patterns
+/// Target patterns match against "kind/name" (e.g., "Deployment/my-app" or ".*Map/config.*")
+fn matches_target_patterns(manifest: &JsonValue, patterns: &[regex::Regex]) -> bool {
+	// If no patterns, include all manifests
+	if patterns.is_empty() {
+		return true;
+	}
+
+	// Build the kind/name string to match against
+	let kind = manifest.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+	let name = manifest
+		.get("metadata")
+		.and_then(|m| m.get("name"))
+		.and_then(|n| n.as_str())
+		.unwrap_or("");
+	let target_str = format!("{}/{}", kind, name);
+
+	// Match against any pattern (OR logic)
+	patterns.iter().any(|p| p.is_match(&target_str))
+}
+
 /// Export environments from given paths to the output directory
 pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 	use std::time::Instant;
@@ -255,7 +368,7 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 	// PHASE 2: Discover environments
 	let discover_start = Instant::now();
 	debug!("Finding Tanka environments in {} paths", paths.len());
-	let envs = find_environments(paths)?;
+	let envs = find_environments_with_opts(paths, &opts.eval_opts)?;
 	debug!(
 		"Found {} Tanka environments in {}ms",
 		envs.len(),
@@ -305,11 +418,25 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 		envs
 	};
 
+	// Filter by selector if specified (kubectl-style label selector)
+	let envs: Vec<_> = if let Some(ref selector) = opts.selector {
+		trace!("Filtering environments by selector: {}", selector);
+		let selector_parts = parse_label_selector(selector)?;
+		envs.into_iter()
+			.filter(|e| matches_label_selector(&e.labels, &selector_parts))
+			.collect()
+	} else {
+		envs
+	};
+
 	if envs.is_empty() {
-		bail!(
-			"No environments found matching name filter: {:?}",
-			opts.name
-		);
+		if opts.name.is_some() || opts.selector.is_some() {
+			bail!(
+				"No environments found matching filters (name: {:?}, selector: {:?})",
+				opts.name,
+				opts.selector
+			);
+		}
 	}
 
 	trace!(
@@ -840,6 +967,31 @@ fn export_single_env(
 			collect_start.elapsed().as_millis()
 		);
 
+		// Filter manifests by target patterns if specified
+		let manifests = if !opts.target.is_empty() {
+			let target_patterns = compile_target_patterns(&opts.target)
+				.map_err(|e| ExportError::Fatal(format!("Invalid target pattern: {}", e)))?;
+			trace!(
+				"[{}:{}] Filtering manifests by {} target patterns",
+				env_display,
+				env_name,
+				target_patterns.len()
+			);
+			let filtered: Vec<_> = manifests
+				.into_iter()
+				.filter(|m| matches_target_patterns(m, &target_patterns))
+				.collect();
+			trace!(
+				"[{}:{}] {} manifests after target filtering",
+				env_display,
+				env_name,
+				filtered.len()
+			);
+			filtered
+		} else {
+			manifests
+		};
+
 		// Skip if there are no manifests to process
 		if manifests.is_empty() {
 			trace!(
@@ -957,36 +1109,27 @@ fn export_single_env(
 				}
 
 				// Serialize manifest (CPU-intensive, good for parallelization)
-				let content = if opts.extension == "json" {
-					serde_json::to_string_pretty(&manifest)
-						.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?
-				} else {
-					// Sort all object keys to match Go's yaml.v3 output order
-					let sorted_manifest = sort_json_keys(manifest);
+				// Always output YAML regardless of extension (matching tk behavior)
+				// Sort all object keys to match Go's yaml.v3 output order
+				let sorted_manifest = sort_json_keys(manifest);
 
-					// Use serializer options to match Go's yaml.v2 output (used by tk for manifest export)
-					let options = serde_saphyr::SerializerOptions {
-						indent_step: 2,
-						indent_array: Some(0),
-						prefer_block_scalars: true,
-						empty_map_as_braces: true,
-						empty_array_as_brackets: true,
-						line_width: Some(80),
-						scientific_notation_threshold: Some(1000000), // 1 million
-						scientific_notation_small_threshold: Some(0.0001), // Small floats like 0.00001 become 1e-05
-						quote_ambiguous_keys: true,                   // Quote y, n, yes, no, etc. to match Go yaml.v3
-						quote_numeric_strings: true, // Quote numeric string keys like "12", "12.5" to match Go yaml.v3
-						..Default::default()
-					};
-					let mut output = String::new();
-					serde_saphyr::to_fmt_writer_with_options(
-						&mut output,
-						&sorted_manifest,
-						options,
-					)
-					.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?;
-					output
+				// Use serializer options to match Go's yaml.v2 output (used by tk for manifest export)
+				let options = serde_saphyr::SerializerOptions {
+					indent_step: 2,
+					indent_array: Some(0),
+					prefer_block_scalars: true,
+					empty_map_as_braces: true,
+					empty_array_as_brackets: true,
+					line_width: Some(80),
+					scientific_notation_threshold: Some(1000000), // 1 million
+					scientific_notation_small_threshold: Some(0.0001), // Small floats like 0.00001 become 1e-05
+					quote_ambiguous_keys: true,                   // Quote y, n, yes, no, etc. to match Go yaml.v3
+					quote_numeric_strings: true, // Quote numeric string keys like "12", "12.5" to match Go yaml.v3
+					..Default::default()
 				};
+				let mut content = String::new();
+				serde_saphyr::to_fmt_writer_with_options(&mut content, &sorted_manifest, options)
+					.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?;
 
 				Ok((relative_path, content))
 			})
