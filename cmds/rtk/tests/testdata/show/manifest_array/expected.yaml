@@ -1,0 +1,13 @@
+apiVersion: v1
+data:
+  index: "1"
+kind: ConfigMap
+metadata:
+  name: array-cm-1
+---
+apiVersion: v1
+data:
+  index: "2"
+kind: ConfigMap
+metadata:
+  name: array-cm-2

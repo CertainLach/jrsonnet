@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  another: entry
+  key: value
+kind: ConfigMap
+metadata:
+  name: test-config
+  namespace: default

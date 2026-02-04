@@ -3,7 +3,10 @@
 //! This provides a real HTTP server that can be used with actual kubeconfig-based
 //! connections, unlike the tower mock which only works with in-process clients.
 
-use std::{collections::HashMap, sync::Arc};
+use std::{
+	collections::HashMap,
+	sync::{Arc, RwLock},
+};
 
 use bon::Builder;
 use kube::config::{
@@ -20,6 +23,9 @@ use super::{
 	helpers::{merge_json, strip_strategic_merge_directives},
 };
 
+/// Type alias for the shared mutable resources map.
+pub type SharedResources = Arc<RwLock<HashMap<(String, String), serde_json::Value>>>;
+
 /// A mock Kubernetes server exposed over HTTP.
 #[derive(Builder)]
 pub struct HttpMockK8sServer {
@@ -34,6 +40,9 @@ pub struct HttpMockK8sServer {
 /// A running HTTP mock server instance.
 pub struct RunningHttpMockK8sServer {
 	server: MockServer,
+	/// Shared mutable resources state.
+	#[allow(dead_code)]
+	resources: SharedResources,
 }
 
 impl HttpMockK8sServer {
@@ -66,11 +75,17 @@ impl HttpMockK8sServer {
 			})
 		});
 
+		// Wrap in Arc<RwLock> for mutable sharing
+		let shared_resources = Arc::new(RwLock::new(resources));
+
 		mount_version(&server).await;
 		mount_discovery(&server, &discovery, self.discovery_mode).await;
-		mount_resources(&server, &resources).await;
+		mount_resources(&server, &shared_resources).await;
 
-		RunningHttpMockK8sServer { server }
+		RunningHttpMockK8sServer {
+			server,
+			resources: shared_resources,
+		}
 	}
 }
 
@@ -398,127 +413,154 @@ async fn mount_discovery(server: &MockServer, discovery: &MockDiscovery, mode: D
 	}
 }
 
-async fn mount_resources(
-	server: &MockServer,
-	resources: &HashMap<(String, String), serde_json::Value>,
-) {
-	// Create Arc for sharing resources with closures
-	let resources_arc = Arc::new(resources.clone());
+async fn mount_resources(server: &MockServer, resources: &SharedResources) {
+	let patch_resources = Arc::clone(resources);
+	let post_resources = Arc::clone(resources);
+	let get_resources = Arc::clone(resources);
 
-	// Mount GET endpoints for each resource
-	for ((api_path, name), resource) in resources {
-		let full_path = format!("{}/{}", api_path, name);
-
-		// GET single resource
-		Mock::given(method("GET"))
-			.and(path(&full_path))
-			.respond_with(ResponseTemplate::new(200).set_body_json(resource.clone()))
-			.mount(server)
-			.await;
-	}
-
-	// PATCH endpoints - merge request body with existing resource (simulates dry-run apply)
-	let patch_resources = Arc::clone(&resources_arc);
+	// PATCH endpoints - merge request body with existing resource
+	// If dry-run is not set, persist the changes
 	Mock::given(method("PATCH"))
 		.and(path_regex(r"^/api(s)?/.*"))
 		.respond_with(move |req: &Request| {
 			let path_str = req.url.path();
+			let query = req.url.query().unwrap_or("");
+			let is_dry_run = query.contains("dryRun");
 
-			// Parse path to extract api_path and name
-			// Paths look like /api/v1/namespaces/default/configmaps/my-config
-			// or /apis/apps/v1/namespaces/default/deployments/my-deploy
 			let (api_path, name) = parse_resource_path(path_str);
 
-			// Look up existing resource and merge
 			let patch: serde_json::Value =
 				serde_json::from_slice(&req.body).unwrap_or(serde_json::Value::Null);
 
-			let merged = if let Some(existing) = patch_resources.get(&(api_path, name)) {
-				merge_json(existing.clone(), patch)
-			} else {
-				// Resource doesn't exist, just return the patch (for create scenarios)
-				patch
+			let merged = {
+				let resources = patch_resources.read().unwrap();
+				if let Some(existing) = resources.get(&(api_path.clone(), name.clone())) {
+					merge_json(existing.clone(), patch)
+				} else {
+					patch
+				}
 			};
 
-			// Strip strategic merge patch directives (e.g., $setElementOrder) from response.
-			// These are merge instructions, not actual resource content.
-			let result = strip_strategic_merge_directives(merged);
+			let result = strip_strategic_merge_directives(merged.clone());
+
+			// Persist changes if not dry-run
+			if !is_dry_run {
+				let mut resources = patch_resources.write().unwrap();
+				resources.insert((api_path, name), result.clone());
+			}
 
 			ResponseTemplate::new(200).set_body_json(result)
 		})
 		.mount(server)
 		.await;
 
-	// Mount LIST endpoints - group resources by api_path
-	let mut by_path: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-	// Also track cluster-wide lists (e.g., /api/v1/configmaps for all namespaces)
-	let mut cluster_wide: HashMap<String, Vec<serde_json::Value>> = HashMap::new();
-
-	for ((api_path, _name), resource) in resources {
-		by_path
-			.entry(api_path.clone())
-			.or_default()
-			.push(resource.clone());
-
-		// Build cluster-wide path by removing the namespace part
-		// e.g., /api/v1/namespaces/default/configmaps -> /api/v1/configmaps
-		// e.g., /apis/apps/v1/namespaces/default/deployments -> /apis/apps/v1/deployments
-		if let Some(cluster_path) = extract_cluster_wide_path(api_path) {
-			cluster_wide
-				.entry(cluster_path)
-				.or_default()
-				.push(resource.clone());
-		}
-	}
-
-	// Mount namespaced LIST endpoints
-	for (api_path, items) in by_path {
-		Mock::given(method("GET"))
-			.and(path(&api_path))
-			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-				"kind": "List",
-				"apiVersion": "v1",
-				"metadata": {"resourceVersion": "1"},
-				"items": items
-			})))
-			.mount(server)
-			.await;
-	}
-
-	// Mount cluster-wide LIST endpoints
-	for (cluster_path, items) in cluster_wide {
-		Mock::given(method("GET"))
-			.and(path(&cluster_path))
-			.respond_with(ResponseTemplate::new(200).set_body_json(serde_json::json!({
-				"kind": "List",
-				"apiVersion": "v1",
-				"metadata": {"resourceVersion": "1"},
-				"items": items
-			})))
-			.mount(server)
-			.await;
-	}
-
-	// Default 404 for resources not found (low priority)
-	Mock::given(method("GET"))
+	// POST for create - echo back the request body and optionally persist
+	Mock::given(method("POST"))
 		.and(path_regex(r"^/api(s)?/.*"))
-		.respond_with(ResponseTemplate::new(404).set_body_json(serde_json::json!({
-			"kind": "Status",
-			"apiVersion": "v1",
-			"metadata": {},
-			"status": "Failure",
-			"message": "not found",
-			"reason": "NotFound",
-			"code": 404
-		})))
+		.respond_with(move |req: &Request| {
+			let path_str = req.url.path();
+			let query = req.url.query().unwrap_or("");
+			let is_dry_run = query.contains("dryRun");
+
+			let body: serde_json::Value =
+				serde_json::from_slice(&req.body).unwrap_or(serde_json::Value::Null);
+
+			// Extract name from the body
+			let name = body
+				.pointer("/metadata/name")
+				.and_then(|v| v.as_str())
+				.unwrap_or("")
+				.to_string();
+
+			// Persist if not dry-run
+			if !is_dry_run && !name.is_empty() {
+				let api_path = path_str.to_string();
+				let mut resources = post_resources.write().unwrap();
+				resources.insert((api_path, name), body.clone());
+			}
+
+			ResponseTemplate::new(200).set_body_json(body)
+		})
 		.mount(server)
 		.await;
 
-	// POST for dry-run create - echo back the request body
-	Mock::given(method("POST"))
+	// GET endpoints - handles both single resource and LIST
+	// This is a catch-all that determines whether to return a single resource or a list
+	Mock::given(method("GET"))
 		.and(path_regex(r"^/api(s)?/.*"))
-		.respond_with(|req: &Request| {
-			ResponseTemplate::new(200).set_body_raw(req.body.clone(), "application/json")
+		.respond_with(move |req: &Request| {
+			let path_str = req.url.path();
+			let resources = get_resources.read().unwrap();
+
+			// First, try to find a single resource
+			let (api_path, name) = parse_resource_path(path_str);
+
+			// Check if this looks like a single resource request (has a name component)
+			if !name.is_empty() {
+				if let Some(resource) = resources.get(&(api_path.clone(), name.clone())) {
+					return ResponseTemplate::new(200).set_body_json(resource.clone());
+				}
+			}
+
+			// Try LIST - match resources under this path
+			// First try exact api_path match (namespaced list)
+			let items: Vec<_> = resources
+				.iter()
+				.filter(|((res_api_path, _), _)| res_api_path == path_str)
+				.map(|(_, v)| v.clone())
+				.collect();
+
+			if !items.is_empty() {
+				return ResponseTemplate::new(200).set_body_json(serde_json::json!({
+					"kind": "List",
+					"apiVersion": "v1",
+					"metadata": {"resourceVersion": "1"},
+					"items": items
+				}));
+			}
+
+			// Try cluster-wide list (e.g., /api/v1/configmaps matches /api/v1/namespaces/X/configmaps)
+			let cluster_items: Vec<_> = resources
+				.iter()
+				.filter(|((res_api_path, _), _)| {
+					if let Some(cluster_path) = extract_cluster_wide_path(res_api_path) {
+						cluster_path == path_str
+					} else {
+						false
+					}
+				})
+				.map(|(_, v)| v.clone())
+				.collect();
+
+			if !cluster_items.is_empty() {
+				return ResponseTemplate::new(200).set_body_json(serde_json::json!({
+					"kind": "List",
+					"apiVersion": "v1",
+					"metadata": {"resourceVersion": "1"},
+					"items": cluster_items
+				}));
+			}
+
+			// If name was provided but resource not found, return 404
+			if !name.is_empty() {
+				return ResponseTemplate::new(404).set_body_json(serde_json::json!({
+					"kind": "Status",
+					"apiVersion": "v1",
+					"metadata": {},
+					"status": "Failure",
+					"message": "not found",
+					"reason": "NotFound",
+					"code": 404
+				}));
+			}
+
+			// Return empty list for paths that didn't match anything
+			ResponseTemplate::new(200).set_body_json(serde_json::json!({
+				"kind": "List",
+				"apiVersion": "v1",
+				"metadata": {"resourceVersion": "1"},
+				"items": []
+			}))
 		})
 		.mount(server)
 		.await;

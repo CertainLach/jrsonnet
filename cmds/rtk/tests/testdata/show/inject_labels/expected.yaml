@@ -1,0 +1,8 @@
+apiVersion: v1
+data:
+  setting: value
+kind: ConfigMap
+metadata:
+  labels:
+    tanka.dev/environment: de7243f17de3c2620651c9b9c0990a099fabaf084a7a6915
+  name: labeled-config

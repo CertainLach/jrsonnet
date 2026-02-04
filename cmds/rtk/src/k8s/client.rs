@@ -51,6 +51,7 @@ pub enum ConnectionError {
 ///
 /// This type encapsulates the kube client and server metadata,
 /// providing a high-level interface for cluster operations.
+#[derive(Clone)]
 pub struct ClusterConnection {
 	client: Client,
 	server_version: Info,

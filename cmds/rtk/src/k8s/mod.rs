@@ -3,6 +3,7 @@
 //! This module provides native Kubernetes API access using kube-rs,
 //! avoiding the need to shell out to kubectl.
 
+pub mod apply;
 pub mod client;
 pub mod diff;
 pub mod discovery;
