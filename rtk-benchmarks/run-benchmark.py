@@ -114,11 +114,13 @@ class BenchmarkRunner:
         config: BenchmarkConfig,
         repo_root: Path,
         hyperfine_args: list[str],
+        rtk_path: Path | None = None,
         rtk_base_path: Path | None = None,
     ):
         self.config = config
         self.repo_root = repo_root
         self.hyperfine_args = hyperfine_args
+        self.rtk_path = rtk_path
         self.rtk_base_path = rtk_base_path
         self.rtk: Path | None = None
         self.rtk_base: Path | None = None
@@ -135,7 +137,11 @@ class BenchmarkRunner:
 
     def check_dependencies(self) -> None:
         """Check that required commands are available."""
-        required = ["tk", "hyperfine", "cargo"]
+        required = ["tk", "hyperfine"]
+        # Only need cargo if we're building rtk from source
+        # (mock-k8s-server for diff mode may also need cargo, but we check that later)
+        if not self.rtk_path:
+            required.append("cargo")
         if self.config.mode == "generated":
             required.append("jq")
 
@@ -148,27 +154,61 @@ class BenchmarkRunner:
 
     def build_binaries(self) -> None:
         """Build rtk (and mock-k8s-server for diff mode) in release mode."""
-        packages = ["rtk"]
-        if self.config.mode == "diff":
-            packages.append("mock-k8s-server")
+        # Use pre-built rtk if provided
+        if self.rtk_path:
+            if not self.rtk_path.exists():
+                print(
+                    f"Error: rtk-binary-path does not exist: {self.rtk_path}", file=sys.stderr)
+                sys.exit(1)
+            self.rtk = self.rtk_path.resolve()
+            version = subprocess.run(
+                [str(self.rtk), "--version"],
+                capture_output=True,
+                text=True,
+            ).stdout.strip()
+            print(
+                f"Using pre-built rtk: {self.rtk} ({version})", file=sys.stderr)
 
-        print(
-            f"Building {', '.join(packages)} in release mode...", file=sys.stderr)
-        subprocess.run(
-            ["cargo", "build", "--release"] + [f"-p={p}" for p in packages],
-            cwd=self.repo_root,
-            check=True,
-        )
-        self.rtk = self.repo_root / "target" / "release" / "rtk"
-        if self.config.mode == "diff":
-            self.mock_server = self.repo_root / "target" / "release" / "mock-k8s-server"
+            # Look for mock-k8s-server next to the rtk binary (for diff mode)
+            if self.config.mode == "diff":
+                mock_server_path = self.rtk.parent / "mock-k8s-server"
+                if mock_server_path.exists():
+                    self.mock_server = mock_server_path
+                    print(
+                        f"Using pre-built mock-k8s-server: {self.mock_server}", file=sys.stderr)
+                else:
+                    print("Building mock-k8s-server in release mode...", file=sys.stderr)
+                    subprocess.run(
+                        ["cargo", "build", "--release", "-p=mock-k8s-server"],
+                        cwd=self.repo_root,
+                        check=True,
+                    )
+                    self.mock_server = self.repo_root / "target" / "release" / "mock-k8s-server"
+        else:
+            print("Building rtk in release mode...", file=sys.stderr)
+            subprocess.run(
+                ["cargo", "build", "--release", "-p=rtk"],
+                cwd=self.repo_root,
+                check=True,
+            )
+            self.rtk = self.repo_root / "target" / "release" / "rtk"
+
+            # Build mock-k8s-server if needed (diff mode only)
+            if self.config.mode == "diff":
+                print("Building mock-k8s-server in release mode...", file=sys.stderr)
+                subprocess.run(
+                    ["cargo", "build", "--release", "-p=mock-k8s-server"],
+                    cwd=self.repo_root,
+                    check=True,
+                )
+                self.mock_server = self.repo_root / "target" / "release" / "mock-k8s-server"
 
     def build_rtk_base(self) -> None:
-        """Build rtk from base branch if BENCHMARK_BASE_REF is set, or use --rtk-base-path."""
+        """Build rtk from base branch if BENCHMARK_BASE_REF is set, or use --rtk-base-binary-path."""
         if self.rtk_base_path:
             if not self.rtk_base_path.exists():
                 print(
-                    f"Error: rtk-base-path does not exist: {self.rtk_base_path}", file=sys.stderr)
+                    f"Error: rtk-base-binary-path does not exist: {self.rtk_base_path}", file=sys.stderr)
                 sys.exit(1)
             self.rtk_base = self.rtk_base_path.resolve()
             version = subprocess.run(
@@ -735,11 +775,13 @@ class BenchmarkRunner:
 def main():
     parser = argparse.ArgumentParser(
         description="Run benchmarks from YAML config",
-        usage="%(prog)s config [--rtk-base-path PATH] [-- hyperfine_args...]",
+        usage="%(prog)s config [--rtk-binary-path PATH] [--rtk-base-binary-path PATH] [-- hyperfine_args...]",
     )
     parser.add_argument("config", type=Path,
                         help="Path to benchmark YAML config file")
-    parser.add_argument("--rtk-base-path", type=Path,
+    parser.add_argument("--rtk-binary-path", type=Path,
+                        help="Path to pre-built rtk binary (skips building from current branch)")
+    parser.add_argument("--rtk-base-binary-path", type=Path,
                         help="Path to pre-built rtk binary for baseline comparison")
 
     args, hyperfine_args = parser.parse_known_args()
@@ -750,7 +792,10 @@ def main():
     repo_root = Path(__file__).parent.parent.resolve()
     config = BenchmarkConfig.from_yaml(args.config, repo_root)
     runner = BenchmarkRunner(
-        config, repo_root, hyperfine_args, rtk_base_path=args.rtk_base_path)
+        config, repo_root, hyperfine_args,
+        rtk_path=args.rtk_binary_path,
+        rtk_base_path=args.rtk_base_binary_path,
+    )
     runner.run()
 
 
