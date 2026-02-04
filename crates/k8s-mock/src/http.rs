@@ -416,6 +416,7 @@ async fn mount_discovery(server: &MockServer, discovery: &MockDiscovery, mode: D
 async fn mount_resources(server: &MockServer, resources: &SharedResources) {
 	let patch_resources = Arc::clone(resources);
 	let post_resources = Arc::clone(resources);
+	let delete_resources = Arc::clone(resources);
 	let get_resources = Arc::clone(resources);
 
 	// PATCH endpoints - merge request body with existing resource
@@ -480,6 +481,60 @@ async fn mount_resources(server: &MockServer, resources: &SharedResources) {
 			}
 
 			ResponseTemplate::new(200).set_body_json(body)
+		})
+		.mount(server)
+		.await;
+
+	// DELETE endpoints - remove resource from the mock storage
+	Mock::given(method("DELETE"))
+		.and(path_regex(r"^/api(s)?/.*"))
+		.respond_with(move |req: &Request| {
+			let path_str = req.url.path();
+			let (api_path, name) = parse_resource_path(path_str);
+
+			if name.is_empty() {
+				return ResponseTemplate::new(400).set_body_json(serde_json::json!({
+					"kind": "Status",
+					"apiVersion": "v1",
+					"metadata": {},
+					"status": "Failure",
+					"message": "name is required",
+					"reason": "BadRequest",
+					"code": 400
+				}));
+			}
+
+			let removed = {
+				let mut resources = delete_resources.write().unwrap();
+				resources.remove(&(api_path.clone(), name.clone()))
+			};
+
+			match removed {
+				Some(resource) => {
+					// Return the deleted resource with a deletion timestamp
+					let mut result = resource;
+					if let serde_json::Value::Object(ref mut obj) = result {
+						if let Some(serde_json::Value::Object(ref mut metadata)) =
+							obj.get_mut("metadata")
+						{
+							metadata.insert(
+								"deletionTimestamp".to_string(),
+								serde_json::json!("2024-01-01T00:00:00Z"),
+							);
+						}
+					}
+					ResponseTemplate::new(200).set_body_json(result)
+				}
+				None => ResponseTemplate::new(404).set_body_json(serde_json::json!({
+					"kind": "Status",
+					"apiVersion": "v1",
+					"metadata": {},
+					"status": "Failure",
+					"message": format!("{} \"{}\" not found", api_path, name),
+					"reason": "NotFound",
+					"code": 404
+				})),
+			}
 		})
 		.mount(server)
 		.await;

@@ -4,7 +4,8 @@
 //! using either client-side or server-side apply strategies.
 
 use kube::{
-	api::{Api, DynamicObject, Patch, PatchParams},
+	api::{Api, DeleteParams, DynamicObject, Patch, PatchParams},
+	core::GroupVersionKind,
 	Client,
 };
 use thiserror::Error;
@@ -29,6 +30,14 @@ pub enum ApplyError {
 
 	#[error("applying {kind}/{name}")]
 	ApplyFailed {
+		kind: String,
+		name: String,
+		#[source]
+		source: Box<kube::Error>,
+	},
+
+	#[error("deleting {kind}/{name}")]
+	DeleteFailed {
 		kind: String,
 		name: String,
 		#[source]
@@ -161,6 +170,49 @@ impl ApplyEngine {
 				}
 			}
 		}
+
+		Ok(())
+	}
+
+	/// Delete a resource from the cluster.
+	#[instrument(skip(self), fields(kind = %gvk.kind, name = %name))]
+	pub async fn delete_resource(
+		&self,
+		gvk: &GroupVersionKind,
+		name: &str,
+		namespace: Option<&str>,
+	) -> Result<(), ApplyError> {
+		// Build API cache if not already done
+		let api_cache = if let Some(ref cache) = self.api_cache {
+			cache.clone()
+		} else {
+			let required_keys = std::iter::once(gvk.clone()).collect();
+			ApiResourceCache::build(&self.client, required_keys, false)
+				.await
+				.map_err(|e| ApplyError::BuildingApiCache(Box::new(e)))?
+		};
+
+		let discovered = api_cache
+			.lookup(gvk)
+			.ok_or_else(|| ApplyError::UnknownResourceType {
+				api_version: gvk.api_version(),
+				kind: gvk.kind.clone(),
+			})?
+			.clone();
+
+		let api = self.dynamic_api(&discovered.api_resource, namespace);
+
+		let delete_params = DeleteParams {
+			..Default::default()
+		};
+
+		api.delete(name, &delete_params)
+			.await
+			.map_err(|e| ApplyError::DeleteFailed {
+				kind: gvk.kind.clone(),
+				name: name.to_string(),
+				source: Box::new(e),
+			})?;
 
 		Ok(())
 	}

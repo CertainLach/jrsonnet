@@ -552,8 +552,13 @@ impl DiffEngine {
 	}
 
 	/// Build a set of (apiVersion, kind, namespace, name) from manifests for prune detection.
+	///
+	/// For namespaced resources without an explicit namespace, uses the default namespace.
+	/// This ensures manifests relying on spec.namespace match cluster resources.
 	fn build_manifest_keys(
 		manifests: &[Arc<serde_json::Value>],
+		default_namespace: &str,
+		api_cache: &ApiResourceCache,
 	) -> HashSet<(String, String, Option<String>, String)> {
 		manifests
 			.iter()
@@ -561,10 +566,27 @@ impl DiffEngine {
 				let api_version = m.get("apiVersion")?.as_str()?.to_string();
 				let kind = m.get("kind")?.as_str()?.to_string();
 				let name = m.pointer("/metadata/name")?.as_str()?.to_string();
-				let namespace = m
+
+				// Get explicit namespace from manifest
+				let explicit_namespace = m
 					.pointer("/metadata/namespace")
 					.and_then(|v| v.as_str())
 					.map(|s| s.to_string());
+
+				// Determine if this resource is namespaced using api_cache
+				let gvk = gvk_from_manifest(m)?;
+				let is_namespaced = api_cache
+					.lookup(&gvk)
+					.map(|d| d.scope == ResourceScope::Namespaced)
+					.unwrap_or(true); // Default to namespaced if unknown
+
+				// Use default namespace for namespaced resources without explicit namespace
+				let namespace = if is_namespaced {
+					Some(explicit_namespace.unwrap_or_else(|| default_namespace.to_string()))
+				} else {
+					None
+				};
+
 				Some((api_version, kind, namespace, name))
 			})
 			.collect()
@@ -579,7 +601,11 @@ impl DiffEngine {
 		env_label: &str,
 		api_cache: &ApiResourceCache,
 	) {
-		let manifest_keys = Arc::new(Self::build_manifest_keys(manifests));
+		let manifest_keys = Arc::new(Self::build_manifest_keys(
+			manifests,
+			&engine.default_namespace,
+			api_cache,
+		));
 		let label = env_label.to_string();
 
 		for (gvk, discovered) in api_cache.iter() {

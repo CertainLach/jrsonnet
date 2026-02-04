@@ -35,6 +35,17 @@ fn otel_export_enabled() -> bool {
 		|| std::env::var(opentelemetry_otlp::OTEL_EXPORTER_OTLP_TRACES_ENDPOINT).is_ok()
 }
 
+/// Noisy crates that should be filtered to WARN unless explicitly set otherwise.
+/// These crates produce excessive debug/trace output that clutters logs.
+const NOISY_CRATES: &[&str] = &[
+	"hyper_util",
+	"kube_client",
+	"rustls",
+	"tower",
+	"h2",
+	"hyper",
+];
+
 /// Initialize tracing with the given log level.
 ///
 /// Priority for log level:
@@ -52,8 +63,15 @@ fn otel_export_enabled() -> bool {
 /// - Default service.name: "rtk" (if OTEL_SERVICE_NAME is not set)
 pub fn init(log_level: Option<Level>) -> Result<TelemetryGuard> {
 	// Build filter layer: CLI flag takes priority, then RUST_LOG, then default to info
+	// We also filter noisy crates to WARN to reduce log spam at DEBUG level.
 	let filter_layer = match log_level {
-		Some(level) => EnvFilter::new(level.as_str()),
+		Some(level) => {
+			let mut filter = EnvFilter::new(level.as_str());
+			for crate_name in NOISY_CRATES {
+				filter = filter.add_directive(format!("{crate_name}=warn").parse().unwrap());
+			}
+			filter
+		}
 		None => EnvFilter::builder()
 			.with_default_directive(Level::INFO.into())
 			.from_env_lossy(),
