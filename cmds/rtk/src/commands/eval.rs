@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Args;
 use jrsonnet_evaluator::ImportResolver;
 
-use super::util::{JsonnetArgs, UnimplementedArgs};
+use super::util::UnimplementedArgs;
 use crate::{
 	eval::{self, EvalOpts},
 	spec::Environment,
@@ -46,26 +46,7 @@ pub struct EvalArgs {
 	pub tla_str: Vec<String>,
 }
 
-impl JsonnetArgs for EvalArgs {
-	fn ext_str(&self) -> &[String] {
-		&self.ext_str
-	}
-	fn ext_code(&self) -> &[String] {
-		&self.ext_code
-	}
-	fn tla_str(&self) -> &[String] {
-		&self.tla_str
-	}
-	fn tla_code(&self) -> &[String] {
-		&self.tla_code
-	}
-	fn max_stack(&self) -> i32 {
-		self.max_stack
-	}
-	fn name(&self) -> Option<&str> {
-		None
-	}
-}
+crate::impl_jsonnet_args!(EvalArgs);
 
 /// Run the eval command with injected dependencies.
 pub fn run<W: Write, R: ImportResolver>(
@@ -85,13 +66,7 @@ pub fn run<W: Write, R: ImportResolver>(
 
 /// Build EvalOpts from EvalArgs.
 pub fn build_eval_opts(args: &EvalArgs) -> EvalOpts {
-	UnimplementedArgs {
-		jsonnet_implementation: Some(&args.jsonnet_implementation),
-		cache_envs: None,
-		cache_path: None,
-		mem_ballast_size_bytes: None,
-	}
-	.warn_if_set();
+	UnimplementedArgs::warn_jsonnet_impl(&args.jsonnet_implementation);
 
 	let mut opts = super::util::build_eval_opts(args);
 	opts.eval_expr = args.eval.clone();

@@ -13,7 +13,8 @@ use tracing::instrument;
 use super::diff::ColorMode;
 use super::util::{
 	build_eval_opts, create_tokio_runtime, extract_manifests, get_or_create_connection,
-	process_manifests, prompt_confirmation, validate_dry_run, JsonnetArgs, UnimplementedArgs,
+	process_manifests, prompt_confirmation, setup_diff_engine, validate_dry_run, DiffEngineConfig,
+	UnimplementedArgs,
 };
 
 // Re-export AutoApprove for backwards compatibility
@@ -23,7 +24,7 @@ use crate::{
 	k8s::{
 		apply::ApplyEngine,
 		client::ClusterConnection,
-		diff::{DiffEngine, DiffStatus, ResourceDiff},
+		diff::{DiffStatus, ResourceDiff},
 		output::DiffOutput,
 	},
 	spec::DiffStrategy,
@@ -116,36 +117,11 @@ pub struct ApplyArgs {
 	pub validate: bool,
 }
 
-impl JsonnetArgs for ApplyArgs {
-	fn ext_str(&self) -> &[String] {
-		&self.ext_str
-	}
-	fn ext_code(&self) -> &[String] {
-		&self.ext_code
-	}
-	fn tla_str(&self) -> &[String] {
-		&self.tla_str
-	}
-	fn tla_code(&self) -> &[String] {
-		&self.tla_code
-	}
-	fn max_stack(&self) -> i32 {
-		self.max_stack
-	}
-	fn name(&self) -> Option<&str> {
-		self.name.as_deref()
-	}
-}
+crate::impl_jsonnet_args!(ApplyArgs);
 
 /// Run the apply command.
 pub fn run<W: Write>(args: ApplyArgs, writer: W) -> Result<()> {
-	UnimplementedArgs {
-		jsonnet_implementation: Some(&args.jsonnet_implementation),
-		cache_envs: None,
-		cache_path: None,
-		mem_ballast_size_bytes: None,
-	}
-	.warn_if_set();
+	UnimplementedArgs::warn_jsonnet_impl(&args.jsonnet_implementation);
 
 	validate_dry_run(args.dry_run.as_deref())?;
 
@@ -207,34 +183,21 @@ pub async fn apply_environment<W: Write>(
 
 	let connection = get_or_create_connection(connection, spec).await?;
 
-	// Determine strategies
-	let diff_strategy = opts.diff_strategy.unwrap_or_else(|| {
-		if let Some(s) = spec {
-			DiffStrategy::from_spec(s, connection.server_version())
-		} else {
-			DiffStrategy::Native
-		}
-	});
-	tracing::debug!(strategy = %diff_strategy, "using diff strategy");
-
 	let apply_strategy = opts.apply_strategy.unwrap_or(ApplyStrategy::Client);
 	tracing::debug!(strategy = %apply_strategy, "using apply strategy");
 
-	// Get default namespace from spec or connection
-	let default_namespace = spec
-		.map(|s| s.namespace.clone())
-		.unwrap_or_else(|| connection.default_namespace().to_string());
-
-	// Create diff engine
-	let diff_engine = DiffEngine::new(
-		connection.clone(),
-		diff_strategy,
-		default_namespace.clone(),
-		&manifests,
-		false, // no prune for apply (use prune command)
-	)
-	.await
-	.context("creating diff engine")?;
+	// Set up diff engine
+	let setup = setup_diff_engine(DiffEngineConfig {
+		connection: &connection,
+		spec,
+		manifests: &manifests,
+		with_prune: false, // no prune for apply (use prune command)
+		diff_strategy_override: opts.diff_strategy,
+	})
+	.await?;
+	let diff_engine = setup.engine;
+	let diff_strategy = setup.strategy;
+	let default_namespace = setup.default_namespace;
 
 	// Compute diffs
 	tracing::debug!("computing differences");
@@ -348,7 +311,8 @@ pub async fn apply_environment<W: Write>(
 /// Async implementation of the apply command.
 #[instrument(skip_all, fields(path = %args.path))]
 async fn run_async<W: Write>(args: ApplyArgs, writer: W) -> Result<()> {
-	let eval_opts = build_eval_opts(&args);
+	let mut eval_opts = build_eval_opts(&args);
+	eval_opts.env_name = args.name.clone();
 	let opts = ApplyOpts {
 		diff_strategy: args.diff_strategy,
 		apply_strategy: args.apply_strategy,

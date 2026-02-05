@@ -29,14 +29,20 @@ static HELM_TEMPLATE_CACHE: RwLock<Option<HashMap<String, String>>> = RwLock::ne
 /// Get or create the Helm template cache
 fn get_helm_cache() -> &'static RwLock<Option<HashMap<String, String>>> {
 	// Initialize the cache if needed
+	// Use unwrap_or_else to recover from poisoned locks - if another thread panicked
+	// while holding the lock, we still want to proceed with the cache initialization
 	{
-		let read = HELM_TEMPLATE_CACHE.read().unwrap();
+		let read = HELM_TEMPLATE_CACHE
+			.read()
+			.unwrap_or_else(|e| e.into_inner());
 		if read.is_some() {
 			return &HELM_TEMPLATE_CACHE;
 		}
 	}
 	{
-		let mut write = HELM_TEMPLATE_CACHE.write().unwrap();
+		let mut write = HELM_TEMPLATE_CACHE
+			.write()
+			.unwrap_or_else(|e| e.into_inner());
 		if write.is_none() {
 			*write = Some(HashMap::new());
 		}
@@ -190,7 +196,8 @@ fn to_snake_case(s: &str) -> String {
 			if !result.is_empty() {
 				result.push('_');
 			}
-			result.push(ch.to_lowercase().next().unwrap());
+			// to_lowercase() always returns at least one char, but use unwrap_or for safety
+			result.push(ch.to_lowercase().next().unwrap_or(ch));
 		} else if ch == '-' {
 			// Replace hyphens with underscores
 			result.push('_');
@@ -593,7 +600,7 @@ pub fn builtin_tanka_helm_template(name: String, chart: String, opts: ObjValue) 
 	);
 	{
 		let cache = get_helm_cache();
-		let read = cache.read().unwrap();
+		let read = cache.read().unwrap_or_else(|e| e.into_inner());
 		if let Some(ref map) = *read {
 			if let Some(cached_yaml) = map.get(&cache_key) {
 				// Cache hit - parse the cached YAML
@@ -700,7 +707,7 @@ pub fn builtin_tanka_helm_template(name: String, chart: String, opts: ObjValue) 
 	// Store raw YAML in cache before parsing
 	{
 		let cache = get_helm_cache();
-		let mut write = cache.write().unwrap();
+		let mut write = cache.write().unwrap_or_else(|e| e.into_inner());
 		if let Some(ref mut map) = *write {
 			map.insert(cache_key, yaml_content.clone());
 		}

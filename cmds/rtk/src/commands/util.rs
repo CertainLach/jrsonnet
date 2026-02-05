@@ -13,8 +13,8 @@ use tracing::warn;
 
 use crate::{
 	eval::EvalOpts,
-	k8s::client::ClusterConnection,
-	spec::{Environment, EnvironmentData, Spec},
+	k8s::{client::ClusterConnection, diff::DiffEngine},
+	spec::{DiffStrategy, Environment, EnvironmentData, Spec},
 };
 
 /// Warn about unimplemented CLI arguments that are accepted for Tanka compatibility
@@ -51,6 +51,20 @@ impl<'a> UnimplementedArgs<'a> {
 		if let Some(Some(_)) = self.mem_ballast_size_bytes {
 			warn!("--mem-ballast-size-bytes is unimplemented in rtk and has no effect");
 		}
+	}
+
+	/// Convenience method to warn only about jsonnet_implementation.
+	///
+	/// Most commands only have the jsonnet_implementation flag as an unimplemented
+	/// option. This helper avoids the boilerplate of constructing the full struct.
+	pub fn warn_jsonnet_impl(jsonnet_implementation: &str) {
+		UnimplementedArgs {
+			jsonnet_implementation: Some(jsonnet_implementation),
+			cache_envs: None,
+			cache_path: None,
+			mem_ballast_size_bytes: None,
+		}
+		.warn_if_set();
 	}
 }
 
@@ -258,7 +272,37 @@ pub trait JsonnetArgs {
 	fn tla_str(&self) -> &[String];
 	fn tla_code(&self) -> &[String];
 	fn max_stack(&self) -> i32;
-	fn name(&self) -> Option<&str>;
+}
+
+/// Macro to implement JsonnetArgs for a struct with standard fields.
+///
+/// The struct must have these fields:
+/// - `ext_str: Vec<String>`
+/// - `ext_code: Vec<String>`
+/// - `tla_str: Vec<String>`
+/// - `tla_code: Vec<String>`
+/// - `max_stack: i32`
+#[macro_export]
+macro_rules! impl_jsonnet_args {
+	($ty:ty) => {
+		impl $crate::commands::util::JsonnetArgs for $ty {
+			fn ext_str(&self) -> &[String] {
+				&self.ext_str
+			}
+			fn ext_code(&self) -> &[String] {
+				&self.ext_code
+			}
+			fn tla_str(&self) -> &[String] {
+				&self.tla_str
+			}
+			fn tla_code(&self) -> &[String] {
+				&self.tla_code
+			}
+			fn max_stack(&self) -> i32 {
+				self.max_stack
+			}
+		}
+	};
 }
 
 /// Build evaluation options from command args that implement JsonnetArgs.
@@ -270,7 +314,7 @@ pub fn build_eval_opts(args: &impl JsonnetArgs) -> EvalOpts {
 		tla_code: parse_key_value_pairs(args.tla_code()),
 		max_stack: Some(args.max_stack() as usize),
 		eval_expr: None,
-		env_name: args.name().map(|s| s.to_string()),
+		env_name: None,
 		export_jsonnet_implementation: None,
 	}
 }
@@ -388,4 +432,69 @@ pub fn create_tokio_runtime() -> Result<tokio::runtime::Runtime> {
 		.enable_all()
 		.build()
 		.context("creating tokio runtime")
+}
+
+/// Configuration for setting up a diff engine.
+pub struct DiffEngineConfig<'a> {
+	/// Connection to the Kubernetes cluster.
+	pub connection: &'a ClusterConnection,
+	/// Optional spec for strategy selection.
+	pub spec: Option<&'a Spec>,
+	/// Manifests to diff against.
+	pub manifests: &'a [serde_json::Value],
+	/// Whether to enable prune detection.
+	pub with_prune: bool,
+	/// Optional override for diff strategy.
+	pub diff_strategy_override: Option<DiffStrategy>,
+}
+
+/// Result of setting up a diff engine.
+pub struct DiffEngineSetup {
+	/// The configured diff engine.
+	pub engine: DiffEngine,
+	/// The diff strategy being used.
+	pub strategy: DiffStrategy,
+	/// The default namespace for resources.
+	pub default_namespace: String,
+}
+
+/// Set up a diff engine with strategy and namespace resolution.
+///
+/// This consolidates the common pattern of:
+/// 1. Determining diff strategy from override, spec, or default
+/// 2. Resolving default namespace from spec or connection
+/// 3. Creating the diff engine
+pub async fn setup_diff_engine(config: DiffEngineConfig<'_>) -> Result<DiffEngineSetup> {
+	// Determine diff strategy
+	let strategy = config.diff_strategy_override.unwrap_or_else(|| {
+		if let Some(s) = config.spec {
+			DiffStrategy::from_spec(s, config.connection.server_version())
+		} else {
+			DiffStrategy::Native
+		}
+	});
+	tracing::debug!(strategy = %strategy, "using diff strategy");
+
+	// Get default namespace from spec or connection
+	let default_namespace = config
+		.spec
+		.map(|s| s.namespace.clone())
+		.unwrap_or_else(|| config.connection.default_namespace().to_string());
+
+	// Create diff engine
+	let engine = DiffEngine::new(
+		config.connection.clone(),
+		strategy,
+		default_namespace.clone(),
+		config.manifests,
+		config.with_prune,
+	)
+	.await
+	.context("creating diff engine")?;
+
+	Ok(DiffEngineSetup {
+		engine,
+		strategy,
+		default_namespace,
+	})
 }

@@ -1272,7 +1272,8 @@ fn export_manifest_file(
 		sorted
 			.serialize(&mut ser)
 			.context("serializing manifest.json")?;
-		String::from_utf8(buf).expect("valid utf8")
+		// JSON serialization always produces valid UTF-8, but handle gracefully just in case
+		String::from_utf8(buf).context("manifest.json content is not valid UTF-8")?
 	};
 	fs::write(&manifest_path, content).context("writing manifest.json")?;
 
@@ -1626,7 +1627,9 @@ fn specialize_template_for_env(
 	let mut result = template.to_string();
 
 	// Find all env.metadata.labels.X references in the template
-	let label_pattern = Regex::new(r"env\.metadata\.labels\.(\w+)").unwrap();
+	// This pattern is a compile-time constant, so it should never fail
+	let label_pattern = Regex::new(r"env\.metadata\.labels\.(\w+)")
+		.context("failed to compile label reference pattern")?;
 	let all_label_refs: std::collections::HashSet<String> = label_pattern
 		.captures_iter(template)
 		.map(|cap| cap[1].to_string())

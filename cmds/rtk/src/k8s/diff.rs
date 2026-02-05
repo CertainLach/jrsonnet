@@ -44,6 +44,9 @@ pub enum DiffError {
 	#[error("diff task panicked")]
 	TaskPanicked(#[source] tokio::task::JoinError),
 
+	#[error("internal error: concurrency semaphore unexpectedly closed")]
+	SemaphoreClosed,
+
 	#[error("building API resource cache")]
 	BuildingApiCache(#[source] Box<DiscoveryError>),
 
@@ -540,7 +543,10 @@ impl DiffEngine {
 			let sem = semaphore.clone();
 
 			join_set.spawn(async move {
-				let _permit = sem.acquire().await.expect("semaphore closed");
+				let _permit = match sem.acquire().await {
+					Ok(permit) => permit,
+					Err(_) => return DiffTaskResult::Diff(Err(DiffError::SemaphoreClosed)),
+				};
 				let result = if use_native {
 					engine.diff_manifest_native(&manifest).await
 				} else {
@@ -625,7 +631,10 @@ impl DiffEngine {
 			let label = label.clone();
 
 			join_set.spawn(async move {
-				let _permit = sem.acquire().await.expect("semaphore closed");
+				let _permit = match sem.acquire().await {
+					Ok(permit) => permit,
+					Err(_) => return DiffTaskResult::Prune(Err(DiffError::SemaphoreClosed)),
+				};
 				let result = engine
 					.find_deleted_for_type(&gvk, &discovered, &manifest_keys, &label)
 					.await;
@@ -717,7 +726,10 @@ impl DiffEngine {
 			let sem = semaphore.clone();
 
 			join_set.spawn(async move {
-				let _permit = sem.acquire().await.expect("semaphore closed");
+				let _permit = match sem.acquire().await {
+					Ok(permit) => permit,
+					Err(_) => return Err(DiffError::SemaphoreClosed),
+				};
 				engine.validate_manifest(&manifest).await
 			});
 		}

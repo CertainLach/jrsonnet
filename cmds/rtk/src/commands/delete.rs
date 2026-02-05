@@ -63,13 +63,7 @@ pub struct DeleteArgs {
 
 /// Run the delete command.
 pub fn run<W: Write>(args: DeleteArgs, _writer: W) -> Result<()> {
-	UnimplementedArgs {
-		jsonnet_implementation: Some(&args.jsonnet_implementation),
-		cache_envs: None,
-		cache_path: None,
-		mem_ballast_size_bytes: None,
-	}
-	.warn_if_set();
+	UnimplementedArgs::warn_jsonnet_impl(&args.jsonnet_implementation);
 
 	anyhow::bail!("not implemented")
 }
