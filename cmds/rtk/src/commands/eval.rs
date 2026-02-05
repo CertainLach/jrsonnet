@@ -6,7 +6,7 @@ use anyhow::Result;
 use clap::Args;
 use jrsonnet_evaluator::ImportResolver;
 
-use super::util::UnimplementedArgs;
+use super::util::{JsonnetArgs, UnimplementedArgs};
 use crate::{
 	eval::{self, EvalOpts},
 	spec::Environment,
@@ -46,6 +46,27 @@ pub struct EvalArgs {
 	pub tla_str: Vec<String>,
 }
 
+impl JsonnetArgs for EvalArgs {
+	fn ext_str(&self) -> &[String] {
+		&self.ext_str
+	}
+	fn ext_code(&self) -> &[String] {
+		&self.ext_code
+	}
+	fn tla_str(&self) -> &[String] {
+		&self.tla_str
+	}
+	fn tla_code(&self) -> &[String] {
+		&self.tla_code
+	}
+	fn max_stack(&self) -> i32 {
+		self.max_stack
+	}
+	fn name(&self) -> Option<&str> {
+		None
+	}
+}
+
 /// Run the eval command with injected dependencies.
 pub fn run<W: Write, R: ImportResolver>(
 	import_resolver: R,
@@ -72,48 +93,9 @@ pub fn build_eval_opts(args: &EvalArgs) -> EvalOpts {
 	}
 	.warn_if_set();
 
-	// Parse ext_code flags (format: key=value)
-	let mut ext_code_map = std::collections::HashMap::new();
-	for item in &args.ext_code {
-		if let Some((key, value)) = item.split_once('=') {
-			ext_code_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse ext_str flags
-	let mut ext_str_map = std::collections::HashMap::new();
-	for item in &args.ext_str {
-		if let Some((key, value)) = item.split_once('=') {
-			ext_str_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse tla_code flags
-	let mut tla_code_map = std::collections::HashMap::new();
-	for item in &args.tla_code {
-		if let Some((key, value)) = item.split_once('=') {
-			tla_code_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse tla_str flags
-	let mut tla_str_map = std::collections::HashMap::new();
-	for item in &args.tla_str {
-		if let Some((key, value)) = item.split_once('=') {
-			tla_str_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	EvalOpts {
-		ext_str: ext_str_map,
-		ext_code: ext_code_map,
-		tla_str: tla_str_map,
-		tla_code: tla_code_map,
-		max_stack: Some(args.max_stack as usize),
-		eval_expr: args.eval.clone(),
-		env_name: None,
-		export_jsonnet_implementation: None,
-	}
+	let mut opts = super::util::build_eval_opts(args);
+	opts.eval_expr = args.eval.clone();
+	opts
 }
 
 #[cfg(test)]

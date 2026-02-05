@@ -5,7 +5,7 @@ use std::{io::Write, path::PathBuf};
 use anyhow::Result;
 use clap::Args;
 
-use super::util::UnimplementedArgs;
+use super::util::{parse_key_value_pairs, UnimplementedArgs};
 use crate::{
 	eval::EvalOpts,
 	export::{self as export_impl, ExportMergeStrategy, ExportOpts},
@@ -169,43 +169,11 @@ pub fn run<W: Write>(args: ExportArgs, mut writer: W) -> Result<()> {
 }
 
 fn build_export_opts(args: &ExportArgs) -> Result<ExportOpts> {
-	// Parse ext_code flags
-	let mut ext_code_map = std::collections::HashMap::new();
-	for item in &args.ext_code {
-		if let Some((key, value)) = item.split_once('=') {
-			ext_code_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse ext_str flags
-	let mut ext_str_map = std::collections::HashMap::new();
-	for item in &args.ext_str {
-		if let Some((key, value)) = item.split_once('=') {
-			ext_str_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse tla_code flags
-	let mut tla_code_map = std::collections::HashMap::new();
-	for item in &args.tla_code {
-		if let Some((key, value)) = item.split_once('=') {
-			tla_code_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
-	// Parse tla_str flags
-	let mut tla_str_map = std::collections::HashMap::new();
-	for item in &args.tla_str {
-		if let Some((key, value)) = item.split_once('=') {
-			tla_str_map.insert(key.to_string(), value.to_string());
-		}
-	}
-
 	let eval_opts = EvalOpts {
-		ext_str: ext_str_map,
-		ext_code: ext_code_map,
-		tla_str: tla_str_map,
-		tla_code: tla_code_map,
+		ext_str: parse_key_value_pairs(&args.ext_str),
+		ext_code: parse_key_value_pairs(&args.ext_code),
+		tla_str: parse_key_value_pairs(&args.tla_str),
+		tla_code: parse_key_value_pairs(&args.tla_code),
 		max_stack: Some(args.max_stack as usize),
 		eval_expr: None,
 		env_name: None,

@@ -9,6 +9,10 @@ use clap::{Args, ValueEnum};
 use serde::{Deserialize, Serialize};
 use tracing::instrument;
 
+use super::util::{
+	build_eval_opts, create_tokio_runtime, extract_manifests, get_or_create_connection,
+	parse_key_value_pairs, process_manifests, JsonnetArgs,
+};
 use crate::{
 	discover::find_environments,
 	eval::EvalOpts,
@@ -121,6 +125,27 @@ pub struct DiffArgs {
 	pub list_modified_envs: bool,
 }
 
+impl JsonnetArgs for DiffArgs {
+	fn ext_str(&self) -> &[String] {
+		&self.ext_str
+	}
+	fn ext_code(&self) -> &[String] {
+		&self.ext_code
+	}
+	fn tla_str(&self) -> &[String] {
+		&self.tla_str
+	}
+	fn tla_code(&self) -> &[String] {
+		&self.tla_code
+	}
+	fn max_stack(&self) -> i32 {
+		self.max_stack
+	}
+	fn name(&self) -> Option<&str> {
+		self.name.as_deref()
+	}
+}
+
 /// Result of running the diff command.
 struct DiffResult {
 	/// Whether any differences were found.
@@ -135,12 +160,7 @@ pub fn run<W: Write>(args: DiffArgs, writer: W) -> Result<bool> {
 	let exit_zero = args.exit_zero;
 	let list_modified_envs = args.list_modified_envs;
 
-	// Create a tokio runtime for async operations
-	let runtime = tokio::runtime::Builder::new_multi_thread()
-		.enable_all()
-		.build()
-		.context("creating tokio runtime")?;
-
+	let runtime = create_tokio_runtime()?;
 	let result = runtime.block_on(run_async(args, writer))?;
 
 	// --list-modified-envs always exits 0
@@ -187,41 +207,9 @@ pub async fn diff_environment<W: Write>(
 	opts: DiffOpts,
 	writer: W,
 ) -> Result<Vec<ResourceDiff>> {
-	// Evaluate the environment
-	tracing::debug!(path = %path, "evaluating environment");
-	let eval_result = crate::eval::eval(path, eval_opts)
-		.context(format!("evaluating environment at {}", path))?;
+	use super::util::evaluate_single_environment;
 
-	// Extract environments (handles both inline and static environments)
-	let mut environments = crate::spec::extract_environments(&eval_result.value, &eval_result.spec);
-
-	// For inline environments, set metadata.namespace to file path
-	if eval_result.spec.is_none() {
-		crate::spec::set_inline_env_namespace(&mut environments, path);
-	}
-
-	// Filter by name if specified
-	if let Some(ref target_name) = opts.name {
-		environments = filter_environments_by_name(environments, target_name).map_err(|_| {
-			anyhow::anyhow!(
-				"no environment found matching name '{}'. Available environments: {}",
-				target_name,
-				get_environment_names(&crate::spec::extract_environments(
-					&eval_result.value,
-					&eval_result.spec
-				))
-			)
-		})?;
-	}
-
-	// For diff, we only support a single environment
-	let [env_data] = <[_; 1]>::try_from(environments).map_err(|envs: Vec<_>| {
-		anyhow::anyhow!(
-			"multiple inline environments found ({}). Use --name to select one: {}",
-			envs.len(),
-			get_environment_names(&envs)
-		)
-	})?;
+	let env_data = evaluate_single_environment(path, eval_opts, opts.name.as_deref())?;
 	let env_spec = env_data.spec;
 
 	// Get the spec for cluster connection and strategy selection
@@ -236,33 +224,9 @@ pub async fn diff_environment<W: Write>(
 		return Ok(Vec::new());
 	}
 
-	// Inject tanka.dev/environment label if injectLabels is enabled
-	for manifest in &mut manifests {
-		crate::spec::inject_environment_label(manifest, &env_spec);
-	}
+	process_manifests(&mut manifests, &env_spec);
 
-	// Strip empty annotations/labels (matches Tanka's pkg/process/namespace.go)
-	for manifest in &mut manifests {
-		crate::spec::strip_null_metadata_fields(manifest);
-	}
-
-	// Use provided connection or create one from spec
-	let connection = match connection {
-		Some(conn) => conn,
-		None => {
-			let spec_for_connection = spec.cloned().unwrap_or_default();
-			tracing::debug!("connecting to Kubernetes cluster");
-			let conn = ClusterConnection::from_spec(&spec_for_connection)
-				.await
-				.context("connecting to Kubernetes cluster")?;
-			tracing::debug!(
-				cluster = %conn.cluster_identifier(),
-				server_version = %format!("{}.{}", conn.server_version().major, conn.server_version().minor),
-				"connected to cluster"
-			);
-			conn
-		}
-	};
+	let connection = get_or_create_connection(connection, spec).await?;
 
 	diff_manifests(manifests, connection, env_spec.as_ref(), opts, writer).await
 }
@@ -350,17 +314,16 @@ async fn run_async<W: Write>(args: DiffArgs, writer: W) -> Result<DiffResult> {
 		return list_modified_environments(&args, &mut std::io::sink()).await;
 	}
 
-	let eval_opts = build_eval_opts(&args);
 	let opts = DiffOpts {
 		strategy: args.diff_strategy,
 		with_prune: args.with_prune,
 		color: args.color,
 		summarize: args.summarize,
-		target: args.target,
-		name: args.name,
+		target: args.target.clone(),
+		name: args.name.clone(),
 	};
 
-	let diffs = diff_environment(&args.path, None, eval_opts, opts, writer).await?;
+	let diffs = diff_environment(&args.path, None, build_eval_opts(&args), opts, writer).await?;
 	let has_changes = diffs.iter().any(|d| d.has_changes());
 
 	Ok(DiffResult { has_changes })
@@ -566,149 +529,6 @@ async fn check_environment_for_changes(
 
 	// Check if any resource has changes
 	Ok(diffs.iter().any(|d| d.has_changes()))
-}
-
-/// Parse key=value pairs into a HashMap.
-fn parse_key_value_pairs(items: &[String]) -> std::collections::HashMap<String, String> {
-	items
-		.iter()
-		.filter_map(|s| {
-			s.split_once('=')
-				.map(|(k, v)| (k.to_string(), v.to_string()))
-		})
-		.collect()
-}
-
-/// Build evaluation options from command args.
-fn build_eval_opts(args: &DiffArgs) -> EvalOpts {
-	EvalOpts {
-		ext_str: parse_key_value_pairs(&args.ext_str),
-		ext_code: parse_key_value_pairs(&args.ext_code),
-		tla_str: parse_key_value_pairs(&args.tla_str),
-		tla_code: parse_key_value_pairs(&args.tla_code),
-		max_stack: Some(args.max_stack as usize),
-		eval_expr: None,
-		env_name: args.name.clone(),
-		export_jsonnet_implementation: None,
-	}
-}
-
-/// Extract Kubernetes manifests from the evaluation result.
-///
-/// The evaluation result can be:
-/// - A single manifest object
-/// - An array of manifests
-/// - A nested object containing manifests (Tanka environment format)
-fn extract_manifests(
-	value: &serde_json::Value,
-	target_filters: &[String],
-) -> Result<Vec<serde_json::Value>> {
-	let mut manifests = Vec::new();
-	collect_manifests(value, &mut manifests);
-
-	// Apply target filters if specified
-	if !target_filters.is_empty() {
-		let filters: Vec<regex::Regex> = target_filters
-			.iter()
-			.map(|f| regex::Regex::new(f))
-			.collect::<Result<Vec<_>, _>>()
-			.context("invalid target filter regex")?;
-
-		manifests.retain(|m| {
-			let kind = m.get("kind").and_then(|v| v.as_str()).unwrap_or("");
-			let name = m
-				.pointer("/metadata/name")
-				.and_then(|v| v.as_str())
-				.unwrap_or("");
-			let target = format!("{}/{}", kind, name);
-
-			filters.iter().any(|f| f.is_match(&target))
-		});
-	}
-
-	Ok(manifests)
-}
-
-/// Recursively collect Kubernetes manifests from a JSON value.
-fn collect_manifests(value: &serde_json::Value, manifests: &mut Vec<serde_json::Value>) {
-	match value {
-		serde_json::Value::Object(map) => {
-			// Check if this looks like a Kubernetes manifest
-			if map.contains_key("apiVersion") && map.contains_key("kind") {
-				// Check if it's a List
-				if map.get("kind").and_then(|v| v.as_str()) == Some("List") {
-					if let Some(items) = map.get("items").and_then(|v| v.as_array()) {
-						for item in items {
-							collect_manifests(item, manifests);
-						}
-					}
-				} else {
-					// Regular manifest
-					manifests.push(value.clone());
-				}
-			} else {
-				// Nested object - recurse into values
-				for (_, v) in map {
-					collect_manifests(v, manifests);
-				}
-			}
-		}
-		serde_json::Value::Array(arr) => {
-			for item in arr {
-				collect_manifests(item, manifests);
-			}
-		}
-		_ => {
-			// Ignore primitives
-		}
-	}
-}
-
-/// Get the name of an environment, if available.
-fn env_name(env_data: &crate::spec::EnvironmentData) -> Option<&str> {
-	env_data
-		.spec
-		.as_ref()
-		.and_then(|s| s.metadata.name.as_deref())
-}
-
-/// Format a list of environment names for error messages.
-fn get_environment_names(environments: &[crate::spec::EnvironmentData]) -> String {
-	let names: Vec<&str> = environments.iter().filter_map(env_name).collect();
-	if names.is_empty() {
-		"(unnamed environments)".to_string()
-	} else {
-		names.join(", ")
-	}
-}
-
-/// Filter environments by name, trying exact match first, then substring.
-fn filter_environments_by_name(
-	environments: Vec<crate::spec::EnvironmentData>,
-	target_name: &str,
-) -> Result<Vec<crate::spec::EnvironmentData>> {
-	// Try exact match first
-	let exact: Vec<_> = environments
-		.iter()
-		.filter(|e| env_name(e) == Some(target_name))
-		.cloned()
-		.collect();
-
-	if let [_single] = exact.as_slice() {
-		return Ok(exact);
-	}
-
-	// Fall back to substring matching
-	let matches: Vec<_> = environments
-		.into_iter()
-		.filter(|e| env_name(e).is_some_and(|n| n.contains(target_name)))
-		.collect();
-
-	if matches.is_empty() {
-		anyhow::bail!("no environment found matching name '{}'", target_name);
-	}
-
-	Ok(matches)
 }
 
 #[cfg(test)]
