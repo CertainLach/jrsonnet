@@ -56,26 +56,7 @@ pub struct ShowArgs {
 	pub tla_str: Vec<String>,
 }
 
-impl JsonnetArgs for ShowArgs {
-	fn ext_str(&self) -> &[String] {
-		&self.ext_str
-	}
-	fn ext_code(&self) -> &[String] {
-		&self.ext_code
-	}
-	fn tla_str(&self) -> &[String] {
-		&self.tla_str
-	}
-	fn tla_code(&self) -> &[String] {
-		&self.tla_code
-	}
-	fn max_stack(&self) -> i32 {
-		self.max_stack
-	}
-	fn name(&self) -> Option<&str> {
-		self.name.as_deref()
-	}
-}
+crate::impl_jsonnet_args!(ShowArgs);
 
 /// Options for the show operation.
 #[derive(Default)]
@@ -88,13 +69,7 @@ pub struct ShowOpts {
 
 /// Run the show command.
 pub fn run<W: Write>(args: ShowArgs, mut writer: W) -> Result<()> {
-	UnimplementedArgs {
-		jsonnet_implementation: Some(&args.jsonnet_implementation),
-		cache_envs: None,
-		cache_path: None,
-		mem_ballast_size_bytes: None,
-	}
-	.warn_if_set();
+	UnimplementedArgs::warn_jsonnet_impl(&args.jsonnet_implementation);
 
 	// Check redirect safety (matches tk behavior)
 	let is_terminal = std::io::IsTerminal::is_terminal(&std::io::stdout());

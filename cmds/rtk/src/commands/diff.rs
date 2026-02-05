@@ -11,7 +11,7 @@ use tracing::instrument;
 
 use super::util::{
 	build_eval_opts, create_tokio_runtime, extract_manifests, get_or_create_connection,
-	parse_key_value_pairs, process_manifests, JsonnetArgs,
+	parse_key_value_pairs, process_manifests, setup_diff_engine, DiffEngineConfig, JsonnetArgs,
 };
 use crate::{
 	discover::find_environments,
@@ -125,26 +125,7 @@ pub struct DiffArgs {
 	pub list_modified_envs: bool,
 }
 
-impl JsonnetArgs for DiffArgs {
-	fn ext_str(&self) -> &[String] {
-		&self.ext_str
-	}
-	fn ext_code(&self) -> &[String] {
-		&self.ext_code
-	}
-	fn tla_str(&self) -> &[String] {
-		&self.tla_str
-	}
-	fn tla_code(&self) -> &[String] {
-		&self.tla_code
-	}
-	fn max_stack(&self) -> i32 {
-		self.max_stack
-	}
-	fn name(&self) -> Option<&str> {
-		self.name.as_deref()
-	}
-}
+crate::impl_jsonnet_args!(DiffArgs);
 
 /// Result of running the diff command.
 struct DiffResult {
@@ -245,31 +226,17 @@ pub async fn diff_manifests<W: Write>(
 ) -> Result<Vec<ResourceDiff>> {
 	let spec = env_spec.map(|e| &e.spec);
 
-	// Determine diff strategy
-	let strategy = opts.strategy.unwrap_or_else(|| {
-		if let Some(s) = spec {
-			DiffStrategy::from_spec(s, connection.server_version())
-		} else {
-			DiffStrategy::Native
-		}
-	});
-	tracing::debug!(strategy = %strategy, "using diff strategy");
-
-	// Get default namespace from spec or connection
-	let default_namespace = spec
-		.map(|s| s.namespace.clone())
-		.unwrap_or_else(|| connection.default_namespace().to_string());
-
-	// Create diff engine
-	let engine = DiffEngine::new(
-		connection,
-		strategy,
-		default_namespace,
-		&manifests,
-		opts.with_prune,
-	)
-	.await
-	.context("creating diff engine")?;
+	// Set up diff engine
+	let setup = setup_diff_engine(DiffEngineConfig {
+		connection: &connection,
+		spec,
+		manifests: &manifests,
+		with_prune: opts.with_prune,
+		diff_strategy_override: opts.strategy,
+	})
+	.await?;
+	let engine = setup.engine;
+	let strategy = setup.strategy;
 
 	// Get environment label for prune detection (SHA256 hash of name:namespace)
 	let env_label_owned = env_spec.map(crate::spec::generate_environment_label);
