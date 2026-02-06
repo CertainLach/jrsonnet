@@ -89,7 +89,7 @@ pub struct EvalResult {
 
 /// Evaluate a tanka environment at the given path
 #[instrument(skip(opts), fields(path = %path))]
-pub fn eval(path: &str, opts: EvalOpts) -> Result<EvalResult> {
+pub fn eval(path: &str, opts: &EvalOpts) -> Result<EvalResult> {
 	// Resolve jpath (find root, base, import paths)
 	let jpath_result = jpath::resolve(path)?;
 
@@ -118,23 +118,46 @@ pub fn eval_with_resolver(
 	entrypoint: &Path,
 	config_base: Option<&Path>,
 	spec: Option<Environment>,
-	opts: EvalOpts,
+	opts: &EvalOpts,
 ) -> Result<EvalResult> {
-	set_skip_assertions(false);
+	let object_space_empty = jrsonnet_gcmodule::with_thread_object_space(|object_space| {
+		object_space.collect_cycles();
+		object_space.is_empty()
+	});
+	if !object_space_empty {
+		anyhow::bail!("cannot eval without an empty gc on the thread");
+	}
 
-	// Enable lenient super mode to handle mixins that reference super fields that don't exist yet
-	// This works around go-jsonnet compatibility issues in libraries like k8s-libsonnet
-	set_lenient_super(true);
+	let result = (|| -> Result<_> {
+		// Skip assertions during manifest generation to match Go Tanka's behavior
+		// This prevents circular dependency errors in autoscaling configs and other complex patterns
+		set_skip_assertions(false);
 
-	// Set up the evaluator state
-	let state = setup_state(import_resolver, config_base, &spec, &opts)?;
+		// Enable lenient super mode to handle mixins that reference super fields that don't exist yet
+		// This works around go-jsonnet compatibility issues in libraries like k8s-libsonnet
+		set_lenient_super(true);
 
-	// Evaluate the entrypoint
-	let result = evaluate_file(&state, entrypoint, &opts)?;
+		// Set up the evaluator state
+		let state = setup_state(import_resolver, config_base, &spec, &opts)?;
 
-	// Parse the result as JSON
-	let value: serde_json::Value =
-		serde_json::from_str(&result).context("failed to parse evaluation result as JSON")?;
+		// Evaluate the entrypoint
+		let result = evaluate_file(&state, entrypoint, &opts)?;
+
+		// Parse the result as JSON
+		let value: serde_json::Value =
+			serde_json::from_str(&result).context("failed to parse evaluation result as JSON")?;
+
+		Ok(value)
+	})();
+
+	jrsonnet_gcmodule::with_thread_object_space(|object_space| {
+		// SAFETY: We ensure at the start of this function that the object space
+		// is empty, and we're not holding on to any garbage collected values at
+		// this point- therefore the object space must be empty.
+		unsafe { object_space.empty_without_checking_cycles() }
+	});
+
+	let value = result?;
 
 	Ok(EvalResult { value, spec })
 }
@@ -440,7 +463,7 @@ mod tests {
 		let temp = TempDir::new().unwrap();
 		let env_path = setup_test_env(&temp, r#"{ hello: "world", num: 42 }"#);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 
 		assert_eq!(result.value["hello"], "world");
 		assert_eq!(result.value["num"], 42);
@@ -463,7 +486,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert!(result.spec.is_some());
 		// Note: metadata.name is overridden with the relative path from root to base
 		// (matching Go Tanka's behavior in pkg/spec/spec.go:ParseDir)
@@ -480,7 +503,7 @@ mod tests {
 		opts.ext_str
 			.insert("myvar".to_string(), "hello".to_string());
 
-		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
 		assert_eq!(result.value["value"], "hello");
 	}
 
@@ -493,7 +516,7 @@ mod tests {
 		opts.ext_code
 			.insert("mycode".to_string(), "{ a: 1, b: 2 }".to_string());
 
-		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
 		assert_eq!(result.value["value"]["a"], 1);
 		assert_eq!(result.value["value"]["b"], 2);
 	}
@@ -506,7 +529,7 @@ mod tests {
 			r#"{ parsed: std.native("parseJson")('{"key": "value"}') }"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["parsed"]["key"], "value");
 	}
 
@@ -521,7 +544,7 @@ mod tests {
             }"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["matches"], true);
 		assert_eq!(result.value["no_match"], false);
 	}
@@ -544,7 +567,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = eval(root.join("env").to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(root.join("env").to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["shared"], true);
 	}
 
@@ -553,7 +576,7 @@ mod tests {
 		let temp = TempDir::new().unwrap();
 		let env_path = setup_test_env(&temp, r#"{ invalid syntax }"#);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default());
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default());
 		assert!(result.is_err());
 	}
 
@@ -568,7 +591,7 @@ mod tests {
 		let mut opts = EvalOpts::default();
 		opts.tla_str.insert("name".to_string(), "World".to_string());
 
-		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
 		assert_eq!(result.value["greeting"], "Hello, World!");
 	}
 
@@ -586,7 +609,7 @@ mod tests {
 			r#"{ items: ["a", "b", "c"] }"#.to_string(),
 		);
 
-		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
 		assert_eq!(result.value["count"], 3);
 		assert_eq!(result.value["items"][0], "a");
 	}
@@ -607,7 +630,7 @@ mod tests {
 			..Default::default()
 		};
 
-		let result = eval(env_path.to_str().unwrap(), opts).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
 		assert_eq!(result.value["value"], 42);
 		assert!(result.value.get("other").is_none());
 	}
@@ -617,7 +640,7 @@ mod tests {
 		let temp = TempDir::new().unwrap();
 		let env_path = setup_test_env(&temp, r#"{ hash: std.native("sha256")("hello") }"#);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		// SHA256 of "hello" is a known value
 		assert_eq!(
 			result.value["hash"],
@@ -635,7 +658,7 @@ mod tests {
 			}"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["result"], "hello universe");
 	}
 
@@ -647,7 +670,7 @@ mod tests {
 			r#"{ parsed: std.native("parseYaml")("key: value\nnum: 123") }"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		// parseYaml returns an array of documents
 		assert_eq!(result.value["parsed"][0]["key"], "value");
 		assert_eq!(result.value["parsed"][0]["num"], 123);
@@ -671,7 +694,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = eval(root.join("env").to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(root.join("env").to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["helper"], true);
 	}
 
@@ -695,7 +718,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = eval(root.join("env").to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(root.join("env").to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert!(result.value["k"]["core"].is_object());
 	}
 
@@ -729,7 +752,7 @@ mod tests {
 		)
 		.unwrap();
 
-		let result = eval(root.join("env").to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(root.join("env").to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["namespace"], "my-namespace");
 	}
 
@@ -738,7 +761,7 @@ mod tests {
 		let temp = TempDir::new().unwrap();
 		let env_path = setup_test_env(&temp, r#"[1, 2, 3, "four", { five: 5 }]"#);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert!(result.value.is_array());
 		assert_eq!(result.value[0], 1);
 		assert_eq!(result.value[3], "four");
@@ -758,7 +781,7 @@ mod tests {
 			}"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["upper"], "HELLO");
 		assert_eq!(result.value["lower"], "world");
 		assert_eq!(result.value["length"], 3);
@@ -772,7 +795,7 @@ mod tests {
 		fs::write(root.join("jsonnetfile.json"), "{}").unwrap();
 		// Don't create main.jsonnet
 
-		let result = eval(root.to_str().unwrap(), EvalOpts::default());
+		let result = eval(root.to_str().unwrap(), &EvalOpts::default());
 		assert!(result.is_err());
 	}
 
@@ -784,7 +807,7 @@ mod tests {
 			r#"{ escaped: std.native("escapeStringRegex")("hello.world*") }"#,
 		);
 
-		let result = eval(env_path.to_str().unwrap(), EvalOpts::default()).unwrap();
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["escaped"], r"hello\.world\*");
 	}
 }

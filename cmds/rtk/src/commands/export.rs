@@ -110,6 +110,7 @@ pub fn run<W: Write>(args: ExportArgs, mut writer: W) -> Result<()> {
 	.warn_if_set();
 
 	let opts = build_export_opts(&args)?;
+
 	let result = export_impl::export(&args.paths, opts)?;
 
 	// Match tk behavior: silent on success, errors reported via the provided writer

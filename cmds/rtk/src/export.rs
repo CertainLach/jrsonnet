@@ -11,17 +11,16 @@ use std::{
 		atomic::{AtomicBool, Ordering},
 		mpsc, Arc,
 	},
-	thread,
 };
 
 use crate::yaml::sort_json_keys;
 
 use anyhow::{bail, Context, Result};
 use gtmpl::{FuncError, Value};
-use rayon::iter::{IntoParallelIterator, ParallelIterator};
+use rayon::iter::{IndexedParallelIterator, IntoParallelIterator, ParallelIterator};
 use serde::Serialize;
 use serde_json::Value as JsonValue;
-use tracing::{debug, trace};
+use tracing::{debug, trace, warn};
 
 use crate::{
 	discover::{find_environments_with_opts, DiscoveredEnv},
@@ -356,6 +355,12 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 		opts.output_dir
 	);
 
+	let opts = Arc::new(opts);
+
+	let thread_pool = rayon::ThreadPoolBuilder::new()
+		.num_threads(opts.parallelism)
+		.build()?;
+
 	// PHASE 1: Validate template format FIRST (fail fast - Issue #2)
 	let validate_start = Instant::now();
 	trace!("Validating filename template: {}", opts.format);
@@ -500,22 +505,16 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 	// Dynamic scheduling: spawn threads up to parallelism limit
 	// Fresh threads for each export ensure thread-local GC state is freed
 	let (tx, rx) = mpsc::channel();
-	let mut env_iter = envs.iter().enumerate();
 	let total_envs = envs.len();
 	let show_timing = opts.show_timing;
 
 	debug!("Loading {} environments", total_envs);
 	let parallel_start = Instant::now();
 
-	// Spawn initial batch of threads (up to parallelism limit)
-	for _ in 0..opts.parallelism {
-		if let Some((idx, env)) = env_iter.next() {
-			let env = env.clone();
-			let opts = opts.clone();
-			let abort_flag = Arc::clone(&abort_flag);
-			let tx = tx.clone();
-
-			thread::spawn(move || {
+	thread_pool.install(|| {
+		envs.into_par_iter().enumerate().for_each_with(
+			(opts.clone(), abort_flag, tx),
+			|(opts, abort_flag, tx), (idx, env)| {
 				if abort_flag.load(Ordering::Relaxed) {
 					let result = ExportEnvResult {
 						env_path: env.path.clone(),
@@ -555,77 +554,18 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 					},
 				};
 
-				let _ = tx.send((idx, result));
-			});
-		}
-	}
-
-	// Keep original sender alive for spawning more threads
-	let tx_main = tx.clone();
-	drop(tx); // Drop this clone so channel closes when all threads complete
+				if let Err(_) = tx.send((idx, result)) {
+					warn!("Unable to send export result- channel disconnected");
+				}
+			},
+		);
+	});
 
 	// Collect results and dynamically spawn new threads as old ones complete
 	let mut collected_results = HashMap::with_capacity(total_envs);
-	let mut received_count = 0;
 
 	for (idx, result) in rx {
 		collected_results.insert(idx, result);
-		received_count += 1;
-
-		// Spawn a new thread for the next environment (if any remain)
-		if let Some((next_idx, env)) = env_iter.next() {
-			let env = env.clone();
-			let opts = opts.clone();
-			let abort_flag = Arc::clone(&abort_flag);
-			let tx = tx_main.clone();
-
-			thread::spawn(move || {
-				if abort_flag.load(Ordering::Relaxed) {
-					let result = ExportEnvResult {
-						env_path: env.path.clone(),
-						files_written: vec![],
-						env_namespace: None,
-						error: Some("Skipped due to earlier fatal error".to_string()),
-						timing: None,
-					};
-					let _ = tx.send((next_idx, result));
-					return;
-				}
-
-				let result = match export_single_env(&env, &opts) {
-					Ok((files, namespace, timing)) => ExportEnvResult {
-						env_path: env.path.clone(),
-						files_written: files,
-						env_namespace: Some(namespace),
-						error: None,
-						timing: if show_timing { Some(timing) } else { None },
-					},
-					Err(ExportError::Fatal(msg)) => {
-						abort_flag.store(true, Ordering::Relaxed);
-						ExportEnvResult {
-							env_path: env.path.clone(),
-							files_written: vec![],
-							env_namespace: None,
-							error: Some(format!("FATAL: {}", msg)),
-							timing: None,
-						}
-					}
-					Err(ExportError::EnvError(_, msg)) => ExportEnvResult {
-						env_path: env.path.clone(),
-						files_written: vec![],
-						env_namespace: None,
-						error: Some(msg),
-						timing: None,
-					},
-				};
-
-				let _ = tx.send((next_idx, result));
-			});
-		} else if received_count == total_envs {
-			// All environments processed, drop the sender to close the channel
-			drop(tx_main);
-			break;
-		}
 	}
 
 	// Extract results in order by index
@@ -729,7 +669,7 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 	);
 
 	Ok(ExportResult {
-		total_envs: envs.len(),
+		total_envs,
 		successful,
 		failed,
 		results,
@@ -846,7 +786,7 @@ fn export_single_env(
 
 	trace!("[{}] Starting Jsonnet evaluation", env_display);
 	let eval_start = Instant::now();
-	let result = eval(env.path.to_string_lossy().as_ref(), eval_opts)
+	let result = eval(env.path.to_string_lossy().as_ref(), &eval_opts)
 		.map_err(|e| ExportError::EnvError(env.path.clone(), e.to_string()))?;
 	timing.eval_ms = eval_start.elapsed().as_millis();
 	trace!(
@@ -1340,7 +1280,7 @@ fn collect_manifests_with_validation(
 				bail!(
 					"found invalid Kubernetes object (at {}): missing attribute \"apiVersion\"",
 					path
-				);
+				)
 			} else {
 				// Recurse into object values
 				for (key, v) in obj.iter() {

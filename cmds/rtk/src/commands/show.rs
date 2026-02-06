@@ -106,8 +106,10 @@ to bypass this check."
 #[instrument(skip_all, fields(path = %path))]
 pub fn show_environment(path: &str, eval_opts: EvalOpts, opts: ShowOpts) -> Result<String> {
 	use super::util::evaluate_single_environment;
+	// Evaluate the environment
+	tracing::debug!(path = %path, "evaluating environment");
 
-	let env_data = evaluate_single_environment(path, eval_opts, opts.name.as_deref())?;
+	let env_data = evaluate_single_environment(path, &eval_opts, opts.name.as_deref())?;
 
 	// Extract manifests from environment data
 	let mut manifests = extract_manifests(&env_data.data, &opts.target)?;

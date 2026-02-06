@@ -189,8 +189,10 @@ pub async fn diff_environment<W: Write>(
 	writer: W,
 ) -> Result<Vec<ResourceDiff>> {
 	use super::util::evaluate_single_environment;
+	// Evaluate the environment
+	tracing::debug!(path = %path, "evaluating environment");
 
-	let env_data = evaluate_single_environment(path, eval_opts, opts.name.as_deref())?;
+	let env_data = evaluate_single_environment(path, &eval_opts, opts.name.as_deref())?;
 	let env_spec = env_data.spec;
 
 	// Get the spec for cluster connection and strategy selection
@@ -435,7 +437,7 @@ async fn check_environment_for_changes(
 	target: Vec<String>,
 ) -> Result<bool> {
 	// Evaluate the environment
-	let eval_result = crate::eval::eval(&path, eval_opts).context("evaluating environment")?;
+	let eval_result = crate::eval::eval(&path, &eval_opts).context("evaluating environment")?;
 
 	let spec = eval_result.spec.as_ref().map(|e| &e.spec);
 

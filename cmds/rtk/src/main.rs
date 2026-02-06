@@ -121,7 +121,7 @@ fn main() -> Result<()> {
 				&jpath_result.entrypoint,
 				Some(&jpath_result.base),
 				spec,
-				opts,
+				&opts,
 				stdout,
 			)
 		}
