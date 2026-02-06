@@ -41,7 +41,7 @@ pub fn list_envs_to_writer<W: Write>(path: Option<String>, json: bool, writer: W
 	let search_path = path
 		.map(PathBuf::from)
 		.unwrap_or_else(|| std::env::current_dir().unwrap());
-	let mut envs = find_environments(&search_path, &search_path)?;
+	let mut envs = find_environments(&search_path)?;
 
 	if json {
 		// Normalize: convert null resourceDefaults and expectVersions to empty objects,
@@ -100,7 +100,7 @@ fn print_table_to_writer<W: Write>(
 }
 
 /// Find all environments recursively
-fn find_environments(root: &Path, original_path: &Path) -> Result<Vec<Environment>> {
+fn find_environments(root: &Path) -> Result<Vec<Environment>> {
 	// Handle the case where a main.jsonnet file is passed directly
 	let main_files = if root.is_file()
 		&& root
@@ -128,7 +128,7 @@ fn find_environments(root: &Path, original_path: &Path) -> Result<Vec<Environmen
 			let result = if spec_file.exists() {
 				// Static environment
 				if let Ok(mut env) = load_static_env(dir) {
-					if set_env_metadata(&mut env, dir, original_path).is_ok() {
+					if set_env_metadata(&mut env, dir).is_ok() {
 						Some(vec![env])
 					} else {
 						None
@@ -144,10 +144,10 @@ fn find_environments(root: &Path, original_path: &Path) -> Result<Vec<Environmen
 							// For inline envs, preserve the name from jsonnet if it exists
 							// Only generate name from path if metadata.name is missing
 							if env.metadata.name.is_none() {
-								let _ = set_env_metadata(env, dir, original_path);
+								let _ = set_env_metadata(env, dir);
 							} else {
-								// Name exists from jsonnet, just set the namespace relative to search path
-								let _ = set_env_namespace(env, dir, original_path);
+								// Name exists from jsonnet, just set the namespace relative to project root
+								let _ = set_env_namespace(env, dir);
 							}
 						}
 						Some(envs)
@@ -191,17 +191,19 @@ fn find_environments(root: &Path, original_path: &Path) -> Result<Vec<Environmen
 	Ok(final_envs)
 }
 
-/// Set environment metadata (name and namespace)
-fn set_env_metadata(env: &mut Environment, dir: &Path, original_path: &Path) -> Result<()> {
-	let env_path = compute_relative_env_path(dir, original_path);
+/// Set environment metadata (name and namespace) relative to the project root
+fn set_env_metadata(env: &mut Environment, dir: &Path) -> Result<()> {
+	let project_root = find_project_root(dir).unwrap_or_else(|| dir.to_path_buf());
+	let env_path = compute_relative_env_path(dir, &project_root);
 	env.metadata.name = Some(env_path.clone());
 	env.metadata.namespace = Some(format!("{}/main.jsonnet", env_path));
 	Ok(())
 }
 
-/// Set only the namespace without changing the name
-fn set_env_namespace(env: &mut Environment, dir: &Path, original_path: &Path) -> Result<()> {
-	let relative_path = compute_relative_env_path(dir, original_path);
+/// Set only the namespace without changing the name, relative to the project root
+fn set_env_namespace(env: &mut Environment, dir: &Path) -> Result<()> {
+	let project_root = find_project_root(dir).unwrap_or_else(|| dir.to_path_buf());
+	let relative_path = compute_relative_env_path(dir, &project_root);
 	env.metadata.namespace = Some(format!("{}/main.jsonnet", relative_path));
 	Ok(())
 }
@@ -384,15 +386,22 @@ fn extract_environments(value: &serde_json::Value) -> Result<Vec<Environment>> {
 	Ok(environments)
 }
 
-/// Find the project root by looking for jsonnetfile.json or tkrc.yaml
+/// Find the project root by looking for the outermost jsonnetfile.json or tkrc.yaml.
+/// Environments may have their own jsonnetfile.json for vendoring, so we walk all the
+/// way up and return the outermost match.
 fn find_project_root(start_path: &Path) -> Option<PathBuf> {
 	let mut current = start_path;
+	let mut root = None;
 	loop {
 		if current.join("jsonnetfile.json").exists() || current.join("tkrc.yaml").exists() {
-			return Some(current.to_path_buf());
+			root = Some(current.to_path_buf());
 		}
-		current = current.parent()?;
+		match current.parent() {
+			Some(parent) if parent != current => current = parent,
+			_ => break,
+		}
 	}
+	root
 }
 
 /// Load a static environment from spec.json
@@ -526,6 +535,269 @@ mod tests {
 			dir_envs.len(),
 			file_envs.len(),
 			"Directory path and file path should return the same number of environments"
+		);
+	}
+
+	/// Helper to extract metadata.namespace values from env list --json output
+	fn list_env_namespaces(path: Option<String>) -> Vec<String> {
+		let mut output = Cursor::new(Vec::new());
+		list_envs_to_writer(path, true, &mut output).unwrap();
+		let output_str = String::from_utf8(output.into_inner()).unwrap();
+		let envs: Vec<serde_json::Value> = serde_json::from_str(&output_str).unwrap();
+		let mut namespaces: Vec<String> = envs
+			.iter()
+			.filter_map(|env| env["metadata"]["namespace"].as_str().map(|s| s.to_string()))
+			.collect();
+		namespaces.sort();
+		namespaces
+	}
+
+	/// Create an inline env fixture nested under a "project" subdirectory.
+	/// Returns the project root path.
+	fn create_nested_inline_env_fixture(base: &Path) -> PathBuf {
+		let project_root = base.join("project");
+		fs::create_dir_all(&project_root).unwrap();
+		create_inline_env_fixture(&project_root);
+		project_root
+	}
+
+	fn create_static_env_fixture(dir: &Path) {
+		// Create jsonnetfile.json at root (required for project root detection)
+		fs::write(
+			dir.join("jsonnetfile.json"),
+			r#"{"version": 1, "dependencies": [], "legacyImports": true}"#,
+		)
+		.unwrap();
+
+		// Create static environment directory
+		let env_dir = dir.join("environments").join("dev");
+		fs::create_dir_all(&env_dir).unwrap();
+
+		fs::write(env_dir.join("main.jsonnet"), "{}").unwrap();
+
+		fs::write(
+			env_dir.join("spec.json"),
+			r#"{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {},
+  "spec": {
+    "apiServer": "https://localhost:6443",
+    "namespace": "default"
+  }
+}"#,
+		)
+		.unwrap();
+	}
+
+	/// Create a static env fixture nested under a "project" subdirectory.
+	/// Returns the project root path.
+	fn create_nested_static_env_fixture(base: &Path) -> PathBuf {
+		let project_root = base.join("project");
+		fs::create_dir_all(&project_root).unwrap();
+		create_static_env_fixture(&project_root);
+		project_root
+	}
+
+	/// metadata.namespace should always be relative to the project root
+	/// (where jsonnetfile.json lives), regardless of what path is passed.
+	#[test]
+	fn test_list_envs_json_inline_namespace_stable_from_root_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_inline_env_fixture(temp_dir.path());
+
+		let expected_namespace = "my-env/main.jsonnet";
+		let ns = list_env_namespaces(Some(project_root.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 2);
+		assert!(
+			ns.iter().all(|n| n == expected_namespace),
+			"From root dir: expected all namespaces to be '{}', got {:?}",
+			expected_namespace,
+			ns
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_inline_namespace_stable_from_parent_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_inline_env_fixture(temp_dir.path());
+
+		let expected_namespace = "my-env/main.jsonnet";
+		let parent = project_root.parent().unwrap();
+		let ns = list_env_namespaces(Some(parent.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 2);
+		assert!(
+			ns.iter().all(|n| n == expected_namespace),
+			"From parent dir: expected all namespaces to be '{}', got {:?}",
+			expected_namespace,
+			ns
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_inline_namespace_stable_from_child_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_inline_env_fixture(temp_dir.path());
+
+		let expected_namespace = "my-env/main.jsonnet";
+		let child = project_root.join("my-env");
+		let ns = list_env_namespaces(Some(child.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 2);
+		assert!(
+			ns.iter().all(|n| n == expected_namespace),
+			"From child dir: expected all namespaces to be '{}', got {:?}",
+			expected_namespace,
+			ns
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_inline_namespace_stable_from_file_path() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_inline_env_fixture(temp_dir.path());
+
+		let expected_namespace = "my-env/main.jsonnet";
+		let file_path = project_root.join("my-env").join("main.jsonnet");
+		let ns = list_env_namespaces(Some(file_path.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 2);
+		assert!(
+			ns.iter().all(|n| n == expected_namespace),
+			"From file path: expected all namespaces to be '{}', got {:?}",
+			expected_namespace,
+			ns
+		);
+	}
+
+	/// Same tests for static environments (spec.json based)
+	#[test]
+	fn test_list_envs_json_static_namespace_stable_from_root_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_static_env_fixture(temp_dir.path());
+
+		let expected_namespace = "environments/dev/main.jsonnet";
+		let ns = list_env_namespaces(Some(project_root.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"From root dir: expected namespace '{}'",
+			expected_namespace
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_static_namespace_stable_from_parent_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_static_env_fixture(temp_dir.path());
+
+		let expected_namespace = "environments/dev/main.jsonnet";
+		let parent = project_root.parent().unwrap();
+		let ns = list_env_namespaces(Some(parent.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"From parent dir: expected namespace '{}'",
+			expected_namespace
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_static_namespace_stable_from_child_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_static_env_fixture(temp_dir.path());
+
+		let expected_namespace = "environments/dev/main.jsonnet";
+		let child = project_root.join("environments");
+		let ns = list_env_namespaces(Some(child.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"From child dir: expected namespace '{}'",
+			expected_namespace
+		);
+	}
+
+	#[test]
+	fn test_list_envs_json_static_namespace_stable_from_env_dir() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = create_nested_static_env_fixture(temp_dir.path());
+
+		let expected_namespace = "environments/dev/main.jsonnet";
+		let env_dir = project_root.join("environments").join("dev");
+		let ns = list_env_namespaces(Some(env_dir.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"From env dir: expected namespace '{}'",
+			expected_namespace
+		);
+	}
+
+	/// Env directories can have their own jsonnetfile.json for vendoring.
+	/// find_project_root must walk past these to the outermost project root.
+	fn create_static_env_with_nested_jsonnetfile(dir: &Path) {
+		// Create jsonnetfile.json at the real project root
+		fs::write(
+			dir.join("jsonnetfile.json"),
+			r#"{"version": 1, "dependencies": [], "legacyImports": true}"#,
+		)
+		.unwrap();
+
+		// Create static environment directory
+		let env_dir = dir.join("environments").join("ge-logs").join("dev.ge-logs");
+		fs::create_dir_all(&env_dir).unwrap();
+
+		fs::write(env_dir.join("main.jsonnet"), "{}").unwrap();
+
+		fs::write(
+			env_dir.join("spec.json"),
+			r#"{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {},
+  "spec": {
+    "apiServer": "https://localhost:6443",
+    "namespace": "ge-logs"
+  }
+}"#,
+		)
+		.unwrap();
+
+		// The env dir also has its own jsonnetfile.json (for vendoring)
+		fs::write(
+			env_dir.join("jsonnetfile.json"),
+			r#"{"version": 1, "dependencies": [], "legacyImports": true}"#,
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn test_list_envs_json_static_namespace_with_nested_jsonnetfile() {
+		let temp_dir = TempDir::new().unwrap();
+		let project_root = temp_dir.path().join("project");
+		fs::create_dir_all(&project_root).unwrap();
+		create_static_env_with_nested_jsonnetfile(&project_root);
+
+		// The namespace should be relative to the outermost project root,
+		// not the env's own jsonnetfile.json
+		let expected_namespace = "environments/ge-logs/dev.ge-logs/main.jsonnet";
+
+		// From root
+		let ns = list_env_namespaces(Some(project_root.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"Nested jsonnetfile.json should not affect namespace; got '{}'",
+			ns[0]
+		);
+
+		// From environments/ subdirectory
+		let child = project_root.join("environments");
+		let ns = list_env_namespaces(Some(child.to_string_lossy().to_string()));
+		assert_eq!(ns.len(), 1);
+		assert_eq!(
+			ns[0], expected_namespace,
+			"Nested jsonnetfile.json from child dir; got '{}'",
+			ns[0]
 		);
 	}
 }
