@@ -1,5 +1,4 @@
 use jrsonnet_evaluator::{function::builtin, runtime_error, IStr, Result, Val};
-use serde::Deserialize;
 
 #[builtin]
 pub fn builtin_parse_json(str: IStr) -> Result<Val> {
@@ -10,17 +9,17 @@ pub fn builtin_parse_json(str: IStr) -> Result<Val> {
 
 #[builtin]
 pub fn builtin_parse_yaml(str: IStr) -> Result<Val> {
-	use serde_yaml_with_quirks::DeserializingQuirks;
-	let value = serde_yaml_with_quirks::Deserializer::from_str_with_quirks(
+	let out = serde_saphyr::from_multiple_with_options::<Val>(
 		&str,
-		DeserializingQuirks { old_octals: true },
-	);
-	let mut out = vec![];
-	for item in value {
-		let val =
-			Val::deserialize(item).map_err(|e| runtime_error!("failed to parse yaml: {e}"))?;
-		out.push(val);
-	}
+		serde_saphyr::Options {
+			// Golang/C++ compat
+			legacy_octal_numbers: true,
+			// Disable budget limits - we trust the YAML input
+			budget: None,
+			..Default::default()
+		},
+	)
+	.map_err(|e| runtime_error!("failed to parse yaml: {e}"))?;
 	Ok(if out.is_empty() {
 		Val::Null
 	} else if out.len() == 1 {
