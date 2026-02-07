@@ -6,12 +6,11 @@ use rustc_hash::FxHashMap;
 
 use crate::{
 	error::ErrorKind::*, gc::WithCapacityExt as _, map::LayeredHashMap, ObjValue, Pending, Result,
-	State, Thunk, Val,
+	Thunk, Val,
 };
 
 #[derive(Trace)]
 struct ContextInternals {
-	state: Option<State>,
 	dollar: Option<ObjValue>,
 	sup: Option<ObjValue>,
 	this: Option<ObjValue>,
@@ -31,13 +30,6 @@ pub struct Context(Cc<ContextInternals>);
 impl Context {
 	pub fn new_future() -> Pending<Self> {
 		Pending::new()
-	}
-
-	pub fn state(&self) -> &State {
-		self.0
-			.state
-			.as_ref()
-			.expect("used state from dummy context")
 	}
 
 	pub fn dollar(&self) -> Option<&ObjValue> {
@@ -112,7 +104,6 @@ impl Context {
 			ctx.bindings.clone().extend(new_bindings)
 		};
 		Self(Cc::new(ContextInternals {
-			state: ctx.state.clone(),
 			dollar,
 			sup,
 			this,
@@ -128,34 +119,22 @@ impl PartialEq for Context {
 }
 
 pub struct ContextBuilder {
-	state: Option<State>,
 	bindings: FxHashMap<IStr, Thunk<Val>>,
 	extend: Option<Context>,
 }
 
 impl ContextBuilder {
-	/// # Panics
-	/// Panics aren't directly caused by this function, but if state from resulting context is used
-	pub fn dangerous_empty_state() -> Self {
-		Self {
-			state: None,
-			bindings: FxHashMap::new(),
-			extend: None,
-		}
+	pub fn new() -> Self {
+		Self::with_capacity(0)
 	}
-	pub fn new(state: State) -> Self {
-		Self::with_capacity(state, 0)
-	}
-	pub fn with_capacity(state: State, capacity: usize) -> Self {
+	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
-			state: Some(state),
 			bindings: FxHashMap::with_capacity(capacity),
 			extend: None,
 		}
 	}
 	pub fn extend(parent: Context) -> Self {
 		Self {
-			state: parent.0.state.clone(),
 			bindings: FxHashMap::new(),
 			extend: Some(parent),
 		}
@@ -173,7 +152,6 @@ impl ContextBuilder {
 			parent.extend(self.bindings, None, None, None)
 		} else {
 			Context(Cc::new(ContextInternals {
-				state: self.state,
 				bindings: LayeredHashMap::new(self.bindings),
 				dollar: None,
 				sup: None,
