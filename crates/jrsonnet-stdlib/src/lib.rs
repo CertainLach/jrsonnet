@@ -3,6 +3,7 @@
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
+	f64,
 	rc::Rc,
 };
 
@@ -14,6 +15,7 @@ use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
+	val::NumValue,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
 };
 use jrsonnet_gcmodule::{Acyclic, Cc, Trace};
@@ -63,6 +65,7 @@ pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 		("isObject", builtin_is_object::INST),
 		("isArray", builtin_is_array::INST),
 		("isFunction", builtin_is_function::INST),
+		("isNull", builtin_is_null::INST),
 		// Arrays
 		("makeArray", builtin_make_array::INST),
 		("repeat", builtin_repeat::INST),
@@ -104,6 +107,8 @@ pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 		("floor", builtin_floor::INST),
 		("ceil", builtin_ceil::INST),
 		("log", builtin_log::INST),
+		("log2", builtin_log2::INST),
+		("log10", builtin_log10::INST),
 		("pow", builtin_pow::INST),
 		("sqrt", builtin_sqrt::INST),
 		("sin", builtin_sin::INST),
@@ -121,6 +126,9 @@ pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 		("isOdd", builtin_is_odd::INST),
 		("isInteger", builtin_is_integer::INST),
 		("isDecimal", builtin_is_decimal::INST),
+		("deg2rad", builtin_deg2rad::INST),
+		("rad2deg", builtin_rad2deg::INST),
+		("hypot", builtin_hypot::INST),
 		// Operator
 		("mod", builtin_mod::INST),
 		("primitiveEquals", builtin_primitive_equals::INST),
@@ -201,6 +209,7 @@ pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 		("lstripChars", builtin_lstrip_chars::INST),
 		("rstripChars", builtin_rstrip_chars::INST),
 		("stripChars", builtin_strip_chars::INST),
+		("trim", builtin_trim::INST),
 		// Misc
 		("length", builtin_length::INST),
 		("get", builtin_get::INST),
@@ -247,6 +256,10 @@ pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 	);
 	builder.method("trace", builtin_trace { settings });
 	builder.method("id", FuncVal::Id);
+
+	builder.field("pi").hide().value(Val::Num(
+		NumValue::new(f64::consts::PI).expect("pi is finite"),
+	));
 
 	#[cfg(feature = "exp-regex")]
 	{

@@ -254,6 +254,19 @@ pub fn builtin_strip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
 	Ok(str.as_str().trim_matches(pattern).into())
 }
 
+#[builtin]
+pub fn builtin_trim(str: IStr) -> String {
+	let filter =
+		|v: char| {
+			v == ' '
+				|| v == '\t' || v == '\n'
+				|| v == '\u{000c}'
+				|| v == '\r' || v == '\u{0085}'
+				|| v == '\u{00a0}'
+		};
+	str.as_str().trim_matches(filter).to_string()
+}
+
 fn new_trim_pattern(chars: IndexableVal) -> Result<impl Fn(char) -> bool> {
 	let chars: BTreeSet<char> = match chars {
 		IndexableVal::Str(chars) => chars.chars().collect(),

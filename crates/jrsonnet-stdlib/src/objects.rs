@@ -1,7 +1,8 @@
 use jrsonnet_evaluator::{
 	function::builtin,
+	rustc_hash::FxHashSet,
 	val::{ArrValue, Val},
-	IStr, ObjValue, ObjValueBuilder,
+	IStr, MaybeUnbound, ObjValue, ObjValueBuilder, Thunk,
 };
 
 #[builtin]
@@ -166,14 +167,31 @@ pub fn builtin_object_remove_key(
 	preserve_order: bool,
 ) -> ObjValue {
 	let mut new_obj = ObjValueBuilder::with_capacity(obj.len() - 1);
-	for (k, v) in obj.iter(
+	let all_fields = obj.fields_ex(
+		true,
 		#[cfg(feature = "exp-preserve-order")]
 		preserve_order,
-	) {
-		if k == key {
+	);
+	let visible_fields = obj
+		.fields_ex(
+			false,
+			#[cfg(feature = "exp-preserve-order")]
+			preserve_order,
+		)
+		.into_iter()
+		.collect::<FxHashSet<_>>();
+
+	for field in &all_fields {
+		if *field == key {
 			continue;
 		}
-		new_obj.field(k).value(v.unwrap());
+		let mut b = new_obj.field(field.clone());
+		if !visible_fields.contains(&field) {
+			b = b.hide();
+		}
+		let _ = b.binding(MaybeUnbound::Bound(Thunk::result(
+			obj.get(field.clone()).transpose().expect("field exists"),
+		)));
 	}
 
 	new_obj.build()

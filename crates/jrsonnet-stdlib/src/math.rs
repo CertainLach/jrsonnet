@@ -1,3 +1,5 @@
+use std::f64;
+
 use jrsonnet_evaluator::{function::builtin, typed::PositiveF64};
 
 #[builtin]
@@ -53,6 +55,16 @@ pub fn builtin_ceil(x: f64) -> f64 {
 #[builtin]
 pub fn builtin_log(x: f64) -> f64 {
 	x.ln()
+}
+
+#[builtin]
+pub fn builtin_log2(x: f64) -> f64 {
+	x.log2()
+}
+
+#[builtin]
+pub fn builtin_log10(x: f64) -> f64 {
+	x.log10()
 }
 
 #[builtin]
@@ -152,4 +164,19 @@ pub fn builtin_is_integer(x: f64) -> bool {
 #[allow(clippy::float_cmp)]
 pub fn builtin_is_decimal(x: f64) -> bool {
 	builtin_round(x) != x
+}
+
+#[builtin]
+pub fn builtin_deg2rad(x: f64) -> f64 {
+	x * f64::consts::PI / 180.0
+}
+
+#[builtin]
+pub fn builtin_rad2deg(x: f64) -> f64 {
+	x * 180.0 / f64::consts::PI
+}
+
+#[builtin]
+pub fn builtin_hypot(x: f64, y: f64) -> f64 {
+	x.hypot(y)
 }

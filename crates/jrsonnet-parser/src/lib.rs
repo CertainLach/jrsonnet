@@ -237,7 +237,11 @@ parser! {
 				Expr::ArrComp(expr, specs)
 			}
 		pub rule number_expr(s: &ParserSettings) -> Expr
-			= n:number() { expr::Expr::Num(n) }
+			= n:number() {? if n.is_finite() {
+				Ok(expr::Expr::Num(n))
+			} else {
+				Err("!!!numbers are finite")
+			}}
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr

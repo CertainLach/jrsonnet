@@ -413,18 +413,19 @@ impl<I: ManifestFormat> ManifestFormat for YamlStreamFormat<I> {
 				val.value_type()
 			)
 		};
-		if !arr.is_empty() {
-			for (i, v) in arr.iter().enumerate() {
-				let v = v.with_description(|| format!("elem <{i}> evaluation"))?;
-				out.push_str("---\n");
-				in_description_frame(
-					|| format!("elem <{i}> manifestification"),
-					|| self.inner.manifest_buf(v, out),
-				)?;
+		for (i, v) in arr.iter().enumerate() {
+			if i != 0 {
 				out.push('\n');
 			}
+			let v = v.with_description(|| format!("elem <{i}> evaluation"))?;
+			out.push_str("---\n");
+			in_description_frame(
+				|| format!("elem <{i}> manifestification"),
+				|| self.inner.manifest_buf(v, out),
+			)?;
 		}
 		if self.c_document_end {
+			out.push('\n');
 			out.push_str("...");
 		}
 		if self.end_newline {

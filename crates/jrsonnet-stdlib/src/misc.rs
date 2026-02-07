@@ -156,8 +156,16 @@ pub fn builtin_assert_equal(a: Val, b: Val) -> Result<bool> {
 		#[cfg(feature = "exp-preserve-order")]
 		true,
 	);
-	let a = a.manifest(&format).description("<a> manifestification")?;
-	let b = b.manifest(&format).description("<b> manifestification")?;
+	let a = if let Some(a) = a.as_str() {
+		format!("<A>\n{a}\n</A>")
+	} else {
+		a.manifest(&format).description("<a> manifestification")?
+	};
+	let b = if let Some(b) = b.as_str() {
+		format!("<B>\n{b}\n</B>")
+	} else {
+		b.manifest(&format).description("<b> manifestification")?
+	};
 	bail!("assertion failed: A != B\nA: {a}\nB: {b}")
 }
 
@@ -166,9 +174,7 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 	let Some(patch) = patch.as_obj() else {
 		return Ok(patch);
 	};
-	let Some(target) = target.as_obj() else {
-		return Ok(Val::Obj(patch));
-	};
+	let target = target.as_obj().unwrap_or_else(|| ObjValue::new_empty());
 	let target_fields = target
 		.fields(
 			// FIXME: Makes no sense to preserve order for BTreeSet, it would be better to use IndexSet here?
@@ -203,10 +209,7 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 		if matches!(field_patch, Val::Null) {
 			continue;
 		}
-		let Some(field_target) = target.get(field.clone())? else {
-			out.field(field.clone()).value(field_patch);
-			continue;
-		};
+		let field_target = target.get(field.clone())?.unwrap_or(Val::Null);
 		out.field(field.clone())
 			.value(builtin_merge_patch(field_target, field_patch)?);
 	}
