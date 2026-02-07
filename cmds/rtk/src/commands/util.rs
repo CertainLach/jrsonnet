@@ -498,3 +498,428 @@ pub async fn setup_diff_engine(config: DiffEngineConfig<'_>) -> Result<DiffEngin
 		default_namespace,
 	})
 }
+
+#[cfg(test)]
+mod tests {
+	use super::*;
+
+	// -----------------------------------------------------------------------
+	// filter_environments_by_name tests (mirrors Tanka's pkg/tanka/load_test.go)
+	// -----------------------------------------------------------------------
+
+	fn make_env(name: &str) -> EnvironmentData {
+		EnvironmentData {
+			spec: Some(Environment {
+				metadata: crate::spec::Metadata {
+					name: Some(name.to_string()),
+					namespace: None,
+					labels: None,
+				},
+				..Default::default()
+			}),
+			data: serde_json::json!({}),
+		}
+	}
+
+	#[test]
+	fn test_filter_environments_by_name_exact_match() {
+		// Exact match should return single environment
+		let envs = vec![
+			make_env("project1-env1"),
+			make_env("project1-env2"),
+			make_env("project2-env1"),
+		];
+
+		let result = filter_environments_by_name(envs, "project1-env1").unwrap();
+		assert_eq!(result.len(), 1);
+		assert_eq!(env_name(&result[0]), Some("project1-env1"));
+	}
+
+	#[test]
+	fn test_filter_environments_by_name_partial_match_single() {
+		// Partial match that matches one environment
+		let envs = vec![
+			make_env("project1-env1"),
+			make_env("project1-env2"),
+			make_env("project2-env1"),
+		];
+
+		let result = filter_environments_by_name(envs, "project2").unwrap();
+		assert_eq!(result.len(), 1);
+		assert_eq!(env_name(&result[0]), Some("project2-env1"));
+	}
+
+	#[test]
+	fn test_filter_environments_by_name_partial_match_multiple() {
+		// Partial match that matches multiple environments - should return all matches
+		let envs = vec![
+			make_env("project1-env1"),
+			make_env("project1-env2"),
+			make_env("project2-env1"),
+		];
+
+		let result = filter_environments_by_name(envs, "project1").unwrap();
+		assert_eq!(result.len(), 2);
+	}
+
+	#[test]
+	fn test_filter_environments_by_name_no_match() {
+		// No match should return error
+		let envs = vec![make_env("project1-env1"), make_env("project1-env2")];
+
+		let result = filter_environments_by_name(envs, "no match");
+		assert!(result.is_err());
+	}
+
+	#[test]
+	fn test_filter_environments_by_name_full_match_has_priority() {
+		// If there's an exact match, return just that one, even if there are
+		// partial matches too. Mirrors Tanka's TestLoadSelectEnvironmentFullMatchHasPriority
+		let envs = vec![make_env("base"), make_env("base-extended")];
+
+		let result = filter_environments_by_name(envs, "base").unwrap();
+		assert_eq!(result.len(), 1);
+		assert_eq!(env_name(&result[0]), Some("base"));
+	}
+
+	// -----------------------------------------------------------------------
+	// extract_manifests tests (mirrors Tanka's pkg/process/extract_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_extract_manifests_regular() {
+		let value = serde_json::json!({
+			"deployment": {
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": { "name": "grafana" }
+			},
+			"service": {
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": { "name": "grafana" }
+			}
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_extract_manifests_flat() {
+		let value = serde_json::json!({
+			"apiVersion": "apps/v1",
+			"kind": "Deployment",
+			"metadata": { "name": "grafana" }
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 1);
+	}
+
+	#[test]
+	fn test_extract_manifests_deep_nesting() {
+		let value = serde_json::json!({
+			"app": {
+				"web": {
+					"backend": {
+						"server": {
+							"grafana": {
+								"deployment": {
+									"apiVersion": "apps/v1",
+									"kind": "Deployment",
+									"metadata": { "name": "grafana" }
+								}
+							}
+						}
+					},
+					"frontend": {
+						"nodejs": {
+							"express": {
+								"service": {
+									"apiVersion": "v1",
+									"kind": "Service",
+									"metadata": { "name": "frontend" }
+								}
+							}
+						}
+					}
+				}
+			}
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_extract_manifests_array() {
+		let value = serde_json::json!([
+			{
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "cm1" }
+			},
+			{
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "cm2" }
+			}
+		]);
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_extract_manifests_nil_values_ignored() {
+		// null values should be silently skipped
+		let value = serde_json::json!({
+			"enabled": {
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "config" }
+			},
+			"disabledObject": null
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 1);
+	}
+
+	#[test]
+	fn test_extract_manifests_unwrap_list() {
+		// List kind should be expanded into individual manifests
+		let value = serde_json::json!({
+			"foo": {
+				"apiVersion": "v1",
+				"kind": "List",
+				"items": [
+					{
+						"apiVersion": "v1",
+						"kind": "ConfigMap",
+						"metadata": { "name": "cm1" }
+					},
+					{
+						"apiVersion": "v1",
+						"kind": "ConfigMap",
+						"metadata": { "name": "cm2" }
+					}
+				]
+			}
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_extract_manifests_primitives_ignored() {
+		// Primitive values in the object should be silently skipped
+		let value = serde_json::json!({
+			"string_val": "hello",
+			"number_val": 42,
+			"bool_val": true,
+			"cm": {
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "test" }
+			}
+		});
+
+		let manifests = extract_manifests(&value, &[]).unwrap();
+		assert_eq!(manifests.len(), 1);
+	}
+
+	// -----------------------------------------------------------------------
+	// Target filter tests (mirrors Tanka's pkg/process/process_test.go target tests)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_extract_manifests_target_filter_regex() {
+		// Regex filter on kind/name
+		let value = serde_json::json!({
+			"deployment": {
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": { "name": "grafana" }
+			},
+			"service": {
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": { "name": "frontend" }
+			}
+		});
+
+		let manifests = extract_manifests(&value, &["Deployment/.*".to_string()]).unwrap();
+		assert_eq!(manifests.len(), 1);
+		assert_eq!(manifests[0]["kind"], "Deployment");
+	}
+
+	#[test]
+	fn test_extract_manifests_target_filter_multiple() {
+		// Multiple targets: match any
+		let value = serde_json::json!({
+			"dep": {
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": { "name": "grafana" }
+			},
+			"svc": {
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": { "name": "frontend" }
+			},
+			"ns": {
+				"apiVersion": "v1",
+				"kind": "Namespace",
+				"metadata": { "name": "monitoring" }
+			}
+		});
+
+		let manifests = extract_manifests(
+			&value,
+			&[
+				"Deployment/grafana".to_string(),
+				"Service/frontend".to_string(),
+			],
+		)
+		.unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	// -----------------------------------------------------------------------
+	// collect_manifests tests (additional edge cases)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_collect_manifests_nested_objects() {
+		let value = serde_json::json!({
+			"app": {
+				"nested": {
+					"apiVersion": "v1",
+					"kind": "ConfigMap",
+					"metadata": { "name": "nested" }
+				}
+			}
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests(&value, &mut manifests);
+		assert_eq!(manifests.len(), 1);
+	}
+
+	#[test]
+	fn test_collect_manifests_environment_wrapper_extracts_data() {
+		// Environment objects should not be collected themselves;
+		// List kind should be expanded
+		let value = serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "List",
+			"items": [
+				{
+					"apiVersion": "v1",
+					"kind": "ConfigMap",
+					"metadata": { "name": "cm1" }
+				}
+			]
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests(&value, &mut manifests);
+		assert_eq!(manifests.len(), 1);
+		assert_eq!(manifests[0]["metadata"]["name"], "cm1");
+	}
+
+	// -----------------------------------------------------------------------
+	// process_manifests tests (mirrors Tanka's Process() integration)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_process_manifests_inject_labels() {
+		let env = Some(Environment {
+			spec: crate::spec::Spec {
+				inject_labels: Some(true),
+				..Default::default()
+			},
+			metadata: crate::spec::Metadata {
+				name: Some("test-env".to_string()),
+				namespace: Some("main.jsonnet".to_string()),
+				labels: None,
+			},
+			..Default::default()
+		});
+
+		let mut manifests = vec![serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "ConfigMap",
+			"metadata": { "name": "test" }
+		})];
+
+		process_manifests(&mut manifests, &env);
+
+		let labels = manifests[0]["metadata"]["labels"].as_object().unwrap();
+		assert!(labels.contains_key("tanka.dev/environment"));
+	}
+
+	#[test]
+	fn test_process_manifests_strips_null_labels() {
+		let mut manifests = vec![serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "ConfigMap",
+			"metadata": {
+				"name": "test",
+				"labels": null,
+				"annotations": null
+			}
+		})];
+
+		process_manifests(&mut manifests, &None);
+
+		assert!(manifests[0]["metadata"].get("labels").is_none());
+		assert!(manifests[0]["metadata"].get("annotations").is_none());
+	}
+
+	#[test]
+	fn test_process_manifests_order_consistent() {
+		// Processing the same data multiple times should produce the same result
+		// Mirrors Tanka's TestProcessOrder
+		let manifests_data = vec![
+			serde_json::json!({
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": { "name": "deploy1" }
+			}),
+			serde_json::json!({
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": { "name": "svc1" }
+			}),
+			serde_json::json!({
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "cm1" }
+			}),
+		];
+
+		let env = Some(Environment {
+			spec: crate::spec::Spec {
+				inject_labels: Some(true),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut results = Vec::new();
+		for _ in 0..10 {
+			let mut manifests = manifests_data.clone();
+			process_manifests(&mut manifests, &env);
+			results.push(manifests);
+		}
+
+		// All results should be identical
+		for i in 1..10 {
+			assert_eq!(results[0], results[i], "run {} differs from run 0", i);
+		}
+	}
+}

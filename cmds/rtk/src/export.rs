@@ -3870,4 +3870,485 @@ mod tests {
 		assert!(manifest_map.contains_key("ConfigMap-config1.yaml"));
 		assert!(manifest_map.contains_key("Secret-secret1.yaml"));
 	}
+
+	// -----------------------------------------------------------------------
+	// inject_namespace tests (mirrors Tanka's pkg/process/namespace_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_inject_namespace_simple_namespaced() {
+		// Resource without a namespace: set it from spec
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"testing"
+		);
+	}
+
+	#[test]
+	fn test_inject_namespace_already_present() {
+		// Resource with a namespace: don't override it
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				namespace: "ignored".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "namespace": "mycoolnamespace" }
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"mycoolnamespace"
+		);
+	}
+
+	#[test]
+	fn test_inject_namespace_no_default() {
+		// Empty default namespace: do nothing
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				namespace: "".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {}
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert!(manifest["metadata"].get("namespace").is_none());
+	}
+
+	#[test]
+	fn test_inject_namespace_cluster_wide() {
+		// Cluster-wide resources should not get a namespace
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		for kind in [
+			"Namespace",
+			"ClusterRole",
+			"ClusterRoleBinding",
+			"CustomResourceDefinition",
+			"PersistentVolume",
+			"StorageClass",
+			"Node",
+		] {
+			let mut manifest = serde_json::json!({ "kind": kind });
+			inject_namespace(&mut manifest, &env_spec);
+			assert!(
+				manifest["metadata"].get("namespace").is_none(),
+				"{} should not get a namespace",
+				kind
+			);
+		}
+	}
+
+	#[test]
+	fn test_inject_namespace_annotation_override() {
+		// tanka.dev/namespaced annotation can override cluster-wide detection
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		// Normally cluster-wide, but annotation says namespaced
+		let mut manifest = serde_json::json!({
+			"kind": "ClusterRole",
+			"metadata": {
+				"annotations": {
+					"tanka.dev/namespaced": "true"
+				}
+			}
+		});
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"testing"
+		);
+	}
+
+	// -----------------------------------------------------------------------
+	// inject_resource_defaults tests (mirrors Tanka's pkg/process/resourceDefaults_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_inject_resource_defaults_no_change() {
+		// No resource defaults configured: manifest should be unchanged
+		let env_spec = Some(crate::spec::Environment::default());
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+		let expected = manifest.clone();
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest, expected);
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_annotation() {
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["annotations"]["a"].as_str().unwrap(),
+			"b"
+		);
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_label() {
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				resource_defaults: Some(serde_json::json!({
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest["metadata"]["labels"]["a"].as_str().unwrap(), "b");
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_leaves_existing() {
+		// Adding defaults should not remove existing annotations/labels
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" },
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"annotations": { "1": "2" },
+				"labels": { "1": "2" }
+			}
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		// Both old and new should be present
+		assert_eq!(manifest["metadata"]["annotations"]["1"], "2");
+		assert_eq!(manifest["metadata"]["annotations"]["a"], "b");
+		assert_eq!(manifest["metadata"]["labels"]["1"], "2");
+		assert_eq!(manifest["metadata"]["labels"]["a"], "b");
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_existing_overrides_spec() {
+		// Existing annotations/labels take priority over spec defaults
+		let env_spec = Some(crate::spec::Environment {
+			spec: crate::spec::Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" },
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"annotations": { "a": "c", "1": "2" },
+				"labels": { "a": "c", "1": "2" }
+			}
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		// Existing value "c" should override default "b"
+		assert_eq!(manifest["metadata"]["annotations"]["a"], "c");
+		assert_eq!(manifest["metadata"]["annotations"]["1"], "2");
+		assert_eq!(manifest["metadata"]["labels"]["a"], "c");
+		assert_eq!(manifest["metadata"]["labels"]["1"], "2");
+	}
+
+	// -----------------------------------------------------------------------
+	// collect_manifests_with_validation error tests (mirrors Tanka's pkg/process/extract_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_collect_manifests_with_validation_regular() {
+		let value = serde_json::json!({
+			"deployment": {
+				"apiVersion": "apps/v1",
+				"kind": "Deployment",
+				"metadata": { "name": "grafana" }
+			},
+			"service": {
+				"apiVersion": "v1",
+				"kind": "Service",
+				"metadata": { "name": "grafana" }
+			}
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_flat() {
+		let value = serde_json::json!({
+			"apiVersion": "apps/v1",
+			"kind": "Deployment",
+			"metadata": { "name": "grafana" }
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 1);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_missing_api_version() {
+		// Object with kind and metadata but no apiVersion should error
+		let value = serde_json::json!({
+			"service": {
+				"kind": "Service",
+				"metadata": { "name": "test" },
+				"spec": { "ports": [{ "port": 80 }] }
+			}
+		});
+
+		let mut manifests = Vec::new();
+		let result = collect_manifests_with_validation(&value, &mut manifests, "");
+		assert!(result.is_err());
+		let err_msg = result.unwrap_err().to_string();
+		assert!(
+			err_msg.contains("missing attribute \"apiVersion\""),
+			"expected missing apiVersion error, got: {}",
+			err_msg
+		);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_nil_values() {
+		// null values should be skipped without error (like disabled objects)
+		let value = serde_json::json!({
+			"enabled": {
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "config" }
+			},
+			"disabledObject": null
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 1);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_deep_nesting() {
+		let value = serde_json::json!({
+			"app": {
+				"web": {
+					"backend": {
+						"deployment": {
+							"apiVersion": "apps/v1",
+							"kind": "Deployment",
+							"metadata": { "name": "backend" }
+						}
+					},
+					"frontend": {
+						"service": {
+							"apiVersion": "v1",
+							"kind": "Service",
+							"metadata": { "name": "frontend" }
+						}
+					}
+				}
+			}
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_array() {
+		let value = serde_json::json!([
+			{
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "cm1" }
+			},
+			{
+				"apiVersion": "v1",
+				"kind": "ConfigMap",
+				"metadata": { "name": "cm2" }
+			}
+		]);
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_list_expansion() {
+		// List kind should be expanded into individual manifests
+		let value = serde_json::json!({
+			"foo": {
+				"apiVersion": "v1",
+				"kind": "List",
+				"items": [
+					{
+						"apiVersion": "v1",
+						"kind": "ConfigMap",
+						"metadata": { "name": "cm1" }
+					},
+					{
+						"apiVersion": "v1",
+						"kind": "ConfigMap",
+						"metadata": { "name": "cm2" }
+					}
+				]
+			}
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 2);
+	}
+
+	#[test]
+	fn test_collect_manifests_with_validation_environment_wrapper() {
+		// Environment objects should extract manifests from their data field
+		let value = serde_json::json!({
+			"apiVersion": "tanka.dev/v1alpha1",
+			"kind": "Environment",
+			"metadata": { "name": "test" },
+			"spec": { "namespace": "default" },
+			"data": {
+				"cm": {
+					"apiVersion": "v1",
+					"kind": "ConfigMap",
+					"metadata": { "name": "config" }
+				}
+			}
+		});
+
+		let mut manifests = Vec::new();
+		collect_manifests_with_validation(&value, &mut manifests, "").unwrap();
+		assert_eq!(manifests.len(), 1);
+		assert_eq!(manifests[0]["kind"], "ConfigMap");
+	}
+
+	// -----------------------------------------------------------------------
+	// Target pattern matching tests (mirrors Tanka's process_test.go target tests)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_matches_target_patterns_basic_regex() {
+		let patterns = compile_target_patterns(&["Deployment/.*".to_string()]).unwrap();
+
+		let deployment = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "grafana" }
+		});
+		let service = serde_json::json!({
+			"kind": "Service",
+			"metadata": { "name": "frontend" }
+		});
+
+		assert!(matches_target_patterns(&deployment, &patterns));
+		assert!(!matches_target_patterns(&service, &patterns));
+	}
+
+	#[test]
+	fn test_matches_target_patterns_multiple() {
+		let patterns = compile_target_patterns(&[
+			"Deployment/grafana".to_string(),
+			"Service/frontend".to_string(),
+		])
+		.unwrap();
+
+		let deployment = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "grafana" }
+		});
+		let service = serde_json::json!({
+			"kind": "Service",
+			"metadata": { "name": "frontend" }
+		});
+		let namespace = serde_json::json!({
+			"kind": "Namespace",
+			"metadata": { "name": "monitoring" }
+		});
+
+		assert!(matches_target_patterns(&deployment, &patterns));
+		assert!(matches_target_patterns(&service, &patterns));
+		assert!(!matches_target_patterns(&namespace, &patterns));
+	}
+
+	#[test]
+	fn test_matches_target_patterns_empty_allows_all() {
+		let patterns = compile_target_patterns(&[]).unwrap();
+
+		let manifest = serde_json::json!({
+			"kind": "ConfigMap",
+			"metadata": { "name": "test" }
+		});
+
+		assert!(matches_target_patterns(&manifest, &patterns));
+	}
 }

@@ -433,10 +433,19 @@ pub fn builtin_tanka_sha256(str: String) -> String {
 }
 
 /// Tanka-compatible escapeStringRegex
-/// Escapes regex special characters
+/// Escapes regex special characters using Go's regexp.QuoteMeta set: \.+*?()|[]{}^$
+/// This matches Go's behavior exactly (Rust's regex::escape escapes additional characters like `-`).
 #[builtin]
 pub fn builtin_escape_string_regex(pattern: String) -> String {
-	regex::escape(&pattern)
+	const GO_META: &str = r"\.+*?()|[]{}^$";
+	let mut escaped = String::with_capacity(pattern.len() * 2);
+	for ch in pattern.chars() {
+		if GO_META.contains(ch) {
+			escaped.push('\\');
+		}
+		escaped.push(ch);
+	}
+	escaped
 }
 
 /// Tanka-compatible regexMatch

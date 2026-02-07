@@ -706,4 +706,267 @@ mod tests {
 			DiffStrategy::Subset
 		);
 	}
+
+	// -----------------------------------------------------------------------
+	// generate_environment_label tests (mirrors Tanka's pkg/spec/v1alpha1/environment_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_generate_environment_label_default() {
+		// Matches Tanka's "Default environment label hash" test case
+		let env = Environment {
+			metadata: Metadata {
+				name: Some("environments/a-nice-go-test".to_string()),
+				namespace: Some("main.jsonnet".to_string()),
+				labels: None,
+			},
+			spec: Spec {
+				namespace: "default".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		};
+
+		let label = generate_environment_label(&env);
+		// The label should be a 48-char hex SHA256 hash of "environments/a-nice-go-test:main.jsonnet"
+		assert_eq!(label.len(), 48);
+
+		// Verify the hash matches expected value
+		use sha2::{Digest, Sha256};
+		let mut hasher = Sha256::new();
+		hasher.update(b"environments/a-nice-go-test:main.jsonnet");
+		let expected_hex = format!("{:x}", hasher.finalize());
+		assert_eq!(label, &expected_hex[..48]);
+	}
+
+	#[test]
+	fn test_generate_environment_label_empty_fields() {
+		let env = Environment::default();
+		let label = generate_environment_label(&env);
+		// Should be hash of ":" (empty name + empty namespace)
+		assert_eq!(label.len(), 48);
+
+		use sha2::{Digest, Sha256};
+		let mut hasher = Sha256::new();
+		hasher.update(b":");
+		let expected_hex = format!("{:x}", hasher.finalize());
+		assert_eq!(label, &expected_hex[..48]);
+	}
+
+	#[test]
+	fn test_generate_environment_label_consistency() {
+		// Same input should always produce the same label
+		let env = Environment {
+			metadata: Metadata {
+				name: Some("test-env".to_string()),
+				namespace: Some("main.jsonnet".to_string()),
+				labels: None,
+			},
+			..Default::default()
+		};
+
+		let label1 = generate_environment_label(&env);
+		let label2 = generate_environment_label(&env);
+		assert_eq!(label1, label2);
+	}
+
+	// -----------------------------------------------------------------------
+	// inject_environment_label tests (mirrors Tanka's label injection in process.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_inject_environment_label_when_enabled() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				inject_labels: Some(true),
+				..Default::default()
+			},
+			metadata: Metadata {
+				name: Some("test-env".to_string()),
+				namespace: Some("main.jsonnet".to_string()),
+				labels: None,
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+
+		inject_environment_label(&mut manifest, &env_spec);
+
+		let labels = manifest["metadata"]["labels"].as_object().unwrap();
+		assert!(labels.contains_key("tanka.dev/environment"));
+		let label_value = labels["tanka.dev/environment"].as_str().unwrap();
+		assert_eq!(label_value.len(), 48);
+	}
+
+	#[test]
+	fn test_inject_environment_label_when_disabled() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				inject_labels: Some(false),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+
+		inject_environment_label(&mut manifest, &env_spec);
+
+		// Labels should not be injected
+		assert!(manifest["metadata"].get("labels").is_none());
+	}
+
+	#[test]
+	fn test_inject_environment_label_default_is_disabled() {
+		// When inject_labels is None (default), labels should not be injected
+		let env_spec = Some(Environment::default());
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+
+		inject_environment_label(&mut manifest, &env_spec);
+		assert!(manifest["metadata"].get("labels").is_none());
+	}
+
+	#[test]
+	fn test_inject_environment_label_no_spec() {
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+
+		inject_environment_label(&mut manifest, &None);
+		assert!(manifest["metadata"].get("labels").is_none());
+	}
+
+	#[test]
+	fn test_inject_environment_label_creates_metadata_if_missing() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				inject_labels: Some(true),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_environment_label(&mut manifest, &env_spec);
+
+		// Should have created metadata.labels
+		assert!(manifest["metadata"]["labels"]["tanka.dev/environment"]
+			.as_str()
+			.is_some());
+	}
+
+	#[test]
+	fn test_inject_environment_label_preserves_existing_labels() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				inject_labels: Some(true),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"name": "test",
+				"labels": { "app": "grafana" }
+			}
+		});
+
+		inject_environment_label(&mut manifest, &env_spec);
+
+		let labels = manifest["metadata"]["labels"].as_object().unwrap();
+		assert_eq!(labels["app"], "grafana");
+		assert!(labels.contains_key("tanka.dev/environment"));
+	}
+
+	// -----------------------------------------------------------------------
+	// strip_null_metadata_fields tests
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_strip_null_metadata_fields_removes_null_annotations() {
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"name": "test",
+				"annotations": null
+			}
+		});
+
+		strip_null_metadata_fields(&mut manifest);
+		assert!(manifest["metadata"].get("annotations").is_none());
+	}
+
+	#[test]
+	fn test_strip_null_metadata_fields_removes_null_labels() {
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"name": "test",
+				"labels": null
+			}
+		});
+
+		strip_null_metadata_fields(&mut manifest);
+		assert!(manifest["metadata"].get("labels").is_none());
+	}
+
+	#[test]
+	fn test_strip_null_metadata_fields_removes_empty_object() {
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"name": "test",
+				"annotations": {},
+				"labels": {}
+			}
+		});
+
+		strip_null_metadata_fields(&mut manifest);
+		assert!(manifest["metadata"].get("annotations").is_none());
+		assert!(manifest["metadata"].get("labels").is_none());
+	}
+
+	#[test]
+	fn test_strip_null_metadata_fields_preserves_non_empty() {
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"name": "test",
+				"annotations": { "key": "value" },
+				"labels": { "app": "test" }
+			}
+		});
+
+		strip_null_metadata_fields(&mut manifest);
+		assert_eq!(manifest["metadata"]["annotations"]["key"], "value");
+		assert_eq!(manifest["metadata"]["labels"]["app"], "test");
+	}
+
+	#[test]
+	fn test_strip_null_metadata_fields_no_metadata() {
+		// Should not panic if metadata is missing
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		strip_null_metadata_fields(&mut manifest);
+		assert!(manifest.get("metadata").is_none());
+	}
 }

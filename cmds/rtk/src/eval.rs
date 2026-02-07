@@ -812,4 +812,283 @@ mod tests {
 		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
 		assert_eq!(result.value["escaped"], r"hello\.world\*");
 	}
+
+	// -----------------------------------------------------------------------
+	// TLA edge case tests (mirrors Tanka's pkg/tanka/evaluators_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_eval_with_optional_tlas() {
+		// Function with default params, no TLAs provided - should use defaults
+		// Mirrors Tanka's TestEvalWithOptionalTlas
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"function(foo="bar", baz="baz") { metadata: { name: foo + "-" + baz } }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["metadata"]["name"], "bar-baz");
+	}
+
+	#[test]
+	fn test_eval_with_optional_tlas_partial_override() {
+		// Function with default params, override only one - rest use defaults
+		// Mirrors Tanka's TestEvalWithOptionalTlasSpecifiedArg2
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"function(foo="bar", baz="baz") { metadata: { name: foo + "-" + baz } }"#,
+		);
+
+		let mut opts = EvalOpts::default();
+		opts.tla_code
+			.insert("baz".to_string(), "'changed'".to_string());
+
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
+		assert_eq!(result.value["metadata"]["name"], "bar-changed");
+	}
+
+	#[test]
+	fn test_eval_function_zero_params() {
+		// Zero-param function should work without TLAs
+		// Mirrors Tanka's TestEvalFunctionWithNoTlas
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"function() { metadata: { name: "inline" } }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["metadata"]["name"], "inline");
+	}
+
+	#[test]
+	fn test_eval_invalid_tla_arg() {
+		// Providing a TLA for a param that doesn't exist should error
+		// Mirrors Tanka's TestInvalidTlaArg
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"function() { metadata: { name: "inline" } }"#);
+
+		let mut opts = EvalOpts::default();
+		opts.tla_code.insert("foo".to_string(), "'bar'".to_string());
+
+		let result = eval(env_path.to_str().unwrap(), &opts);
+		assert!(result.is_err(), "should error on invalid TLA arg");
+		let err_msg = result.unwrap_err().to_string();
+		assert!(
+			err_msg.contains("foo"),
+			"error should mention the invalid param name, got: {}",
+			err_msg
+		);
+	}
+
+	#[test]
+	fn test_eval_tla_with_non_function() {
+		// Providing TLAs to a non-function top-level should pass through
+		// Mirrors Tanka's TestTlaWithNonFunction
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ apiVersion: "v1", kind: "ConfigMap", metadata: { name: "test" } }"#,
+		);
+
+		let mut opts = EvalOpts::default();
+		opts.tla_code.insert("foo".to_string(), "'bar'".to_string());
+
+		let result = eval(env_path.to_str().unwrap(), &opts);
+		assert!(result.is_ok(), "TLAs with non-function should not error");
+		assert_eq!(result.unwrap().value["kind"], "ConfigMap");
+	}
+
+	// -----------------------------------------------------------------------
+	// Expression eval tests (mirrors Tanka's TestEvalJsonnetWithExpression)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_eval_expression_bracket_syntax() {
+		// Expression with bracket notation: ["testCase"]
+		// Mirrors Tanka's TestEvalJsonnetWithExpression
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{
+				testCase: "object",
+				other: "ignored"
+			}"#,
+		);
+
+		let opts = EvalOpts {
+			eval_expr: Some("testCase".to_string()),
+			..Default::default()
+		};
+
+		let result = eval(env_path.to_str().unwrap(), &opts).unwrap();
+		assert_eq!(result.value, "object");
+	}
+
+	// -----------------------------------------------------------------------
+	// Native function edge case tests (mirrors Tanka's pkg/jsonnet/native/funcs_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_eval_native_parse_json_empty_dict() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ result: std.native("parseJson")("{}") }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert!(result.value["result"].is_object());
+		assert_eq!(result.value["result"].as_object().unwrap().len(), 0);
+	}
+
+	#[test]
+	fn test_eval_native_parse_json_key_value() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ result: std.native("parseJson")('{"a": 47}') }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"]["a"], 47);
+	}
+
+	#[test]
+	fn test_eval_native_parse_yaml_empty() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ result: std.native("parseYaml")("") }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		// parseYaml returns an array of documents; empty input should return empty array
+		assert!(result.value["result"].is_array());
+		assert_eq!(result.value["result"].as_array().unwrap().len(), 0);
+	}
+
+	#[test]
+	fn test_eval_native_manifest_json_from_json() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("manifestJsonFromJson")("{}", 4) }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "{}\n");
+	}
+
+	#[test]
+	fn test_eval_native_manifest_json_from_json_reindent() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("manifestJsonFromJson")('{ "a": 47}', 4) }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "{\n    \"a\": 47\n}\n");
+	}
+
+	#[test]
+	fn test_eval_native_manifest_yaml_from_json_empty() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("manifestYamlFromJson")("{}") }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "{}\n");
+	}
+
+	#[test]
+	fn test_eval_native_manifest_yaml_from_json_key_value() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("manifestYamlFromJson")('{ "a": 47}') }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "a: 47\n");
+	}
+
+	#[test]
+	fn test_eval_native_manifest_yaml_from_json_list() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("manifestYamlFromJson")('{ "list": ["a", "b", "c"]}') }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert!(result.value["result"].as_str().unwrap().contains("- a"));
+		assert!(result.value["result"].as_str().unwrap().contains("- b"));
+		assert!(result.value["result"].as_str().unwrap().contains("- c"));
+	}
+
+	#[test]
+	fn test_eval_native_escape_string_regex_empty() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ result: std.native("escapeStringRegex")("") }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "");
+	}
+
+	#[test]
+	fn test_eval_native_escape_string_regex_value() {
+		// Mirrors Tanka's TestEscapeStringRegexValue
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("escapeStringRegex")("([0-9]+).*\\s") }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		// Must match Go's regexp.QuoteMeta output exactly
+		assert_eq!(
+			result.value["result"].as_str().unwrap(),
+			"\\(\\[0-9\\]\\+\\)\\.\\*\\\\s"
+		);
+	}
+
+	#[test]
+	fn test_eval_native_regex_match_no_match() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ result: std.native("regexMatch")("a", "b") }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], false);
+	}
+
+	#[test]
+	fn test_eval_native_regex_subst_no_change() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("regexSubst")("a", "b", "c") }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "b");
+	}
+
+	#[test]
+	fn test_eval_native_regex_subst_valid() {
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(
+			&temp,
+			r#"{ result: std.native("regexSubst")("p[^m]*", "pm", "poe") }"#,
+		);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(result.value["result"], "poem");
+	}
+
+	#[test]
+	fn test_eval_native_sha256_known_value() {
+		// Matches Tanka's TestSha256 with "foo" input
+		let temp = TempDir::new().unwrap();
+		let env_path = setup_test_env(&temp, r#"{ hash: std.native("sha256")("foo") }"#);
+
+		let result = eval(env_path.to_str().unwrap(), &EvalOpts::default()).unwrap();
+		assert_eq!(
+			result.value["hash"],
+			"2c26b46b68ffc68ff99b453c1d30413413422d706483bfa0f98a5e886266e7ae"
+		);
+	}
 }
