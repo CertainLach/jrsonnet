@@ -14,6 +14,7 @@ Supports two modes:
 import argparse
 import json
 import os
+import shlex
 import signal
 import shutil
 import subprocess
@@ -463,14 +464,19 @@ class BenchmarkRunner:
     def _check_rtk_base_supports_command(self, test: Test) -> bool:
         if not self.rtk_base:
             return False
+        # Run prepare for rtk-base if configured (e.g., clear export dir)
+        if self.config.prepare and self.export_dir_rtk_base:
+            rtk_base_prepare = self.expand_command(
+                self.config.prepare, self.export_dir_rtk_base)
+            subprocess.run(["sh", "-c", rtk_base_prepare],
+                           cwd=self.fixtures_dir, check=False)
         rtk_base_command = self.expand_command(
             test.command, self.export_dir_rtk_base)
         result = self.run_command(str(self.rtk_base), rtk_base_command)
         if result.returncode != 0:
-            if "not implemented" in result.stderr.lower() or "not implemented" in result.stdout.lower():
-                print(
-                    "  (rtk-base does not support this command, skipping)", file=sys.stderr)
-                return False
+            print(
+                "  (rtk-base failed for this command, skipping)", file=sys.stderr)
+            return False
         return True
 
     def run_generated_benchmark(self, test: Test, output_file: Path, index: int) -> dict:
@@ -498,13 +504,19 @@ class BenchmarkRunner:
             rtk_prepare = self.expand_command(
                 self.config.prepare, self.export_dir_rtk)
             prepare_args = [
-                "--prepare", f"sh -c '{tk_prepare}'", "--prepare", f"sh -c '{rtk_prepare}'"]
+                "--prepare", f"sh -c {shlex.quote(tk_prepare)}",
+                "--prepare", f"sh -c {shlex.quote(rtk_prepare)}"]
             if include_rtk_base:
                 rtk_base_prepare = self.expand_command(
                     self.config.prepare, self.export_dir_rtk_base)
                 prepare_args.extend(
-                    ["--prepare", f"sh -c '{rtk_base_prepare}'"])
+                    ["--prepare", f"sh -c {shlex.quote(rtk_base_prepare)}"])
 
+        # hyperfine -N (--shell=none) requires commands to be direct executables.
+        # We wrap in sh -c and use shlex.quote() to properly escape inner quotes
+        # (e.g., eval -e expressions with bracket notation and quoted keys).
+        tk_inner = f"{cd_prefix}tk {tk_command} >/dev/null"
+        rtk_inner = f"{cd_prefix}{self.rtk} {rtk_command} >/dev/null"
         args = [
             "hyperfine", "-N",
             *self.hyperfine_args,
@@ -512,15 +524,16 @@ class BenchmarkRunner:
             "--export-markdown", str(temp_md),
             "--export-json", str(temp_json),
             "--warmup", "1",
-            "-n", "tk", f"sh -c '{cd_prefix}tk {tk_command} >/dev/null'",
-            "-n", "rtk", f"sh -c '{cd_prefix}{self.rtk} {rtk_command} >/dev/null'",
+            "-n", "tk", f"sh -c {shlex.quote(tk_inner)}",
+            "-n", "rtk", f"sh -c {shlex.quote(rtk_inner)}",
         ]
 
         if include_rtk_base:
             rtk_base_command = self.expand_command(
                 test.command, self.export_dir_rtk_base)
+            rtk_base_inner = f"{cd_prefix}{self.rtk_base} {rtk_base_command} >/dev/null"
             args.extend(
-                ["-n", "rtk-base", f"sh -c '{cd_prefix}{self.rtk_base} {rtk_base_command} >/dev/null'"])
+                ["-n", "rtk-base", f"sh -c {shlex.quote(rtk_base_inner)}"])
 
         subprocess.run(args, check=True, stdout=subprocess.DEVNULL)
 

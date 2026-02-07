@@ -195,6 +195,27 @@ local env = import 'env-static-${padded}/main.libsonnet';
     env.config.port + idx
   )
   for idx in std.range(0, ${NUM_RESOURCES_PER_ENV} - 1)
+} + {
+  // Nested structure for eval -e benchmarks (bracket-notation keys, hidden attrs, deep nesting).
+  // Hidden (::) so it doesn't appear in exports, but accessible via eval -e.
+  nested:: {
+    ['test-with-dash']: global.configMap(
+      'nested-test-with-dash',
+      env.namespace,
+      {key: 'value'}
+    ) + {
+      hidden_attr:: 'hidden-value',
+      deeply: {
+        nested: {
+          path: {
+            to: {
+              value: 'found-it',
+            },
+          },
+        },
+      },
+    },
+  },
 }
 JSONNET
   done

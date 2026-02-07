@@ -16,3 +16,7 @@ tests:
   - name: "Inline Environment File"
     description: "Evaluating an inline environment file containing {envs_per_inline_file} environments."
     command: "eval {single_inline_file}"
+
+  - name: "Eval Expression - Deeply Nested Path"
+    description: "Evaluating a single expression accessing a deeply nested path (6 levels) through a bracket-notation key with dashes."
+    command: "eval {single_static_dir} -e 'nested[\"test-with-dash\"].deeply.nested.path.to.value'"

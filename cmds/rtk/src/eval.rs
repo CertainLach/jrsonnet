@@ -378,13 +378,15 @@ fn evaluate_file(state: &State, entrypoint: &Path, opts: &EvalOpts) -> Result<St
 			.evaluate_snippet("<single-env-eval>".to_owned(), &eval_script)
 			.map_err(|e| anyhow::anyhow!("evaluation error:\n{}", e))?
 	} else if let Some(expr) = &opts.eval_expr {
-		// Build an expression that imports the file and applies the eval expression
+		// Build an expression that imports the file and applies the eval expression.
+		// Match tk's PatternEvalScript: add a dot separator unless expression starts with '['
+		let separator = if expr.starts_with('[') { "" } else { "." };
 		let eval_script = format!(
 			r#"
 local main = (import '{}');
-main{}
+main{}{}
 "#,
-			entrypoint_filename, expr
+			entrypoint_filename, separator, expr
 		);
 		state
 			.evaluate_snippet("<eval>".to_owned(), &eval_script)
@@ -626,7 +628,7 @@ mod tests {
 		);
 
 		let opts = EvalOpts {
-			eval_expr: Some(".data.nested".to_string()),
+			eval_expr: Some("data.nested".to_string()),
 			..Default::default()
 		};
 
