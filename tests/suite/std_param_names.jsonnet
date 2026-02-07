@@ -8,6 +8,7 @@ local names = {
     isObject: ['v'],
     isArray: ['v'],
     isFunction: ['v'],
+    isNull: ['v'],
     toString: ['a'],
     substr: ['str', 'from', 'len'],
     startsWith: ['a', 'b'],
@@ -15,6 +16,7 @@ local names = {
     lstripChars: ['str', 'chars'],
     rstripChars: ['str', 'chars'],
     stripChars: ['str', 'chars'],
+    trim: ['str'],
     stringChars: ['str'],
     parseInt: ['str'],
     parseOctal: ['str'],
@@ -113,6 +115,8 @@ local names = {
     codepoint: ['str'],
     char: ['n'],
     log: ['x'],
+    log2: ['x'],
+    log10: ['x'],
     exp: ['x'],
     mantissa: ['x'],
     exponent: ['x'],
@@ -162,6 +166,10 @@ local names = {
     __array_greater: ['arr1', 'arr2'],
     __array_less_or_equal: ['arr1', 'arr2'],
     __array_greater_or_equal: ['arr1', 'arr2'],
+
+    deg2rad: ['x'],
+    rad2deg: ['x'],
+    hypot: ['x', 'y'],
 };
 
 std.all(std.map(function(key) assertNames(key, names[key]), std.objectFields(names)))
@@ -169,5 +177,5 @@ std.all(std.map(function(key) assertNames(key, names[key]), std.objectFields(nam
     assert std.objectHasAll(names, key): ('function "%s" is not defined in names'
         % key); true,
     for key in std.objectFieldsAll(std)
-    if key != 'thisFile'
+    if key != 'thisFile' && key != 'pi'
 ])

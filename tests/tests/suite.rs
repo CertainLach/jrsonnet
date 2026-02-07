@@ -36,7 +36,7 @@ fn run(file: &Path) {
 }
 
 #[test]
-fn test() -> io::Result<()> {
+fn suite() -> io::Result<()> {
 	let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 	root.push("suite");
 
