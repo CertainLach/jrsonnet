@@ -2,7 +2,6 @@ use std::{
 	cmp::Ordering,
 	convert::Infallible,
 	fmt::{Debug, Display},
-	path::PathBuf,
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -16,7 +15,7 @@ use crate::{
 	stdlib::format::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
-	ObjValue,
+	ObjValue, ResolvePathOwned,
 };
 
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
@@ -180,9 +179,7 @@ pub enum ErrorKind {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(SourcePath, String),
-	#[error("can't resolve absolute {0}")]
-	AbsoluteImportFileNotFound(PathBuf),
+	ImportFileNotFound(SourcePath, ResolvePathOwned),
 	#[error("resolved file not found: {:?}", .0)]
 	ResolvedFileNotFound(SourcePath),
 	#[error("can't import {0}: is a directory")]
@@ -192,9 +189,7 @@ pub enum ErrorKind {
 	#[error("import io error: {0}")]
 	ImportIo(String),
 	#[error("tried to import {1} from {0}, but imports are not supported")]
-	ImportNotSupported(SourcePath, String),
-	#[error("tried to import {0}, but absolute imports are not supported")]
-	AbsoluteImportNotSupported(PathBuf),
+	ImportNotSupported(SourcePath, ResolvePathOwned),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(

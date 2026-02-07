@@ -14,7 +14,7 @@ use std::{
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	ImportResolver,
+	AsPathLike, ImportResolver, ResolvePath,
 };
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
@@ -38,7 +38,7 @@ pub struct CallbackImportResolver {
 	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
 		let base = if let Some(p) = from.downcast_ref::<SourceFile>() {
 			let mut o = p.path().to_owned();
 			o.pop();
@@ -51,7 +51,11 @@ impl ImportResolver for CallbackImportResolver {
 			unreachable!("can't resolve this path");
 		};
 		let base = unsafe { crate::unparse_path(&base) };
-		let rel = CString::new(path).unwrap();
+		let rel = path.as_path();
+		let rel = match rel {
+			ResolvePath::Str(s) => CString::new(s.as_bytes()).unwrap(),
+			ResolvePath::Path(p) => unsafe { crate::unparse_path(p) },
+		};
 		let found_here: *mut c_char = null_mut();
 
 		let mut buf = null_mut();

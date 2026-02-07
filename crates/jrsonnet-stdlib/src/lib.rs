@@ -12,7 +12,7 @@ pub use compat::*;
 pub use encoding::*;
 pub use hash::*;
 use jrsonnet_evaluator::{
-	error::{ErrorKind::*, Result},
+	error::Result,
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
 	val::NumValue,
@@ -377,23 +377,11 @@ impl ContextInitializer {
 			.ext_vars
 			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_ext_code(&self, name: &str, code: impl Into<IStr>) -> Result<()> {
-		let code = code.into();
-		let source = extvar_source(name, code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			error: Box::new(e),
-		})?;
+	pub fn add_ext_code(&self, name: &str, code: impl AsRef<str>) -> Result<()> {
 		// self.data_mut().volatile_files.insert(source_name, code);
 		self.settings_mut()
 			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
+			.insert(name.into(), TlaArg::InlineCode(code.as_ref().to_owned()));
 		Ok(())
 	}
 	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {
