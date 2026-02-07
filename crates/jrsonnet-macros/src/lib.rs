@@ -103,13 +103,6 @@ mod kw {
 	syn::custom_keyword!(ok);
 }
 
-struct EmptyAttr;
-impl Parse for EmptyAttr {
-	fn parse(_input: ParseStream) -> Result<Self> {
-		Ok(Self)
-	}
-}
-
 struct BuiltinAttrs {
 	fields: Vec<Field>,
 }

@@ -127,9 +127,9 @@ pub enum SyntaxKind {
 	IDENT,
 	#[regex("[ \\t\\n\\r]+")]
 	WHITESPACE,
-	#[regex("//[^\\r\\n]*(\\r\\n|\\n)?")]
+	#[regex("//[^\\r\\n]*?(\\r\\n|\\n)?")]
 	SINGLE_LINE_SLASH_COMMENT,
-	#[regex("#[^\\r\\n]*(\\r\\n|\\n)?")]
+	#[regex("#[^\\r\\n]*?(\\r\\n|\\n)?")]
 	SINGLE_LINE_HASH_COMMENT,
 	#[regex("/\\*([^*]|\\*[^/])*\\*/")]
 	MULTI_LINE_COMMENT,

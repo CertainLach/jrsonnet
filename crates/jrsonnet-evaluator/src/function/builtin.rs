@@ -1,10 +1,10 @@
 use std::{any::Any, borrow::Cow};
 
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{cc_dyn, Trace, TraceBox};
 use jrsonnet_interner::IStr;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{gc::TraceBox, tb, Context, Result, Val};
+use crate::{Context, Result, Val};
 
 /// Can't have `str` | `IStr`, because constant `BuiltinParam` causes
 /// `E0492: constant functions cannot refer to interior mutable data`
@@ -70,6 +70,30 @@ impl BuiltinParam {
 	}
 }
 
+cc_dyn!(
+	#[derive(Clone)]
+	BuiltinFunc,
+	Builtin,
+	pub(crate) fn new() {...}
+);
+impl Builtin for BuiltinFunc {
+	fn name(&self) -> &str {
+		self.0.name()
+	}
+
+	fn params(&self) -> &[BuiltinParam] {
+		self.0.params()
+	}
+
+	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
+		self.0.call(ctx, loc, args)
+	}
+
+	fn as_any(&self) -> &dyn Any {
+		self.0.as_any()
+	}
+}
+
 /// Description of function defined by native code
 ///
 /// Prefer to use #[builtin] macro, instead of manual implementation of this trait
@@ -108,7 +132,7 @@ impl NativeCallback {
 					default: ParamDefault::None,
 				})
 				.collect(),
-			handler: tb!(handler),
+			handler: TraceBox(Box::new(handler)),
 		}
 	}
 }

@@ -138,12 +138,12 @@ pub enum ErrorKind {
 	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
-	#[error("local is not defined: {0}{}", format_found(.1, "local"))]
+	#[error("local is not defined: {0}{found}", found = format_found(.1, "local"))]
 	VariableIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),
 
-	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
+	#[error("type mismatch: expected {expected}, got {2} {0}", expected = .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
@@ -154,7 +154,7 @@ pub enum ErrorKind {
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}{}", format_signature(.1))]
+	#[error("too many args, function has {0}{sig}", sig = format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
 	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
 	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),

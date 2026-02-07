@@ -1,24 +1,26 @@
-use std::{cell::RefCell, hash::BuildHasherDefault, num::NonZeroUsize, rc::Rc};
+use std::{cell::RefCell, num::NonZeroUsize, rc::Rc};
 
 use ::regex::Regex;
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
+	rustc_hash::FxBuildHasher,
 	val::StrValue,
 	IStr, ObjValueBuilder, Val,
 };
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_macros::builtin;
 use lru::LruCache;
-use rustc_hash::FxHasher;
 
+#[derive(Acyclic)]
 pub struct RegexCacheInner {
-	cache: RefCell<LruCache<IStr, Rc<Regex>, BuildHasherDefault<FxHasher>>>,
+	cache: RefCell<LruCache<IStr, Rc<Regex>, FxBuildHasher>>,
 }
 impl Default for RegexCacheInner {
 	fn default() -> Self {
 		Self {
 			cache: RefCell::new(LruCache::with_hasher(
 				NonZeroUsize::new(20).unwrap(),
-				BuildHasherDefault::default(),
+				FxBuildHasher::default(),
 			)),
 		}
 	}

@@ -158,7 +158,6 @@ macro_rules! define_kinds {
 }
 use std::{collections::HashSet, str::FromStr};
 
-pub use define_kinds;
 use indexmap::IndexMap;
 use proc_macro2::{Ident, TokenStream};
 use quote::{format_ident, quote};
@@ -266,8 +265,8 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		error("STRING_BLOCK_MISSING_INDENT", lexer = true);
 		lit("IDENT") => r"[_a-zA-Z][_a-zA-Z0-9]*";
 		lit("WHITESPACE") => r"[ \t\n\r]+";
-		lit("SINGLE_LINE_SLASH_COMMENT") => r"//[^\r\n]*(\r\n|\n)?";
-		lit("SINGLE_LINE_HASH_COMMENT") => r"#[^\r\n]*(\r\n|\n)?";
+		lit("SINGLE_LINE_SLASH_COMMENT") => r"//[^\r\n]*?(\r\n|\n)?";
+		lit("SINGLE_LINE_HASH_COMMENT") => r"#[^\r\n]*?(\r\n|\n)?";
 		lit("MULTI_LINE_COMMENT") => r"/\*([^*]|\*[^/])*\*/";
 		error("COMMENT_TOO_SHORT") => r"/\*/";
 		error("COMMENT_UNTERMINATED") =>  r"/\*([^*/]|\*[^/])+";

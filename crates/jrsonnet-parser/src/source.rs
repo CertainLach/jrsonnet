@@ -6,7 +6,7 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{Trace, Tracer};
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::{IBytes, IStr};
 
 use crate::location::{location_to_offset, offset_to_location, CodeLocation};
@@ -56,7 +56,7 @@ macro_rules! any_ext {
 		impl Eq for dyn $T {}
 	};
 }
-pub trait SourcePathT: Trace + Debug + Display {
+pub trait SourcePathT: Acyclic + Debug + Display {
 	/// This method should be checked by resolver before panicking with bad SourcePath input
 	/// if `true` - then resolver may threat this path as default, and default is usally a CWD
 	fn is_default(&self) -> bool;
@@ -79,7 +79,7 @@ any_ext!(SourcePathT);
 /// search location is applicable
 ///
 /// Resolver may also return custom implementations of this trait, for example it may return http url in case of remotely loaded files
-#[derive(Eq, Debug, Clone)]
+#[derive(Eq, Debug, Clone, Acyclic)]
 pub struct SourcePath(Rc<dyn SourcePathT>);
 impl SourcePath {
 	pub fn new(inner: impl SourcePathT) -> Self {
@@ -106,18 +106,6 @@ impl PartialEq for SourcePath {
 		&*self.0 == &*other.0
 	}
 }
-impl Trace for SourcePath {
-	fn trace(&self, tracer: &mut Tracer) {
-		(*self.0).trace(tracer)
-	}
-
-	fn is_type_tracked() -> bool
-	where
-		Self: Sized,
-	{
-		true
-	}
-}
 impl Display for SourcePath {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.0)
@@ -129,7 +117,7 @@ impl Default for SourcePath {
 	}
 }
 
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Acyclic, Hash, PartialEq, Eq, Debug)]
 struct SourceDefault;
 impl Display for SourceDefault {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -151,7 +139,7 @@ impl SourcePathT for SourceDefault {
 ///
 /// When `file` is being resolved from `SourceFile(a/b/c)`, it should be resolved to `SourceFile(a/b/file)`,
 /// however if it is being resolved from `SourceDirectory(a/b/c)`, then it should be resolved to `SourceDirectory(a/b/c/file)`
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Acyclic, Hash, PartialEq, Eq, Debug)]
 pub struct SourceFile(PathBuf);
 impl SourceFile {
 	pub fn new(path: PathBuf) -> Self {
@@ -179,7 +167,7 @@ impl SourcePathT for SourceFile {
 /// Represents path to the directory on the disk
 ///
 /// See also [`SourceFile`]
-#[derive(Trace, Hash, PartialEq, Eq, Debug)]
+#[derive(Acyclic, Hash, PartialEq, Eq, Debug)]
 pub struct SourceDirectory(PathBuf);
 impl SourceDirectory {
 	pub fn new(path: PathBuf) -> Self {
@@ -208,7 +196,7 @@ impl SourcePathT for SourceDirectory {
 ///
 /// It is used for --ext-code=.../--tla-code=.../standard library source code by default,
 /// and user can construct arbitrary values by hand, without asking import resolver
-#[derive(Trace, Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Acyclic, Hash, PartialEq, Eq, Debug, Clone)]
 pub struct SourceVirtual(pub IStr);
 impl Display for SourceVirtual {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
@@ -231,7 +219,7 @@ impl SourcePathT for SourceVirtual {
 /// for better cross-platform support.
 // PartialEq is limited to ptr equality
 #[allow(clippy::derived_hash_with_manual_eq)]
-#[derive(Trace, Debug, Hash)]
+#[derive(Acyclic, Debug, Hash)]
 pub struct SourceFifo(pub String, pub IBytes);
 impl PartialEq for SourceFifo {
 	fn eq(&self, other: &Self) -> bool {
@@ -258,16 +246,8 @@ impl SourcePathT for SourceFifo {
 
 /// Either real file, or virtual
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
-#[derive(Clone, PartialEq, Eq, Debug)]
+#[derive(Clone, PartialEq, Eq, Debug, Acyclic)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
-
-impl Trace for Source {
-	fn trace(&self, _tracer: &mut Tracer) {}
-
-	fn is_type_tracked() -> bool {
-		false
-	}
-}
 
 impl Source {
 	pub fn new(path: SourcePath, code: IStr) -> Self {

@@ -1,12 +1,11 @@
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct};
+use rustc_hash::FxHashMap;
 
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
-	evaluate, evaluate_method, evaluate_named,
-	gc::GcHashMap,
-	Context, Pending, Thunk, Val,
+	evaluate, evaluate_method, evaluate_named, Context, Pending, Thunk, Val,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -15,7 +14,7 @@ pub fn destruct(
 	d: &Destruct,
 	parent: Thunk<Val>,
 	fctx: Pending<Context>,
-	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
+	new_bindings: &mut FxHashMap<IStr, Thunk<Val>>,
 ) -> Result<()> {
 	match d {
 		Destruct::Full(v) => {
@@ -163,7 +162,7 @@ pub fn destruct(
 pub fn evaluate_dest(
 	d: &BindSpec,
 	fctx: Pending<Context>,
-	new_bindings: &mut GcHashMap<IStr, Thunk<Val>>,
+	new_bindings: &mut FxHashMap<IStr, Thunk<Val>>,
 ) -> Result<()> {
 	match d {
 		BindSpec::Field { into, value } => {

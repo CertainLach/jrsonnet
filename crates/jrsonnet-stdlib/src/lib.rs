@@ -16,7 +16,7 @@ use jrsonnet_evaluator::{
 	trace::PathResolver,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Acyclic, Cc, Trace};
 use jrsonnet_parser::Source;
 pub use manifest::*;
 pub use math::*;
@@ -50,7 +50,7 @@ mod strings;
 mod types;
 
 #[allow(clippy::too_many_lines)]
-pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
+pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
 
 	// FIXME: Use PHF
@@ -279,10 +279,11 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	builder.build()
 }
 
-pub trait TracePrinter {
+pub trait TracePrinter: Acyclic {
 	fn print_trace(&self, loc: CallLocation, value: IStr);
 }
 
+#[derive(Acyclic)]
 pub struct StdTracePrinter {
 	resolver: PathResolver,
 }
@@ -309,13 +310,14 @@ impl TracePrinter for StdTracePrinter {
 	}
 }
 
+#[derive(Clone, Trace)]
 pub struct Settings {
 	/// Used for `std.extVar`
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
 	pub ext_natives: HashMap<IStr, FuncVal>,
 	/// Used for `std.trace`
-	pub trace_printer: Box<dyn TracePrinter>,
+	pub trace_printer: Rc<dyn TracePrinter>,
 	/// Used for `std.thisFile`
 	pub path_resolver: PathResolver,
 }
@@ -329,27 +331,27 @@ fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
 pub struct ContextInitializer {
 	/// std without applied thisFile overlay
 	stdlib_obj: ObjValue,
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 }
 impl ContextInitializer {
 	pub fn new(resolver: PathResolver) -> Self {
 		let settings = Settings {
 			ext_vars: HashMap::new(),
 			ext_natives: HashMap::new(),
-			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
+			trace_printer: Rc::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
 		};
-		let settings = Rc::new(RefCell::new(settings));
+		let settings = Cc::new(RefCell::new(settings));
 		let stdlib_obj = stdlib_uncached(settings.clone());
 		Self {
 			stdlib_obj,
 			settings,
 		}
 	}
-	pub fn settings(&self) -> Ref<Settings> {
+	pub fn settings(&self) -> Ref<'_, Settings> {
 		self.settings.borrow()
 	}
-	pub fn settings_mut(&self) -> RefMut<Settings> {
+	pub fn settings_mut(&self) -> RefMut<'_, Settings> {
 		self.settings.borrow_mut()
 	}
 	pub fn add_ext_var(&self, name: IStr, value: Val) {

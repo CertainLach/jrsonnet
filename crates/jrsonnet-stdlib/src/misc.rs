@@ -1,4 +1,4 @@
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use std::{cell::RefCell, collections::BTreeSet};
 
 use jrsonnet_evaluator::{
 	bail,
@@ -9,6 +9,7 @@ use jrsonnet_evaluator::{
 	val::{equals, ArrValue},
 	Context, Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
 };
+use jrsonnet_gcmodule::Cc;
 
 use crate::{extvar_source, Settings};
 
@@ -47,7 +48,7 @@ pub fn builtin_get(
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Val> {
 	let ctx = ctx.state().create_default_context(extvar_source(&x, ""));
@@ -62,7 +63,7 @@ pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 	this.settings
@@ -74,7 +75,7 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_trace(
 	this: &builtin_trace,

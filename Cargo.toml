@@ -19,7 +19,7 @@ jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre9
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre97" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre97" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre97" }
-jrsonnet-gcmodule = { version = "0.3.7" }
+jrsonnet-gcmodule = { version = "0.4.0", path = "../gcmodule" }
 # Diagnostics.
 # hi-doc is my library, which handles text formatting very well, but isn't polished enough yet
 # Previous implementation was based on annotate-snippets, which I don't like for many reasons.
@@ -27,8 +27,8 @@ jrsonnet-gcmodule = { version = "0.3.7" }
 # I'm against using miette, because I want to reuse data between interpreter and annotations, yet miette
 #   and other libraries want to handle spans etc by itself, which is okay for compiler diagnostics, but is
 #   bad for interpreter, where interpreter and parser are paired much closer.
-hi-doc = "0.1.1"
-annotate-snippets = "0.10.1"
+hi-doc = "0.3.0"
+annotate-snippets = "0.12.11"
 
 # CLI
 clap = "4.5"
@@ -37,57 +37,57 @@ clap_complete = "4.5"
 # Parsing, manifestification is implemented manually everywhere
 # Note on serde_yaml_with_quirks: This is a fork of serde-yaml with legacy yaml 1.1 support:
 # https://github.com/dtolnay/serde-yaml/pull/225
-serde = "1.0.197"
-serde_json = "1.0.114"
-serde_yaml_with_quirks = "0.8.24"
+serde = "1.0.228"
+serde_json = "1.0.149"
+serde_yaml_with_quirks = "0.9.34"
 
 # Error handling
-anyhow = "1.0.83"
-thiserror = "1.0.60"
+anyhow = "1.0.101"
+thiserror = "2.0.18"
 
 # Code formatting
-dprint-core = "0.65.0"
+dprint-core = "0.67.4"
 
 # Stdlib hashing functions
-md5 = "0.7.0"
+md5 = "0.8.0"
 sha1 = "0.10.6"
-sha2 = "0.10.8"
+sha2 = "0.10.9"
 sha3 = "0.10.8"
 
 # Source code parsing.
 # Jrsonnet has two parsers for jsonnet - one is for execution, and another is for better parsing diagnostics/lints/LSP.
 # First (and fast one) is based on peg, second is based on rowan.
-peg = "0.8.3"
-logos = "0.14.0"
+peg = "0.8.5"
+logos = "0.16.1"
 ungrammar = "1.16.1"
-rowan = "0.15.15"
+rowan = "0.16.1"
 
 mimallocator = "0.1.3"
 indoc = "2.0"
-insta = "1.39"
-tempfile = "3.10"
-pathdiff = "0.2.1"
-hashbrown = "0.14.5"
+insta = "1.46"
+tempfile = "3.24"
+pathdiff = "0.2.3"
+hashbrown = "0.16.1"
 static_assertions = "1.1"
-rustc-hash = "1.1"
-num-bigint = "0.4.5"
-strsim = "0.11.0"
+rustc-hash = "2.1"
+num-bigint = "0.4.6"
+strsim = "0.11.1"
 proc-macro2 = "1.0"
 quote = "1.0"
 syn = "2.0"
 drop_bomb = "0.1.5"
 base64 = "0.22.1"
-indexmap = "2.2.3"
-itertools = "0.13.0"
-xshell = "0.2.6"
+indexmap = "2.13.0"
+itertools = "0.14.0"
+xshell = "0.2.7"
 
-lsp-server = "0.7.6"
-lsp-types = "0.96.0"
+lsp-server = "0.7.9"
+lsp-types = "0.97.0"
 
-regex = "1.10"
-lru = "0.12.3"
+regex = "1.12"
+lru = "0.16.3"
 
-json-structural-diff = "0.1.0"
+json-structural-diff = "0.2.0"
 syn-dissect-closure = "0.1.0"
 
 [workspace.lints.rust]

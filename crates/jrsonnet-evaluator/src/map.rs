@@ -1,13 +1,14 @@
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
+use rustc_hash::FxHashMap;
 
-use crate::{GcHashMap, Thunk, Val};
+use crate::{gc::WithCapacityExt as _, Thunk, Val};
 
 #[derive(Trace)]
 #[trace(tracking(force))]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
-	current: GcHashMap<IStr, Thunk<Val>>,
+	current: FxHashMap<IStr, Thunk<Val>>,
 }
 
 #[derive(Trace)]
@@ -15,7 +16,7 @@ pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
 	pub fn iter_keys(self, mut handler: impl FnMut(IStr)) {
-		for (k, _) in &*self.0.current {
+		for (k, _) in &self.0.current {
 			handler(k.clone());
 		}
 		if let Some(parent) = self.0.parent.clone() {
@@ -23,14 +24,14 @@ impl LayeredHashMap {
 		}
 	}
 
-	pub(crate) fn new(layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
+	pub(crate) fn new(layer: FxHashMap<IStr, Thunk<Val>>) -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: None,
 			current: layer,
 		}))
 	}
 
-	pub fn extend(self, new_layer: GcHashMap<IStr, Thunk<Val>>) -> Self {
+	pub fn extend(self, new_layer: FxHashMap<IStr, Thunk<Val>>) -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: Some(self),
 			current: new_layer,
@@ -64,7 +65,7 @@ impl Default for LayeredHashMap {
 	fn default() -> Self {
 		Self(Cc::new(LayeredHashMapInternals {
 			parent: None,
-			current: GcHashMap::new(),
+			current: FxHashMap::new(),
 		}))
 	}
 }

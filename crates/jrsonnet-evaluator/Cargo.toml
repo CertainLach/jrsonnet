@@ -7,6 +7,8 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+build = "build.rs"
+
 [lints]
 workspace = true
 
@@ -16,8 +18,6 @@ default = ["explaining-traces"]
 explaining-traces = ["annotate-snippets", "hi-doc"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
-# Adds ability to build import closure in async
-async-import = []
 
 # Allows to preserve field order in objects
 exp-preserve-order = []
@@ -30,9 +30,6 @@ exp-bigint = ["num-bigint", "jrsonnet-types/exp-bigint"]
 # obj?.field, obj?.['field']
 exp-null-coaelse = ["jrsonnet-parser/exp-null-coaelse"]
 
-# Improves performance, and implements some useful things using nightly-only features
-nightly = ["hashbrown/nightly"]
-
 [dependencies]
 jrsonnet-interner.workspace = true
 jrsonnet-parser.workspace = true
@@ -41,7 +38,6 @@ jrsonnet-macros.workspace = true
 jrsonnet-gcmodule.workspace = true
 
 pathdiff.workspace = true
-hashbrown.workspace = true
 static_assertions.workspace = true
 
 rustc-hash.workspace = true
@@ -59,4 +55,8 @@ annotate-snippets = { workspace = true, optional = true }
 hi-doc = { workspace = true, optional = true }
 # Bigint
 num-bigint = { workspace = true, features = ["serde"], optional = true }
-stacker = "0.1.15"
+
+stacker = "0.1.23"
+
+[build-dependencies]
+rustversion = "1.0.22"

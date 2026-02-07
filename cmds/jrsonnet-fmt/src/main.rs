@@ -46,7 +46,7 @@ macro_rules! pi {
 		o
 	}};
 	(@s; $o:ident: str($e:expr $(,)?) $($t:tt)*) => {{
-		$o.push_str($e);
+		$o.push_string($e.to_owned());
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: string($e:expr $(,)?) $($t:tt)*) => {{
@@ -711,8 +711,8 @@ fn format(input: &str, opts: &FormatOptions) -> Option<String> {
 		let mut builder = hi_doc::SnippetBuilder::new(input);
 		for error in errors {
 			builder
-				.error(hi_doc::Text::single(
-					format!("{:?}", error.error).chars(),
+				.error(hi_doc::Text::fragment(
+					format!("{:?}", error.error),
 					Formatting::default(),
 				))
 				.range(

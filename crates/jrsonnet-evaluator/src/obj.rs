@@ -6,22 +6,21 @@ use std::{
 	ptr::addr_of,
 };
 
-use jrsonnet_gcmodule::{Cc, Trace, Weak};
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
-use rustc_hash::FxHashMap;
+use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
 	bail,
 	error::{suggest_object_fields, Error, ErrorKind::*},
 	function::{CallLocation, FuncVal},
-	gc::{GcHashMap, GcHashSet, TraceBox},
+	gc::WithCapacityExt as _,
 	in_frame,
 	operator::evaluate_add_op,
-	tb,
 	val::ArrValue,
-	MaybeUnbound, Result, Thunk, Unbound, Val,
+	CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
@@ -139,6 +138,7 @@ pub struct ObjMember {
 	pub location: Option<Span>,
 }
 
+cc_dyn!(CcObjectAssertion, ObjectAssertion);
 pub trait ObjectAssertion: Trace {
 	fn run(&self, super_obj: Option<ObjValue>, this: Option<ObjValue>) -> Result<()>;
 }
@@ -159,10 +159,10 @@ enum CacheValue {
 pub struct OopObject {
 	sup: Option<ObjValue>,
 	// this: Option<ObjValue>,
-	assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
-	assertions_ran: RefCell<GcHashSet<ObjValue>>,
-	this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<GcHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
+	assertions: Cc<Vec<CcObjectAssertion>>,
+	assertions_ran: RefCell<FxHashSet<ObjValue>>,
+	this_entries: Cc<FxHashMap<IStr, ObjMember>>,
+	value_cache: RefCell<FxHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
 }
 impl Debug for OopObject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
@@ -203,7 +203,7 @@ pub trait ObjectLike: Trace + Any + Debug {
 }
 
 #[derive(Clone, Trace)]
-pub struct WeakObjValue(#[trace(skip)] pub(crate) Weak<TraceBox<dyn ObjectLike>>);
+pub struct WeakObjValue(#[trace(skip)] pub(crate) Weak<dyn ObjectLike>);
 
 impl PartialEq for WeakObjValue {
 	fn eq(&self, other: &Self) -> bool {
@@ -220,9 +220,11 @@ impl Hash for WeakObjValue {
 	}
 }
 
-#[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Trace, Debug)]
-pub struct ObjValue(pub(crate) Cc<TraceBox<dyn ObjectLike>>);
+cc_dyn!(
+	#[derive(Clone, Debug)]
+	ObjValue, ObjectLike,
+	pub fn new() {...}
+);
 
 #[derive(Debug, Trace)]
 struct EmptyObject;
@@ -331,9 +333,6 @@ impl ObjectLike for ThisOverride {
 }
 
 impl ObjValue {
-	pub fn new(v: impl ObjectLike) -> Self {
-		Self(Cc::new(tb!(v)))
-	}
 	pub fn new_empty() -> Self {
 		Self::new(EmptyObject)
 	}
@@ -582,16 +581,16 @@ impl ObjValue {
 impl OopObject {
 	pub fn new(
 		sup: Option<ObjValue>,
-		this_entries: Cc<GcHashMap<IStr, ObjMember>>,
-		assertions: Cc<Vec<TraceBox<dyn ObjectAssertion>>>,
+		this_entries: Cc<FxHashMap<IStr, ObjMember>>,
+		assertions: Cc<Vec<CcObjectAssertion>>,
 	) -> Self {
 		Self {
 			sup,
 			// this: None,
 			assertions,
-			assertions_ran: RefCell::new(GcHashSet::new()),
+			assertions_ran: RefCell::new(FxHashSet::new()),
 			this_entries,
-			value_cache: RefCell::new(GcHashMap::new()),
+			value_cache: RefCell::new(FxHashMap::new()),
 		}
 	}
 
@@ -762,7 +761,7 @@ impl ObjectLike for OopObject {
 		}
 		if self.assertions_ran.borrow_mut().insert(real_this.clone()) {
 			for assertion in self.assertions.iter() {
-				if let Err(e) = assertion.run(self.sup.clone(), Some(real_this.clone())) {
+				if let Err(e) = assertion.0.run(self.sup.clone(), Some(real_this.clone())) {
 					self.assertions_ran.borrow_mut().remove(&real_this);
 					return Err(e);
 				}
@@ -784,15 +783,15 @@ impl PartialEq for ObjValue {
 impl Eq for ObjValue {}
 impl Hash for ObjValue {
 	fn hash<H: Hasher>(&self, hasher: &mut H) {
-		hasher.write_usize(addr_of!(*self.0) as usize);
+		hasher.write_usize(addr_of!(*self.0).expose_provenance() as usize);
 	}
 }
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
 	sup: Option<ObjValue>,
-	map: GcHashMap<IStr, ObjMember>,
-	assertions: Vec<TraceBox<dyn ObjectAssertion>>,
+	map: FxHashMap<IStr, ObjMember>,
+	assertions: Vec<CcObjectAssertion>,
 	next_field_index: FieldIndex,
 }
 impl ObjValueBuilder {
@@ -802,7 +801,7 @@ impl ObjValueBuilder {
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			sup: None,
-			map: GcHashMap::with_capacity(capacity),
+			map: FxHashMap::with_capacity(capacity),
 			assertions: Vec::new(),
 			next_field_index: FieldIndex::default(),
 		}
@@ -817,7 +816,7 @@ impl ObjValueBuilder {
 	}
 
 	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		self.assertions.push(tb!(assertion));
+		self.assertions.push(CcObjectAssertion::new(assertion));
 		self
 	}
 	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
@@ -922,7 +921,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 		let (receiver, name, member) =
 			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
 		let entry = receiver.0.map.entry(name);
-		entry.insert(member);
+		entry.insert_entry(member);
 	}
 
 	/// Tries to insert value, returns an error if it was already defined
@@ -933,7 +932,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 		self.binding(MaybeUnbound::Bound(value.into()))
 	}
 	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {
-		self.binding(MaybeUnbound::Unbound(Cc::new(tb!(bindable))))
+		self.binding(MaybeUnbound::Unbound(CcUnbound::new(bindable)))
 	}
 	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
@@ -955,8 +954,8 @@ impl ObjMemberBuilder<ExtendBuilder<'_>> {
 	pub fn value(self, value: impl Into<Val>) {
 		self.binding(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
 	}
-	pub fn bindable(self, bindable: TraceBox<dyn Unbound<Bound = Val>>) {
-		self.binding(MaybeUnbound::Unbound(Cc::new(bindable)));
+	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) {
+		self.binding(MaybeUnbound::Unbound(CcUnbound::new(bindable)));
 	}
 	pub fn binding(self, binding: MaybeUnbound) {
 		let (receiver, name, member) = self.build_member(binding);

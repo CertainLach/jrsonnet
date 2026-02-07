@@ -9,14 +9,14 @@ use std::{
 	borrow::Cow,
 	cell::RefCell,
 	fmt::{self, Display},
-	hash::{BuildHasherDefault, Hash, Hasher},
+	hash::{Hash, Hasher},
 	ops::Deref,
 	str,
 };
 
 use hashbrown::{hash_map::RawEntryMut, HashMap};
-use jrsonnet_gcmodule::Trace;
-use rustc_hash::FxHasher;
+use jrsonnet_gcmodule::{Acyclic, Trace};
+use rustc_hash::FxBuildHasher;
 
 mod inner;
 use inner::Inner;
@@ -31,6 +31,7 @@ impl Trace for IStr {
 		false
 	}
 }
+unsafe impl Acyclic for IStr {}
 
 impl IStr {
 	#[must_use]
@@ -219,10 +220,10 @@ impl From<&[u8]> for IBytes {
 	}
 }
 
-type PoolMap = HashMap<Inner, (), BuildHasherDefault<FxHasher>>;
+type PoolMap = HashMap<Inner, (), FxBuildHasher>;
 
 thread_local! {
-	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, BuildHasherDefault::default()));
+	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, FxBuildHasher::default()));
 }
 
 /// Jrsonnet golang bindings require that it is possible to move jsonnet

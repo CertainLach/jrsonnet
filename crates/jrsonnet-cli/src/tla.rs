@@ -2,7 +2,8 @@ use clap::Parser;
 use jrsonnet_evaluator::{
 	error::{ErrorKind, Result},
 	function::TlaArg,
-	gc::GcHashMap,
+	gc::WithCapacityExt as _,
+	rustc_hash::FxHashMap,
 	IStr,
 };
 use jrsonnet_parser::{ParserSettings, Source};
@@ -32,8 +33,8 @@ pub struct TlaOpts {
 	tla_code_file: Vec<ExtFile>,
 }
 impl TlaOpts {
-	pub fn tla_opts(&self) -> Result<GcHashMap<IStr, TlaArg>> {
-		let mut out = GcHashMap::new();
+	pub fn tla_opts(&self) -> Result<FxHashMap<IStr, TlaArg>> {
+		let mut out = FxHashMap::new();
 		for (name, value) in self
 			.tla_str
 			.iter()

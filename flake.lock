@@ -1,17 +1,11 @@
 {
   "nodes": {
     "crane": {
-      "inputs": {
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
       "locked": {
-        "lastModified": 1724377159,
-        "narHash": "sha256-ixjje1JO8ucKT41hs6n2NCde1Vc0+Zc2p2gUbJpCsMw=",
+        "lastModified": 1770419512,
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "3e47b7a86c19142bd3675da49d6acef488b4dac1",
+        "rev": "2510f2cbc3ccd237f700bb213756a8f35c32d8d7",
         "type": "github"
       },
       "original": {
@@ -27,11 +21,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1722555600,
-        "narHash": "sha256-XOQkdLafnb/p9ij77byFQjDf5m5QYl9b2REiVClC+x4=",
+        "lastModified": 1769996383,
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "8471fe90ad337a8074e957b69ca4d0089218391d",
+        "rev": "57928607ea566b5db3ad13af0e57e921e6b12381",
         "type": "github"
       },
       "original": {
@@ -42,15 +35,15 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1724519568,
-        "narHash": "sha256-CmfrenY4cEi/mIslKy8XOGdqxUUVgT6/qMzNcAN/7z8=",
+        "lastModified": 1770468184,
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "eb0e6df0cdd2641ec0651cd9802ff4cff3b3e915",
+        "rev": "a124a10ea33a73329c42d67f30efcdbfb60a4e04",
         "type": "github"
       },
       "original": {
         "owner": "nixos",
+        "ref": "release-25.11",
         "repo": "nixpkgs",
         "type": "github"
       }
@@ -71,11 +64,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1755743804,
-        "narHash": "sha256-M6qT02voARH5e9eTXQBzpYIE/hAp6jPgBCyxLmw5uBM=",
+        "lastModified": 1770433312,
         "owner": "oxalica",
         "repo": "rust-overlay",
-        "rev": "80322e975e27d834451d6b66e63f8abae9d74bf2",
+        "rev": "9922ff9f99a6436756cbe6f5d11f9c3630e58cf0",
         "type": "github"
       },
       "original": {
@@ -85,20 +77,11 @@
       }
     },
     "shelly": {
-      "inputs": {
-        "flake-parts": [
-          "flake-parts"
-        ],
-        "nixpkgs": [
-          "nixpkgs"
-        ]
-      },
       "locked": {
-        "lastModified": 1718420551,
-        "narHash": "sha256-NU8NBXVPj0KuY4Tl/LtZPrbX3PmmmgPuhk/1pzm9cyk=",
+        "lastModified": 1756323923,
         "owner": "CertainLach",
         "repo": "shelly",
-        "rev": "4f70221f3f9ad9058f590eefb25251b6760aaa47",
+        "rev": "b5dd29a500db04f54a9f1c2bf81cdd84df8b0cd7",
         "type": "github"
       },
       "original": {

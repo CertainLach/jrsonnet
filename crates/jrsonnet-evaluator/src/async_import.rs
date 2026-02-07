@@ -1,14 +1,15 @@
-use std::{cell::RefCell, future::Future, path::Path};
+use std::{any::Any, cell::RefCell, future::Future, path::Path};
 
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName, ForSpecData,
 	IfSpecData, LocExpr, Member, ObjBody, Param, ParamsDesc, ParserSettings, SliceDesc, Source,
 	SourcePath,
 };
+use rustc_hash::FxHashMap;
 
-use crate::{bail, gc::GcHashMap, FileData, ImportResolver, State};
+use crate::{bail, FileData, ImportResolver, State};
 
 pub struct Import {
 	path: IStr,
@@ -132,12 +133,12 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			ObjBody::ObjComp(_) => todo!(),
 		}
 	}
-	match &*expr.0 {
+	match &*expr.expr() {
 		Expr::Import(v) | Expr::ImportStr(v) | Expr::ImportBin(v) => {
-			if let Expr::Str(s) = &*v.0 {
+			if let Expr::Str(s) = &*v.expr() {
 				out.0.push(Import {
 					path: s.clone(),
-					expression: matches!(&*expr.0, Expr::Import(_)),
+					expression: matches!(&*expr.expr(), Expr::Import(_)),
 				});
 			}
 			// Non-string import will fail in runtime
@@ -250,9 +251,9 @@ pub trait AsyncImportResolver {
 	) -> impl Future<Output = Result<Vec<u8>, Self::Error>>;
 }
 
-#[derive(Trace)]
+#[derive(Acyclic)]
 struct ResolvedImportResolver {
-	resolved: RefCell<GcHashMap<(SourcePath, IStr), (SourcePath, bool)>>,
+	resolved: RefCell<FxHashMap<(SourcePath, IStr), (SourcePath, bool)>>,
 }
 impl ImportResolver for ResolvedImportResolver {
 	fn load_file_contents(&self, _resolved: &SourcePath) -> crate::Result<Vec<u8>> {
@@ -278,10 +279,6 @@ impl ImportResolver for ResolvedImportResolver {
 			path.to_owned()
 		))
 	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
-	}
 }
 
 enum Job {
@@ -295,13 +292,12 @@ pub async fn async_import<H>(s: State, handler: H, path: impl AsRef<Path>) -> Re
 where
 	H: AsyncImportResolver,
 {
-	let mut resolved = s
-		.import_resolver()
-		.as_any()
+	let resolved = (s.import_resolver() as &dyn Any)
 		.downcast_ref::<ResolvedImportResolver>()
-		.map_or_else(GcHashMap::new, |resolver| {
-			std::mem::take(&mut *resolver.resolved.borrow_mut())
-		});
+		.expect("for async imports, import_resolver should be set to ResolvedImportResolver");
+
+	let mut resolved_map = resolved.resolved.borrow_mut();
+
 	let mut queue = vec![Job::LoadFile {
 		path: handler.resolve(path.as_ref()).await?,
 		parse: true,
@@ -344,7 +340,7 @@ where
 			}
 			Job::ResolveImport { from, import } => {
 				if let Some((resolved, expression)) =
-					resolved.get_mut(&(from.clone(), import.path.clone()))
+					resolved_map.get_mut(&(from.clone(), import.path.clone()))
 				{
 					if import.expression && !*expression {
 						*expression = true;
@@ -360,8 +356,5 @@ where
 			}
 		}
 	}
-	s.set_import_resolver(ResolvedImportResolver {
-		resolved: RefCell::new(resolved),
-	});
 	Ok(())
 }

@@ -56,25 +56,10 @@ fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 
 #[builtin]
 fn param_names(fun: FuncVal) -> Vec<String> {
-	match fun {
-		FuncVal::Id => vec!["x".to_string()],
-		FuncVal::Normal(func) => func
-			.params
-			.iter()
-			.map(|p| p.0.name().unwrap_or_else(|| "<unnamed>".into()).to_string())
-			.collect(),
-		FuncVal::StaticBuiltin(b) => b
-			.params()
-			.iter()
-			.map(|p| p.name().as_str().unwrap_or("<unnamed>").to_string())
-			.collect(),
-		FuncVal::Builtin(b) => b
-			.params()
-			.iter()
-			.map(|p| p.name().as_str().unwrap_or("<unnamed>").to_string())
-			.collect(),
-		FuncVal::Thunk(_) => vec![],
-	}
+	fun.params()
+		.into_iter()
+		.map(|v| v.name().as_str().unwrap_or("<unnamed>").to_owned())
+		.collect()
 }
 
 #[derive(Trace)]

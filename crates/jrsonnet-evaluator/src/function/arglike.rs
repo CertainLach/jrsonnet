@@ -1,9 +1,10 @@
-use hashbrown::HashMap;
+use std::collections::HashMap;
+
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{ArgsDesc, LocExpr};
 
-use crate::{evaluate, gc::GcHashMap, typed::Typed, Context, Result, Thunk, Val};
+use crate::{evaluate, typed::Typed, Context, Result, Thunk, Val};
 
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}
@@ -204,38 +205,6 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 	}
 }
 impl<V, S> OptionalContext for HashMap<IStr, V, S> where V: ArgLike + OptionalContext {}
-
-impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
-	fn unnamed_len(&self) -> usize {
-		self.0.unnamed_len()
-	}
-
-	fn unnamed_iter(
-		&self,
-		ctx: Context,
-		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
-	) -> Result<()> {
-		self.0.unnamed_iter(ctx, tailstrict, handler)
-	}
-
-	fn named_iter(
-		&self,
-		ctx: Context,
-		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
-	) -> Result<()> {
-		self.0.named_iter(ctx, tailstrict, handler)
-	}
-
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		self.0.named_names(handler);
-	}
-
-	fn is_empty(&self) -> bool {
-		self.0.is_empty()
-	}
-}
 
 macro_rules! impl_args_like {
 	($count:expr; $($gen:ident)*) => {

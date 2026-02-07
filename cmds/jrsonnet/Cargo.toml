@@ -44,8 +44,6 @@ exp-null-coaelse = [
 # --exp-apply
 exp-apply = []
 
-nightly = ["jrsonnet-evaluator/nightly"]
-
 [dependencies]
 jrsonnet-evaluator.workspace = true
 jrsonnet-parser.workspace = true

@@ -1,19 +1,30 @@
-use std::{any::Any, num::NonZeroU32};
+use std::{
+	any::Any,
+	fmt::{self},
+	num::NonZeroU32,
+};
 
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::LocExpr;
 
-use crate::{function::FuncVal, gc::TraceBox, tb, Context, Result, Thunk, Val};
+use crate::{function::FuncVal, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};
 
-/// Represents a Jsonnet array value.
-#[derive(Debug, Clone, Trace)]
-// may contain other ArrValue
-#[trace(tracking(force))]
-pub struct ArrValue(Cc<TraceBox<dyn ArrayLike>>);
+cc_dyn!(
+	#[doc = "Represents a Jsonnet array value."]
+	#[derive(Clone)]
+	ArrValue,
+	ArrayLike,
+	pub fn new() {...}
+);
+impl fmt::Debug for ArrValue {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		self.0.fmt(f)
+	}
+}
 
 pub trait ArrayLikeIter<T>: Iterator<Item = T> + DoubleEndedIterator + ExactSizeIterator {}
 impl<I, T> ArrayLikeIter<T> for I where
@@ -22,9 +33,6 @@ impl<I, T> ArrayLikeIter<T> for I where
 }
 
 impl ArrValue {
-	pub fn new(v: impl ArrayLike) -> Self {
-		Self(Cc::new(tb!(v)))
-	}
 	pub fn empty() -> Self {
 		Self::new(RangeArray::empty())
 	}
@@ -232,6 +240,3 @@ impl ArrayLike for ArrValue {
 		self.0.is_cheap()
 	}
 }
-
-#[cfg(target_pointer_width = "64")]
-static_assertions::assert_eq_size!(ArrValue, [u8; 8]);

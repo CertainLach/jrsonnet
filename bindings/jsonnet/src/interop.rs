@@ -60,7 +60,7 @@ pub mod wasm {
 
 #[cfg(feature = "interop-common")]
 mod common {
-	use jrsonnet_evaluator::trace::{CompactFormat, ExplainingFormat, JsFormat, PathResolver};
+	use jrsonnet_evaluator::trace::{CompactFormat, HiDocFormat, JsFormat, PathResolver};
 
 	use crate::VM;
 
@@ -76,7 +76,7 @@ mod common {
 			}
 			1 => vm.trace_format = Box::new(JsFormat { max_trace: 20 }),
 			2 => {
-				vm.trace_format = Box::new(ExplainingFormat {
+				vm.trace_format = Box::new(HiDocFormat {
 					resolver: PathResolver::new_cwd_fallback(),
 					max_trace: 20,
 				});

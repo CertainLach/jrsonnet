@@ -4,7 +4,7 @@ use anyhow::Result;
 use ast::{lower, AstSrc};
 use itertools::Itertools;
 use kinds::{KindsSrc, TokenKind};
-use proc_macro2::{Punct, Spacing, TokenStream};
+use proc_macro2::{Ident, Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use ungrammar::Grammar;
 use util::{ensure_file_contents, reformat, to_pascal_case, to_upper_snake_case};
@@ -533,8 +533,11 @@ pub fn escape_token_macro(token: &str) -> TokenStream {
 	if "{}[]()$".contains(token) {
 		let c = token.chars().next().unwrap();
 		quote! { #c }
-	} else if token.contains('$') {
+	} else if token.contains(|v| v == '$') {
 		quote! { #token }
+	} else if token.chars().all(|v| ('a'..='z').contains(&v)) {
+		let i = Ident::new(&token, Span::call_site());
+		quote! { #i }
 	} else {
 		let cs = token.chars().map(|c| Punct::new(c, Spacing::Joint));
 		quote! { #(#cs)* }

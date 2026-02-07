@@ -39,5 +39,5 @@ interop-wasm = []
 interop-threading = []
 
 experimental = ["exp-preserve-order", "exp-destruct"]
-exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order"]
+exp-preserve-order = ["jrsonnet-evaluator/exp-preserve-order", "jrsonnet-stdlib/exp-preserve-order"]
 exp-destruct = ["jrsonnet-evaluator/exp-destruct"]

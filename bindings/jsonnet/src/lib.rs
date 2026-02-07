@@ -17,19 +17,20 @@ use std::{
 	ffi::{CStr, CString, OsStr},
 	os::raw::{c_char, c_double, c_int, c_uint},
 	path::{Path, PathBuf},
+	rc::Rc,
 };
 
 use jrsonnet_evaluator::{
 	apply_tla, bail,
 	function::TlaArg,
-	gc::{GcHashMap, TraceBox},
+	gc::WithCapacityExt as _,
 	manifest::{JsonFormat, ManifestFormat, ToStringFormat},
+	rustc_hash::FxHashMap,
 	stack::set_stack_depth_limit,
-	tb,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::SourcePath;
 use jrsonnet_stdlib::ContextInitializer;
 
@@ -47,7 +48,7 @@ pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
 	b"v0.20.0\0"
 }
 
-unsafe fn parse_path(input: &CStr) -> Cow<Path> {
+unsafe fn parse_path(input: &CStr) -> Cow<'_, Path> {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
@@ -61,7 +62,7 @@ unsafe fn parse_path(input: &CStr) -> Cow<Path> {
 	}
 }
 
-unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
+unsafe fn unparse_path(input: &Path) -> Cow<'_, CStr> {
 	#[cfg(target_family = "unix")]
 	{
 		use std::os::unix::ffi::OsStrExt;
@@ -76,15 +77,14 @@ unsafe fn unparse_path(input: &Path) -> Cow<CStr> {
 	}
 }
 
-#[derive(Trace)]
+#[derive(Acyclic)]
 struct VMImportResolver {
-	#[trace(tracking(force))]
-	inner: RefCell<TraceBox<dyn ImportResolver>>,
+	inner: RefCell<Rc<dyn ImportResolver>>,
 }
 impl VMImportResolver {
 	fn new(value: impl ImportResolver) -> Self {
 		Self {
-			inner: RefCell::new(tb!(value)),
+			inner: RefCell::new(Rc::new(value)),
 		}
 	}
 }
@@ -104,41 +104,29 @@ impl ImportResolver for VMImportResolver {
 	fn resolve(&self, path: &Path) -> Result<SourcePath> {
 		self.inner.borrow().resolve(path)
 	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
-	}
 }
 
 pub struct VM {
 	state: State,
 	manifest_format: Box<dyn ManifestFormat>,
 	trace_format: Box<dyn TraceFormat>,
-	tla_args: GcHashMap<IStr, TlaArg>,
+	tla_args: FxHashMap<IStr, TlaArg>,
 }
 impl VM {
 	fn replace_import_resolver(&self, resolver: impl ImportResolver) {
-		*self
-			.state
-			.import_resolver()
-			.as_any()
+		*(self.state.import_resolver() as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
 			.expect("valid resolver ty")
 			.inner
-			.borrow_mut() = tb!(resolver);
+			.borrow_mut() = Rc::new(resolver);
 	}
 	fn add_jpath(&self, path: PathBuf) {
-		self.state
-			.import_resolver()
-			.as_any()
+		let ir = self.state.import_resolver();
+		let vmi = (ir as &dyn Any)
 			.downcast_ref::<VMImportResolver>()
-			.expect("valid resolver ty")
-			.inner
-			.borrow_mut()
-			.as_any_mut()
+			.expect("valid resolver ty");
+		let vmi = &mut *vmi.inner.borrow_mut();
+		(vmi as &mut dyn Any)
 			.downcast_mut::<FileImportResolver>()
 			.expect("jpaths are not compatible with callback imports!")
 			.add_jpath(path);
@@ -158,7 +146,7 @@ pub extern "C" fn jsonnet_make() -> *mut VM {
 		state,
 		manifest_format: Box::new(JsonFormat::default()),
 		trace_format: Box::new(CompactFormat::default()),
-		tla_args: GcHashMap::new(),
+		tla_args: FxHashMap::new(),
 	}))
 }
 

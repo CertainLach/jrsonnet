@@ -7,6 +7,7 @@ use jrsonnet_parser::{
 	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
 };
 use jrsonnet_types::ValType;
+use rustc_hash::FxHashMap;
 
 use self::destructure::destruct;
 use crate::{
@@ -16,11 +17,12 @@ use crate::{
 	error::{suggest_object_fields, ErrorKind::*},
 	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
+	gc::WithCapacityExt as _,
 	in_frame,
 	typed::Typed,
 	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
-	Context, Error, GcHashMap, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, Unbound, Val,
+	Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt,
+	Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -122,7 +124,7 @@ pub fn evaluate_comp(
 			Val::Arr(list) => {
 				for item in list.iter_lazy() {
 					let fctx = Pending::new();
-					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
+					let mut new_bindings = FxHashMap::with_capacity(var.capacity_hint());
 					destruct(var, item, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx
 						.clone()
@@ -140,7 +142,7 @@ pub fn evaluate_comp(
 					false,
 				) {
 					let fctx = Pending::new();
-					let mut new_bindings = GcHashMap::with_capacity(var.capacity_hint());
+					let mut new_bindings = FxHashMap::with_capacity(var.capacity_hint());
 					let obj = obj.clone();
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
 						Thunk::evaluated(Val::string(field.clone())),
@@ -181,7 +183,7 @@ fn evaluate_object_locals(
 		fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Context> {
 			let fctx = Context::new_future();
 			let mut new_bindings =
-				GcHashMap::with_capacity(self.locals.iter().map(BindSpec::capacity_hint).sum());
+				FxHashMap::with_capacity(self.locals.iter().map(BindSpec::capacity_hint).sum());
 			for b in self.locals.iter() {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
@@ -329,7 +331,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 		}
 	}
 	let this = builder.build();
-	fctx.fill(ctx.extend(GcHashMap::new(), None, None, Some(this.clone())));
+	fctx.fill(ctx.extend(FxHashMap::new(), None, None, Some(this.clone())));
 	Ok(this)
 }
 
@@ -357,7 +359,7 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 			let this = builder.build();
 			for (ctx, fctx) in ctxs {
 				let _ctx = ctx
-					.extend(GcHashMap::new(), None, None, Some(this.clone()))
+					.extend(FxHashMap::new(), None, None, Some(this.clone()))
 					.into_future(fctx);
 			}
 			this
@@ -581,8 +583,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			Ok(indexable)
 		})?,
 		LocalExpr(bindings, returned) => {
-			let mut new_bindings: GcHashMap<IStr, Thunk<Val>> =
-				GcHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
+			let mut new_bindings: FxHashMap<IStr, Thunk<Val>> =
+				FxHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
 			let fctx = Context::new_future();
 			for b in bindings {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;

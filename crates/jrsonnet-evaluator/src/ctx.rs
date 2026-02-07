@@ -2,10 +2,11 @@ use std::fmt::Debug;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
+use rustc_hash::FxHashMap;
 
 use crate::{
-	error::ErrorKind::*, gc::GcHashMap, map::LayeredHashMap, ObjValue, Pending, Result, State,
-	Thunk, Val,
+	error::ErrorKind::*, gc::WithCapacityExt as _, map::LayeredHashMap, ObjValue, Pending, Result,
+	State, Thunk, Val,
 };
 
 #[derive(Trace)]
@@ -88,7 +89,7 @@ impl Context {
 
 	#[must_use]
 	pub fn with_var(self, name: impl Into<IStr>, value: Val) -> Self {
-		let mut new_bindings = GcHashMap::with_capacity(1);
+		let mut new_bindings = FxHashMap::with_capacity(1);
 		new_bindings.insert(name.into(), Thunk::evaluated(value));
 		self.extend(new_bindings, None, None, None)
 	}
@@ -96,7 +97,7 @@ impl Context {
 	#[must_use]
 	pub fn extend(
 		self,
-		new_bindings: GcHashMap<IStr, Thunk<Val>>,
+		new_bindings: FxHashMap<IStr, Thunk<Val>>,
 		new_dollar: Option<ObjValue>,
 		new_sup: Option<ObjValue>,
 		new_this: Option<ObjValue>,
@@ -128,7 +129,7 @@ impl PartialEq for Context {
 
 pub struct ContextBuilder {
 	state: Option<State>,
-	bindings: GcHashMap<IStr, Thunk<Val>>,
+	bindings: FxHashMap<IStr, Thunk<Val>>,
 	extend: Option<Context>,
 }
 
@@ -138,7 +139,7 @@ impl ContextBuilder {
 	pub fn dangerous_empty_state() -> Self {
 		Self {
 			state: None,
-			bindings: GcHashMap::new(),
+			bindings: FxHashMap::new(),
 			extend: None,
 		}
 	}
@@ -148,14 +149,14 @@ impl ContextBuilder {
 	pub fn with_capacity(state: State, capacity: usize) -> Self {
 		Self {
 			state: Some(state),
-			bindings: GcHashMap::with_capacity(capacity),
+			bindings: FxHashMap::with_capacity(capacity),
 			extend: None,
 		}
 	}
 	pub fn extend(parent: Context) -> Self {
 		Self {
 			state: parent.0.state.clone(),
-			bindings: GcHashMap::new(),
+			bindings: FxHashMap::new(),
 			extend: Some(parent),
 		}
 	}

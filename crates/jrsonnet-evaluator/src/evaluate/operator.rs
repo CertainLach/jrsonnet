@@ -2,11 +2,6 @@ use std::cmp::Ordering;
 
 use jrsonnet_parser::{BinaryOpType, LocExpr, UnaryOpType};
 
-#[cfg(feature = "exp-bigint")]
-use num_traits::{FromPrimitive, ToPrimitive};
-
-#[cfg(feature = "exp-bigint")]
-use crate::val::NumValue;
 use crate::{
 	arr::ArrValue,
 	bail,
