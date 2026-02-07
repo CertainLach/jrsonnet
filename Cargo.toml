@@ -19,7 +19,7 @@ jrsonnet-interner = { path = "./crates/jrsonnet-interner" }
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli" }
 jrsonnet-types = { path = "./crates/jrsonnet-types" }
-jrsonnet-gcmodule = { git = "https://github.com/grafana/jrsonnet-gcmodule.git", branch = "v0.3.7/feat/empty", default-features = false, features = ["derive"] }
+jrsonnet-gcmodule = { version = "0.3.7" }
 # Diagnostics.
 # hi-doc is my library, which handles text formatting very well, but isn't polished enough yet
 # Previous implementation was based on annotate-snippets, which I don't like for many reasons.

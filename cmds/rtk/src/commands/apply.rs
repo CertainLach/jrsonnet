@@ -162,10 +162,8 @@ pub async fn apply_environment<W: Write>(
 	mut writer: W,
 ) -> Result<Vec<ResourceDiff>> {
 	use super::util::evaluate_single_environment;
-	// Evaluate the environment
-	tracing::debug!(path = %path, "evaluating environment");
 
-	let env_data = evaluate_single_environment(path, &eval_opts, opts.name.as_deref())?;
+	let env_data = evaluate_single_environment(path, eval_opts, opts.name.as_deref())?;
 	let env_spec = env_data.spec;
 
 	// Get the spec for cluster connection and strategy selection

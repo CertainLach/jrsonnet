@@ -115,7 +115,7 @@ fn run_error_test(env_path: &PathBuf, expected_error: &str) {
 	}
 
 	// Then, verify rtk also fails with the expected error
-	let result = eval(&env_path.to_string_lossy(), &EvalOpts::default());
+	let result = eval(&env_path.to_string_lossy(), EvalOpts::default());
 
 	match result {
 		Ok(_) => {

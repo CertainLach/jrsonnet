@@ -329,11 +329,11 @@ pub fn build_eval_opts(args: &impl JsonnetArgs) -> EvalOpts {
 /// 5. Ensuring exactly one environment is returned
 pub fn evaluate_single_environment(
 	path: &str,
-	eval_opts: &EvalOpts,
+	eval_opts: EvalOpts,
 	name_filter: Option<&str>,
 ) -> Result<EnvironmentData> {
 	tracing::debug!(path = %path, "evaluating environment");
-	let eval_result = crate::eval::eval(path, &eval_opts)
+	let eval_result = crate::eval::eval(path, eval_opts)
 		.context(format!("evaluating environment at {}", path))?;
 
 	// Extract environments (handles both inline and static environments)

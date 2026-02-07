@@ -54,7 +54,7 @@ pub fn run<W: Write, R: ImportResolver>(
 	entrypoint: &Path,
 	config_base: Option<&Path>,
 	spec: Option<Environment>,
-	opts: &EvalOpts,
+	opts: EvalOpts,
 	mut writer: W,
 ) -> Result<()> {
 	let result = eval::eval_with_resolver(import_resolver, entrypoint, config_base, spec, opts)?;
@@ -110,7 +110,7 @@ mod tests {
 			&entrypoint(),
 			None,
 			None,
-			&EvalOpts::default(),
+			EvalOpts::default(),
 			&mut output,
 		)
 		.expect("eval should succeed");
@@ -146,7 +146,7 @@ mod tests {
 			&entrypoint(),
 			None,
 			None,
-			&EvalOpts::default(),
+			EvalOpts::default(),
 			writer,
 		);
 
