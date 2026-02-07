@@ -1,0 +1,3 @@
+local is not defined: tmp2
+There is a local with similar name present: tmp
+    error.static_error_var_not_exist.jsonnet:17:16-21: local <tmp2> access

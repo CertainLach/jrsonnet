@@ -1,0 +1,3 @@
+syntax error: expected one of "\\\\", "\\u", "\\x", ['"'], ['\\'], [_], got "EOF"
+    syntax_error.jsonnet:1:3
+    error.import_syntax-error.jsonnet:1:1-35: import "lib/syntax_error.jsonnet"

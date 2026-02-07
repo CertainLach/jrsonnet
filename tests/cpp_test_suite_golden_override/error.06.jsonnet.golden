@@ -1,0 +1,3 @@
+attempted to divide by zero
+    error.06.jsonnet:18:22-26: local <err> access
+    error.06.jsonnet:19:1-5:   function <f> call

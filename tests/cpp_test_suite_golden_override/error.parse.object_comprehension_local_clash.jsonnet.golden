@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, <comma>, got ":"
+    error.parse.object_comprehension_local_clash.jsonnet:17:29

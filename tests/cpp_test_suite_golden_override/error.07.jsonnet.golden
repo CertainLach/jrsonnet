@@ -1,0 +1,4 @@
+runtime error: sarcasm
+    error.07.jsonnet:18:31-47: error statement
+    error.07.jsonnet:18:15-55: function <third> call
+    error.07.jsonnet:19:1-7:   local <toxic> access

@@ -1,0 +1,5 @@
+too many args, function has 2
+Function has the following signature: (str, rest = <default>)
+    error.trace_three_param.jsonnet:17:11-33: function <builtin_trace> call
+    error.trace_three_param.jsonnet:19:6-8:   local <v> access
+    field <a> evaluation

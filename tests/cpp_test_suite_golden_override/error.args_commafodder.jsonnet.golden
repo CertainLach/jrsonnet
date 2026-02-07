@@ -1,0 +1,2 @@
+local is not defined: foo
+    error.args_commafodder.jsonnet:1:1-5: local <foo> access

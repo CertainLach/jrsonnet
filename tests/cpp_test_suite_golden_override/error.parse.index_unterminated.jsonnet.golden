@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ":", "[", "{", <identifier>, <number>, <string>, <unary op>, ['"'], ['\''], got "EOF"
+    error.parse.index_unterminated.jsonnet:17:4
