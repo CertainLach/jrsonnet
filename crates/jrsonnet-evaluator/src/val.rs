@@ -22,7 +22,7 @@ use crate::{
 	function::FuncVal,
 	gc::WithCapacityExt as _,
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::BoundedUsize,
+	typed::{BoundedUsize, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER},
 	ObjValue, Result, Unbound, WeakObjValue,
 };
 
@@ -418,6 +418,12 @@ impl NumValue {
 	pub const fn get(&self) -> f64 {
 		self.0
 	}
+	pub(crate) fn truncate_for_bitwise(&self) -> Result<i64> {
+		if self.0 < MIN_SAFE_INTEGER || self.0 > dbg!(MAX_SAFE_INTEGER) {
+			bail!("numberic value outside of safe integer range for bitwise operation");
+		}
+		Ok(self.0 as i64)
+	}
 }
 impl PartialEq for NumValue {
 	fn eq(&self, other: &Self) -> bool {
@@ -490,7 +496,6 @@ macro_rules! impl_try_num {
 			type Error = ConvertNumValueError;
 			#[inline]
 			fn try_from(value: $ty) -> Result<Self, ConvertNumValueError> {
-				use crate::typed::conversions::{MIN_SAFE_INTEGER, MAX_SAFE_INTEGER};
 				let value = value as f64;
 				if value < MIN_SAFE_INTEGER {
 					return Err(ConvertNumValueError::Underflow)

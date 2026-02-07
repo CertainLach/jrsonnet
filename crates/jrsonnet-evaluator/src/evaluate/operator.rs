@@ -225,15 +225,20 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 			if v2.get() < 0.0 {
 				bail!("shift by negative exponent")
 			}
-			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shl(exp) as f64)?
+			let base = v1.truncate_for_bitwise()?;
+			let exp = v2.truncate_for_bitwise()? % 64;
+
+			if exp >= 1 && base >= (1i64 << (63 - exp as u32)) {
+				bail!("left shift would overflow")
+			}
+			Val::try_num(base.wrapping_shl(exp as u32) as f64)?
 		}
 		(Num(v1), Rhs, Num(v2)) => {
 			if v2.get() < 0.0 {
 				bail!("shift by negative exponent")
 			}
 			let exp = ((v2.get() as i64) & 63) as u32;
-			Val::try_num((v1.get() as i64).wrapping_shr(exp) as f64)?
+			Val::try_num(v1.truncate_for_bitwise()?.wrapping_shr(exp) as f64)?
 		}
 
 		// Bigint X Bigint

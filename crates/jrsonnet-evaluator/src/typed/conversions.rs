@@ -120,8 +120,8 @@ where
 	}
 }
 
-pub const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS + 1)) - 1) as f64;
-pub const MIN_SAFE_INTEGER: f64 = -MAX_SAFE_INTEGER;
+pub const MAX_SAFE_INTEGER: f64 = ((1u64 << (f64::MANTISSA_DIGITS)) - 1) as f64;
+pub const MIN_SAFE_INTEGER: f64 = (-((1i64 << (f64::MANTISSA_DIGITS)) - 1)) as f64;
 
 macro_rules! impl_int {
 	($($ty:ty)*) => {$(
