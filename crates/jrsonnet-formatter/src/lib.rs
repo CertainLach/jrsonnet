@@ -3,8 +3,10 @@ use std::{any::type_name, rc::Rc};
 use children::{children_between, trivia_before};
 use dprint_core::formatting::{
 	condition_helpers::is_multiple_lines,
+	condition_resolvers::true_resolver,
 	ir_helpers::{new_line_group, with_indent},
-	ConditionResolver, ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
+	ConditionResolver, ConditionResolverContext, LineNumber, PrintItemPath, PrintItems,
+	PrintOptions, Signal,
 };
 use hi_doc::{Formatting, SnippetBuilder};
 use jrsonnet_rowan_parser::{
@@ -12,13 +14,13 @@ use jrsonnet_rowan_parser::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
 		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
-		UnaryOperator, Visibility,
+		Trivia, TriviaKind, UnaryOperator, Visibility,
 	},
 	AstNode, AstToken as _, SyntaxToken,
 };
 
 use crate::{
-	children::{trivia_after, Child},
+	children::{trivia_after, Child, EndingComments},
 	comments::{format_comments, CommentLocation},
 };
 
@@ -26,6 +28,23 @@ mod children;
 mod comments;
 #[cfg(test)]
 mod tests;
+
+fn with_indent_eoi(cond: ConditionResolver, o: PrintItems, e: EndingComments) -> PrintItems {
+	let end_comments_items = {
+		let mut items = PrintItems::new();
+		if e.should_start_with_newline {
+			p!(&mut items, nl);
+		}
+		format_comments(&e.trivia, CommentLocation::EndOfItems, &mut items);
+		items.into_rc_path()
+	};
+	let items =
+		new_line_group(pi!(@i; items(o.into()) items(end_comments_items.into()))).into_rc_path();
+
+	let indented = with_indent(pi!(@i; nl items(items.into())));
+
+	pi!(@i; if_else("indented body", cond, items(indented))(str(" ") items(items.into())))
+}
 
 pub trait Printable {
 	fn print(&self, out: &mut PrintItems);
@@ -146,6 +165,10 @@ macro_rules! pi {
 macro_rules! p {
 	($o:ident, $($t:tt)*) => {
 		pi!(@s; $o: $($t)*)
+	};
+	(&mut $o:ident, $($t:tt)*) => {
+		let om = &mut $o;
+		pi!(@s; om: $($t)*)
 	};
 }
 pub(crate) use p;
@@ -461,22 +484,53 @@ impl Printable for ObjBody {
 					p!(out, str("{ }"));
 					return;
 				}
-				p!(out, str("{") >i nl);
-				for (i, mem) in children.into_iter().enumerate() {
-					if mem.should_start_with_newline && i != 0 {
-						p!(out, nl);
+
+				let source_is_multiline = children.iter().any(|c| c.triggers_multiline)
+					|| end_comments.should_start_with_newline;
+
+				let start = LineNumber::new("obj start line");
+				let end = LineNumber::new("obj end line");
+				let multi_line: ConditionResolver = if source_is_multiline {
+					true_resolver()
+				} else {
+					Rc::new(move |ctx: &mut ConditionResolverContext| {
+						is_multiple_lines(ctx, start, end)
+					})
+				};
+
+				fn gen_members(
+					children: Vec<Child<Member>>,
+					multi_line: ConditionResolver,
+				) -> PrintItems {
+					let mut _out = PrintItems::new();
+					let out = &mut _out;
+					let mut members = children.into_iter().peekable();
+					while let Some(mem) = members.next() {
+						if mem.should_start_with_newline {
+							p!(out, nl);
+						}
+						format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
+						p!(out, { mem.value });
+						let has_more = members.peek().is_some();
+						if has_more {
+							p!(out, str(","));
+						} else {
+							p!(out, if("trailing comma", multi_line, str(",")));
+						}
+						format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
+						p!(out, if_else("member separator", multi_line, nl)(sonl));
 					}
-					format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
-					p!(out, {mem.value} str(","));
-					format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
-					p!(out, nl);
+					_out
 				}
 
-				if end_comments.should_start_with_newline {
-					p!(out, nl);
-				}
-				format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
-				p!(out, <i str("}"));
+				let members_items =
+					new_line_group(gen_members(children, multi_line.clone())).into_rc_path();
+
+				let members = with_indent_eoi(multi_line, members_items.into(), end_comments);
+
+				p!(out, str("{") info(start));
+				p!(out, items(members));
+				p!(out, str("}") info(end));
 			}
 		}
 	}

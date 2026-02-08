@@ -80,14 +80,19 @@ pub fn children_between<T: AstNode + Debug>(
 	)
 }
 
-pub fn should_start_with_newline(prev_inline: Option<&ChildTrivia>, tt: &ChildTrivia) -> bool {
-	count_newlines_before(tt)
-		+ prev_inline
-			.map(count_newlines_after)
-			.unwrap_or_default()
+// Should start, triggers multi-line render
+pub fn should_start_with_newline(
+	prev_inline: Option<&ChildTrivia>,
+	tt: &ChildTrivia,
+) -> (bool, bool) {
+	let count =
+		count_newlines_before(tt) + prev_inline.map(count_newlines_after).unwrap_or_default();
 
+	(
 		// First for previous item end, second for current item
-		>= 2
+		count >= 2,
+		count >= 1,
+	)
 }
 
 fn count_newlines_before(tt: &ChildTrivia) -> usize {
@@ -147,13 +152,14 @@ pub fn children<T: AstNode + Debug>(
 			} else {
 				mem::take(&mut next)
 			};
+			let (should_start_with_newline, triggers_multiline) = should_start_with_newline(
+				current_child.as_ref().map(|c| &c.inline_trivia),
+				&before_trivia,
+			);
 			let last_child = current_child.replace(Child {
 				// First item should not start with newline
-				should_start_with_newline: had_some
-					&& should_start_with_newline(
-						current_child.as_ref().map(|c| &c.inline_trivia),
-						&before_trivia,
-					),
+				should_start_with_newline: had_some && should_start_with_newline,
+				triggers_multiline,
 				before_trivia,
 				value,
 				inline_trivia: Vec::new(),
@@ -203,7 +209,8 @@ pub fn children<T: AstNode + Debug>(
 		should_start_with_newline: should_start_with_newline(
 			current_child.as_ref().map(|c| &c.inline_trivia),
 			&next,
-		),
+		)
+		.0,
 		trivia: next,
 	};
 
@@ -234,6 +241,9 @@ pub struct Child<T> {
 	/// item2,
 	/// ```
 	pub inline_trivia: ChildTrivia,
+	/// Is this child has whitespace that is considered significant, meaning
+	/// user has inserted it to split the value into multiple lines.
+	pub triggers_multiline: bool,
 }
 
 pub struct EndingComments {

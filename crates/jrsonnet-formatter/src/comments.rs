@@ -72,7 +72,10 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 					if matches!(loc, CommentLocation::ItemInline) {
 						p!(out, str(" "));
 					}
-					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */") nl);
+					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */"));
+					if matches!(loc, CommentLocation::AboveItem | CommentLocation::EndOfItems) {
+						p!(out, nl);
+					}
 				} else if !lines.is_empty() {
 					fn common_ws_prefix<'a>(a: &'a str, b: &str) -> &'a str {
 						let offset = a
