@@ -1,5 +1,4 @@
-use std::ptr::addr_of;
-use std::{cell::OnceCell, hash::Hasher};
+use std::{cell::OnceCell, hash::Hasher, ptr::addr_of};
 
 use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};

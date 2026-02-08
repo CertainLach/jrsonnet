@@ -4,8 +4,8 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State, Val,
+	trace::{CompactFormat, PathResolver, TraceFormat},
 };
 use jrsonnet_stdlib::ContextInitializer;
 

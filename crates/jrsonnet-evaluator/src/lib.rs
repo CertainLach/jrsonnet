@@ -27,11 +27,11 @@ pub mod val;
 use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
-	collections::hash_map::Entry,
 	clone::Clone,
+	collections::hash_map::Entry,
 	fmt::{self, Debug},
-	rc::Rc,
 	marker::PhantomData,
+	rc::Rc,
 };
 
 pub use ctx::*;

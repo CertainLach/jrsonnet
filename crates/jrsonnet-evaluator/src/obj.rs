@@ -4,10 +4,12 @@ use std::{
 	collections::hash_map::Entry,
 	fmt::{self, Debug},
 	hash::{Hash, Hasher},
+	mem,
+	ops::ControlFlow,
 };
 
 use educe::Educe;
-use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, Weak};
+use jrsonnet_gcmodule::{cc_dyn, Acyclic, Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -74,7 +76,7 @@ mod ordering {
 	pub struct SuperDepth(u32);
 	impl SuperDepth {
 		pub(super) fn deepen(&mut self) {
-			*self.0 += 1
+			self.0 += 1
 		}
 	}
 
@@ -151,31 +153,56 @@ enum CacheValue {
 }
 
 #[allow(clippy::module_name_repetitions)]
-#[derive(Trace)]
+#[derive(Trace, Default)]
 #[trace(tracking(force))]
 pub struct OopObject {
-	// this: Option<ObjValue>,
-	assertions: Cc<Vec<CcObjectAssertion>>,
-	this_entries: Cc<FxHashMap<IStr, ObjMember>>,
-	value_cache: RefCell<FxHashMap<(IStr, Option<WeakObjValue>), CacheValue>>,
+	assertions: Vec<CcObjectAssertion>,
+	this_entries: FxHashMap<IStr, ObjMember>,
 }
 impl Debug for OopObject {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		f.debug_struct("OopObject")
-			// .field("assertions", &self.assertions)
-			// .field("assertions_ran", &self.assertions_ran)
 			.field("this_entries", &self.this_entries)
-			// .field("value_cache", &self.value_cache)
 			.finish_non_exhaustive()
 	}
 }
+impl OopObject {
+	fn is_empty(&self) -> bool {
+		self.assertions.is_empty() && self.this_entries.is_empty()
+	}
+}
 
-type EnumFieldsHandler<'a> = dyn FnMut(SuperDepth, FieldIndex, IStr, Visibility) -> bool + 'a;
+type EnumFieldsHandler<'a> =
+	dyn FnMut(SuperDepth, FieldIndex, IStr, EnumFields) -> ControlFlow<()> + 'a;
+
+pub enum EnumFields {
+	Normal(Visibility),
+	Omit,
+}
 
 #[derive(Trace, Clone)]
-pub enum ValueProcess {
-	None,
-	SuperPlus,
+pub enum GetFor {
+	// Return value
+	Final(Val),
+	// Continue iterating over cores, add current value to sum stack
+	SuperPlus(Val),
+	// Ignore the field value, stop at this layer instead
+	Omit,
+	NotFound,
+}
+
+#[derive(Acyclic, Clone)]
+pub enum FieldVisibility {
+	Found(Visibility),
+	Omit,
+	NotFound,
+}
+
+#[derive(Acyclic, Clone)]
+pub enum HasFieldIncludeHidden {
+	Exists,
+	NotFound,
+	Omit,
 }
 
 pub trait ObjectCore: Trace + Any + Debug {
@@ -186,13 +213,12 @@ pub trait ObjectCore: Trace + Any + Debug {
 		handler: &mut EnumFieldsHandler<'_>,
 	) -> bool;
 
-	fn has_field_include_hidden(&self, name: IStr) -> bool;
+	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden;
 
-	fn get_for(&self, key: IStr, sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>>;
-	// fn get_for_uncached(&self, key: IStr, this: ObjValue) -> Result<Option<(Val, ValueProcess)>>;
-	fn field_visibility(&self, field: IStr) -> Option<Visibility>;
+	fn get_for_core(&self, key: IStr, sup_this: SupThis) -> Result<GetFor>;
+	fn field_visibility_core(&self, field: IStr) -> FieldVisibility;
 
-	fn run_assertions_raw(&self, sup_this: SupThis) -> Result<()>;
+	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()>;
 }
 
 #[derive(Clone, Trace)]
@@ -220,13 +246,13 @@ impl Hash for WeakObjValue {
 
 cc_dyn!(
 	#[derive(Clone, Debug)]
-	ObjCore, ObjectCore,
+	CcObjectCore, ObjectCore,
 	pub fn new() {...}
 );
 #[derive(Trace, Educe)]
 #[educe(Debug)]
 struct ObjValueInner {
-	cores: Vec<ObjCore>,
+	cores: Vec<CcObjectCore>,
 	assertions_ran: Cell<bool>,
 	value_cache: RefCell<FxHashMap<(IStr, CoreIdx), CacheValue>>,
 }
@@ -251,12 +277,29 @@ fn finish_asserting(obj: &ObjValue) {
 	});
 }
 
+thread_local! {
+	static EMPTY_OBJ: ObjValue = ObjValue(Cc::new(ObjValueInner {
+		cores: vec![],
+		assertions_ran: Cell::new(true),
+		value_cache: Default::default(),
+	}))
+}
+
 #[allow(clippy::module_name_repetitions)]
 #[derive(Clone, Trace, Debug, Educe)]
 #[educe(PartialEq, Hash, Eq)]
 pub struct ObjValue(
 	#[educe(PartialEq(method(Cc::ptr_eq)), Hash(method(identity_hash)))] Cc<ObjValueInner>,
 );
+
+impl ObjValue {
+	pub fn empty() -> Self {
+		EMPTY_OBJ.with(|v| v.clone())
+	}
+	pub fn is_empty(&self) -> bool {
+		self.0.cores.is_empty() || self.len() == 0
+	}
+}
 
 #[derive(Trace, Debug)]
 struct StandaloneSuperCore {
@@ -269,53 +312,77 @@ impl ObjectCore for StandaloneSuperCore {
 		super_depth: &mut SuperDepth,
 		handler: &mut EnumFieldsHandler<'_>,
 	) -> bool {
-		self.this
-			.enum_fields_internal(super_depth, handler, self.sup)
+		self.this.enum_fields_idx(super_depth, handler, self.sup)
 	}
 
-	fn has_field_include_hidden(&self, name: IStr) -> bool {
-		self.this.has_field_include_hidden_idx(name, self.sup)
+	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden {
+		if self.this.has_field_include_hidden_idx(name, self.sup) {
+			HasFieldIncludeHidden::Exists
+		} else {
+			HasFieldIncludeHidden::NotFound
+		}
 	}
 
-	fn get_for(&self, key: IStr, _sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
+	fn get_for_core(&self, key: IStr, _sup_this: SupThis) -> Result<GetFor> {
 		let v = self.this.get_idx(key, self.sup)?;
-		Ok(v.map(|v| (v, ValueProcess::None)))
+		Ok(v.map_or(GetFor::NotFound, |v| GetFor::Final(v)))
 	}
 
-	fn field_visibility(&self, field: IStr) -> Option<Visibility> {
-		self.this.field_visibility_idx(field, self.sup)
+	fn field_visibility_core(&self, field: IStr) -> FieldVisibility {
+		match self.this.field_visibility_idx(field, self.sup) {
+			Some(c) => FieldVisibility::Found(c),
+			None => FieldVisibility::NotFound,
+		}
 	}
 
-	fn run_assertions_raw(&self, _sup_this: SupThis) -> Result<()> {
+	fn run_assertions_core(&self, _sup_this: SupThis) -> Result<()> {
 		self.this.run_assertions()
 	}
 }
 
-#[derive(Debug, Trace)]
-struct EmptyObject;
-impl ObjectCore for EmptyObject {
+#[derive(Debug, Acyclic)]
+struct OmitFieldsCore {
+	omit: FxHashSet<IStr>,
+}
+impl ObjectCore for OmitFieldsCore {
 	fn enum_fields_core(
 		&self,
-		_super_depth: &mut SuperDepth,
-		_handler: &mut EnumFieldsHandler<'_>,
+		super_depth: &mut SuperDepth,
+		handler: &mut EnumFieldsHandler<'_>,
 	) -> bool {
+		let mut fi = FieldIndex::default();
+		for f in &self.omit {
+			if let ControlFlow::Break(()) = handler(*super_depth, fi, f.clone(), EnumFields::Omit) {
+				return false;
+			}
+			fi = fi.next();
+		}
 		true
 	}
 
-	fn has_field_include_hidden(&self, _name: IStr) -> bool {
-		false
+	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden {
+		if self.omit.contains(&name) {
+			return HasFieldIncludeHidden::Omit;
+		}
+		HasFieldIncludeHidden::NotFound
 	}
 
-	fn get_for(&self, _key: IStr, _sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
-		Ok(None)
+	fn get_for_core(&self, key: IStr, _sup_this: SupThis) -> Result<GetFor> {
+		if self.omit.contains(&key) {
+			return Ok(GetFor::Omit);
+		}
+		Ok(GetFor::NotFound)
 	}
 
-	fn run_assertions_raw(&self, _sup_this: SupThis) -> Result<()> {
+	fn field_visibility_core(&self, field: IStr) -> FieldVisibility {
+		if self.omit.contains(&field) {
+			return FieldVisibility::Omit;
+		}
+		FieldVisibility::NotFound
+	}
+
+	fn run_assertions_core(&self, _sup_this: SupThis) -> Result<()> {
 		Ok(())
-	}
-
-	fn field_visibility(&self, _field: IStr) -> Option<Visibility> {
-		None
 	}
 }
 
@@ -363,10 +430,12 @@ impl SupThis {
 		if !self.sup.super_exists() {
 			bail!(NoSuperFound)
 		}
-		Ok(ObjValue::new(StandaloneSuperCore {
+		let mut out = ObjValue::builder();
+		out.reserve_cores(1).extend_with_core(StandaloneSuperCore {
 			sup: self.sup,
 			this: self.this.clone(),
-		}))
+		});
+		Ok(out.build())
 	}
 	pub fn this(&self) -> &ObjValue {
 		&self.this
@@ -385,16 +454,6 @@ pub struct WeakSupThis {
 }
 
 impl ObjValue {
-	pub fn new(v: impl ObjectCore) -> Self {
-		Self(Cc::new(ObjValueInner {
-			cores: vec![ObjCore::new(v)],
-			assertions_ran: Cell::new(false),
-			value_cache: RefCell::new(FxHashMap::new()),
-		}))
-	}
-	pub fn new_empty() -> Self {
-		Self::new(EmptyObject)
-	}
 	pub fn builder() -> ObjValueBuilder {
 		ObjValueBuilder::new()
 	}
@@ -420,6 +479,12 @@ impl ObjValue {
 		ObjMemberBuilder::new(ExtendBuilder(self), name, FieldIndex::default())
 	}
 
+	pub fn extend(&mut self) -> ObjValueBuilder {
+		let mut out = ObjValueBuilder::new();
+		out.with_super(self.clone());
+		out
+	}
+
 	#[must_use]
 	pub fn extend_from(&self, sup: Self) -> Self {
 		let mut cores = sup.0.cores.clone();
@@ -442,16 +507,13 @@ impl ObjValue {
 			.filter(|(_, (visible, _))| *visible)
 			.count()
 	}
-	pub fn is_empty(&self) -> bool {
-		self.len() == 0
-	}
 	/// For each field, calls callback.
 	/// If callback returns false - ends iteration prematurely.
 	///
 	/// Returns false if ended prematurely
 	pub fn enum_fields(&self, handler: &mut EnumFieldsHandler<'_>) -> bool {
 		let mut super_depth = SuperDepth::default();
-		self.enum_fields_internal(
+		self.enum_fields_idx(
 			&mut super_depth,
 			handler,
 			CoreIdx {
@@ -459,7 +521,7 @@ impl ObjValue {
 			},
 		)
 	}
-	fn enum_fields_internal(
+	fn enum_fields_idx(
 		&self,
 		super_depth: &mut SuperDepth,
 		handler: &mut EnumFieldsHandler<'_>,
@@ -483,10 +545,14 @@ impl ObjValue {
 		)
 	}
 	fn has_field_include_hidden_idx(&self, name: IStr, core: CoreIdx) -> bool {
-		self.0.cores[..core.idx]
-			.iter()
-			.rev()
-			.any(|v| v.0.has_field_include_hidden(name.clone()))
+		for ele in self.0.cores[..core.idx].iter().rev() {
+			match ele.0.has_field_include_hidden_core(name.clone()) {
+				HasFieldIncludeHidden::Exists => return true,
+				HasFieldIncludeHidden::NotFound => {}
+				HasFieldIncludeHidden::Omit => break,
+			}
+		}
+		false
 	}
 	pub fn has_field(&self, name: IStr) -> bool {
 		match self.field_visibility(name) {
@@ -544,16 +610,20 @@ impl ObjValue {
 				sup: CoreIdx { idx: sup },
 				this: self.clone(),
 			};
-			if let Some((val, proc)) = core.0.get_for(key.clone(), sup_this)? {
-				match proc {
-					ValueProcess::None if add_stack.is_empty() => return Ok(Some(val)),
-					ValueProcess::None => {
-						add_stack.push(val);
-						break;
-					}
-					ValueProcess::SuperPlus => {
-						add_stack.push(val);
-					}
+			match core.0.get_for_core(key.clone(), sup_this)? {
+				GetFor::Final(val) if add_stack.is_empty() => return Ok(Some(val)),
+				GetFor::Final(val) => {
+					add_stack.push(val);
+					break;
+				}
+				GetFor::SuperPlus(val) => {
+					add_stack.push(val);
+				}
+				GetFor::Omit => {
+					break;
+				}
+				GetFor::NotFound => {
+					continue;
 				}
 			}
 		}
@@ -594,11 +664,14 @@ impl ObjValue {
 	fn field_visibility_idx(&self, field: IStr, core: CoreIdx) -> Option<Visibility> {
 		let mut exists = false;
 		for ele in self.0.cores[..core.idx].iter().rev() {
-			let vis = ele.0.field_visibility(field.clone());
+			let vis = ele.0.field_visibility_core(field.clone());
 			match vis {
-				Some(Visibility::Unhide | Visibility::Hidden) => return vis,
-				Some(Visibility::Normal) => exists = true,
-				None => {}
+				FieldVisibility::Found(vis @ (Visibility::Unhide | Visibility::Hidden)) => {
+					return Some(vis)
+				}
+				FieldVisibility::Found(Visibility::Normal) => exists = true,
+				FieldVisibility::NotFound => {}
+				FieldVisibility::Omit => break,
 			}
 		}
 		exists.then_some(Visibility::Normal)
@@ -616,7 +689,7 @@ impl ObjValue {
 				sup: CoreIdx { idx },
 				this: self.clone(),
 			};
-			ele.0.run_assertions_raw(sup_this).inspect_err(|_e| {
+			ele.0.run_assertions_core(sup_this).inspect_err(|_e| {
 				finish_asserting(self);
 			})?;
 		}
@@ -664,17 +737,24 @@ impl ObjValue {
 		self.enum_fields(&mut |depth, index, name, visibility| {
 			let new_sort_key = FieldSortKey::new(depth, index);
 			let entry = out.entry(name);
+			if matches!(visibility, EnumFields::Omit) {
+				if let Entry::Occupied(v) = entry {
+					v.remove();
+				}
+				return ControlFlow::Continue(());
+			}
 			let (visible, _) = entry.or_insert((true, new_sort_key));
 			match visibility {
-				Visibility::Normal => {}
-				Visibility::Hidden => {
+				EnumFields::Omit => unreachable!(),
+				EnumFields::Normal(Visibility::Normal) => {}
+				EnumFields::Normal(Visibility::Hidden) => {
 					*visible = false;
 				}
-				Visibility::Unhide => {
+				EnumFields::Normal(Visibility::Unhide) => {
 					*visible = true;
 				}
 			};
-			false
+			return ControlFlow::Continue(());
 		});
 		out
 	}
@@ -776,12 +856,11 @@ impl ObjValue {
 
 impl OopObject {
 	pub fn new(
-		this_entries: Cc<FxHashMap<IStr, ObjMember>>,
-		assertions: Cc<Vec<CcObjectAssertion>>,
+		this_entries: FxHashMap<IStr, ObjMember>,
+		assertions: Vec<CcObjectAssertion>,
 	) -> Self {
 		Self {
 			this_entries,
-			value_cache: RefCell::new(FxHashMap::new()),
 			assertions,
 		}
 	}
@@ -794,11 +873,14 @@ impl ObjectCore for OopObject {
 		handler: &mut EnumFieldsHandler<'_>,
 	) -> bool {
 		for (name, member) in self.this_entries.iter() {
-			if handler(
-				*super_depth,
-				member.original_index,
-				name.clone(),
-				member.flags.visibility(),
+			if matches!(
+				handler(
+					*super_depth,
+					member.original_index,
+					name.clone(),
+					EnumFields::Normal(member.flags.visibility()),
+				),
+				ControlFlow::Break(())
 			) {
 				return false;
 			}
@@ -806,28 +888,35 @@ impl ObjectCore for OopObject {
 		true
 	}
 
-	fn has_field_include_hidden(&self, name: IStr) -> bool {
-		self.this_entries.contains_key(&name)
-	}
-
-	fn get_for(&self, key: IStr, sup_this: SupThis) -> Result<Option<(Val, ValueProcess)>> {
-		match self.this_entries.get(&key) {
-			Some(k) => Ok(Some((
-				k.invoke.evaluate(sup_this)?,
-				if k.flags.add() {
-					ValueProcess::SuperPlus
-				} else {
-					ValueProcess::None
-				},
-			))),
-			None => Ok(None),
+	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden {
+		if self.this_entries.contains_key(&name) {
+			HasFieldIncludeHidden::Exists
+		} else {
+			HasFieldIncludeHidden::NotFound
 		}
 	}
-	fn field_visibility(&self, name: IStr) -> Option<Visibility> {
-		Some(self.this_entries.get(&name)?.flags.visibility())
+
+	fn get_for_core(&self, key: IStr, sup_this: SupThis) -> Result<GetFor> {
+		match self.this_entries.get(&key) {
+			Some(k) => {
+				let v = k.invoke.evaluate(sup_this)?;
+				Ok(if k.flags.add() {
+					GetFor::SuperPlus(v)
+				} else {
+					GetFor::Final(v)
+				})
+			}
+			None => Ok(GetFor::NotFound),
+		}
+	}
+	fn field_visibility_core(&self, name: IStr) -> FieldVisibility {
+		match self.this_entries.get(&name) {
+			Some(f) => FieldVisibility::Found(f.flags.visibility()),
+			None => FieldVisibility::NotFound,
+		}
 	}
 
-	fn run_assertions_raw(&self, sup_this: SupThis) -> Result<()> {
+	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()> {
 		if self.assertions.is_empty() {
 			return Ok(());
 		}
@@ -840,9 +929,9 @@ impl ObjectCore for OopObject {
 
 #[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
-	sup: Option<ObjValue>,
-	map: FxHashMap<IStr, ObjMember>,
-	assertions: Vec<CcObjectAssertion>,
+	sup: Vec<CcObjectCore>,
+
+	new: OopObject,
 	next_field_index: FieldIndex,
 }
 impl ObjValueBuilder {
@@ -851,23 +940,29 @@ impl ObjValueBuilder {
 	}
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
-			sup: None,
-			map: FxHashMap::with_capacity(capacity),
-			assertions: Vec::new(),
+			sup: vec![],
+			new: OopObject {
+				assertions: vec![],
+				this_entries: FxHashMap::with_capacity(capacity),
+			},
 			next_field_index: FieldIndex::default(),
 		}
 	}
+	pub fn reserve_cores(&mut self, capacity: usize) -> &mut Self {
+		self.sup.reserve_exact(capacity);
+		self
+	}
 	pub fn reserve_asserts(&mut self, capacity: usize) -> &mut Self {
-		self.assertions.reserve_exact(capacity);
+		self.new.assertions.reserve_exact(capacity);
 		self
 	}
 	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
-		self.sup = Some(super_obj);
+		self.sup = super_obj.0.cores.clone();
 		self
 	}
 
 	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		self.assertions.push(CcObjectAssertion::new(assertion));
+		self.new.assertions.push(CcObjectAssertion::new(assertion));
 		self
 	}
 	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
@@ -892,12 +987,33 @@ impl ObjValueBuilder {
 		Ok(self)
 	}
 
-	pub fn build(self) -> ObjValue {
-		if self.sup.is_none() && self.map.is_empty() && self.assertions.is_empty() {
-			return ObjValue::new_empty();
+	pub fn extend_with_core(&mut self, core: impl ObjectCore) {
+		self.commit();
+		self.sup.push(CcObjectCore::new(core));
+	}
+
+	fn commit(&mut self) {
+		if !self.new.is_empty() {
+			self.sup.push(CcObjectCore::new(mem::take(&mut self.new)));
 		}
-		let res = ObjValue::new(OopObject::new(Cc::new(self.map), Cc::new(self.assertions)));
-		self.sup.map(|sup| res.extend_from(sup)).unwrap_or(res)
+		self.next_field_index = FieldIndex::default();
+	}
+
+	pub fn with_fields_omitted(&mut self, omit: FxHashSet<IStr>) {
+		self.commit();
+		self.sup.push(CcObjectCore::new(OmitFieldsCore { omit }));
+	}
+
+	pub fn build(mut self) -> ObjValue {
+		self.commit();
+		if self.sup.is_empty() {
+			return ObjValue::empty();
+		}
+		ObjValue(Cc::new(ObjValueInner {
+			cores: self.sup,
+			assertions_ran: Cell::new(false),
+			value_cache: Default::default(),
+		}))
 	}
 }
 impl Default for ObjValueBuilder {
@@ -968,7 +1084,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn value(self, value: impl Into<Val>) {
 		let (receiver, name, member) =
 			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
-		let entry = receiver.0.map.entry(name);
+		let entry = receiver.0.new.this_entries.entry(name);
 		entry.insert_entry(member);
 	}
 
@@ -985,7 +1101,7 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
 		let (receiver, name, member) = self.build_member(binding);
 		let location = member.location.clone();
-		let old = receiver.0.map.insert(name.clone(), member);
+		let old = receiver.0.new.this_entries.insert(name.clone(), member);
 		if old.is_some() {
 			in_frame(
 				CallLocation(location.as_ref()),

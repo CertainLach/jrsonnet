@@ -2,7 +2,7 @@ mod common;
 
 use std::fmt::Debug;
 
-use jrsonnet_evaluator::{trace::PathResolver, typed::Typed, Result, State};
+use jrsonnet_evaluator::{Result, State, trace::PathResolver, typed::Typed};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone, Typed, PartialEq, Debug)]

@@ -172,7 +172,7 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 	let Some(patch) = patch.as_obj() else {
 		return Ok(patch);
 	};
-	let target = target.as_obj().unwrap_or_else(|| ObjValue::new_empty());
+	let target = target.as_obj().unwrap_or_else(|| ObjValue::empty());
 	let target_fields = target
 		.fields(
 			// FIXME: Makes no sense to preserve order for BTreeSet, it would be better to use IndexSet here?

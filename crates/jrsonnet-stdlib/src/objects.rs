@@ -1,8 +1,9 @@
 use jrsonnet_evaluator::{
 	function::builtin,
+	gc::WithCapacityExt,
 	rustc_hash::FxHashSet,
 	val::{ArrValue, Val},
-	IStr, MaybeUnbound, ObjValue, ObjValueBuilder, Thunk,
+	IStr, ObjValue, ObjValueBuilder,
 };
 
 #[builtin]
@@ -156,43 +157,11 @@ pub fn builtin_object_has_all(o: ObjValue, f: IStr) -> bool {
 }
 
 #[builtin]
-pub fn builtin_object_remove_key(
-	obj: ObjValue,
-	key: IStr,
+pub fn builtin_object_remove_key(obj: ObjValue, key: IStr) -> ObjValue {
+	let mut omit = FxHashSet::with_capacity(1);
+	omit.insert(key);
 
-	// Standard implementation uses std.objectFields without such argument, we can't
-	// assume order preservation should always be enabled/disabled
-	#[default(false)]
-	#[cfg(feature = "exp-preserve-order")]
-	preserve_order: bool,
-) -> ObjValue {
-	let mut new_obj = ObjValueBuilder::with_capacity(obj.len() - 1);
-	let all_fields = obj.fields_ex(
-		true,
-		#[cfg(feature = "exp-preserve-order")]
-		preserve_order,
-	);
-	let visible_fields = obj
-		.fields_ex(
-			false,
-			#[cfg(feature = "exp-preserve-order")]
-			preserve_order,
-		)
-		.into_iter()
-		.collect::<FxHashSet<_>>();
-
-	for field in &all_fields {
-		if *field == key {
-			continue;
-		}
-		let mut b = new_obj.field(field.clone());
-		if !visible_fields.contains(&field) {
-			b = b.hide();
-		}
-		let _ = b.binding(MaybeUnbound::Bound(Thunk::result(
-			obj.get(field.clone()).transpose().expect("field exists"),
-		)));
-	}
-
-	new_obj.build()
+	let mut out = ObjValueBuilder::new();
+	out.with_super(obj).with_fields_omitted(omit);
+	out.build()
 }

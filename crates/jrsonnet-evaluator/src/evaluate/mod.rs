@@ -11,7 +11,18 @@ use rustc_hash::FxHashMap;
 
 use self::destructure::destruct;
 use crate::{
-	Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt, SupThis, Unbound, Val, arr::ArrValue, bail, destructure::evaluate_dest, error::{ErrorKind::*, suggest_object_fields}, evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op}, function::{CallLocation, FuncDesc, FuncVal}, gc::WithCapacityExt as _, in_frame, typed::Typed, val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk}, with_state
+	arr::ArrValue,
+	bail,
+	destructure::evaluate_dest,
+	error::{suggest_object_fields, ErrorKind::*},
+	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	function::{CallLocation, FuncDesc, FuncVal},
+	gc::WithCapacityExt as _,
+	in_frame,
+	typed::Typed,
+	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
+	with_state, Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
+	ResultExt, SupThis, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -137,10 +148,7 @@ pub fn evaluate_comp(
 						)),
 					])));
 					destruct(var, value, fctx.clone(), &mut new_bindings)?;
-					let ctx = ctx
-						.clone()
-						.extend(new_bindings, None, None, None)
-						.into_future(fctx);
+					let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
 					evaluate_comp(ctx, &specs[1..], callback)?;
 				}

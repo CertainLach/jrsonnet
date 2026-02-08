@@ -62,10 +62,10 @@ impl Typed for JSONMLValue {
 			if let Val::Obj(attrs) = maybe_attrs {
 				(true, attrs)
 			} else {
-				(false, ObjValue::new_empty())
+				(false, ObjValue::empty())
 			}
 		} else {
-			(false, ObjValue::new_empty())
+			(false, ObjValue::empty())
 		};
 		Ok(Self::Tag {
 			tag,

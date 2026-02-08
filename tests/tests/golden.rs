@@ -4,9 +4,9 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
+	FileImportResolver, State,
 	manifest::JsonFormat,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, State,
 };
 use jrsonnet_stdlib::ContextInitializer;
 mod common;

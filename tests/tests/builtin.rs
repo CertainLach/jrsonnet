@@ -1,11 +1,11 @@
 mod common;
 
 use jrsonnet_evaluator::{
-	function::{builtin, builtin::Builtin, CallLocation, FuncVal},
+	ContextBuilder, ContextInitializer, FileImportResolver, Result, State, Thunk, Val,
+	function::{CallLocation, FuncVal, builtin, builtin::Builtin},
 	parser::Source,
 	trace::PathResolver,
 	typed::Typed,
-	ContextBuilder, ContextInitializer, FileImportResolver, Result, State, Thunk, Val,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_stdlib::ContextInitializer as StdContextInitializer;
@@ -18,11 +18,8 @@ fn a() -> u32 {
 #[test]
 fn basic_function() -> Result<()> {
 	let a: a = a {};
-	let v = u32::from_untyped(a.call(
-		ContextBuilder::new().build(),
-		CallLocation::native(),
-		&(),
-	)?)?;
+	let v =
+		u32::from_untyped(a.call(ContextBuilder::new().build(), CallLocation::native(), &())?)?;
 
 	ensure_eq!(v, 1);
 	Ok(())

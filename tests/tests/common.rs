@@ -1,8 +1,8 @@
 use jrsonnet_evaluator::{
-	bail,
-	function::{builtin, FuncVal},
-	parser::Source,
 	ContextBuilder, ContextInitializer as ContextInitializerT, ObjValueBuilder, Result, Thunk, Val,
+	bail,
+	function::{FuncVal, builtin},
+	parser::Source,
 };
 use jrsonnet_gcmodule::Trace;
 
