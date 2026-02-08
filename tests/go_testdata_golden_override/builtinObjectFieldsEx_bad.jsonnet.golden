@@ -1,0 +1,3 @@
+type error: expected object, got number
+    argument <obj> evaluation
+    builtinObjectFieldsEx_bad.jsonnet:1:1-30: function <builtin_object_fields_ex> call

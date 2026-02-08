@@ -1,0 +1,2 @@
+invalid unicode codepoint: 1114112
+    builtinChar5.jsonnet:2:1-19: function <builtin_char> call

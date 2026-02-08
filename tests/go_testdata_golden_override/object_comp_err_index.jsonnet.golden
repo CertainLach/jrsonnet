@@ -1,0 +1,3 @@
+runtime error: xxx
+    object_comp_err_index.jsonnet:1:4-16: error statement
+    object_comp_err_index.jsonnet:1:4-16: evaluating field name

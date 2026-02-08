@@ -1,1 +1,3 @@
-runtime error: tried to manifest function
+function argument is not passed: name
+Function has the following signature: (name)
+    during TLA call

@@ -1,0 +1,3 @@
+type error: expected string, got number
+    argument <str> evaluation
+    builtinSubStr_first_param_not_string.jsonnet:1:1-21: function <builtin_substr> call

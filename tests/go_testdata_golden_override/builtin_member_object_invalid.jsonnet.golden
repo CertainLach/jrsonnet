@@ -1,0 +1,5 @@
+type error: every failed from array | string:
+  - expected array, got object
+  - expected string, got object
+    argument <arr> evaluation
+    builtin_member_object_invalid.jsonnet:1:1-32: function <builtin_member> call

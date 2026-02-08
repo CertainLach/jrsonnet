@@ -1,0 +1,2 @@
+parameter y is not defined
+    optional_args8.jsonnet:2:1-11: function <foo> call

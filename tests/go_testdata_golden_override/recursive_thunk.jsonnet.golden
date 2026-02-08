@@ -1,0 +1,10 @@
+runtime error: xxx
+    recursive_thunk.jsonnet:1:35-47: error statement
+    recursive_thunk.jsonnet:2:16-39: function <bar> call
+    recursive_thunk.jsonnet:2:20-31: function <foo> call
+    recursive_thunk.jsonnet:1:52-55: local <th> access
+    recursive_thunk.jsonnet:2:16-39: function <bar> call
+    recursive_thunk.jsonnet:2:20-31: function <foo> call
+    recursive_thunk.jsonnet:1:52-55: local <th> access
+    recursive_thunk.jsonnet:2:16-39: function <bar> call
+    recursive_thunk.jsonnet:3:1-8:   function <foo> call

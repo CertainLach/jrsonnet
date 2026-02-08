@@ -1,0 +1,2 @@
+assert failed: null
+    assert_failed.jsonnet:1:8-14: assertion failure

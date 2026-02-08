@@ -1,0 +1,2 @@
+type error: expected number, got string
+    std.format of x %d

@@ -1,0 +1,8 @@
+runtime error: assertion failed: A != B
+A: {
+  "x": 1
+}
+B: {
+  "x": 2
+}
+    assert_equal4.jsonnet:1:1-33: function <builtin_assert_equal> call

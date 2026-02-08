@@ -1,0 +1,2 @@
+runtime error: should happen
+    lazy_operator2.jsonnet:1:9-31: error statement

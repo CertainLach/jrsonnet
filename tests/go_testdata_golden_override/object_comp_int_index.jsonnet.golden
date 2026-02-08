@@ -1,0 +1,2 @@
+type error: expected string, got number
+    object_comp_int_index.jsonnet:1:4-6: evaluating field name

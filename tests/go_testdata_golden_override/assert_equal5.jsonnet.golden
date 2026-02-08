@@ -1,0 +1,10 @@
+runtime error: assertion failed: A != B
+A: <A>
+
+ 
+</A>
+B: <B>
+
+
+</B>
+    assert_equal5.jsonnet:1:1-30: function <builtin_assert_equal> call

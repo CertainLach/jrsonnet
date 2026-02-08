@@ -1,1 +1,3 @@
-runtime error: tried to manifest function
+function argument is not passed: a
+Function has the following signature: (a = <default>, b)
+    during TLA call

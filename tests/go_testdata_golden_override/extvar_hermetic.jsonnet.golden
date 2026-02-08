@@ -1,0 +1,2 @@
+external variable is not defined: UndeclaredX
+    extvar_hermetic.jsonnet:1:15-41: function <builtin_ext_var> call

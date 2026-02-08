@@ -1,0 +1,2 @@
+assert failed: xxx
+    object_invariant_plus6.jsonnet:1:10-16: assertion failure

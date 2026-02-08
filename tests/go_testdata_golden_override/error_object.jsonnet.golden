@@ -1,0 +1,2 @@
+runtime error: {"blah": 42}
+    error_object.jsonnet:1:1-22: error statement
