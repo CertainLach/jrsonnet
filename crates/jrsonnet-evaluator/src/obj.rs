@@ -1,9 +1,13 @@
 use std::{
-	any::Any, cell::{Cell, RefCell}, collections::hash_map::Entry, fmt::{self, Debug}, hash::{Hash, Hasher}
+	any::Any,
+	cell::{Cell, RefCell},
+	collections::hash_map::Entry,
+	fmt::{self, Debug},
+	hash::{Hash, Hasher},
 };
 
-use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, Weak};
 use educe::Educe;
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -14,8 +18,7 @@ use crate::{
 	error::{suggest_object_fields, ErrorKind::*},
 	function::{CallLocation, FuncVal},
 	gc::WithCapacityExt as _,
-	in_frame,
-	identity_hash, 
+	identity_hash, in_frame,
 	operator::evaluate_add_op,
 	val::ArrValue,
 	CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
@@ -659,7 +662,6 @@ impl ObjValue {
 	fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
 		let mut out = FxHashMap::default();
 		self.enum_fields(&mut |depth, index, name, visibility| {
-			dbg!(&name, visibility);
 			let new_sort_key = FieldSortKey::new(depth, index);
 			let entry = out.entry(name);
 			let (visible, _) = entry.or_insert((true, new_sort_key));
@@ -709,8 +711,8 @@ impl ObjValue {
 			return fields;
 		}
 
-		let mut fields: Vec<_> = dbg!(self
-			.fields_visibility())
+		let mut fields: Vec<_> = self
+			.fields_visibility()
 			.into_iter()
 			.filter(|(_, (visible, _))| include_hidden || *visible)
 			.map(|(k, _)| k)

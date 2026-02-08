@@ -414,7 +414,7 @@ impl NumValue {
 		self.0
 	}
 	pub(crate) fn truncate_for_bitwise(&self) -> Result<i64> {
-		if self.0 < MIN_SAFE_INTEGER || self.0 > dbg!(MAX_SAFE_INTEGER) {
+		if self.0 < MIN_SAFE_INTEGER || self.0 > MAX_SAFE_INTEGER {
 			bail!("numberic value outside of safe integer range for bitwise operation");
 		}
 		Ok(self.0 as i64)
