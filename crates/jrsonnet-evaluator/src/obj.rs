@@ -1183,6 +1183,12 @@ impl ObjMemberBuilder<ValueBuilder<'_>> {
 		let entry = receiver.0.new.this_entries.entry(name);
 		entry.insert_entry(member);
 	}
+	/// Inserts thunk, replacing if it is already defined
+	pub fn thunk(self, value: impl Into<Thunk<Val>>) {
+		let (receiver, name, member) = self.build_member(MaybeUnbound::Bound(value.into()));
+		let entry = receiver.0.new.this_entries.entry(name);
+		entry.insert_entry(member);
+	}
 
 	/// Tries to insert value, returns an error if it was already defined
 	pub fn try_value(self, value: impl Into<Val>) -> Result<()> {

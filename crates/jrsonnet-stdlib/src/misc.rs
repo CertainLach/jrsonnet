@@ -201,7 +201,9 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 	let mut out = ObjValueBuilder::new();
 	for field in target_fields.union(&patch_fields) {
 		let Some(field_patch) = patch.get(field.clone())? else {
-			out.field(field.clone()).value(target.get(field.clone())?.expect("we're iterating over fields union, if field is missing in patch - it exists in target"));
+			// All lazy fields might be unified into a single filtered object core instead of creating a thunk per, but this implementation is good enough.
+			let target_field = target.get_lazy(field.clone()).expect("we're iterating over fields union, if field is missing in patch - it exists in target");
+			out.field(field.clone()).thunk(target_field);
 			continue;
 		};
 		if matches!(field_patch, Val::Null) {

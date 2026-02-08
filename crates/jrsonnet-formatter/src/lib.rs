@@ -5,8 +5,7 @@ use dprint_core::formatting::{
 	condition_helpers::is_multiple_lines,
 	condition_resolvers::true_resolver,
 	ir_helpers::{new_line_group, with_indent},
-	ConditionResolver, ConditionResolverContext, LineNumber, PrintItemPath, PrintItems,
-	PrintOptions, Signal,
+	ConditionResolver, ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
 };
 use hi_doc::{Formatting, SnippetBuilder};
 use jrsonnet_rowan_parser::{
@@ -14,7 +13,7 @@ use jrsonnet_rowan_parser::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
 		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
-		Trivia, TriviaKind, UnaryOperator, Visibility,
+		UnaryOperator, Visibility,
 	},
 	AstNode, AstToken as _, SyntaxToken,
 };
