@@ -5,6 +5,7 @@ use std::{
 	fmt::{self, Debug},
 	hash::{Hash, Hasher},
 	mem,
+	num::Saturating,
 	ops::ControlFlow,
 };
 
@@ -48,14 +49,6 @@ mod ordering {
 	impl SuperDepth {
 		pub(super) fn deepen(self) {}
 	}
-
-	#[derive(Clone, Copy, Debug)]
-	pub struct FieldSortKey(());
-	impl FieldSortKey {
-		pub const fn new(_: SuperDepth, _: FieldIndex) -> Self {
-			Self(())
-		}
-	}
 }
 
 #[cfg(feature = "exp-preserve-order")]
@@ -89,7 +82,9 @@ mod ordering {
 	}
 }
 
-use ordering::{FieldIndex, FieldSortKey, SuperDepth};
+#[cfg(feature = "exp-preserve-order")]
+use ordering::FieldSortKey;
+use ordering::{FieldIndex, SuperDepth};
 
 // 0 - add
 //  12 - visibility
@@ -177,7 +172,7 @@ type EnumFieldsHandler<'a> =
 
 pub enum EnumFields {
 	Normal(Visibility),
-	Omit,
+	Omit(Skip),
 }
 
 #[derive(Trace, Clone)]
@@ -187,14 +182,14 @@ pub enum GetFor {
 	// Continue iterating over cores, add current value to sum stack
 	SuperPlus(Val),
 	// Ignore the field value, stop at this layer instead
-	Omit,
+	Omit(#[trace(skip)] Skip),
 	NotFound,
 }
 
 #[derive(Acyclic, Clone)]
 pub enum FieldVisibility {
 	Found(Visibility),
-	Omit,
+	Omit(Skip),
 	NotFound,
 }
 
@@ -202,8 +197,10 @@ pub enum FieldVisibility {
 pub enum HasFieldIncludeHidden {
 	Exists,
 	NotFound,
-	Omit,
+	Omit(Skip),
 }
+
+type Skip = Saturating<usize>;
 
 pub trait ObjectCore: Trace + Any + Debug {
 	// If callback returns false, iteration stops, and this call returns false.
@@ -215,7 +212,7 @@ pub trait ObjectCore: Trace + Any + Debug {
 
 	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden;
 
-	fn get_for_core(&self, key: IStr, sup_this: SupThis) -> Result<GetFor>;
+	fn get_for_core(&self, key: IStr, sup_this: SupThis, omit_only: bool) -> Result<GetFor>;
 	fn field_visibility_core(&self, field: IStr) -> FieldVisibility;
 
 	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()>;
@@ -323,7 +320,10 @@ impl ObjectCore for StandaloneSuperCore {
 		}
 	}
 
-	fn get_for_core(&self, key: IStr, _sup_this: SupThis) -> Result<GetFor> {
+	fn get_for_core(&self, key: IStr, _sup_this: SupThis, omit_only: bool) -> Result<GetFor> {
+		if omit_only {
+			return Ok(GetFor::NotFound);
+		}
 		let v = self.this.get_idx(key, self.sup)?;
 		Ok(v.map_or(GetFor::NotFound, |v| GetFor::Final(v)))
 	}
@@ -343,6 +343,7 @@ impl ObjectCore for StandaloneSuperCore {
 #[derive(Debug, Acyclic)]
 struct OmitFieldsCore {
 	omit: FxHashSet<IStr>,
+	prev_layers: usize,
 }
 impl ObjectCore for OmitFieldsCore {
 	fn enum_fields_core(
@@ -352,7 +353,12 @@ impl ObjectCore for OmitFieldsCore {
 	) -> bool {
 		let mut fi = FieldIndex::default();
 		for f in &self.omit {
-			if let ControlFlow::Break(()) = handler(*super_depth, fi, f.clone(), EnumFields::Omit) {
+			if let ControlFlow::Break(()) = handler(
+				*super_depth,
+				fi,
+				f.clone(),
+				EnumFields::Omit(Saturating(self.prev_layers)),
+			) {
 				return false;
 			}
 			fi = fi.next();
@@ -362,21 +368,21 @@ impl ObjectCore for OmitFieldsCore {
 
 	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden {
 		if self.omit.contains(&name) {
-			return HasFieldIncludeHidden::Omit;
+			return HasFieldIncludeHidden::Omit(Saturating(self.prev_layers));
 		}
 		HasFieldIncludeHidden::NotFound
 	}
 
-	fn get_for_core(&self, key: IStr, _sup_this: SupThis) -> Result<GetFor> {
+	fn get_for_core(&self, key: IStr, _sup_this: SupThis, _omit_only: bool) -> Result<GetFor> {
 		if self.omit.contains(&key) {
-			return Ok(GetFor::Omit);
+			return Ok(GetFor::Omit(Saturating(self.prev_layers)));
 		}
 		Ok(GetFor::NotFound)
 	}
 
 	fn field_visibility_core(&self, field: IStr) -> FieldVisibility {
 		if self.omit.contains(&field) {
-			return FieldVisibility::Omit;
+			return FieldVisibility::Omit(Saturating(self.prev_layers));
 		}
 		FieldVisibility::NotFound
 	}
@@ -503,8 +509,8 @@ impl ObjValue {
 	/// If object only contains hidden fields - may return zero.
 	pub fn len(&self) -> usize {
 		self.fields_visibility()
-			.iter()
-			.filter(|(_, (visible, _))| *visible)
+			.values()
+			.filter(|d| d.visible())
 			.count()
 	}
 	/// For each field, calls callback.
@@ -527,7 +533,7 @@ impl ObjValue {
 		handler: &mut EnumFieldsHandler<'_>,
 		idx: CoreIdx,
 	) -> bool {
-		for core in self.0.cores[..idx.idx].iter() {
+		for core in self.0.cores[..idx.idx].iter().rev() {
 			if !core.0.enum_fields_core(super_depth, handler) {
 				return false;
 			}
@@ -545,12 +551,21 @@ impl ObjValue {
 		)
 	}
 	fn has_field_include_hidden_idx(&self, name: IStr, core: CoreIdx) -> bool {
+		let mut skip = Saturating(0usize);
 		for ele in self.0.cores[..core.idx].iter().rev() {
 			match ele.0.has_field_include_hidden_core(name.clone()) {
-				HasFieldIncludeHidden::Exists => return true,
+				HasFieldIncludeHidden::Exists => {
+					if skip.0 == 0 {
+						return true;
+					}
+				}
+				HasFieldIncludeHidden::Omit(new_skip) => {
+					// +1 including this core
+					skip = skip.max(new_skip + Saturating(1));
+				}
 				HasFieldIncludeHidden::NotFound => {}
-				HasFieldIncludeHidden::Omit => break,
 			}
+			skip -= 1;
 		}
 		false
 	}
@@ -605,27 +620,36 @@ impl ObjValue {
 	fn get_idx_uncached(&self, key: IStr, core: CoreIdx) -> Result<Option<Val>> {
 		self.run_assertions()?;
 		let mut add_stack = Vec::with_capacity(2);
+		let mut skip = Saturating(0);
 		for (sup, core) in self.0.cores[..core.idx].iter().enumerate().rev() {
 			let sup_this = SupThis {
 				sup: CoreIdx { idx: sup },
 				this: self.clone(),
 			};
-			match core.0.get_for_core(key.clone(), sup_this)? {
-				GetFor::Final(val) if add_stack.is_empty() => return Ok(Some(val)),
+			match core.0.get_for_core(key.clone(), sup_this, skip.0 != 0)? {
+				GetFor::Final(val) if add_stack.is_empty() => {
+					if skip.0 == 0 {
+						return Ok(Some(val));
+					}
+				}
 				GetFor::Final(val) => {
-					add_stack.push(val);
-					break;
+					if skip.0 == 0 {
+						add_stack.push(val);
+						break;
+					}
 				}
 				GetFor::SuperPlus(val) => {
-					add_stack.push(val);
+					if skip.0 == 0 {
+						add_stack.push(val);
+					}
 				}
-				GetFor::Omit => {
-					break;
+				GetFor::Omit(new_skip) => {
+					// +1 including this core
+					skip = skip.max(new_skip + Saturating(1));
 				}
-				GetFor::NotFound => {
-					continue;
-				}
+				GetFor::NotFound => {}
 			}
+			skip -= 1;
 		}
 		if add_stack.is_empty() {
 			// None of layers had this field
@@ -663,16 +687,27 @@ impl ObjValue {
 	}
 	fn field_visibility_idx(&self, field: IStr, core: CoreIdx) -> Option<Visibility> {
 		let mut exists = false;
+		let mut skip = Saturating(0usize);
 		for ele in self.0.cores[..core.idx].iter().rev() {
 			let vis = ele.0.field_visibility_core(field.clone());
 			match vis {
 				FieldVisibility::Found(vis @ (Visibility::Unhide | Visibility::Hidden)) => {
-					return Some(vis)
+					if skip.0 == 0 {
+						return Some(vis);
+					}
 				}
-				FieldVisibility::Found(Visibility::Normal) => exists = true,
+				FieldVisibility::Found(Visibility::Normal) => {
+					if skip.0 == 0 {
+						exists = true
+					}
+				}
 				FieldVisibility::NotFound => {}
-				FieldVisibility::Omit => break,
+				FieldVisibility::Omit(new_skip) => {
+					// +1 including this core
+					skip = skip.max(new_skip + Saturating(1));
+				}
 			}
+			skip -= 1;
 		}
 		exists.then_some(Visibility::Normal)
 	}
@@ -732,30 +767,85 @@ impl ObjValue {
 	pub fn downgrade(self) -> WeakObjValue {
 		WeakObjValue(self.0.downgrade())
 	}
-	fn fields_visibility(&self) -> FxHashMap<IStr, (bool, FieldSortKey)> {
+}
+
+#[derive(Debug)]
+struct FieldVisibilityData {
+	omitted_until: Saturating<usize>,
+	exists_visible: Option<Visibility>,
+	#[cfg(feature = "exp-preserve-order")]
+	key: FieldSortKey,
+}
+impl FieldVisibilityData {
+	fn visible(&self) -> bool {
+		self.exists_visible
+			.expect("non-existing fields shall be dropped at the end of fn fields_visibility()")
+			.is_visible()
+	}
+	#[cfg(feature = "exp-preserve-order")]
+	fn sort_key(&self) -> FieldSortKey {
+		self.key
+	}
+}
+
+impl ObjValue {
+	fn fields_visibility(&self) -> FxHashMap<IStr, FieldVisibilityData> {
 		let mut out = FxHashMap::default();
-		self.enum_fields(&mut |depth, index, name, visibility| {
-			let new_sort_key = FieldSortKey::new(depth, index);
-			let entry = out.entry(name);
-			if matches!(visibility, EnumFields::Omit) {
-				if let Entry::Occupied(v) = entry {
-					v.remove();
-				}
-				return ControlFlow::Continue(());
-			}
-			let (visible, _) = entry.or_insert((true, new_sort_key));
-			match visibility {
-				EnumFields::Omit => unreachable!(),
-				EnumFields::Normal(Visibility::Normal) => {}
-				EnumFields::Normal(Visibility::Hidden) => {
-					*visible = false;
-				}
-				EnumFields::Normal(Visibility::Unhide) => {
-					*visible = true;
-				}
-			};
-			return ControlFlow::Continue(());
-		});
+
+		let mut super_depth = SuperDepth::default();
+		let mut omit_index = Saturating(0);
+		for core in self.0.cores.iter().rev() {
+			core.0
+				.enum_fields_core(&mut super_depth, &mut |_depth, _index, name, visibility| {
+					let entry = out.entry(name);
+					let data = entry.or_insert(FieldVisibilityData {
+						exists_visible: None,
+						#[cfg(feature = "exp-preserve-order")]
+						key: FieldSortKey::new(_depth, _index),
+						omitted_until: omit_index,
+					});
+					match visibility {
+						EnumFields::Omit(new_skip) => {
+							// +1 including this core
+							data.omitted_until = data
+								.omitted_until
+								.max(omit_index + new_skip + Saturating(1));
+						}
+						EnumFields::Normal(Visibility::Normal) => {
+							if data.omitted_until <= omit_index {
+								if data.exists_visible.is_none() {
+									data.exists_visible = Some(Visibility::Normal);
+								}
+							}
+						}
+						EnumFields::Normal(Visibility::Hidden) => {
+							if data.omitted_until <= omit_index {
+								data.exists_visible = Some(match data.exists_visible {
+									// We're iterating in reverse, later unhide is preserved
+									Some(Visibility::Unhide) => Visibility::Unhide,
+									_ => Visibility::Hidden,
+								});
+							}
+						}
+						EnumFields::Normal(Visibility::Unhide) => {
+							if data.omitted_until <= omit_index {
+								data.exists_visible = Some(match data.exists_visible {
+									// We're iterating in reverse, later hide is preserved
+									Some(Visibility::Hidden) => Visibility::Hidden,
+									_ => Visibility::Unhide,
+								});
+							}
+						}
+					};
+					return ControlFlow::Continue(());
+				});
+
+			super_depth.deepen();
+			omit_index += 1;
+		}
+
+		out.retain(|_, v| v.exists_visible.is_some());
+
 		out
 	}
 	pub fn fields_ex(
@@ -768,9 +858,9 @@ impl ObjValue {
 			let (mut fields, mut keys): (Vec<_>, Vec<_>) = self
 				.fields_visibility()
 				.into_iter()
-				.filter(|(_, (visible, _))| include_hidden || *visible)
+				.filter(|(_, d)| include_hidden || d.visible())
 				.enumerate()
-				.map(|(idx, (k, (_, sk)))| (k, (sk, idx)))
+				.map(|(idx, (k, d))| (k, (d.sort_key(), idx)))
 				.unzip();
 			keys.sort_unstable_by_key(|v| v.0);
 			// Reorder in-place by resulting indexes
@@ -794,7 +884,7 @@ impl ObjValue {
 		let mut fields: Vec<_> = self
 			.fields_visibility()
 			.into_iter()
-			.filter(|(_, (visible, _))| include_hidden || *visible)
+			.filter(|(_, d)| include_hidden || d.visible())
 			.map(|(k, _)| k)
 			.collect();
 		fields.sort_unstable();
@@ -896,7 +986,10 @@ impl ObjectCore for OopObject {
 		}
 	}
 
-	fn get_for_core(&self, key: IStr, sup_this: SupThis) -> Result<GetFor> {
+	fn get_for_core(&self, key: IStr, sup_this: SupThis, omit_only: bool) -> Result<GetFor> {
+		if omit_only {
+			return Ok(GetFor::NotFound);
+		}
 		match self.this_entries.get(&key) {
 			Some(k) => {
 				let v = k.invoke.evaluate(sup_this)?;
@@ -1001,7 +1094,10 @@ impl ObjValueBuilder {
 
 	pub fn with_fields_omitted(&mut self, omit: FxHashSet<IStr>) {
 		self.commit();
-		self.sup.push(CcObjectCore::new(OmitFieldsCore { omit }));
+		self.sup.push(CcObjectCore::new(OmitFieldsCore {
+			omit,
+			prev_layers: self.sup.len(),
+		}));
 	}
 
 	pub fn build(mut self) -> ObjValue {
