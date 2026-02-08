@@ -1,0 +1,15 @@
+[package]
+name = "jrsonnet-formatter"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+dprint-core.workspace = true
+hi-doc.workspace = true
+jrsonnet-rowan-parser.workspace = true
+
+[lints]
+workspace = true

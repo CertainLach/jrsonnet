@@ -631,13 +631,20 @@ name = "jrsonnet-fmt"
 version = "0.5.0-pre97"
 dependencies = [
  "clap",
- "dprint-core",
  "hi-doc",
  "indoc",
- "insta",
- "jrsonnet-rowan-parser",
+ "jrsonnet-formatter",
  "tempfile",
  "thiserror",
+]
+
+[[package]]
+name = "jrsonnet-formatter"
+version = "0.5.0-pre97"
+dependencies = [
+ "dprint-core",
+ "hi-doc",
+ "jrsonnet-rowan-parser",
 ]
 
 [[package]]
