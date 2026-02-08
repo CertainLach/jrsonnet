@@ -45,7 +45,7 @@
             jsonnetImpls = {
               go-jsonnet = pkgs.callPackage ./nix/go-jsonnet.nix { };
               sjsonnet = pkgs.callPackage ./nix/sjsonnet.nix { };
-              jsonnet = pkgs.callPackage ./nix/jsonnet.nix { };
+              cpp-jsonnet = pkgs.callPackage ./nix/cpp-jsonnet.nix { };
               # I didn't managed to build it, and nixpkgs version is marked as broken
               # haskell-jsonnet = pkgs.callPackage ./nix/haskell-jsonnet.nix { };
               rsjsonnet = pkgs.callPackage ./nix/rsjsonnet.nix { };
@@ -56,10 +56,6 @@
 
             jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
               inherit craneLib;
-            };
-            jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
-              inherit craneLib;
-              withNightlyFeatures = true;
             };
             jrsonnet-experimental = pkgs.callPackage ./nix/jrsonnet.nix {
               inherit craneLib;
@@ -77,7 +73,7 @@
               inherit (config.legacyPackages.jsonnetImpls)
                 go-jsonnet
                 sjsonnet
-                jsonnet
+                cpp-jsonnet
                 rsjsonnet
                 ;
               jrsonnetVariants = [
@@ -91,7 +87,7 @@
               inherit (config.legacyPackages.jsonnetImpls)
                 go-jsonnet
                 sjsonnet
-                jsonnet
+                cpp-jsonnet
                 rsjsonnet
                 ;
               quick = true;
@@ -106,7 +102,7 @@
               inherit (config.legacyPackages.jsonnetImpls)
                 go-jsonnet
                 sjsonnet
-                jsonnet
+                cpp-jsonnet
                 rsjsonnet
                 ;
               jrsonnetVariants = [
@@ -115,8 +111,8 @@
                   name = "current";
                 }
                 {
-                  drv = jrsonnet-nightly.override { forBenchmarks = true; };
-                  name = "current-nightly";
+                  drv = jrsonnet-experimental.override { forBenchmarks = true; };
+                  name = "current-experimental";
                 }
                 {
                   drv = jrsonnet-release.override { forBenchmarks = true; };
@@ -128,7 +124,7 @@
               inherit (config.legacyPackages.jsonnetImpls)
                 go-jsonnet
                 sjsonnet
-                jsonnet
+                cpp-jsonnet
                 rsjsonnet
                 ;
               quick = true;
@@ -138,8 +134,8 @@
                   name = "current";
                 }
                 {
-                  drv = jrsonnet-nightly.override { forBenchmarks = true; };
-                  name = "current-nightly";
+                  drv = jrsonnet-experimental.override { forBenchmarks = true; };
+                  name = "current-experimental";
                 }
                 {
                   drv = jrsonnet-release.override { forBenchmarks = true; };

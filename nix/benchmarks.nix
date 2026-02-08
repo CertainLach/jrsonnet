@@ -7,7 +7,7 @@
   fetchFromGitHub,
   go-jsonnet,
   sjsonnet,
-  jsonnet,
+  cpp-jsonnet,
   rsjsonnet,
   hyperfine,
   quick ? false,
@@ -71,7 +71,7 @@ in
 
     buildInputs = [
       sjsonnet
-      jsonnet
+      cpp-jsonnet
       rsjsonnet
       go-jsonnet
 

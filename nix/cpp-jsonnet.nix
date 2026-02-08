@@ -3,26 +3,30 @@
   fetchFromGitHub,
   makeWrapper,
 }:
-stdenv.mkDerivation rec {
-  pname = "jsonnet";
-  version = "0.20.0";
-
+let
+  pname = "cpp-jsonnet";
+  version = "0.21.0";
   src = fetchFromGitHub {
     rev = "v${version}";
     owner = "google";
-    repo = pname;
-    hash = "sha256-FtVJE9alEl56Uik+nCpJMV5DMVVmRCnE1xMAiWdK39Y=";
+    repo = "jsonnet";
+    hash = "sha256-QHp0DOu/pqcgN7di219cHzfFb7fWtdGGE6J1ZXgbOGQ=";
   };
+in
+stdenv.mkDerivation {
+  inherit pname version src;
 
   makeFlags = [
     "jsonnet"
   ];
 
-  nativeBuildInputs = [makeWrapper];
+  nativeBuildInputs = [ makeWrapper ];
 
   installPhase = ''
     mkdir -p $out/bin
     cp jsonnet $out/bin/jsonnet
     wrapProgram $out/bin/jsonnet --add-flags "--max-stack 200000"
   '';
+
+  passthru = { inherit src; };
 }

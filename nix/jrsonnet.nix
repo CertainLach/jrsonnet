@@ -2,7 +2,6 @@
   lib,
   craneLib,
   makeWrapper,
-  withNightlyFeatures ? false,
   withExperimentalFeatures ? false,
   forBenchmarks ? false,
 }:
@@ -15,9 +14,9 @@ with lib;
         || (craneLib.filterCargoSources path type);
     };
     pname = "jrsonnet";
-    version = "current${optionalString withNightlyFeatures "-nightly"}${optionalString withExperimentalFeatures "-experimental"}";
+    version = "current${optionalString withExperimentalFeatures "-experimental"}";
 
-    cargoExtraArgs = "--locked --features=mimalloc${optionalString withNightlyFeatures ",nightly"}${optionalString withExperimentalFeatures ",experimental"}";
+    cargoExtraArgs = "--locked --features=mimalloc${optionalString withExperimentalFeatures ",experimental"}";
 
     nativeBuildInputs = [makeWrapper];
 
