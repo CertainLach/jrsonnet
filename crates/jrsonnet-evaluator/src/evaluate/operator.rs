@@ -218,9 +218,15 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(a, Div, b) => evaluate_div_op(a, b)?,
 		(a, Mod, b) => evaluate_mod_op(a, b)?,
 
-		(Num(v1), BitAnd, Num(v2)) => Val::try_num((v1.get() as i64 & v2.get() as i64) as f64)?,
-		(Num(v1), BitOr, Num(v2)) => Val::try_num((v1.get() as i64 | v2.get() as i64) as f64)?,
-		(Num(v1), BitXor, Num(v2)) => Val::try_num((v1.get() as i64 ^ v2.get() as i64) as f64)?,
+		(Num(v1), BitAnd, Num(v2)) => {
+			Val::try_num((v1.truncate_for_bitwise()? & v2.truncate_for_bitwise()?) as f64)?
+		}
+		(Num(v1), BitOr, Num(v2)) => {
+			Val::try_num((v1.truncate_for_bitwise()? | v2.truncate_for_bitwise()?) as f64)?
+		}
+		(Num(v1), BitXor, Num(v2)) => {
+			Val::try_num((v1.truncate_for_bitwise()? ^ v2.truncate_for_bitwise()?) as f64)?
+		}
 		(Num(v1), Lhs, Num(v2)) => {
 			if v2.get() < 0.0 {
 				bail!("shift by negative exponent")
