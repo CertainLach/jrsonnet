@@ -19,7 +19,7 @@ jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre9
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre97" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre97" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre97" }
-jrsonnet-gcmodule = { version = "0.4.0", path = "../gcmodule" }
+jrsonnet-gcmodule = { version = "0.4.1" }
 # Diagnostics.
 # hi-doc is my library, which handles text formatting very well, but isn't polished enough yet
 # Previous implementation was based on annotate-snippets, which I don't like for many reasons.
