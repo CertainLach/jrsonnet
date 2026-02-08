@@ -21,6 +21,8 @@ fn run(file: &Path) -> String {
 	.import_resolver(FileImportResolver::default());
 	let s = s.build();
 
+	let _entered = s.enter();
+
 	let trace_format = CompactFormat {
 		resolver: PathResolver::FileName,
 		max_trace: 20,

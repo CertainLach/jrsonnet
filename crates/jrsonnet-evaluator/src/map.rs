@@ -4,14 +4,14 @@ use rustc_hash::FxHashMap;
 
 use crate::{gc::WithCapacityExt as _, Thunk, Val};
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 #[trace(tracking(force))]
 pub struct LayeredHashMapInternals {
 	parent: Option<LayeredHashMap>,
 	current: FxHashMap<IStr, Thunk<Val>>,
 }
 
-#[derive(Trace)]
+#[derive(Trace, Debug)]
 pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {

@@ -30,6 +30,8 @@ fn run(file: &Path, root: &Path) -> String {
 		.import_resolver(FileImportResolver::default());
 	let s = s.build();
 
+	let _entered = s.enter();
+
 	let trace_format = CompactFormat {
 		resolver: PathResolver::FileName,
 		max_trace: 20,
@@ -61,7 +63,7 @@ fn run(file: &Path, root: &Path) -> String {
 				Val::Obj(o.build())
 			}),
 		);
-		v = apply_tla(s, &args, v).expect("failed to apply tla");
+		v = apply_tla(&args, v).expect("failed to apply tla");
 	}
 
 	match v.manifest(JsonFormat::default()) {

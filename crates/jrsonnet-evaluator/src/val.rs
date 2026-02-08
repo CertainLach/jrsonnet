@@ -23,7 +23,7 @@ use crate::{
 	gc::WithCapacityExt as _,
 	manifest::{ManifestFormat, ToStringFormat},
 	typed::{BoundedUsize, MAX_SAFE_INTEGER, MIN_SAFE_INTEGER},
-	ObjValue, Result, Unbound, WeakObjValue,
+	ObjValue, Result, SupThis, Unbound, WeakSupThis,
 };
 
 pub trait ThunkValue: Trace {
@@ -168,15 +168,13 @@ impl<T: Trace + Default> Default for Thunk<T> {
 	}
 }
 
-type CacheKey = (Option<WeakObjValue>, Option<WeakObjValue>);
-
 #[derive(Trace, Clone)]
 pub struct CachedUnbound<I, T>
 where
 	I: Unbound<Bound = T>,
 	T: Trace,
 {
-	cache: Cc<RefCell<FxHashMap<CacheKey, T>>>,
+	cache: Cc<RefCell<FxHashMap<WeakSupThis, T>>>,
 	value: I,
 }
 impl<I: Unbound<Bound = T>, T: Trace> CachedUnbound<I, T> {
@@ -189,17 +187,14 @@ impl<I: Unbound<Bound = T>, T: Trace> CachedUnbound<I, T> {
 }
 impl<I: Unbound<Bound = T>, T: Clone + Trace> Unbound for CachedUnbound<I, T> {
 	type Bound = T;
-	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<T> {
-		let cache_key = (
-			sup.as_ref().map(|s| s.clone().downgrade()),
-			this.as_ref().map(|t| t.clone().downgrade()),
-		);
+	fn bind(&self, sup_this: SupThis) -> Result<T> {
+		let cache_key = sup_this.clone().downgrade();
 		{
 			if let Some(t) = self.cache.borrow().get(&cache_key) {
 				return Ok(t.clone());
 			}
 		}
-		let bound = self.value.bind(sup, this)?;
+		let bound = self.value.bind(sup_this)?;
 
 		{
 			let mut cache = self.cache.borrow_mut();

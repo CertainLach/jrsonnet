@@ -40,7 +40,7 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, Trace, PartialEq)]
 pub struct FuncDesc {
 	/// # Example
 	///
