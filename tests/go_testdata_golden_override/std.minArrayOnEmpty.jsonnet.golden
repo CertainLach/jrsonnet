@@ -1,0 +1,2 @@
+runtime error: expected non-empty array
+    std.minArrayOnEmpty.jsonnet:1:1-18: function <builtin_min_array> call

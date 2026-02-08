@@ -1,0 +1,2 @@
+runtime error: primitiveEquals operates on primitive types, got object
+    std.primitiveEquals6.jsonnet:1:1-29: function <builtin_primitive_equals> call

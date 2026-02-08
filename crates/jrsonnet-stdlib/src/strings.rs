@@ -25,8 +25,11 @@ pub fn builtin_char(n: u32) -> Result<char> {
 }
 
 #[builtin]
-pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
-	str.replace(&from as &str, &to as &str)
+pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
+	if from.is_empty() {
+		bail!("'from' string must not be zero length");
+	}
+	Ok(str.replace(&from as &str, &to as &str))
 }
 
 #[builtin]

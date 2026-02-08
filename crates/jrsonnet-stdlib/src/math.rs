@@ -168,12 +168,12 @@ pub fn builtin_is_decimal(x: f64) -> bool {
 
 #[builtin]
 pub fn builtin_deg2rad(x: f64) -> f64 {
-	x * f64::consts::PI / 180.0
+	x.to_radians()
 }
 
 #[builtin]
 pub fn builtin_rad2deg(x: f64) -> f64 {
-	x * 180.0 / f64::consts::PI
+	x.to_degrees()
 }
 
 #[builtin]

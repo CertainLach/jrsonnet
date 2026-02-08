@@ -183,6 +183,15 @@ const SKIPPED: &[&str] = &[
 	"number_leading_zero.jsonnet",
 	// Jrsonnet has this overload
 	"number_times_string.jsonnet",
+	// Jrsonnet has stricter implementations, this is a dumb thing that the filter value might not be
+	// evaluated anyway...
+	"std.filter7.jsonnet",
+	// Golang fails with max stack frames exceeded error
+	"std.makeArray_recursive_evalutation_order_matters.jsonnet",
+	// Jrsonnet has this overload
+	"string_times_number.jsonnet",
+	// Tailstrict semantics is partially unspecified
+	"tailstrict3.jsonnet",
 ];
 
 #[test]
@@ -244,17 +253,21 @@ fn cpp_test_suite() -> io::Result<()> {
 				"expected error for golden {}:\n<got>\n{result}\n</got>\n<golden>\n{golden}\n</golden>",
 				entry.path().display()
 			),
-			(Ok(result), Ok(golden)) => {
+			(Ok(result_v), Ok(golden)) => {
 				// Show diff relative to golden`.
-				let diff = JsonDiff::diff_string(&golden, &result, false);
+				let diff = JsonDiff::diff_string(&golden, &result_v, false);
 				if let Some(diff) = diff {
-					panic!(
-						"Result \n{result:#}\n\
-							and golden \n{golden:#}\n\
-							did not match structurally:\n{diff:#}\n\
-							for golden {}",
-						entry.path().display()
-					);
+					if env::var_os("UPDATE_GOLDEN").is_some() {
+						fs::write(golden_override, result)?;
+					} else {
+						panic!(
+							"Result \n{result_v:#}\n\
+								and golden \n{golden:#}\n\
+								did not match structurally:\n{diff:#}\n\
+								for golden {}",
+							entry.path().display()
+						);
+					}
 				}
 			}
 			(Err(_), Err(_)) => {

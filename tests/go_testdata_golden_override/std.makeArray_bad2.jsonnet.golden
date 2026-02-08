@@ -1,0 +1,3 @@
+type error: expected function, got string
+    argument <func> evaluation
+    std.makeArray_bad2.jsonnet:1:1-26: function <builtin_make_array> call

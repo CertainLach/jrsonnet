@@ -532,17 +532,23 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 					)),
 
 					(Val::Str(s), Val::Num(n)) => Val::Str({
+						let n = n.get();
+						if n.fract() > f64::EPSILON {
+							bail!(FractionalIndex)
+						}
+						if n < 0.0 {
+							bail!(ArrayBoundsError(n as isize, s.into_flat().chars().count()));
+						}
 						let v: IStr = s
 							.clone()
 							.into_flat()
 							.chars()
-							.skip(n.get() as usize)
+							.skip(n as usize)
 							.take(1)
 							.collect::<String>()
 							.into();
 						if v.is_empty() {
-							let size = s.into_flat().chars().count();
-							bail!(StringBoundsError(n.get() as usize, size))
+							bail!(StringBoundsError(n as usize, s.into_flat().chars().count()))
 						}
 						StrValue::Flat(v)
 					}),

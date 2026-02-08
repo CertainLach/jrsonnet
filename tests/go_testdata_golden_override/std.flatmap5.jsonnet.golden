@@ -1,0 +1,5 @@
+runtime error: a
+    std.flatmap5.jsonnet:1:21-29: error statement
+    std.flatmap5.jsonnet:2:10-49: function <builtin_flatmap> call
+    argument <x> evaluation
+    std.flatmap5.jsonnet:2:1-50:  function <builtin_type> call
