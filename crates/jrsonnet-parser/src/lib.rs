@@ -53,9 +53,9 @@ parser! {
 		rule digit() -> char = d:$(['0'..='9']) {d.chars().next().unwrap()}
 		rule end_of_ident() = !['0'..='9' | '_' | 'a'..='z' | 'A'..='Z']
 		/// Sequence of digits
-		rule uint_str() -> &'input str = a:$(digit()+) { a }
+		rule uint_str() -> &'input str = a:$(digit()+ ("_" digit()+)*) { a }
 		/// Number in scientific notation format
-		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.parse().map_err(|_| "<number>") }} / expected!("<number>")
+		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.replace("_","").parse().map_err(|_| "<number>") }} / expected!("<number>")
 
 		/// Reserved word followed by any non-alphanumberic
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "importbin" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
