@@ -9,6 +9,8 @@ version.workspace = true
 [dependencies]
 dprint-core.workspace = true
 hi-doc.workspace = true
+indoc.workspace = true
+insta.workspace = true
 jrsonnet-rowan-parser.workspace = true
 
 [lints]

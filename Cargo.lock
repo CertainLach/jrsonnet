@@ -644,6 +644,8 @@ version = "0.5.0-pre97"
 dependencies = [
  "dprint-core",
  "hi-doc",
+ "indoc",
+ "insta",
  "jrsonnet-rowan-parser",
 ]
 

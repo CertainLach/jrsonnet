@@ -2,8 +2,9 @@ use std::{any::type_name, rc::Rc};
 
 use children::{children_between, trivia_before};
 use dprint_core::formatting::{
-	condition_helpers::is_multiple_lines, condition_resolvers::true_resolver,
-	ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
+	condition_helpers::is_multiple_lines,
+	ir_helpers::{new_line_group, with_indent},
+	ConditionResolver, ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
 };
 use hi_doc::{Formatting, SnippetBuilder};
 use jrsonnet_rowan_parser::{
@@ -17,7 +18,7 @@ use jrsonnet_rowan_parser::{
 };
 
 use crate::{
-	children::trivia_after,
+	children::{trivia_after, Child},
 	comments::{format_comments, CommentLocation},
 };
 
@@ -49,6 +50,10 @@ macro_rules! pi {
 		$o.push_signal(dprint_core::formatting::Signal::NewLine);
 		pi!(@s; $o: $($t)*);
 	}};
+	(@s; $o:ident: sonl $($t:tt)*) => {{
+		$o.push_signal(dprint_core::formatting::Signal::SpaceOrNewLine);
+		pi!(@s; $o: $($t)*);
+	}};
 	(@s; $o:ident: tab $($t:tt)*) => {{
 		$o.push_signal(dprint_core::formatting::Signal::Tab);
 		pi!(@s; $o: $($t)*);
@@ -63,6 +68,10 @@ macro_rules! pi {
 	}};
 	(@s; $o:ident: info($v:expr) $($t:tt)*) => {{
 		$o.push_info($v);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: ln_anchor($v:expr) $($t:tt)*) => {{
+		$o.push_anchor(LineNumberAnchor::new($v));
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: if($s:literal, $cond:expr, $($i:tt)*) $($t:tt)*) => {{
@@ -290,42 +299,58 @@ impl Printable for ParamsDesc {
 }
 impl Printable for ArgsDesc {
 	fn print(&self, out: &mut PrintItems) {
-		let start = LineNumber::new("start");
-		let end = LineNumber::new("end");
+		let start = LineNumber::new("args start line");
+		let end = LineNumber::new("args end line");
 		let multi_line = Rc::new(move |condition_context: &mut ConditionResolverContext| {
-			is_multiple_lines(condition_context, start, end).map(|v| !v)
+			is_multiple_lines(condition_context, start, end)
 		});
-		p!(out, str("(") info(start) if("start args", multi_line, >i nl));
+
 		let (children, end_comments) = children_between::<Arg>(
 			self.syntax().clone(),
 			self.l_paren_token().map(Into::into).as_ref(),
 			self.r_paren_token().map(Into::into).as_ref(),
 			None,
 		);
-		let mut args = children.into_iter().peekable();
-		while let Some(ele) = args.next() {
-			if ele.should_start_with_newline {
-				p!(out, nl);
+
+		fn gen_args(children: Vec<Child<Arg>>, multi_line: ConditionResolver) -> PrintItems {
+			let mut _out = PrintItems::new();
+			let out = &mut _out;
+
+			let mut args = children.into_iter().peekable();
+			while let Some(ele) = args.next() {
+				if ele.should_start_with_newline {
+					p!(out, nl);
+				}
+				format_comments(&ele.before_trivia, CommentLocation::AboveItem, out);
+				let arg = ele.value;
+				if arg.name().is_some() || arg.assign_token().is_some() {
+					p!(out, {arg.name()} str(" = "));
+				}
+				p!(out, { arg.expr() });
+				let has_more = args.peek().is_some();
+				if has_more {
+					p!(out, str(","));
+				} else {
+					p!(out, if("trailing comma", multi_line, str(",")));
+				}
+				format_comments(&ele.inline_trivia, CommentLocation::ItemInline, out);
+				if has_more {
+					p!(out, if_else("arg separator", multi_line, nl)(sonl));
+				}
 			}
-			format_comments(&ele.before_trivia, CommentLocation::AboveItem, out);
-			let arg = ele.value;
-			if arg.name().is_some() || arg.assign_token().is_some() {
-				p!(out, {arg.name()} str(" = "));
-			}
-			let comma_between = if args.peek().is_some() {
-				true_resolver()
-			} else {
-				multi_line.clone()
-			};
-			p!(out, {arg.expr()} if("arg comma", comma_between, str(",") if_not("between args", multi_line, str(" "))));
-			format_comments(&ele.inline_trivia, CommentLocation::ItemInline, out);
-			p!(out, if("between args", multi_line, nl));
+			_out
 		}
+
+		let args_items = new_line_group(gen_args(children, multi_line.clone())).into_rc_path();
+		let args_indented = with_indent(pi!(@i; nl items(args_items.into())));
+
+		p!(out, str("(") info(start));
+		p!(out, if_else("args body", multi_line, items(args_indented) nl)(items(args_items.into())));
 		if end_comments.should_start_with_newline {
 			p!(out, nl);
 		}
 		format_comments(&end_comments.trivia, CommentLocation::EndOfItems, out);
-		p!(out, if("end args", multi_line, <i info(end)) str(")"));
+		p!(out, str(")") info(end));
 	}
 }
 impl Printable for SliceDesc {

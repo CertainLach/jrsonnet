@@ -22,7 +22,7 @@ fn reformat(input: &str) -> String {
 }
 
 #[test]
-fn complex_comments_snapshot() {
+fn complex_comments() {
 	insta::assert_snapshot!(reformat(indoc!(
 		"{
 		  comments: {
@@ -75,5 +75,19 @@ fn complex_comments_snapshot() {
             b: '',
           },
         }"
+	)));
+}
+
+#[test]
+fn args() {
+	insta::assert_snapshot!(reformat(indoc!(
+		"
+			{
+				short: aaa(1,2,3,4,5),
+				long: bbb(123123123123123123123,12312312321123123123,123123123123312123123,123123123123123123312,123123123123312321123),
+				short_in_long: bbb(aaa(1,2,3,4,5), 123123123123123123123,12312312321123123123,123123123123312123123,123123123123123123312,123123123123312321123),
+				long_in_short: aaa(1,2,3,4,5,bbb(123123123123123123123,12312312321123123123,123123123123312123123,123123123123123123312,123123123123312321123)),
+			}
+		"
 	)));
 }

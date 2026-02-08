@@ -1,4 +1,9 @@
-use std::{fs, io};
+use std::{
+	fs,
+	io::{self, Write as _},
+	path::PathBuf,
+	process,
+};
 
 use clap::Parser;
 use jrsonnet_formatter::{format, FormatOptions};
