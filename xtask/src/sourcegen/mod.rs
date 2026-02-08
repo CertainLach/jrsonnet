@@ -1,4 +1,4 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 use ast::{lower, AstSrc};
@@ -202,7 +202,15 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 				quote!(impl ast::#trait_name for #name {})
 			});
 
-			let methods = node.fields.iter().map(|field| {
+			let mut type_positions: HashMap<String, usize> = HashMap::new();
+			let field_positions: Vec<_> = node.fields.iter().map(|field| {
+				let ty_str = field.ty().to_string();
+				let pos = *type_positions.get(&ty_str).unwrap_or(&0);
+				type_positions.insert(ty_str, pos + 1);
+				pos
+			}).collect();
+
+			let methods = node.fields.iter().zip(field_positions.iter()).map(|(field, &pos)| {
 				let method_name = field.method_name(kinds);
 				let ty = field.ty();
 
@@ -224,10 +232,16 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 							support::token_child(&self.syntax)
 						}
 					}
+				} else if pos == 0 {
+					quote! {
+						pub fn #method_name(&self) -> Option<#ty> {
+							support::children(&self.syntax).next()
+						}
+					}
 				} else {
 					quote! {
 						pub fn #method_name(&self) -> Option<#ty> {
-							support::child(&self.syntax)
+							support::children(&self.syntax).nth(#pos)
 						}
 					}
 				}

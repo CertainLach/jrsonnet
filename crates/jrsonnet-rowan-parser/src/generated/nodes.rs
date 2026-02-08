@@ -14,7 +14,7 @@ pub struct SourceFile {
 }
 impl SourceFile {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -27,7 +27,7 @@ impl Expr {
 		support::children(&self.syntax)
 	}
 	pub fn expr_base(&self) -> Option<ExprBase> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn suffixs(&self) -> AstChildren<Suffix> {
 		support::children(&self.syntax)
@@ -46,7 +46,7 @@ impl SuffixIndex {
 		support::token(&self.syntax, T![.])
 	}
 	pub fn index(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -75,7 +75,7 @@ impl SuffixIndexExpr {
 		support::token(&self.syntax, T!['['])
 	}
 	pub fn index(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![']'])
@@ -88,7 +88,7 @@ pub struct SuffixSlice {
 }
 impl SuffixSlice {
 	pub fn slice_desc(&self) -> Option<SliceDesc> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -101,16 +101,16 @@ impl SliceDesc {
 		support::token(&self.syntax, T!['['])
 	}
 	pub fn from(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn colon_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![:])
 	}
 	pub fn end(&self) -> Option<SliceDescEnd> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn step(&self) -> Option<SliceDescStep> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![']'])
@@ -123,7 +123,7 @@ pub struct SuffixApply {
 }
 impl SuffixApply {
 	pub fn args_desc(&self) -> Option<ArgsDesc> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn tailstrict_kw_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![tailstrict])
@@ -168,7 +168,7 @@ pub struct StmtAssert {
 }
 impl StmtAssert {
 	pub fn assertion(&self) -> Option<Assertion> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn semi_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![;])
@@ -184,13 +184,13 @@ impl Assertion {
 		support::token(&self.syntax, T![assert])
 	}
 	pub fn condition(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn colon_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![:])
 	}
 	pub fn message(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).nth(1usize)
 	}
 }
 
@@ -200,13 +200,13 @@ pub struct ExprBinary {
 }
 impl ExprBinary {
 	pub fn lhs(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn binary_operator(&self) -> Option<BinaryOperator> {
 		support::token_child(&self.syntax)
 	}
 	pub fn rhs(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).nth(1usize)
 	}
 }
 
@@ -219,7 +219,7 @@ impl ExprUnary {
 		support::token_child(&self.syntax)
 	}
 	pub fn rhs(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -229,7 +229,7 @@ pub struct ExprObjExtend {
 }
 impl ExprObjExtend {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -242,7 +242,7 @@ impl ExprParened {
 		support::token(&self.syntax, T!['('])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn r_paren_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![')'])
@@ -301,7 +301,7 @@ pub struct ExprObject {
 }
 impl ExprObject {
 	pub fn obj_body(&self) -> Option<ObjBody> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -314,7 +314,7 @@ impl ExprArrayComp {
 		support::token(&self.syntax, T!['['])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn comma_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![,])
@@ -346,7 +346,7 @@ pub struct ExprVar {
 }
 impl ExprVar {
 	pub fn name(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -359,19 +359,19 @@ impl ExprIfThenElse {
 		support::token(&self.syntax, T![if])
 	}
 	pub fn cond(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn then_kw_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![then])
 	}
 	pub fn then(&self) -> Option<TrueExpr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn else_kw_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![else])
 	}
 	pub fn else_(&self) -> Option<FalseExpr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -381,7 +381,7 @@ pub struct TrueExpr {
 }
 impl TrueExpr {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -391,7 +391,7 @@ pub struct FalseExpr {
 }
 impl FalseExpr {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -407,13 +407,13 @@ impl ExprFunction {
 		support::token(&self.syntax, T!['('])
 	}
 	pub fn params_desc(&self) -> Option<ParamsDesc> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn r_paren_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![')'])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -442,7 +442,7 @@ impl ExprError {
 		support::token(&self.syntax, T![error])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -452,7 +452,7 @@ pub struct SliceDescEnd {
 }
 impl SliceDescEnd {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -462,7 +462,7 @@ pub struct SliceDescStep {
 }
 impl SliceDescStep {
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -472,13 +472,13 @@ pub struct Arg {
 }
 impl Arg {
 	pub fn name(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn assign_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![=])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -523,7 +523,7 @@ pub struct MemberBindStmt {
 }
 impl MemberBindStmt {
 	pub fn obj_local(&self) -> Option<ObjLocal> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -536,7 +536,7 @@ impl ObjLocal {
 		support::token(&self.syntax, T![local])
 	}
 	pub fn bind(&self) -> Option<Bind> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -546,7 +546,7 @@ pub struct MemberAssertStmt {
 }
 impl MemberAssertStmt {
 	pub fn assertion(&self) -> Option<Assertion> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -556,7 +556,7 @@ pub struct MemberFieldNormal {
 }
 impl MemberFieldNormal {
 	pub fn field_name(&self) -> Option<FieldName> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn plus_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![+])
@@ -565,7 +565,7 @@ impl MemberFieldNormal {
 		support::token_child(&self.syntax)
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -575,16 +575,16 @@ pub struct MemberFieldMethod {
 }
 impl MemberFieldMethod {
 	pub fn field_name(&self) -> Option<FieldName> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn params_desc(&self) -> Option<ParamsDesc> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn visibility(&self) -> Option<Visibility> {
 		support::token_child(&self.syntax)
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -594,7 +594,7 @@ pub struct FieldNameFixed {
 }
 impl FieldNameFixed {
 	pub fn id(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn text(&self) -> Option<Text> {
 		support::token_child(&self.syntax)
@@ -610,7 +610,7 @@ impl FieldNameDynamic {
 		support::token(&self.syntax, T!['['])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn r_brack_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![']'])
@@ -626,13 +626,13 @@ impl ForSpec {
 		support::token(&self.syntax, T![for])
 	}
 	pub fn bind(&self) -> Option<Destruct> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn in_kw_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![in])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -645,7 +645,7 @@ impl IfSpec {
 		support::token(&self.syntax, T![if])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -655,13 +655,13 @@ pub struct BindDestruct {
 }
 impl BindDestruct {
 	pub fn into(&self) -> Option<Destruct> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn assign_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![=])
 	}
 	pub fn value(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -671,16 +671,16 @@ pub struct BindFunction {
 }
 impl BindFunction {
 	pub fn name(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn params(&self) -> Option<ParamsDesc> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn assign_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![=])
 	}
 	pub fn value(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -690,13 +690,13 @@ pub struct Param {
 }
 impl Param {
 	pub fn destruct(&self) -> Option<Destruct> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn assign_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![=])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -706,7 +706,7 @@ pub struct DestructFull {
 }
 impl DestructFull {
 	pub fn name(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -748,7 +748,7 @@ impl DestructObject {
 		support::children(&self.syntax)
 	}
 	pub fn destruct_rest(&self) -> Option<DestructRest> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn comma_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![,])
@@ -764,19 +764,19 @@ pub struct DestructObjectField {
 }
 impl DestructObjectField {
 	pub fn field(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn colon_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![:])
 	}
 	pub fn destruct(&self) -> Option<Destruct> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn assign_token(&self) -> Option<SyntaxToken> {
 		support::token(&self.syntax, T![=])
 	}
 	pub fn expr(&self) -> Option<Expr> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -789,7 +789,7 @@ impl DestructRest {
 		support::token(&self.syntax, T![...])
 	}
 	pub fn into(&self) -> Option<Name> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
@@ -799,7 +799,7 @@ pub struct DestructArrayElement {
 }
 impl DestructArrayElement {
 	pub fn destruct(&self) -> Option<Destruct> {
-		support::child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 }
 
