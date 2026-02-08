@@ -129,7 +129,7 @@ local names = {
     parseJson: ['str'],
     parseYaml: ['str'],
     encodeUTF8: ['str'],
-    decodeUTF8: ['arr'],
+    decodeUTF8: ['arr', 'lossy'],
 
     sum: ['arr'],
     avg: ['arr', 'onEmpty'],
