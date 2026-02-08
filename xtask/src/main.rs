@@ -35,6 +35,8 @@ enum Opts {
 		test_file: String,
 		args: Vec<String>,
 	},
+	/// Update C++/Golang golden testsuites from git
+	UpdateTestsuites,
 }
 
 fn main() -> Result<()> {
@@ -103,6 +105,27 @@ fn main() -> Result<()> {
 			let sh = Shell::new()?;
 
 			cmd!(sh, "{c_bindings}{test_file} {args...}").run()?;
+
+			Ok(())
+		}
+		Opts::UpdateTestsuites => {
+			let _pushd = sh.push_dir("tests");
+			let git_dir = sh.create_temp_dir()?;
+			let git_dir_path = git_dir.path();
+			cmd!(
+				sh,
+				"git clone https://github.com/google/jsonnet.git --depth=1 {git_dir_path}/jsonnet"
+			)
+			.run()?;
+			cmd!(
+				sh,
+				"git clone https://github.com/google/go-jsonnet.git --depth=1 {git_dir_path}/go-jsonnet"
+			)
+			.run()?;
+			sh.remove_path("cpp_test_suite")?;
+			sh.remove_path("go_testdata")?;
+			cmd!(sh, "mv {git_dir_path}/jsonnet/test_suite cpp_test_suite").run()?;
+			cmd!(sh, "mv {git_dir_path}/go-jsonnet/testdata go_testdata").run()?;
 
 			Ok(())
 		}
