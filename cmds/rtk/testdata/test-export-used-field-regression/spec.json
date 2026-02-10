@@ -1,0 +1,10 @@
+{
+  "apiVersion": "tanka.dev/v1alpha1",
+  "kind": "Environment",
+  "metadata": {
+    "name": "test-export-used-field-regression"
+  },
+  "spec": {
+    "namespace": "default"
+  }
+}

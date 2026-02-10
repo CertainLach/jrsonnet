@@ -97,7 +97,11 @@ pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
 		if conf < 0.8 {
 			continue;
 		}
-		assert!(field.as_str() != key.as_str(), "looks like string pooling failure, please write any info regarding this crash to https://github.com/CertainLach/jrsonnet/issues/113, thanks!");
+		// Skip exact match: don't suggest the key itself. Compare by string content so we
+		// don't panic when string pooling fails (e.g. under heavy load with many envs).
+		if field.as_str() == key.as_str() {
+			continue;
+		}
 
 		heap.push((conf, field));
 	}

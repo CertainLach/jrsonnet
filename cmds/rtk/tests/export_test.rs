@@ -2174,3 +2174,39 @@ fn test_export_tla_function_with_overrides() {
 		deployment_content
 	);
 }
+
+/// Minimal anonymized regression case for "no such field: used".
+///
+/// This reproduces a known evaluator regression where an assertion that reads
+/// `self.used` from a merged object can fail with:
+/// `no such field: used`.
+#[test]
+fn regression_minimal_used_field_export() {
+	let temp_dir = tempfile::TempDir::new().unwrap();
+	let output_dir = temp_dir.path();
+
+	let opts = ExportOpts {
+		output_dir: output_dir.to_path_buf(),
+		extension: "yaml".to_string(),
+		parallelism: 1,
+		recursive: false,
+		eval_opts: EvalOpts::default(),
+		..Default::default()
+	};
+
+	let result = export(
+		&[testdata_path("test-export-used-field-regression")
+			.to_string_lossy()
+			.to_string()],
+		opts,
+	)
+	.expect("export should succeed");
+
+	assert_eq!(result.successful, 1);
+	assert_eq!(result.failed, 0);
+
+	check_files(
+		output_dir,
+		&["manifest.json", "v1.ConfigMap-used-field-regression.yaml"],
+	);
+}
