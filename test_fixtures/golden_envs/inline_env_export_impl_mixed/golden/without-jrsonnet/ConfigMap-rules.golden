@@ -1,0 +1,12 @@
+apiVersion: v1
+data:
+  config.yaml: |-
+    "key": "value 1.1000000000000001"
+    "list":
+    - 1.1
+    - 2.2
+    "num": 1
+kind: ConfigMap
+metadata:
+  name: rules
+  namespace: without-jrsonnet

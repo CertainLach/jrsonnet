@@ -426,11 +426,6 @@ fn discover_inline_environments(path: &Path, eval_opts: &EvalOpts) -> Result<Vec
 		return Ok(vec![]);
 	}
 
-	// Get shared exportJsonnetImplementation (use first non-None value found)
-	let shared_export_impl = env_metadata
-		.iter()
-		.find_map(|m| m.export_jsonnet_implementation.clone());
-
 	if env_metadata.len() == 1 {
 		// Single environment - no need to specify name
 		let meta = &env_metadata[0];
@@ -438,22 +433,21 @@ fn discover_inline_environments(path: &Path, eval_opts: &EvalOpts) -> Result<Vec
 			is_static: false,
 			path: path.to_path_buf(),
 			env_name: None,
-			export_jsonnet_implementation: shared_export_impl,
+			export_jsonnet_implementation: meta.export_jsonnet_implementation.clone(),
 			labels: meta.labels.clone(),
 		}]);
 	}
 
-	// Multiple environments - create one DiscoveredEnv per sub-environment
+	// Multiple environments - create one DiscoveredEnv per sub-environment.
+	// Each env gets only its own exportJsonnetImplementation (no shared fallback),
+	// so formatting applies only to envs that set it.
 	Ok(env_metadata
 		.into_iter()
 		.map(|meta| DiscoveredEnv {
 			is_static: false,
 			path: path.to_path_buf(),
 			env_name: Some(meta.name),
-			// Use per-env export_impl if set, otherwise fall back to shared
-			export_jsonnet_implementation: meta
-				.export_jsonnet_implementation
-				.or_else(|| shared_export_impl.clone()),
+			export_jsonnet_implementation: meta.export_jsonnet_implementation,
 			labels: meta.labels,
 		})
 		.collect())

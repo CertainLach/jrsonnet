@@ -1,0 +1,4 @@
+{
+    "with-jrsonnet/ConfigMap-rules.golden": "main.jsonnet",
+    "without-jrsonnet/ConfigMap-rules.golden": "main.jsonnet"
+}
