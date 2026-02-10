@@ -1,0 +1,3 @@
+{
+    test: import 'lib.libsonnet',
+}

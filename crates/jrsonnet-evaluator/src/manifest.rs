@@ -371,17 +371,7 @@ fn manifest_json_ex_buf(
 				#[cfg(feature = "exp-preserve-order")]
 				options.preserve_order,
 			) {
-				// Skip fields that evaluate to runtime errors (e.g., error statements in unused conditionals)
-				// This matches Go Tanka's behavior where these fields are silently ignored during manifest
-				// Note: This may hide legitimate configuration errors, but is needed for tk compatibility
-				let value = match value.with_description(|| format!("field <{key}> evaluation")) {
-					Ok(v) => v,
-					Err(e) if matches!(e.error(), crate::error::ErrorKind::RuntimeError(_)) => {
-						// Skip this field silently - tk doesn't manifest fields with runtime errors
-						continue;
-					}
-					Err(e) => return Err(e),
-				};
+				let value = value.with_description(|| format!("field <{key}> evaluation"))?;
 
 				had_fields = true;
 				if field_count > 0 {
