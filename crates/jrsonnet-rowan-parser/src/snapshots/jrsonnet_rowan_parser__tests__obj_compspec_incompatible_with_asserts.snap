@@ -56,9 +56,5 @@ SOURCE_FILE@0..34
 ===
 LocatedSyntaxError { error: Custom { error: "asserts can't be used in object comprehensions" }, range: 1..9 }
 ===
-  x syntax error
-   ,----
- 1 | {assert 1, a: 1 for a in [1,2,3]}
-   :  ^^^^|^^^
-   :      `-- asserts can't be used in object comprehensions
-   `----
+   ·  ╭────────── asserts can't be used in object comprehensions
+1  │ {assert 1, a: 1 for a in [1,2,3]}

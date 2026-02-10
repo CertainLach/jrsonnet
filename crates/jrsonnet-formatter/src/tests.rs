@@ -148,3 +148,20 @@ fn complex_nested() {
 		"
 	)));
 }
+
+#[test]
+fn self_super() {
+	insta::assert_snapshot!(reformat(indoc!(
+		"
+			local base = {
+			  foo: 'bar',
+			  method():: self.foo,
+			};
+
+			base {
+			  foo: super.foo + '-extended',
+			  result: self.method(),
+			}
+		"
+	)));
+}

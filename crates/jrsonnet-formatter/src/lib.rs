@@ -685,7 +685,7 @@ impl Printable for ExprBase {
 	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Self::ExprBinary(b) => {
-				p!(out, {b.lhs_work()} str(" ") {b.binary_operator()} str(" ") {b.rhs_work()});
+				p!(out, {b.lhs()} str(" ") {b.binary_operator()} str(" ") {b.rhs()});
 			}
 			Self::ExprUnary(u) => p!(out, {u.unary_operator()} {u.rhs()}),
 			// Self::ExprSlice(s) => {

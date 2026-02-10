@@ -58,9 +58,5 @@ SOURCE_FILE@0..30
 ===
 LocatedSyntaxError { error: Custom { error: "compspec may only be used if there is only one object element" }, range: 5..23 }
 ===
-  x syntax error
-   ,----
- 1 | {a:1 for a in [1, 2, 3], b:1}
-   :      ^^^^^^^^^|^^^^^^^^
-   :               `-- compspec may only be used if there is only one object element
-   `----
+   ·      ╭──────────────────── compspec may only be used if there is only one object element
+1  │ {a:1 for a in [1, 2, 3], b:1}

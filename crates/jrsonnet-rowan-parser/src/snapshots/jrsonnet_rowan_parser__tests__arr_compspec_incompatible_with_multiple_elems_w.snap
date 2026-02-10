@@ -56,9 +56,5 @@ SOURCE_FILE@0..30
 ===
 LocatedSyntaxError { error: Custom { error: "compspec may only be used if there is only one array element" }, range: 7..25 }
 ===
-  x syntax error
-   ,----
- 1 | [a, b, for a in [1, 2, 3], c]
-   :        ^^^^^^^^^|^^^^^^^^
-   :                 `-- compspec may only be used if there is only one array element
-   `----
+   ·        ╭──────────────────── compspec may only be used if there is only one array element
+1  │ [a, b, for a in [1, 2, 3], c]

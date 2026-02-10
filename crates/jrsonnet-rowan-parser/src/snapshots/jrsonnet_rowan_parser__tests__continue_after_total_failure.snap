@@ -64,14 +64,9 @@ SOURCE_FILE@0..68
 LocatedSyntaxError { error: Unexpected { expected: Unnamed(SyntaxKindSet([L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA, QUESTION_MARK])), found: IDENT }, range: 14..23 }
 LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 29..67 }
 ===
-  x syntax error
-   ,-[1:15]
- 1 | ,-> local intr = $intrinsic(test);
-   : |                 ^^^^|^^^^
-   : |                     `-- expected L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK, found IDENT
- 2 | |
- 3 | |   local a = 1, b = 2, c = a + b;
- 4 | |
- 5 | |-> [c]
-   : `---- unexpected tokens after end
-   `----
+   ·                 ╭─────────── unexpected IDENT, expecting L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK
+1  │ ╭─local intr = $intrinsic(test);
+2  │ │
+3  │ │ local a = 1, b = 2, c = a + b;
+4  │ │
+5  │ ╰─[c]   🢒 unexpected tokens after end

@@ -1,48 +1,10 @@
 // `never`
-#![cfg(any())]
+#![cfg(test)]
 
-use miette::{
-	Diagnostic, GraphicalReportHandler, GraphicalTheme, LabeledSpan, ThemeCharacters, ThemeStyles,
-};
+use hi_doc::{Formatting, SnippetBuilder, Text};
 use thiserror::Error;
 
 use crate::{parse, AstNode};
-
-#[derive(Debug, Error)]
-#[error("syntax error")]
-struct MyDiagnostic {
-	code: String,
-	spans: Vec<LabeledSpan>,
-}
-impl Diagnostic for MyDiagnostic {
-	fn code<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-		None
-	}
-
-	fn severity(&self) -> Option<miette::Severity> {
-		None
-	}
-
-	fn help<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-		None
-	}
-
-	fn url<'a>(&'a self) -> Option<Box<dyn std::fmt::Display + 'a>> {
-		None
-	}
-
-	fn source_code(&self) -> Option<&dyn miette::SourceCode> {
-		Some(&self.code)
-	}
-
-	fn labels(&self) -> Option<Box<dyn Iterator<Item = miette::LabeledSpan> + '_>> {
-		Some(Box::new(self.spans.clone().into_iter()))
-	}
-
-	fn related<'a>(&'a self) -> Option<Box<dyn Iterator<Item = &'a dyn Diagnostic> + 'a>> {
-		None
-	}
-}
 
 fn process(text: &str) -> String {
 	use std::fmt::Write;
@@ -63,20 +25,21 @@ fn process(text: &str) -> String {
 		}
 		code += " ";
 
-		let diag = MyDiagnostic {
-			code,
-			spans: errors.into_iter().map(|e| e.into()).collect(),
-		};
+		let mut s = SnippetBuilder::new(code);
 
-		let handler = GraphicalReportHandler::new_themed(GraphicalTheme {
-			characters: ThemeCharacters::ascii(),
-			styles: ThemeStyles::none(),
-		});
+		for error in errors {
+			s.error(Text::fragment(
+				format!("{}", error.error),
+				Formatting::default(),
+			))
+			.range(error.range.start().into()..=error.range.end().into())
+			.build();
+		}
 
 		writeln!(out, "===").unwrap();
-		handler
-			.render_report(&mut out, &diag)
-			.expect("fmt error?..");
+		let ansi = hi_doc::source_to_ansi(&s.build());
+		let text = strip_ansi_escapes::strip_str(&ansi);
+		out.push_str(&text);
 	}
 	out.split('\n')
 		.map(|s| s.trim_end().to_string())
@@ -237,14 +200,12 @@ mk_test!(
 
 		[c]
 	"#
+
+	super_nesting => r#"
+		super.a + super.b
+	"#
 );
 
-#[test]
-fn stdlib() {
-	let src = include_str!("../../jrsonnet-stdlib/src/std.jsonnet");
-	let result = process(src);
-	insta::assert_snapshot!("stdlib", result, src);
-}
 #[test]
 fn eval_simple() {
 	let src = "local a = 1, b = 2; a + local c = 1; c";

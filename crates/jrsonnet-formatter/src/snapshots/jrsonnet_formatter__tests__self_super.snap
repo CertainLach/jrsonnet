@@ -1,0 +1,13 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: "reformat(indoc!(\"\n\t\t\tlocal base = {\n\t\t\t  foo: 'bar',\n\t\t\t  method():: self.foo,\n\t\t\t};\n\n\t\t\tbase {\n\t\t\t  foo: super.foo + '-extended',\n\t\t\t  result: self.method(),\n\t\t\t}\n\t\t\"))"
+---
+local base = {
+	foo: 'bar',
+	method(
+	):: self.foo,
+};
+base {
+	foo: super.foo + '-extended',
+	result: self.method(),
+}

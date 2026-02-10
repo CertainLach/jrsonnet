@@ -38,14 +38,9 @@ SOURCE_FILE@0..18
 LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }, range: 7..8 }
 LocatedSyntaxError { error: Unexpected { expected: Named("comma"), found: SEMI }, range: 14..15 }
 ===
-  x syntax error
-   ,-[2:6]
- 1 | {
- 2 |     a: 1;
-   :         |
-   :         `-- expected comma, found SEMI
- 3 |     b: 2;
-   :         |
-   :         `-- expected comma, found SEMI
- 4 | }
-   `----
+1  │ {
+   ·         ╭─── unexpected SEMI, expecting comma
+2  │     a: 1;
+   ·         ╭─── unexpected SEMI, expecting comma
+3  │     b: 2;
+4  │ }

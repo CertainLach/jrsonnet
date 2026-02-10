@@ -42,9 +42,5 @@ SOURCE_FILE@0..24
 ===
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 16..16 }
 ===
-  x syntax error
-   ,----
- 1 | function(a, b = ) a + b
-   :                 ^
-   :                 `-- missing expression
-   `----
+   ·                 ╭── missing expression
+1  │ function(a, b = ) a + b

@@ -68,11 +68,7 @@ LocatedSyntaxError { error: Custom { error: "can't use positional arguments afte
 LocatedSyntaxError { error: Custom { error: "can't use positional arguments after named" }, range: 16..17 }
 LocatedSyntaxError { error: Custom { error: "can't use positional arguments after named" }, range: 27..28 }
 ===
-  x syntax error
-   ,----
- 1 | a(1, 2, b=4, 3, 5, k = 12, 6)
-   :              |  |          |
-   :              |  |          `-- can't use positional arguments after named
-   :              |  `-- can't use positional arguments after named
-   :              `-- can't use positional arguments after named
-   `----
+   ·              ╭────── can't use positional arguments after named
+   ·              │  ╭─── can't use positional arguments after named
+1  │ a(1, 2, b=4, 3, 5, k = 12, 6)
+   ·                            ╰─── can't use positional arguments after named
