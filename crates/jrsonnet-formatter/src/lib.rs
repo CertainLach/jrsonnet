@@ -12,9 +12,9 @@ use jrsonnet_rowan_parser::{
 	collect_lexed_str_block,
 	nodes::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
-		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
-		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
-		TextKind, UnaryOperator, Visibility,
+		DestructRest, Expr, ExprArray, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal,
+		Member, Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix,
+		Text, TextKind, UnaryOperator, Visibility,
 	},
 	AstNode, AstToken as _, SyntaxToken,
 };
@@ -715,6 +715,61 @@ impl Printable for Stmt {
 		}
 	}
 }
+
+impl Printable for ExprArray {
+	fn print(&self, out: &mut PrintItems) {
+		let (children, end_comments) = children_between::<Expr>(
+			self.syntax().clone(),
+			self.l_brack_token().map(Into::into).as_ref(),
+			self.r_brack_token().map(Into::into).as_ref(),
+			None,
+		);
+		if children.is_empty() && end_comments.is_empty() {
+			p!(out, str("[ ]"));
+			return;
+		}
+
+		let source_is_multiline =
+			children.iter().any(|c| c.triggers_multiline) || end_comments.should_start_with_newline;
+
+		let start = LineNumber::new("arr start line");
+		let end = LineNumber::new("arr end line");
+		let multi_line: ConditionResolver = if source_is_multiline {
+			true_resolver()
+		} else {
+			Rc::new(move |ctx: &mut ConditionResolverContext| is_multiple_lines(ctx, start, end))
+		};
+
+		fn gen_elements(children: Vec<Child<Expr>>, multi_line: ConditionResolver) -> PrintItems {
+			let mut _out = PrintItems::new();
+			let out = &mut _out;
+			let mut els = children.into_iter().peekable();
+			while let Some(el) = els.next() {
+				if el.should_start_with_newline {
+					p!(out, nl);
+				}
+				format_comments(&el.before_trivia, CommentLocation::AboveItem, out);
+				p!(out, { el.value });
+				let has_more = els.peek().is_some();
+				if has_more {
+					p!(out, str(","));
+				} else {
+					p!(out, if("trailing comma", multi_line, str(",")));
+				}
+				format_comments(&el.inline_trivia, CommentLocation::ItemInline, out);
+				p!(out, if_else("element separator", multi_line, nl)(sonl))
+			}
+			_out
+		}
+
+		let els_items = new_line_group(gen_elements(children, multi_line.clone())).into_rc_path();
+
+		let els = with_indent_eoi(multi_line, els_items.into(), end_comments);
+
+		p!(out, str("[") info(start) items(els) str("]") info(end));
+	}
+}
+
 impl Printable for ExprBase {
 	fn print(&self, out: &mut PrintItems) {
 		match self {
@@ -745,11 +800,7 @@ impl Printable for ExprBase {
 			Self::ExprString(s) => p!(out, { s.text() }),
 			Self::ExprNumber(n) => p!(out, { n.number() }),
 			Self::ExprArray(a) => {
-				p!(out, str("[") >i nl);
-				for el in a.exprs() {
-					p!(out, {el} str(",") nl);
-				}
-				p!(out, <i str("]"));
+				p!(out, { a })
 			}
 			Self::ExprObject(obj) => {
 				p!(out, { obj.obj_body() });

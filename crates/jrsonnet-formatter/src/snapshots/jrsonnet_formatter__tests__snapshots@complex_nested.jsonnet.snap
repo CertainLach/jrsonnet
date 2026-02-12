@@ -22,9 +22,7 @@ input_file: crates/jrsonnet-formatter/src/tests/complex_nested.jsonnet
                      {
                         name: 'myapp',
                         image: 'myapp:latest',
-                        ports: [
-                           { containerPort: 8080 },
-                        ],
+                        ports: [ { containerPort: 8080 } ],
                         env: [
                            { name: 'FOO', value: 'bar' },
                            {

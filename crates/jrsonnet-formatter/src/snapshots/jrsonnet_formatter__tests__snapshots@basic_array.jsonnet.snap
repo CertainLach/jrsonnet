@@ -3,10 +3,4 @@ source: crates/jrsonnet-formatter/src/tests.rs
 expression: reformat(&input)
 input_file: crates/jrsonnet-formatter/src/tests/basic_array.jsonnet
 ---
-[
-   1,
-   2,
-   3,
-   4,
-   5,
-]
+[ 1, 2, 3, 4, 5 ]
