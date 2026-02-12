@@ -23,7 +23,7 @@ use crate::{
 	gc::WithCapacityExt as _,
 	identity_hash, in_frame,
 	operator::evaluate_add_op,
-	val::ArrValue,
+	val::{ArrValue, ThunkValue},
 	CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
 };
 
@@ -753,13 +753,45 @@ impl ObjValue {
 		if !self.has_field_ex(key.clone(), true) {
 			return None;
 		}
-		let obj = self.clone();
+		#[derive(Trace)]
+		struct ObjFieldThunk {
+			obj: ObjValue,
+			key: IStr,
+		}
+		impl ThunkValue for ObjFieldThunk {
+			type Output = Val;
 
-		Some(Thunk!(move || Ok(obj.get(key)?.expect("field exists"))))
+			fn get(&self) -> Result<Self::Output> {
+				self.obj
+					.get(self.key.clone())
+					.transpose()
+					.expect("field existence checked")
+			}
+		}
+
+		Some(Thunk::new(ObjFieldThunk {
+			obj: self.clone(),
+			key,
+		}))
 	}
 	pub fn get_lazy_or_bail(&self, key: IStr) -> Thunk<Val> {
-		let obj = self.clone();
-		Thunk!(move || obj.get_or_bail(key))
+		#[derive(Trace)]
+		struct ObjFieldThunk {
+			obj: ObjValue,
+			key: IStr,
+		}
+		impl ThunkValue for ObjFieldThunk {
+			type Output = Val;
+
+			fn get(&self) -> Result<Self::Output> {
+				self.obj.get_or_bail(self.key.clone())
+			}
+		}
+
+		Thunk::new(ObjFieldThunk {
+			obj: self.clone(),
+			key,
+		})
 	}
 	pub fn ptr_eq(a: &Self, b: &Self) -> bool {
 		Cc::ptr_eq(&a.0, &b.0)

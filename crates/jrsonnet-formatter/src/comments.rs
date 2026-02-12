@@ -73,7 +73,10 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 						p!(out, str(" "));
 					}
 					p!(out, str("/* ") string(lines[0].trim().to_string()) str(" */"));
-					if matches!(loc, CommentLocation::AboveItem | CommentLocation::EndOfItems) {
+					if matches!(
+						loc,
+						CommentLocation::AboveItem | CommentLocation::EndOfItems
+					) {
 						p!(out, nl);
 					}
 				} else if !lines.is_empty() {

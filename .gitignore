@@ -4,6 +4,10 @@
 .vscode
 .direnv
 
+# Nix artifacts
+/result
+/result-*
+
 cache
 
 jsonnet-cpp

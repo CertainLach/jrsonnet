@@ -2,13 +2,14 @@ use std::{
 	cell::RefCell,
 	cmp::Ordering,
 	fmt::{self, Debug, Display},
+	marker::PhantomData,
 	mem::replace,
 	num::NonZeroU32,
 	ops::Deref,
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{Acyclic, Cc, Trace, TraceBox};
+use jrsonnet_gcmodule::{cc_dyn, Acyclic, Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::Thunk;
 use jrsonnet_types::ValType;
@@ -28,56 +29,106 @@ use crate::{
 
 pub trait ThunkValue: Trace {
 	type Output;
-	fn get(self: Box<Self>) -> Result<Self::Output>;
+	fn get(&self) -> Result<Self::Output>;
 }
 
 #[derive(Trace)]
-pub struct ThunkValueClosure<D: Trace, O: 'static> {
-	env: D,
-	// Carries no data, as it is not a real closure, all the
-	// captured environment is stored in `env` field.
-	#[trace(skip)]
-	closure: fn(D) -> Result<O>,
-}
-impl<D: Trace, O: 'static> ThunkValueClosure<D, O> {
-	pub fn new(env: D, closure: fn(D) -> Result<O>) -> Self {
-		Self { env, closure }
-	}
-}
-impl<D: Trace, O: 'static> ThunkValue for ThunkValueClosure<D, O> {
-	type Output = O;
-
-	fn get(self: Box<Self>) -> Result<Self::Output> {
-		(self.closure)(self.env)
-	}
-}
-
-#[derive(Trace)]
-enum ThunkInner<T: Trace> {
+enum MemoizedClusureThunkInner<D: Trace, T: Trace> {
 	Computed(T),
 	Errored(Error),
-	Waiting(TraceBox<dyn ThunkValue<Output = T>>),
+	Waiting {
+		env: D,
+		// Carries no data, as it is not a real closure, all the
+		// captured environment is stored in `env` field.
+		#[trace(skip)]
+		closure: fn(D) -> Result<T>,
+	},
 	Pending,
 }
+#[derive(Trace)]
+pub struct MemoizedClosureThunk<D: Trace, T: Trace>(RefCell<MemoizedClusureThunkInner<D, T>>);
+impl<D: Trace, T: Trace> MemoizedClosureThunk<D, T> {
+	pub fn new(env: D, closure: fn(D) -> Result<T>) -> Self {
+		Self(RefCell::new(MemoizedClusureThunkInner::Waiting {
+			env,
+			closure,
+		}))
+	}
+}
 
-/// Lazily evaluated value
-#[allow(clippy::module_name_repetitions)]
-#[derive(Clone, Trace)]
-pub struct Thunk<T: Trace>(Cc<RefCell<ThunkInner<T>>>);
+impl<D: Trace, T: Trace + Clone> ThunkValue for MemoizedClosureThunk<D, T> {
+	type Output = T;
+
+	fn get(&self) -> Result<Self::Output> {
+		match &*self.0.borrow() {
+			MemoizedClusureThunkInner::Computed(v) => return Ok(v.clone()),
+			MemoizedClusureThunkInner::Errored(e) => return Err(e.clone()),
+			MemoizedClusureThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
+			MemoizedClusureThunkInner::Waiting { .. } => (),
+		};
+		let MemoizedClusureThunkInner::Waiting { env, closure } = replace(
+			&mut *self.0.borrow_mut(),
+			MemoizedClusureThunkInner::Pending,
+		) else {
+			unreachable!();
+		};
+		let new_value = match closure(env) {
+			Ok(v) => v,
+			Err(e) => {
+				*self.0.borrow_mut() = MemoizedClusureThunkInner::Errored(e.clone());
+				return Err(e);
+			}
+		};
+		*self.0.borrow_mut() = MemoizedClusureThunkInner::Computed(new_value.clone());
+		Ok(new_value)
+	}
+}
+
+cc_dyn!(
+	/// Lazily evaluated value
+	#[derive(Clone)] Thunk<V: Trace>,
+	ThunkValue<Output = V>,
+	pub fn new() {...}
+);
 
 impl<T: Trace> Thunk<T> {
-	pub fn evaluated(val: T) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Computed(val))))
-	}
-	pub fn new(f: impl ThunkValue<Output = T> + 'static) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Waiting(TraceBox(
-			Box::new(f),
-		)))))
+	pub fn evaluated(val: T) -> Self
+	where
+		T: Clone,
+	{
+		#[derive(Trace)]
+		struct EvaluatedThunk<T: Trace>(T);
+		impl<T> ThunkValue for EvaluatedThunk<T>
+		where
+			T: Clone + Trace,
+		{
+			type Output = T;
+
+			fn get(&self) -> Result<Self::Output> {
+				Ok(self.0.clone())
+			}
+		}
+		Self::new(EvaluatedThunk(val))
 	}
 	pub fn errored(e: Error) -> Self {
-		Self(Cc::new(RefCell::new(ThunkInner::Errored(e))))
+		#[derive(Trace)]
+		struct ErroredThunk<T: Trace>(Error, PhantomData<T>);
+		impl<T> ThunkValue for ErroredThunk<T>
+		where
+			T: Trace,
+		{
+			type Output = T;
+
+			fn get(&self) -> Result<Self::Output> {
+				Err(self.0.clone())
+			}
+		}
+		Self::new(ErroredThunk(e, PhantomData))
 	}
-	pub fn result(res: Result<T, Error>) -> Self {
+	pub fn result(res: Result<T, Error>) -> Self
+	where
+		T: Clone,
+	{
 		match res {
 			Ok(o) => Self::evaluated(o),
 			Err(e) => Self::errored(e),
@@ -101,25 +152,7 @@ where
 	/// - Lazy value evaluation returned error
 	/// - This method was called during inner value evaluation
 	pub fn evaluate(&self) -> Result<T> {
-		match &*self.0.borrow() {
-			ThunkInner::Computed(v) => return Ok(v.clone()),
-			ThunkInner::Errored(e) => return Err(e.clone()),
-			ThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
-			ThunkInner::Waiting(..) => (),
-		};
-		let ThunkInner::Waiting(value) = replace(&mut *self.0.borrow_mut(), ThunkInner::Pending)
-		else {
-			unreachable!();
-		};
-		let new_value = match value.0.get() {
-			Ok(v) => v,
-			Err(e) => {
-				*self.0.borrow_mut() = ThunkInner::Errored(e.clone());
-				return Err(e);
-			}
-		};
-		*self.0.borrow_mut() = ThunkInner::Computed(new_value.clone());
-		Ok(new_value)
+		self.0.get()
 	}
 }
 
@@ -134,7 +167,7 @@ where
 	pub fn map<M>(self, mapper: M) -> Thunk<M::Output>
 	where
 		M: ThunkMapper<Input>,
-		M::Output: Trace,
+		M::Output: Trace + Clone,
 	{
 		let inner = self;
 		Thunk!(move || {
@@ -145,7 +178,7 @@ where
 	}
 }
 
-impl<T: Trace> From<Result<T>> for Thunk<T> {
+impl<T: Trace + Clone> From<Result<T>> for Thunk<T> {
 	fn from(value: Result<T>) -> Self {
 		match value {
 			Ok(o) => Self::evaluated(o),
@@ -162,7 +195,7 @@ where
 	}
 }
 
-impl<T: Trace + Default> Default for Thunk<T> {
+impl<T: Trace + Default + Clone> Default for Thunk<T> {
 	fn default() -> Self {
 		Self::evaluated(T::default())
 	}

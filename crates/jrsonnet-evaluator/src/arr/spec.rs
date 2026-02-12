@@ -7,7 +7,7 @@ use jrsonnet_parser::LocExpr;
 use super::ArrValue;
 use crate::{
 	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
-	Context, Error, ObjValue, Result, Thunk, Val,
+	val::ThunkValue, Context, Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -191,9 +191,25 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
 		};
 
-		let arr_thunk = self.clone();
-		Some(Thunk!(move || {
-			arr_thunk.get(index).transpose().expect("index checked")
+		#[derive(Trace)]
+		struct ExprArrThunk {
+			expr: ExprArray,
+			index: usize,
+		}
+		impl ThunkValue for ExprArrThunk {
+			type Output = Val;
+
+			fn get(&self) -> Result<Self::Output> {
+				self.expr
+					.get(self.index)
+					.transpose()
+					.expect("index checked")
+			}
+		}
+
+		Some(Thunk::new(ExprArrThunk {
+			expr: self.clone(),
+			index,
 		}))
 	}
 	fn get_cheap(&self, _index: usize) -> Option<Val> {
@@ -484,9 +500,22 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			ArrayThunk::Waiting(()) | ArrayThunk::Pending => {}
 		};
 
-		let arr_thunk = self.clone();
-		Some(Thunk!(move || {
-			arr_thunk.get(index).transpose().expect("index checked")
+		#[derive(Trace)]
+		struct MappedArrayThunk<const WITH_INDEX: bool> {
+			arr: MappedArray<WITH_INDEX>,
+			index: usize,
+		}
+		impl<const WITH_INDEX: bool> ThunkValue for MappedArrayThunk<WITH_INDEX> {
+			type Output = Val;
+
+			fn get(&self) -> Result<Self::Output> {
+				self.arr.get(self.index).transpose().expect("index checked")
+			}
+		}
+
+		Some(Thunk::new(MappedArrayThunk {
+			arr: self.clone(),
+			index,
 		}))
 	}
 

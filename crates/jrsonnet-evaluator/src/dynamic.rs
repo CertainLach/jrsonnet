@@ -40,8 +40,9 @@ impl<T: Trace + 'static + Clone> Pending<T> {
 impl<T: Trace + Clone> ThunkValue for Pending<T> {
 	type Output = T;
 
-	fn get(self: Box<Self>) -> Result<Self::Output> {
+	fn get(&self) -> Result<Self::Output> {
 		let Some(value) = self.0.get() else {
+			// TODO: Other error?
 			bail!(InfiniteRecursionDetected);
 		};
 		Ok(value.clone())

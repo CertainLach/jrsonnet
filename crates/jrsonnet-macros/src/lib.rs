@@ -879,6 +879,6 @@ pub fn Thunk(input: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	quote! {{
 		#move_check
 		#(#trace_check)*
-		::jrsonnet_evaluator::Thunk::new(::jrsonnet_evaluator::val::ThunkValueClosure::new(#env, #closure))
+		::jrsonnet_evaluator::Thunk::new(::jrsonnet_evaluator::val::MemoizedClosureThunk::new(#env, #closure))
 	}}.into()
 }
