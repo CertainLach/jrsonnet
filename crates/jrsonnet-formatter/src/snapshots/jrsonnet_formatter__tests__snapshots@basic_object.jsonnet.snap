@@ -3,4 +3,4 @@ source: crates/jrsonnet-formatter/src/tests.rs
 expression: reformat(&input)
 input_file: crates/jrsonnet-formatter/src/tests/basic_object.jsonnet
 ---
-{ foo: 'bar', baz: 'qux', nested: { a: 1, b: 2 } }
+{ foo: 'bar', baz: 'qux', nested: { a: 1, b: 2 }, unhidden::: 1 }

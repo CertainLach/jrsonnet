@@ -407,11 +407,13 @@ fn field_name(p: &mut Parser) {
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		m.forget(p);
-		p.error_with_recovery_set(TS![; : :: ::: '(']);
+		// ::: it split because in TS it is being handled as : ::
+		p.error_with_recovery_set(TS![; : :: '('].with(T![:::]));
 	}
 }
 fn visibility(p: &mut Parser) {
-	if p.at_ts(TS![: :: :::]) {
+	// ::: it split because in TS it is being handled as : ::
+	if p.at_ts(TS![: ::].with(T![:::])) {
 		p.bump();
 	} else {
 		p.error_with_recovery_set(TS![=]);
@@ -471,7 +473,8 @@ fn object(p: &mut Parser) -> CompletedMarker {
 				visibility(p);
 				expr(p);
 				true
-			} else if p.at_ts(TS![: :: :::]) && p.nth_at(1, T![function]) {
+			// ::: it split because in TS it is being handled as : ::
+			} else if p.at_ts(TS![: ::].with(T![:::])) && p.nth_at(1, T![function]) {
 				visibility(p);
 				p.bump_assert(T![function]);
 				params_desc(p);
