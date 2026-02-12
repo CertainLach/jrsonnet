@@ -52,6 +52,14 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 			self.rest().chars().next()
 		}
 
+		fn eat_if(&mut self, f: impl Fn(char) -> bool) -> usize {
+			if self.peek().map(f).unwrap_or(false) {
+				self.index += 1;
+				return 1;
+			}
+			0
+		}
+
 		fn eat_while(&mut self, f: impl Fn(char) -> bool) -> usize {
 			if self.index == self.source.len() {
 				return 0;
@@ -132,6 +140,8 @@ pub fn lex_str_block(lex: &mut Lexer<SyntaxKind>) -> Result<(), StringBlockError
 		index: 0,
 		offset: lex.span().end,
 	};
+
+	ctx.eat_if(|v| v == '-');
 
 	// Skip whitespaces
 	ctx.eat_while(|r| r == ' ' || r == '\t' || r == '\r');

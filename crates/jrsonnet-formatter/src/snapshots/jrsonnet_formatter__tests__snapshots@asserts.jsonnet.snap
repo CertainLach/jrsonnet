@@ -1,0 +1,10 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/asserts.jsonnet
+---
+{
+   assert 1 > 0: 'one should be greater than zero',
+   assert true,
+   value: 42,
+}

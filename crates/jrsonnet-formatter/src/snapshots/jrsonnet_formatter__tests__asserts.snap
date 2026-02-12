@@ -1,9 +1,0 @@
----
-source: crates/jrsonnet-formatter/src/tests.rs
-expression: "reformat(indoc!(\"\n\t\t\t{\n\t\t\t\tassert 1 > 0 : 'one should be greater than zero',\n\t\t\t\tassert true,\n\t\t\t\tvalue: 42,\n\t\t\t}\n\t\t\"))"
----
-{
-	assert 1 > 0: 'one should be greater than zero',
-	assert true,
-	value: 42,
-}

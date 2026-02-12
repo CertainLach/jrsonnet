@@ -38,7 +38,7 @@ clap_complete = "4.5"
 # Parsing, manifestification is implemented manually everywhere
 serde = "1.0.228"
 serde_json = "1.0.149"
-serde-saphyr = {version = "0.0.17", default-features = false}
+serde-saphyr = { version = "0.0.17", default-features = false }
 
 # Error handling
 anyhow = "1.0.101"
@@ -63,7 +63,7 @@ rowan = "0.16.1"
 
 mimallocator = "0.1.3"
 indoc = "2.0"
-insta = "1.46"
+insta = { version = "1.46", features = ["glob"] }
 tempfile = "3.24"
 pathdiff = "0.2.3"
 hashbrown = "0.16.1"

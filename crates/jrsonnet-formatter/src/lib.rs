@@ -13,7 +13,7 @@ use jrsonnet_rowan_parser::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
 		Name, Number, ObjBody, ObjLocal, ParamsDesc, SliceDesc, SourceFile, Stmt, Suffix, Text,
-		UnaryOperator, Visibility,
+		TextKind, UnaryOperator, Visibility,
 	},
 	AstNode, AstToken as _, SyntaxToken,
 };
@@ -25,7 +25,6 @@ use crate::{
 
 mod children;
 mod comments;
-#[cfg(test)]
 mod tests;
 
 fn with_indent_eoi(cond: ConditionResolver, o: PrintItems, e: EndingComments) -> PrintItems {
@@ -200,6 +199,18 @@ impl Printable for SyntaxToken {
 
 impl Printable for Text {
 	fn print(&self, out: &mut PrintItems) {
+		if matches!(self.kind(), TextKind::StringBlock) {
+			let text = self.text();
+
+			for (i, ele) in text.split("\n").enumerate() {
+				if i != 0 {
+					p!(out, nl);
+				}
+				// TODO: Trim and recreate whitespace
+				p!(out, string(ele.to_string()));
+			}
+			return;
+		}
 		p!(out, string(format!("{}", self)));
 	}
 }

@@ -1,0 +1,9 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "|||-\n\tTrimmed text block\n|||\n"
+---
+SOURCE_FILE@0..29
+  EXPR@0..28
+    EXPR_STRING@0..28
+      STRING_BLOCK@0..28 "|||-\n\tTrimmed text bl ..."
+  WHITESPACE@28..29 "\n"

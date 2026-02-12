@@ -1,0 +1,14 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/string_styles.jsonnet
+---
+{
+   double_quote: 'hello world',
+   single_quote: 'hello world',
+   escaped: 'line1\nline2',
+   multiline: |||
+       This is a
+       multiline string
+     |||,
+}

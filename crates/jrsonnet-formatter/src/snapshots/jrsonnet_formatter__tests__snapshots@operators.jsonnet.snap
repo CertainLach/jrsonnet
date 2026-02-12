@@ -1,0 +1,18 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/operators.jsonnet
+---
+{
+   arithmetic: 1 + 2 * 3 - 4 / 2,
+   comparison: 1 < 2 && 3 > 2 || false,
+   string_concat: 'hello' + ' ' + 'world',
+   object_concat: { a: 1 } + { b: 2 },
+   array_concat: [
+      1,
+      2,
+   ] + [
+      3,
+      4,
+   ],
+}

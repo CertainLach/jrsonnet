@@ -1,0 +1,22 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/std_functions.jsonnet
+---
+{
+   length: std.length(
+      [
+         1,
+         2,
+         3,
+      ],
+   ),
+   type: std.type('hello'),
+   format: std.format(
+      'Hello, %s!',
+      [
+         'world',
+      ],
+   ),
+   manifest: std.manifestJsonEx({ foo: 'bar' }, '  '),
+}

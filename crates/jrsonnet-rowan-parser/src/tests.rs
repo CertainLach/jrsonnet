@@ -55,7 +55,6 @@ macro_rules! mk_test {
 				let src = indoc::indoc!($test);
 				let result = process(&src);
 				insta::assert_snapshot!(stringify!($name), result, src);
-
 			}
 		)+};
 	}
@@ -203,6 +202,12 @@ mk_test!(
 
 	super_nesting => r#"
 		super.a + super.b
+	"#
+
+	string_block_trim => r#"
+		|||-
+			Trimmed text block
+		|||
 	"#
 );
 
