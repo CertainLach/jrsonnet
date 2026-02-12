@@ -3,7 +3,6 @@
 use std::fs;
 
 use dprint_core::formatting::{PrintItems, PrintOptions};
-use indoc::indoc;
 use insta::{assert_snapshot, glob};
 
 use crate::Printable;

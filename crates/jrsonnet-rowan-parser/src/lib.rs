@@ -22,6 +22,7 @@ pub use ast::{AstChildren, AstNode, AstToken};
 pub use generated::{nodes, syntax_kinds::SyntaxKind};
 pub use language::*;
 pub use token_set::SyntaxKindSet;
+pub use string_block::{collect_lexed_str_block, CollectStrBlock};
 
 use self::{
 	ast::support,

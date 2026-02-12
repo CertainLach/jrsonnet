@@ -9,6 +9,7 @@ use dprint_core::formatting::{
 };
 use hi_doc::{Formatting, SnippetBuilder};
 use jrsonnet_rowan_parser::{
+	collect_lexed_str_block,
 	nodes::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal, Member,
@@ -81,6 +82,14 @@ macro_rules! pi {
 	}};
 	(@s; $o:ident: <i $($t:tt)*) => {{
 		$o.push_signal(dprint_core::formatting::Signal::FinishIndent);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: >ii $($t:tt)*) => {{
+		$o.push_signal(dprint_core::formatting::Signal::StartIgnoringIndent);
+		pi!(@s; $o: $($t)*);
+	}};
+	(@s; $o:ident: <ii $($t:tt)*) => {{
+		$o.push_signal(dprint_core::formatting::Signal::FinishIgnoringIndent);
 		pi!(@s; $o: $($t)*);
 	}};
 	(@s; $o:ident: info($v:expr) $($t:tt)*) => {{
@@ -201,14 +210,28 @@ impl Printable for Text {
 	fn print(&self, out: &mut PrintItems) {
 		if matches!(self.kind(), TextKind::StringBlock) {
 			let text = self.text();
+			let mut text = collect_lexed_str_block(&text[3..])
+				.expect("formatting is not performed on code with parsing errors");
 
-			for (i, ele) in text.split("\n").enumerate() {
-				if i != 0 {
-					p!(out, nl);
-				}
-				// TODO: Trim and recreate whitespace
-				p!(out, string(ele.to_string()));
+			if text.truncate && text.lines.ends_with(&[""]) {
+				text.truncate = false;
+				text.lines.pop();
 			}
+
+			p!(out, str("|||"));
+			if text.truncate {
+				p!(out, str("-"));
+			}
+			p!(out, nl > i);
+			for ele in text.lines {
+				if ele.is_empty() {
+					p!(out, >ii nl <ii);
+				} else {
+					p!(out, string(ele.to_string()) nl);
+				}
+			}
+			p!(out, <i str("|||"));
+
 			return;
 		}
 		p!(out, string(format!("{}", self)));
