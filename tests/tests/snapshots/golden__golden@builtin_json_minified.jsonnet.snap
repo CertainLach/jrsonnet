@@ -1,0 +1,6 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/builtin_json_minified.jsonnet
+---
+"{\"a\":3,\"b\":4,\"c\":6}"

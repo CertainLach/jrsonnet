@@ -1,3 +1,0 @@
-local is not defined: sta
-There is a local with similar name present: std
-    missing_binding.jsonnet:1:1-5: local <sta> access

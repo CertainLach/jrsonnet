@@ -1,3 +1,8 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/object_comp.jsonnet
+---
 {
     "h1_2": "0a",
     "h1_3": "0a",

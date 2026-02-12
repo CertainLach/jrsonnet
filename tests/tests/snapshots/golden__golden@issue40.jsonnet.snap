@@ -1,0 +1,8 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue40.jsonnet
+---
+assert failed: is number
+    issue40.jsonnet:6:10-31: assertion failure
+    issue40.jsonnet:9:1-32:  function <builtin_manifest_json_ex> call

@@ -1,0 +1,6 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue187.jsonnet
+---
+"foo bar � baz"

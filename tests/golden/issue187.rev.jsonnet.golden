@@ -1,2 +1,0 @@
-runtime error: bad utf8
-    issue187.rev.jsonnet:1:1-92: function <builtin_decode_utf8> call

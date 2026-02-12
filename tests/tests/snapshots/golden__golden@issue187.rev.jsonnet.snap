@@ -1,0 +1,7 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue187.rev.jsonnet
+---
+runtime error: bad utf8
+    issue187.rev.jsonnet:1:1-92: function <builtin_decode_utf8> call

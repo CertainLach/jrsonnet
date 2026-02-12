@@ -1,3 +1,8 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/builtin_strings.jsonnet
+---
 {
     "split": [
         "ab",

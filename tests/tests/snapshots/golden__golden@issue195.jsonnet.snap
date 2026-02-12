@@ -1,0 +1,11 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue195.jsonnet
+---
+{
+    "x": 42,
+    "y": {
+        "false": false
+    }
+}

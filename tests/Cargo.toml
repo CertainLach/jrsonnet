@@ -14,3 +14,6 @@ jrsonnet-stdlib.workspace = true
 serde.workspace = true
 json-structural-diff.workspace = true
 serde_json.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

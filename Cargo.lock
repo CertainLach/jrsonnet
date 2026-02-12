@@ -1413,6 +1413,7 @@ dependencies = [
 name = "tests"
 version = "0.1.0"
 dependencies = [
+ "insta",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
  "jrsonnet-stdlib",
