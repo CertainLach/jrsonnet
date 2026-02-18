@@ -5,7 +5,9 @@ use std::io::Write;
 use anyhow::Result;
 use clap::{Args, Subcommand};
 
+pub mod chartfile;
 pub mod charts;
+pub mod helm_exec;
 pub mod importers;
 pub mod importers_count;
 pub mod imports;
