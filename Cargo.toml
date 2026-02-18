@@ -18,6 +18,7 @@ jrsonnet-rowan-parser = { path = "./crates/jrsonnet-rowan-parser", version = "0.
 jrsonnet-interner = { path = "./crates/jrsonnet-interner", version = "0.5.0-pre97" }
 jrsonnet-stdlib = { path = "./crates/jrsonnet-stdlib", version = "0.5.0-pre97" }
 jrsonnet-cli = { path = "./crates/jrsonnet-cli", version = "0.5.0-pre97" }
+jrsonnet-lint = { path = "./crates/jrsonnet-lint", version = "0.5.0-pre97" }
 jrsonnet-types = { path = "./crates/jrsonnet-types", version = "0.5.0-pre97" }
 jrsonnet-gcmodule = { version = "0.3.7" }
 # Diagnostics.
