@@ -49,7 +49,7 @@ pub struct ParseError {
 	pub range: TextRange,
 }
 
-/// Scope: name -> (definition range, `was_used`).
+/// Scope: name -> (definition range, was_used).
 type Scope = HashMap<String, (TextRange, bool)>;
 
 struct ScopeEntry {
@@ -190,14 +190,14 @@ impl UnusedLocalsVisitor {
 		vec![]
 	}
 
-	/// Visit the RHS of a bind (for `StmtLocal` or `ObjLocal`). Handles `BindFunction` param scope when value is body-only.
+	/// Visit the RHS of a bind (for StmtLocal or ObjLocal). Handles BindFunction param scope when value is body-only.
 	fn visit_bind_value(visitor: &mut Self, bind: &Bind) {
 		match bind {
 			Bind::BindFunction(b) => {
 				if let Some(value) = b.value() {
 					let is_full_function = value
 						.expr_base()
-						.is_some_and(|base| matches!(base, ExprFunction(_)));
+						.map_or(false, |base| matches!(base, ExprFunction(_)));
 					let param_bindings = if is_full_function {
 						vec![]
 					} else {
@@ -268,7 +268,6 @@ impl UnusedLocalsVisitor {
 		}
 	}
 
-	#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 	fn visit_expr_base(&mut self, base: &ExprBase) {
 		match base {
 			ExprBinary(e) => {
@@ -283,10 +282,14 @@ impl UnusedLocalsVisitor {
 				}
 			}
 			ExprUnary(e) => {
-				// Visit all Expr children (rhs; unary op is a token) so we don't miss uses.
+				// ExprUnary's operand is parsed WITHOUT an EXPR wrapper, so direct children are
+				// ExprBase nodes (e.g. EXPR_VAR for `!this`) and Suffix nodes (e.g. `.x` for
+				// `!this.x`). Neither is an EXPR, so we must cast to ExprBase and Suffix explicitly.
 				for child in e.syntax().children() {
-					if let Some(expr) = Expr::cast(child) {
-						self.visit_expr(&expr);
+					if let Some(base) = ExprBase::cast(child.clone()) {
+						self.visit_expr_base(&base);
+					} else if let Some(suffix) = Suffix::cast(child) {
+						self.visit_suffix(&suffix);
 					}
 				}
 			}
@@ -305,7 +308,7 @@ impl UnusedLocalsVisitor {
 					self.visit_expr(&expr);
 				}
 			}
-			ExprString(_) | ExprNumber(_) | ExprLiteral(_) | ExprImport(_) => {}
+			ExprString(_) | ExprNumber(_) | ExprLiteral(_) => {}
 			ExprArray(e) => {
 				for expr in e.exprs() {
 					self.visit_expr(&expr);
@@ -340,6 +343,7 @@ impl UnusedLocalsVisitor {
 					self.pop_scope_and_report();
 				}
 			}
+			ExprImport(_) => {}
 			ExprVar(e) => {
 				if let Some(name) = e.name() {
 					if let Some((text, _)) = Self::name_text_and_range(&name) {
@@ -429,7 +433,6 @@ impl UnusedLocalsVisitor {
 		}
 	}
 
-	#[allow(clippy::cognitive_complexity, clippy::too_many_lines)]
 	fn visit_obj_body(&mut self, body: &ObjBody) {
 		match body {
 			ObjBody::ObjBodyMemberList(list) => {

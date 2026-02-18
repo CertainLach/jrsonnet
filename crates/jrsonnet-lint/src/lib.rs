@@ -199,7 +199,6 @@ mod tests {
 	}
 
 	#[test]
-	#[ignore] // False positive: nested object in apply (config { _config+:: { local this, f: !this.x } }) reports this unused
 	fn lint_snippet_config_apply_nested_this_used() {
 		// Like query-grafana-app: config { _config+:: { local this = self, f: !this.x } }
 		let config = LintConfig::default();
@@ -277,9 +276,8 @@ mod tests {
 		);
 	}
 
-	/// Object comp: if condition uses outer local. Ignored until visitor visits IfSpec condition in comp scope.
+	/// Object comp: if condition uses outer local.
 	#[test]
-	#[ignore = "IfSpec condition using outer object local not yet marked used"]
 	fn lint_snippet_object_comprehension_if_uses_outer_local() {
 		let config = LintConfig::default();
 		let code = r#"
@@ -479,10 +477,8 @@ local metaEnv = { baseEnv: function(data) data, withLabel: function(l) {} };
 		);
 	}
 
-	/// Regression test for flux-style file: all top-level and method-body locals are used in the method body / data= object.
-	/// Ignored until the visitor correctly handles this large method body (currently reports false positives).
+	/// Regression test for flux-style file: all top-level and method-body locals are used.
 	#[test]
-	#[ignore = "visitor has false positives for large method body; see flux_system_main_anonymized.jsonnet"]
 	fn testdata_flux_system_anonymized_no_false_positives() {
 		let config = LintConfig::default();
 		let path = testdata_dir()

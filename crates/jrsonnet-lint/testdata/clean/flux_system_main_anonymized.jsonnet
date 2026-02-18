@@ -142,7 +142,7 @@ local migrationPhases = import 'oci-migration-phases.libsonnet';
           + (if std.member(['dev0'], cluster.waveV2) then pkgFlux.withoutKustomizeControllerLeaderElection() else {}),
 
         [if !std.member(migrationPhases.phase4OrLater, clusterName) then 'gitRepo']:
-          gitRepo(cluster, fluxDeployKeysSecretName, cloneUrl='https://github.com/org/repo-manifests.git'),
+          gitRepo(cluster, fluxDeployKeysSecretName, cloneUrl='https://github.com/org/repo-manifests.git', path=basePath),
 
         [if std.member(migrationPhases.phase1OrLater + migrationPhases.phase4OrLater, clusterName) then 'ocirepository']:
           ociRepoForCluster(cluster)
