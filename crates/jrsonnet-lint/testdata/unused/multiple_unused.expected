@@ -1,0 +1,2 @@
+2:7: [unused_locals] unused local `a`
+4:7: [unused_locals] unused local `c`

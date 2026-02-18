@@ -349,10 +349,34 @@ mod tests {
 	}
 
 	// Testdata-based tests: files in testdata/clean/ must produce zero unused_locals diagnostics.
-	// Files in testdata/unused/ must produce the expected unused_locals diagnostics (no false positives).
+	// Files in testdata/unused/ must produce exactly the diagnostics listed in the paired .expected file.
+	// .expected format: one `line:col: [check_id] message` entry per line, in any order.
 
 	fn testdata_dir() -> std::path::PathBuf {
 		std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata")
+	}
+
+	fn offset_to_line_col(code: &str, offset: usize) -> (u32, u32) {
+		let mut line = 1u32;
+		let mut col = 1u32;
+		for (i, c) in code.char_indices() {
+			if i >= offset {
+				break;
+			}
+			if c == '\n' {
+				line += 1;
+				col = 1;
+			} else {
+				col += 1;
+			}
+		}
+		(line, col)
+	}
+
+	fn diag_to_string(code: &str, d: &Diagnostic) -> String {
+		let start: usize = d.range.start().into();
+		let (line, col) = offset_to_line_col(code, start);
+		format!("{}:{}: [{}] {}", line, col, d.check, d.message)
 	}
 
 	#[test]
@@ -364,41 +388,37 @@ mod tests {
 			"testdata/clean missing: {:?}",
 			clean_dir
 		);
-		// Known limitation: flux_system_main_anonymized has a large method body; visitor may report false positives (see test below).
-		let skip_known_limitation = std::path::Path::new("flux_system_main_anonymized.jsonnet");
-		for entry in std::fs::read_dir(&clean_dir).unwrap() {
-			let entry = entry.unwrap();
-			let path = entry.path();
-			if path
-				.file_name()
-				.map_or(false, |n| n == skip_known_limitation)
-			{
-				continue;
-			}
-			if path
+		let mut entries: Vec<_> = std::fs::read_dir(&clean_dir)
+			.unwrap()
+			.map(|e| e.unwrap().path())
+			.collect();
+		entries.sort();
+		for path in entries {
+			if !path
 				.extension()
 				.map_or(false, |e| e == "jsonnet" || e == "libsonnet")
 			{
-				let code = std::fs::read_to_string(&path).unwrap();
-				let (diags, parse_errs) = lint_snippet(&code, &config);
-				assert!(
-					parse_errs.is_empty(),
-					"{}: expected no parse errors, got: {:?}",
-					path.display(),
-					parse_errs
-				);
-				let unused: Vec<_> = diags
-					.iter()
-					.filter(|d| d.check == "unused_locals")
-					.map(|d| d.message.as_str())
-					.collect();
-				assert!(
-					unused.is_empty(),
-					"{}: expected no unused_locals (no false positives), got: {:?}",
-					path.display(),
-					unused
-				);
+				continue;
 			}
+			let code = std::fs::read_to_string(&path).unwrap();
+			let (diags, parse_errs) = lint_snippet(&code, &config);
+			assert!(
+				parse_errs.is_empty(),
+				"{}: expected no parse errors, got: {:?}",
+				path.display(),
+				parse_errs
+			);
+			let unused: Vec<String> = diags
+				.iter()
+				.filter(|d| d.check == "unused_locals")
+				.map(|d| diag_to_string(&code, d))
+				.collect();
+			assert!(
+				unused.is_empty(),
+				"{}: expected no unused_locals (false positives), got:\n{}",
+				path.file_name().unwrap().to_string_lossy(),
+				unused.join("\n")
+			);
 		}
 	}
 
@@ -477,28 +497,6 @@ local metaEnv = { baseEnv: function(data) data, withLabel: function(l) {} };
 		);
 	}
 
-	/// Regression test for flux-style file: all top-level and method-body locals are used.
-	#[test]
-	fn testdata_flux_system_anonymized_no_false_positives() {
-		let config = LintConfig::default();
-		let path = testdata_dir()
-			.join("clean")
-			.join("flux_system_main_anonymized.jsonnet");
-		let code = std::fs::read_to_string(&path).unwrap();
-		let (diags, parse_errs) = lint_snippet(&code, &config);
-		assert!(parse_errs.is_empty(), "parse errors: {:?}", parse_errs);
-		let unused: Vec<_> = diags
-			.iter()
-			.filter(|d| d.check == "unused_locals")
-			.map(|d| d.message.as_str())
-			.collect();
-		assert!(
-			unused.is_empty(),
-			"flux_system_main_anonymized: expected no unused_locals, got: {:?}",
-			unused
-		);
-	}
-
 	#[test]
 	fn testdata_unused_expected_diagnostics() {
 		let config = LintConfig::default();
@@ -509,46 +507,87 @@ local metaEnv = { baseEnv: function(data) data, withLabel: function(l) {} };
 			unused_dir
 		);
 
-		let cases: std::collections::HashMap<&str, &[&str]> = [
-			("one_unused.jsonnet", &["y"][..]),
-			("object_local_unused.jsonnet", &["foo"][..]),
-		]
-		.into_iter()
-		.collect();
+		let mut entries: Vec<_> = std::fs::read_dir(&unused_dir)
+			.unwrap()
+			.map(|e| e.unwrap().path())
+			.collect();
+		entries.sort();
 
-		for (filename, expected_names) in cases {
-			let path = unused_dir.join(filename);
+		for path in entries {
+			if !path
+				.extension()
+				.map_or(false, |e| e == "jsonnet" || e == "libsonnet")
+			{
+				continue;
+			}
+			let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+			let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+			let expected_path = unused_dir.join(format!("{stem}.expected"));
+
 			let code = std::fs::read_to_string(&path).unwrap();
 			let (diags, parse_errs) = lint_snippet(&code, &config);
 			assert!(
 				parse_errs.is_empty(),
-				"{}: parse errors: {:?}",
-				filename,
-				parse_errs
+				"{filename}: parse errors: {parse_errs:?}"
 			);
-			let unused_msgs: Vec<_> = diags
+
+			let mut actual: Vec<String> = diags
 				.iter()
 				.filter(|d| d.check == "unused_locals")
-				.map(|d| d.message.as_str())
+				.map(|d| diag_to_string(&code, d))
 				.collect();
-			for name in expected_names.iter() {
-				assert!(
-					unused_msgs.iter().any(|m| m.contains(&format!("`{name}`"))),
-					"{}: expected unused local '{}', got: {:?}",
-					filename,
-					name,
-					unused_msgs
-				);
-			}
+			actual.sort();
+
+			let expected_content = std::fs::read_to_string(&expected_path).unwrap_or_else(|_| {
+				panic!("{filename}: missing .expected file: {expected_path:?}")
+			});
+			let mut expected: Vec<String> = expected_content
+				.lines()
+				.filter(|l| !l.trim().is_empty())
+				.map(str::to_string)
+				.collect();
+			expected.sort();
+
 			assert_eq!(
-				unused_msgs.len(),
-				expected_names.len(),
-				"{}: expected {} unused, got {}: {:?}",
-				filename,
-				expected_names.len(),
-				unused_msgs.len(),
-				unused_msgs
+				actual, expected,
+				"{filename}: unused_locals diagnostics mismatch\n  actual:   {actual:?}\n  expected: {expected:?}"
 			);
+		}
+	}
+
+	/// Helper: print actual diagnostics for every file in testdata/unused/ to stdout.
+	/// Run with `cargo test generate_expected_files -- --nocapture --ignored` to regenerate .expected files.
+	#[test]
+	#[ignore]
+	fn generate_expected_files() {
+		let config = LintConfig::default();
+		let unused_dir = testdata_dir().join("unused");
+		let mut entries: Vec<_> = std::fs::read_dir(&unused_dir)
+			.unwrap()
+			.map(|e| e.unwrap().path())
+			.collect();
+		entries.sort();
+		for path in entries {
+			if !path
+				.extension()
+				.map_or(false, |e| e == "jsonnet" || e == "libsonnet")
+			{
+				continue;
+			}
+			let filename = path.file_name().unwrap().to_string_lossy().into_owned();
+			let stem = path.file_stem().unwrap().to_string_lossy().into_owned();
+			let expected_path = unused_dir.join(format!("{stem}.expected"));
+			let code = std::fs::read_to_string(&path).unwrap();
+			let (diags, _) = lint_snippet(&code, &config);
+			let mut lines: Vec<String> = diags
+				.iter()
+				.filter(|d| d.check == "unused_locals")
+				.map(|d| diag_to_string(&code, d))
+				.collect();
+			lines.sort();
+			let content = lines.join("\n") + "\n";
+			std::fs::write(&expected_path, &content).unwrap();
+			println!("=== {filename} ===\n{content}");
 		}
 	}
 }
