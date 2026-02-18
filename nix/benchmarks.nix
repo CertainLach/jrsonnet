@@ -66,7 +66,6 @@ with lib; let
 in
   stdenv.mkDerivation {
     name = "benchmarks";
-    __impure = true;
     unpackPhase = "true";
 
     buildInputs = [

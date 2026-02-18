@@ -103,8 +103,35 @@ impl ApiResourceCache {
 		// Try aggregated discovery first (2 API calls, K8s 1.26+)
 		match Discovery::new(client.clone()).run_aggregated().await {
 			Ok(discovery) => {
-				tracing::debug!("using aggregated discovery");
-				Ok(Self::from_discovery(discovery))
+				let cache = Self::from_discovery(discovery);
+				tracing::debug!(
+					discovered_count = cache.resources.len(),
+					required_count = required_keys.len(),
+					"aggregated discovery completed"
+				);
+				let missing_required: Vec<_> = required_keys
+					.iter()
+					.filter(|gvk| cache.lookup(gvk).is_none())
+					.map(|gvk| format!("{}/{}", gvk.api_version(), gvk.kind))
+					.collect();
+
+				if missing_required.is_empty() {
+					tracing::debug!("using aggregated discovery");
+					return Ok(cache);
+				}
+
+				tracing::debug!(
+					missing_count = missing_required.len(),
+					missing = ?missing_required,
+					"aggregated discovery missing required resources; falling back"
+				);
+				if need_full_discovery {
+					tracing::debug!("using full discovery for prune support");
+					Self::build_full(client).await
+				} else {
+					tracing::debug!("using lazy discovery");
+					Self::build_lazy(client, required_keys).await
+				}
 			}
 			Err(e) => {
 				tracing::debug!(error = %e, "aggregated discovery not available");

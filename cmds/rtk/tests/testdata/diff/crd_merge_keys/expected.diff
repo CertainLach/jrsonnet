@@ -1,0 +1,10 @@
+--- a/example.com.v1.DatabaseCluster.default.my-db
++++ b/example.com.v1.DatabaseCluster.default.my-db
+@@ -9,5 +9,5 @@
+     replicas: 1
+     storage: 10Gi
+   - name: replica
+-    replicas: 2
+-    storage: 10Gi
++    replicas: 3
++    storage: 20Gi

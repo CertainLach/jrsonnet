@@ -1,0 +1,12 @@
+--- a/apps.v1.Deployment.default.web-app
++++ b/apps.v1.Deployment.default.web-app
+@@ -21,9 +21,3 @@
+         name: app
+         ports:
+         - containerPort: 80
+-      - command:
+-        - sh
+-        - -c
+-        - sleep infinity
+-        image: busybox:1.0
+-        name: sidecar

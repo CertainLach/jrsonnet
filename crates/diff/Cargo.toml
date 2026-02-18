@@ -1,0 +1,22 @@
+[package]
+name = "rtk-diff"
+version = "0.1.0"
+edition = "2021"
+description = "Shared diff and comparison utilities"
+
+[lib]
+name = "rtk_diff"
+path = "src/lib.rs"
+
+[dependencies]
+anyhow = "1.0"
+serde_json = "1.0"
+similar = "2.7"
+patch = "0.7"
+nu-ansi-term = "0.50.3"
+syntect = { version = "5.2.0", default-features = false, features = ["default-syntaxes", "default-themes", "parsing", "regex-fancy"] }
+thiserror = "2.0"
+
+[dev-dependencies]
+rstest = "0.26.1"
+tempfile = "3.21"

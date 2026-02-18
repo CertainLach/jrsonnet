@@ -1,0 +1,34 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web-app
+  namespace: default
+  annotations:
+    # Last-applied config shows what user originally applied (just app container)
+    kubectl.kubernetes.io/last-applied-configuration: |
+      {"apiVersion":"apps/v1","kind":"Deployment","metadata":{"name":"web-app","namespace":"default"},"spec":{"replicas":1,"selector":{"matchLabels":{"app":"web"}},"template":{"metadata":{"labels":{"app":"web"}},"spec":{"containers":[{"name":"app","image":"nginx:1.0","ports":[{"containerPort":80}]}]}}}}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: web
+  template:
+    metadata:
+      labels:
+        app: web
+    spec:
+      containers:
+        # Original app container
+        - name: app
+          image: nginx:1.0
+          ports:
+            - containerPort: 80
+        # Server-injected istio sidecar (should NOT be deleted)
+        - name: istio-proxy
+          image: istio/proxyv2:1.20.0
+          ports:
+            - containerPort: 15090
+          resources:
+            limits:
+              cpu: 100m
+              memory: 128Mi

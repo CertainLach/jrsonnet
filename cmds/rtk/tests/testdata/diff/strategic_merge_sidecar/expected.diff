@@ -1,0 +1,11 @@
+--- a/apps.v1.Deployment.default.web-app
++++ b/apps.v1.Deployment.default.web-app
+@@ -17,7 +17,7 @@
+         app: web
+     spec:
+       containers:
+-      - image: nginx:1.0
++      - image: nginx:2.0
+         name: app
+         ports:
+         - containerPort: 80

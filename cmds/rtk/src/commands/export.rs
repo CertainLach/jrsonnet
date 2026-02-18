@@ -36,18 +36,19 @@ pub struct ExportArgs {
 	pub ext_str: Vec<String>,
 
 	/// File extension
-	#[arg(long, default_value = "yaml")]
+	#[arg(long, default_value = "yaml", overrides_with = "extension")]
 	pub extension: String,
 
 	/// https://tanka.dev/exporting#filenames
 	#[arg(
 		long,
-		default_value = "{{.apiVersion}}.{{.kind}}-{{or .metadata.name .metadata.generateName}}"
+		default_value = "{{.apiVersion}}.{{.kind}}-{{or .metadata.name .metadata.generateName}}",
+		overrides_with = "format"
 	)]
 	pub format: String,
 
 	/// Use `go` to use native go-jsonnet implementation and `binary:<path>` to delegate evaluation to a binary (with the same API as the regular `jsonnet` binary)
-	#[arg(long, default_value = "go")]
+	#[arg(long, default_value = "go", overrides_with = "jsonnet_implementation")]
 	pub jsonnet_implementation: String,
 
 	/// Jsonnet VM max stack. Increase this if you get: max stack frames exceeded
@@ -71,7 +72,7 @@ pub struct ExportArgs {
 	pub name: Option<String>,
 
 	/// Number of environments to process in parallel
-	#[arg(short = 'p', long, default_value = "8")]
+	#[arg(short = 'p', long, default_value = "8", overrides_with = "parallel")]
 	pub parallel: i32,
 
 	/// Look recursively for Tanka environments

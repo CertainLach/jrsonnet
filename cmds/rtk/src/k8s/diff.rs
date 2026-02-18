@@ -5,12 +5,12 @@
 
 use std::{collections::HashSet, fmt, sync::Arc};
 
+use k8s::strategicpatch::CombinedSchemaLookup;
 use kube::{
 	api::{Api, DynamicObject, ListParams, Patch, PatchParams, PostParams},
 	core::GroupVersionKind,
 	Client,
 };
-use similar::TextDiff;
 use thiserror::Error;
 use tokio::{sync::Semaphore, task::JoinSet};
 use tracing::instrument;
@@ -18,6 +18,8 @@ use tracing::instrument;
 use super::{
 	client::ClusterConnection,
 	discovery::{gvk_from_manifest, ApiResourceCache, DiscoveredResource, DiscoveryError},
+	openapi::OpenApiSchemaCache,
+	redacted_object::{RedactedObject, UnredactedObject},
 	ResourceScope,
 };
 use crate::spec::DiffStrategy;
@@ -85,6 +87,13 @@ pub enum DiffError {
 	FetchResource {
 		kind: String,
 		name: String,
+		#[source]
+		source: Box<kube::Error>,
+	},
+
+	#[error("listing resources for prune detection for {kind}")]
+	PruneList {
+		kind: String,
 		#[source]
 		source: Box<kube::Error>,
 	},
@@ -203,11 +212,12 @@ impl ResourceDiff {
 			_ => (format!("a/{}", name), format!("b/{}", name)),
 		};
 
-		TextDiff::from_lines(&self.current_yaml, &self.desired_yaml)
-			.unified_diff()
-			.context_radius(3)
-			.header(&old_header, &new_header)
-			.to_string()
+		rtk_diff::unified::render_unified_diff(
+			&self.current_yaml,
+			&self.desired_yaml,
+			&old_header,
+			&new_header,
+		)
 	}
 }
 
@@ -216,6 +226,7 @@ impl ResourceDiff {
 pub struct DiffEngine {
 	client: Client,
 	api_cache: ApiResourceCache,
+	openapi_cache: Arc<OpenApiSchemaCache>,
 	strategy: DiffStrategy,
 	default_namespace: String,
 }
@@ -264,9 +275,15 @@ impl DiffEngine {
 			.await
 			.map_err(|e| DiffError::BuildingApiCache(Box::new(e)))?;
 
+		let openapi_cache = Arc::new(OpenApiSchemaCache::new(
+			connection.client().clone(),
+			&connection.server_version().git_version,
+		));
+
 		Ok(Self {
 			client: connection.client().clone(),
 			api_cache,
+			openapi_cache,
 			strategy,
 			default_namespace,
 		})
@@ -329,17 +346,18 @@ impl DiffEngine {
 			namespace,
 			discovered,
 		} = self.extract_manifest_info(manifest)?;
+		let normalized_manifest = normalize_manifest_namespace(manifest, namespace.as_deref());
 
 		// Check if namespace exists (for namespaced resources)
 		if let Some(ref ns) = namespace {
 			if !self.namespace_exists(ns).await? {
 				return Ok(ResourceDiff {
-					gvk,
+					gvk: gvk.clone(),
 					namespace,
 					name,
 					status: DiffStatus::SoonAdded,
 					current_yaml: String::new(),
-					desired_yaml: self.manifest_to_yaml(manifest)?,
+					desired_yaml: self.manifest_to_redacted_yaml(&normalized_manifest, &gvk)?,
 				});
 			}
 		}
@@ -347,19 +365,19 @@ impl DiffEngine {
 		// Execute the appropriate diff strategy
 		match self.strategy {
 			DiffStrategy::Native => {
-				self.diff_native(&gvk, &name, namespace, manifest, &discovered)
+				self.diff_native(&gvk, &name, namespace, &normalized_manifest, &discovered)
 					.await
 			}
 			DiffStrategy::Server => {
-				self.diff_server(&gvk, &name, namespace, manifest, &discovered)
+				self.diff_server(&gvk, &name, namespace, &normalized_manifest, &discovered)
 					.await
 			}
 			DiffStrategy::Validate => {
-				self.diff_validate(&gvk, &name, namespace, manifest, &discovered)
+				self.diff_validate(&gvk, &name, namespace, &normalized_manifest, &discovered)
 					.await
 			}
 			DiffStrategy::Subset => {
-				self.diff_subset(&gvk, &name, namespace, manifest, &discovered)
+				self.diff_subset(&gvk, &name, namespace, &normalized_manifest, &discovered)
 					.await
 			}
 		}
@@ -422,12 +440,12 @@ impl DiffEngine {
 		if let Some(ref ns) = namespace {
 			if !self.namespace_exists(ns).await? {
 				return Ok(ResourceDiff {
-					gvk,
+					gvk: gvk.clone(),
 					namespace,
 					name,
 					status: DiffStatus::SoonAdded,
 					current_yaml: String::new(),
-					desired_yaml: self.manifest_to_yaml(manifest)?,
+					desired_yaml: self.manifest_to_redacted_yaml(manifest, &gvk)?,
 				});
 			}
 		}
@@ -510,9 +528,7 @@ impl DiffEngine {
 				DiffTaskResult::Diff(Ok(diff)) => diffs.push(diff),
 				DiffTaskResult::Diff(Err(e)) => return Err(e),
 				DiffTaskResult::Prune(Ok(deleted)) => diffs.extend(deleted),
-				DiffTaskResult::Prune(Err(e)) => {
-					tracing::warn!(error = %e, "prune task failed")
-				}
+				DiffTaskResult::Prune(Err(e)) => return Err(e),
 			}
 		}
 
@@ -563,8 +579,8 @@ impl DiffEngine {
 	/// This ensures manifests relying on spec.namespace match cluster resources.
 	fn build_manifest_keys(
 		manifests: &[Arc<serde_json::Value>],
-		default_namespace: &str,
 		api_cache: &ApiResourceCache,
+		default_namespace: &str,
 	) -> HashSet<(String, String, Option<String>, String)> {
 		manifests
 			.iter()
@@ -572,27 +588,22 @@ impl DiffEngine {
 				let api_version = m.get("apiVersion")?.as_str()?.to_string();
 				let kind = m.get("kind")?.as_str()?.to_string();
 				let name = m.pointer("/metadata/name")?.as_str()?.to_string();
-
-				// Get explicit namespace from manifest
-				let explicit_namespace = m
-					.pointer("/metadata/namespace")
-					.and_then(|v| v.as_str())
-					.map(|s| s.to_string());
-
-				// Determine if this resource is namespaced using api_cache
 				let gvk = gvk_from_manifest(m)?;
-				let is_namespaced = api_cache
-					.lookup(&gvk)
-					.map(|d| d.scope == ResourceScope::Namespaced)
-					.unwrap_or(true); // Default to namespaced if unknown
-
-				// Use default namespace for namespaced resources without explicit namespace
-				let namespace = if is_namespaced {
-					Some(explicit_namespace.unwrap_or_else(|| default_namespace.to_string()))
-				} else {
-					None
+				let discovered = api_cache.lookup(&gvk);
+				let namespace = match discovered.map(|d| d.scope) {
+					Some(ResourceScope::Namespaced) => Some(
+						m.pointer("/metadata/namespace")
+							.and_then(|v| v.as_str())
+							.unwrap_or(default_namespace)
+							.to_string(),
+					),
+					Some(ResourceScope::ClusterWide) => None,
+					// Unknown type: preserve current behavior as best-effort fallback.
+					None => m
+						.pointer("/metadata/namespace")
+						.and_then(|v| v.as_str())
+						.map(|s| s.to_string()),
 				};
-
 				Some((api_version, kind, namespace, name))
 			})
 			.collect()
@@ -609,8 +620,8 @@ impl DiffEngine {
 	) {
 		let manifest_keys = Arc::new(Self::build_manifest_keys(
 			manifests,
-			&engine.default_namespace,
 			api_cache,
+			&engine.default_namespace,
 		));
 		let label = env_label.to_string();
 
@@ -660,8 +671,10 @@ impl DiffEngine {
 		let resources = match api.list(&list_params).await {
 			Ok(list) => list,
 			Err(e) => {
-				tracing::debug!(kind = %gvk.kind, error = %e, "skipping resource type during prune");
-				return Ok(Vec::new());
+				return Err(DiffError::PruneList {
+					kind: gvk.kind.clone(),
+					source: Box::new(e),
+				});
 			}
 		};
 
@@ -692,9 +705,15 @@ impl DiffEngine {
 				continue;
 			}
 
+			// Convert to redacted YAML for display
 			let current_yaml = serde_json::to_value(&resource)
 				.ok()
-				.and_then(|v| value_to_yaml(&v).ok())
+				.map(|v| {
+					let unredacted = UnredactedObject::new(v, gvk.clone());
+					let redacted = RedactedObject::from(unredacted);
+					redacted.to_yaml().ok()
+				})
+				.flatten()
 				.unwrap_or_default();
 
 			deleted.push(ResourceDiff {
@@ -741,7 +760,6 @@ impl DiffEngine {
 
 		Ok(())
 	}
-
 	/// Check if a resource was directly created by Tanka or kubectl.
 	///
 	/// Returns true if the resource has either:
@@ -776,7 +794,15 @@ impl DiffEngine {
 			})
 	}
 
-	/// Native diff strategy: client-side patch.
+	/// Native diff strategy: client-side patch with three-way merge.
+	///
+	/// This implements kubectl's native diff behavior:
+	/// 1. Get the last-applied-configuration from the current resource
+	/// 2. Create a three-way merge patch comparing original, modified, and current
+	/// 3. Apply the patch with dry-run to get the merged result
+	///
+	/// The three-way merge ensures we only send changes the user actually made,
+	/// not fields added by ensure_annotations or other preprocessing.
 	///
 	/// Tries strategic merge patch first (better array handling for built-in types),
 	/// falls back to JSON merge patch for CRDs that don't support strategic merge.
@@ -814,18 +840,50 @@ impl DiffEngine {
 			..Default::default()
 		};
 
-		// Ensure annotations exists (kubectl always includes this)
-		let manifest = ensure_annotations(manifest);
+		// Get the original configuration from last-applied-configuration annotation
+		let original = get_last_applied_config(&current);
+
+		// Ensure annotations exists (kubectl's GetModifiedConfiguration does this)
+		let modified = ensure_annotations(manifest);
+
+		// Convert current to JSON for three-way merge
+		let current_json = serde_json::to_value(&current).map_err(DiffError::JsonSerialization)?;
+
+		// Create schema lookup for strategic merge (handles array merge keys)
+		// This combines built-in schemas with OpenAPI data for CRDs
+		let openapi_schema = self.openapi_cache.get_schema(gvk).await;
+		let schema = CombinedSchemaLookup::with_openapi_data(
+			&gvk.api_version(),
+			&gvk.kind,
+			openapi_schema.merge_keys,
+			openapi_schema.patch_strategies,
+			openapi_schema.type_refs,
+		);
+
+		// Create a three-way strategic merge patch
+		let patch = k8s::strategicpatch::create_three_way_merge_patch(
+			original.as_ref(),
+			&modified,
+			&current_json,
+			&schema,
+		)
+		.map_err(|e| DiffError::DryRunPatch {
+			kind: gvk.kind.clone(),
+			name: name.to_string(),
+			source: Box::new(kube::Error::Service(Box::new(std::io::Error::other(
+				e.to_string(),
+			)))),
+		})?;
 
 		// Try strategic merge patch first (works for built-in types)
 		let merged = match api
-			.patch(name, &patch_params, &Patch::Strategic(&manifest))
+			.patch(name, &patch_params, &Patch::Strategic(&patch))
 			.await
 		{
 			Ok(result) => result,
 			Err(kube::Error::Api(ref err)) if err.code == 415 => {
 				// UnsupportedMediaType - CRD doesn't support strategic merge, fall back to merge patch
-				api.patch(name, &patch_params, &Patch::Merge(manifest))
+				api.patch(name, &patch_params, &Patch::Merge(patch))
 					.await
 					.map_err(|e| DiffError::DryRunPatch {
 						kind: gvk.kind.clone(),
@@ -877,15 +935,32 @@ impl DiffEngine {
 					source: Box::new(e),
 				})?;
 
-		// Diff empty vs server-returned object
-		let desired_yaml = self.object_to_yaml(&created)?;
+		// Diff empty vs server-returned object (with secret redaction behavior)
+		let created_json = self.object_to_cleaned_json(&created)?;
+		let desired_yaml = RedactedObject::from(UnredactedObject::new(created_json, gvk.clone()))
+			.to_yaml()
+			.map_err(DiffError::YamlConversion)?;
+		let current_yaml = if gvk.group.is_empty() && gvk.version == "v1" && gvk.kind == "Secret" {
+			let (current_redacted, _) = RedactedObject::redact_pair(
+				UnredactedObject::empty(gvk.clone()),
+				UnredactedObject::new(
+					serde_json::Value::Object(serde_json::Map::new()),
+					gvk.clone(),
+				),
+			);
+			current_redacted
+				.to_yaml()
+				.map_err(DiffError::YamlConversion)?
+		} else {
+			String::new()
+		};
 
 		Ok(ResourceDiff {
 			gvk: gvk.clone(),
 			namespace,
 			name: name.to_string(),
 			status: DiffStatus::Added,
-			current_yaml: String::new(),
+			current_yaml,
 			desired_yaml,
 		})
 	}
@@ -928,9 +1003,6 @@ impl DiffEngine {
 			..Default::default()
 		};
 
-		// Ensure annotations exists (kubectl always includes this)
-		let manifest = ensure_annotations(manifest);
-
 		let merged = api
 			.patch(name, &patch_params, &Patch::Apply(&manifest))
 			.await
@@ -943,10 +1015,10 @@ impl DiffEngine {
 		self.compute_diff(gvk, name, namespace, &current, &merged)
 	}
 
-	/// Validate diff strategy: server-side validation + client-side diff.
+	/// Validate diff strategy: server-side validation + native diff.
 	///
-	/// First validates the manifest on the server using dry-run apply,
-	/// then computes the diff client-side for output.
+	/// 1. Server-side apply dry-run to validate the manifest
+	/// 2. Native diff to get the actual diff output (three-way merge semantics)
 	#[instrument(skip_all)]
 	async fn diff_validate(
 		&self,
@@ -958,19 +1030,15 @@ impl DiffEngine {
 	) -> Result<ResourceDiff, DiffError> {
 		let api = self.dynamic_api(&discovered.api_resource, namespace.as_deref());
 
-		// First, validate on server using server-side apply with dry-run
-		let validate_params = PatchParams {
+		// Step 1: Server-side apply with dry-run to validate the manifest
+		let apply_params = PatchParams {
 			dry_run: true,
 			field_manager: Some("tanka".to_string()),
 			force: true,
 			..Default::default()
 		};
 
-		// Ensure annotations exists (kubectl always includes this)
-		let manifest = ensure_annotations(manifest);
-
-		// This will fail if the manifest is invalid
-		api.patch(name, &validate_params, &Patch::Apply(&manifest))
+		api.patch(name, &apply_params, &Patch::Apply(manifest))
 			.await
 			.map_err(|e| DiffError::ServerValidation {
 				kind: gvk.kind.clone(),
@@ -978,8 +1046,8 @@ impl DiffEngine {
 				source: Box::new(e),
 			})?;
 
-		// Now do client-side diff using native strategy
-		self.diff_native(gvk, name, namespace, &manifest, discovered)
+		// Step 2: Native diff to get the actual output (matches Tanka's behavior)
+		self.diff_native(gvk, name, namespace, manifest, discovered)
 			.await
 	}
 
@@ -1006,13 +1074,29 @@ impl DiffEngine {
 			})? {
 			Some(obj) => obj,
 			None => {
+				let desired_yaml = self.manifest_to_redacted_yaml(manifest, gvk)?;
+				let current_yaml =
+					if gvk.group.is_empty() && gvk.version == "v1" && gvk.kind == "Secret" {
+						let (current_redacted, _) = RedactedObject::redact_pair(
+							UnredactedObject::empty(gvk.clone()),
+							UnredactedObject::new(
+								serde_json::Value::Object(serde_json::Map::new()),
+								gvk.clone(),
+							),
+						);
+						current_redacted
+							.to_yaml()
+							.map_err(DiffError::YamlConversion)?
+					} else {
+						String::new()
+					};
 				return Ok(ResourceDiff {
 					gvk: gvk.clone(),
 					namespace,
 					name: name.to_string(),
 					status: DiffStatus::Added,
-					current_yaml: String::new(),
-					desired_yaml: self.manifest_to_yaml(manifest)?,
+					current_yaml,
+					desired_yaml,
 				});
 			}
 		};
@@ -1022,9 +1106,19 @@ impl DiffEngine {
 			serde_json::to_value(&current).map_err(DiffError::JsonSerialization)?;
 		let filtered_current = filter_to_manifest_fields(&current_json, manifest);
 
+		// Redact secrets for comparison (handles before/after masking)
+		let (current_redacted, desired_redacted) = RedactedObject::redact_pair(
+			UnredactedObject::new(filtered_current, gvk.clone()),
+			UnredactedObject::new(manifest.clone(), gvk.clone()),
+		);
+
 		// Compare filtered current vs manifest
-		let current_yaml = value_to_yaml(&filtered_current)?;
-		let desired_yaml = value_to_yaml(manifest)?;
+		let current_yaml = current_redacted
+			.to_yaml()
+			.map_err(DiffError::YamlConversion)?;
+		let desired_yaml = desired_redacted
+			.to_yaml()
+			.map_err(DiffError::YamlConversion)?;
 
 		let status = if current_yaml == desired_yaml {
 			DiffStatus::Unchanged
@@ -1050,9 +1144,23 @@ impl DiffEngine {
 		current: &DynamicObject,
 		merged: &DynamicObject,
 	) -> Result<ResourceDiff, DiffError> {
+		// Convert objects to cleaned JSON
+		let current_json = self.object_to_cleaned_json(current)?;
+		let merged_json = self.object_to_cleaned_json(merged)?;
+
+		// Redact secrets (handles before/after masking for diffs)
+		let (current_redacted, desired_redacted) = RedactedObject::redact_pair(
+			UnredactedObject::new(current_json, gvk.clone()),
+			UnredactedObject::new(merged_json, gvk.clone()),
+		);
+
 		// Convert to YAML for comparison
-		let current_yaml = self.object_to_yaml(current)?;
-		let desired_yaml = self.object_to_yaml(merged)?;
+		let current_yaml = current_redacted
+			.to_yaml()
+			.map_err(DiffError::YamlConversion)?;
+		let desired_yaml = desired_redacted
+			.to_yaml()
+			.map_err(DiffError::YamlConversion)?;
 
 		let status = if current_yaml == desired_yaml {
 			DiffStatus::Unchanged
@@ -1098,23 +1206,67 @@ impl DiffEngine {
 		}
 	}
 
-	/// Convert a manifest to YAML string.
-	fn manifest_to_yaml(&self, manifest: &serde_json::Value) -> Result<String, DiffError> {
-		value_to_yaml(manifest)
+	/// Convert a manifest to YAML string, with secret redaction.
+	fn manifest_to_redacted_yaml(
+		&self,
+		manifest: &serde_json::Value,
+		gvk: &GroupVersionKind,
+	) -> Result<String, DiffError> {
+		let unredacted = UnredactedObject::new(manifest.clone(), gvk.clone());
+		let redacted = RedactedObject::from(unredacted);
+		redacted.to_yaml().map_err(DiffError::YamlConversion)
 	}
 
-	/// Convert a DynamicObject to YAML string.
-	fn object_to_yaml(&self, obj: &DynamicObject) -> Result<String, DiffError> {
+	/// Convert a DynamicObject to cleaned JSON (strips managed fields).
+	fn object_to_cleaned_json(&self, obj: &DynamicObject) -> Result<serde_json::Value, DiffError> {
 		let json = serde_json::to_value(obj).map_err(DiffError::JsonSerialization)?;
 		// Strip managed fields and other noise for cleaner diffs
-		let cleaned = strip_kubectl_fields(&json);
-		value_to_yaml(&cleaned)
+		Ok(strip_kubectl_fields(&json))
 	}
 }
 
-/// Convert a serde_json::Value to YAML string.
-fn value_to_yaml(value: &serde_json::Value) -> Result<String, DiffError> {
-	crate::yaml::to_yaml(value).map_err(DiffError::YamlConversion)
+/// Ensure manifests used for diff include an explicit namespace when one is
+/// implied by environment/default context for namespaced resources.
+///
+/// This keeps keying and textual diff behavior aligned with tk for cases where
+/// manifests omit `metadata.namespace` but the effective namespace is known.
+///
+/// # Example
+///
+/// ```rust,ignore
+/// use serde_json::json;
+///
+/// let manifest = json!({
+///     "apiVersion": "v1",
+///     "kind": "ConfigMap",
+///     "metadata": { "name": "keep-config" }
+/// });
+///
+/// let normalized = normalize_manifest_namespace(&manifest, Some("default"));
+/// assert_eq!(
+///     normalized.pointer("/metadata/namespace").and_then(|v| v.as_str()),
+///     Some("default")
+/// );
+/// ```
+fn normalize_manifest_namespace(
+	manifest: &serde_json::Value,
+	namespace: Option<&str>,
+) -> serde_json::Value {
+	let Some(ns) = namespace else {
+		return manifest.clone();
+	};
+
+	let mut normalized = manifest.clone();
+	if let serde_json::Value::Object(obj) = &mut normalized {
+		let metadata = obj
+			.entry("metadata")
+			.or_insert_with(|| serde_json::Value::Object(serde_json::Map::new()));
+		if let serde_json::Value::Object(meta) = metadata {
+			meta.entry("namespace")
+				.or_insert_with(|| serde_json::Value::String(ns.to_string()));
+		}
+	}
+	normalized
 }
 
 /// Ensure metadata.annotations exists in the manifest.
@@ -1143,8 +1295,6 @@ const KUBECTL_STRIP_FIELDS: &[&str] = &["managedFields"];
 /// Strip managed fields for cleaner diffs.
 ///
 /// This matches kubectl's behavior with --show-managed-fields=false (the default).
-/// Also strips empty annotations maps that are added by `ensure_annotations` for patch
-/// compatibility but shouldn't appear in diff output.
 fn strip_kubectl_fields(value: &serde_json::Value) -> serde_json::Value {
 	if let serde_json::Value::Object(map) = value {
 		let mut cleaned = serde_json::Map::new();
@@ -1160,18 +1310,9 @@ fn strip_kubectl_fields(value: &serde_json::Value) -> serde_json::Value {
 				if let serde_json::Value::Object(meta) = v {
 					let mut cleaned_meta = serde_json::Map::new();
 					for (mk, mv) in meta {
-						if KUBECTL_STRIP_FIELDS.contains(&mk.as_str()) {
-							continue;
+						if !KUBECTL_STRIP_FIELDS.contains(&mk.as_str()) {
+							cleaned_meta.insert(mk.clone(), strip_kubectl_fields(mv));
 						}
-						// Skip empty annotations (added by ensure_annotations for patch compat)
-						if mk == "annotations" {
-							if let serde_json::Value::Object(ann) = mv {
-								if ann.is_empty() {
-									continue;
-								}
-							}
-						}
-						cleaned_meta.insert(mk.clone(), strip_kubectl_fields(mv));
 					}
 					cleaned.insert(k.clone(), serde_json::Value::Object(cleaned_meta));
 					continue;
@@ -1187,6 +1328,19 @@ fn strip_kubectl_fields(value: &serde_json::Value) -> serde_json::Value {
 	} else {
 		value.clone()
 	}
+}
+
+/// Annotation key for last applied configuration.
+const LAST_APPLIED_CONFIG_ANNOTATION: &str = "kubectl.kubernetes.io/last-applied-configuration";
+
+/// Extract the last-applied-configuration from a resource.
+///
+/// This returns the original configuration that was used in the previous
+/// kubectl apply, parsed as JSON.
+fn get_last_applied_config(current: &DynamicObject) -> Option<serde_json::Value> {
+	let annotations = current.metadata.annotations.as_ref()?;
+	let last_applied = annotations.get(LAST_APPLIED_CONFIG_ANNOTATION)?;
+	serde_json::from_str(last_applied).ok()
 }
 
 /// Filter current state to only include fields present in the manifest.
@@ -1233,6 +1387,8 @@ fn filter_to_manifest_fields(
 
 #[cfg(test)]
 mod tests {
+	use indoc::indoc;
+
 	use super::*;
 
 	#[test]
@@ -1343,6 +1499,84 @@ mod tests {
 	}
 
 	#[test]
+	fn test_unified_diff_added_secret_uses_null_marker() {
+		let current_yaml = crate::yaml::to_yaml(&serde_json::Value::Null).unwrap();
+		let resource_diff = ResourceDiff {
+			gvk: GroupVersionKind::gvk("", "v1", "Secret"),
+			namespace: Some("default".to_string()),
+			name: "test".to_string(),
+			status: DiffStatus::Added,
+			current_yaml,
+			desired_yaml: "apiVersion: v1\nkind: Secret\n".to_string(),
+		};
+
+		let diff_str = resource_diff.unified_diff(DiffStrategy::Native);
+		let patch = patch::Patch::from_single(&diff_str).expect("valid unified diff");
+		assert_eq!(
+			patch,
+			patch::Patch {
+				old: patch::File {
+					path: std::borrow::Cow::Borrowed("/dev/null"),
+					meta: None,
+				},
+				new: patch::File {
+					path: std::borrow::Cow::Borrowed("b/v1.Secret.default.test"),
+					meta: None,
+				},
+				hunks: vec![patch::Hunk {
+					old_range: patch::Range { start: 1, count: 1 },
+					new_range: patch::Range { start: 1, count: 2 },
+					range_hint: "",
+					lines: vec![
+						patch::Line::Remove("null"),
+						patch::Line::Add("apiVersion: v1"),
+						patch::Line::Add("kind: Secret"),
+					],
+				}],
+				end_newline: true,
+			}
+		);
+	}
+
+	#[test]
+	fn test_unified_diff_added_non_secret_does_not_use_null_marker() {
+		let resource_diff = ResourceDiff {
+			gvk: GroupVersionKind::gvk("", "v1", "ConfigMap"),
+			namespace: Some("default".to_string()),
+			name: "test".to_string(),
+			status: DiffStatus::Added,
+			current_yaml: String::new(),
+			desired_yaml: "apiVersion: v1\nkind: ConfigMap\n".to_string(),
+		};
+
+		let diff_str = resource_diff.unified_diff(DiffStrategy::Native);
+		let patch = patch::Patch::from_single(&diff_str).expect("valid unified diff");
+		assert_eq!(
+			patch,
+			patch::Patch {
+				old: patch::File {
+					path: std::borrow::Cow::Borrowed("/dev/null"),
+					meta: None,
+				},
+				new: patch::File {
+					path: std::borrow::Cow::Borrowed("b/v1.ConfigMap.default.test"),
+					meta: None,
+				},
+				hunks: vec![patch::Hunk {
+					old_range: patch::Range { start: 0, count: 0 },
+					new_range: patch::Range { start: 1, count: 2 },
+					range_hint: "",
+					lines: vec![
+						patch::Line::Add("apiVersion: v1"),
+						patch::Line::Add("kind: ConfigMap"),
+					],
+				}],
+				end_newline: true,
+			}
+		);
+	}
+
+	#[test]
 	fn test_strip_kubectl_fields() {
 		let value = serde_json::json!({
 			"apiVersion": "v1",
@@ -1354,8 +1588,7 @@ mod tests {
 				"uid": "abc-123",
 				"creationTimestamp": "2024-01-01T00:00:00Z",
 				"generation": 1,
-				"managedFields": [],
-				"annotations": {}
+				"managedFields": []
 			},
 			"data": {
 				"key": "value"
@@ -1364,7 +1597,7 @@ mod tests {
 
 		let cleaned = strip_kubectl_fields(&value);
 
-		// managedFields and empty annotations should be stripped
+		// Only managedFields should be stripped (matching kubectl behavior)
 		let expected = serde_json::json!({
 			"apiVersion": "v1",
 			"kind": "ConfigMap",
@@ -1382,28 +1615,6 @@ mod tests {
 		});
 
 		assert_eq!(cleaned, expected);
-	}
-
-	#[test]
-	fn test_strip_kubectl_fields_preserves_non_empty_annotations() {
-		let value = serde_json::json!({
-			"apiVersion": "v1",
-			"kind": "ConfigMap",
-			"metadata": {
-				"name": "test",
-				"annotations": {
-					"key": "value"
-				}
-			}
-		});
-
-		let cleaned = strip_kubectl_fields(&value);
-
-		// Non-empty annotations should be preserved
-		assert_eq!(
-			cleaned.pointer("/metadata/annotations/key"),
-			Some(&serde_json::json!("value"))
-		);
 	}
 
 	#[test]
@@ -1448,5 +1659,91 @@ mod tests {
 		);
 		assert!(filtered.pointer("/data/key2").is_none());
 		assert!(filtered.pointer("/metadata/namespace").is_none());
+	}
+
+	#[test]
+	fn test_secret_redaction_in_diff_masks_changed_data() {
+		// Test that secrets have their data masked with before/after when values differ
+		let secret_gvk = GroupVersionKind::gvk("", "v1", "Secret");
+
+		let current = serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"metadata": {"name": "test", "namespace": "default"},
+			"data": {"password": "c2VjcmV0MTIz"}
+		});
+
+		let desired = serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"metadata": {"name": "test", "namespace": "default"},
+			"data": {"password": "bmV3c2VjcmV0"}
+		});
+
+		let (current_redacted, desired_redacted) = RedactedObject::redact_pair(
+			UnredactedObject::new(current, secret_gvk.clone()),
+			UnredactedObject::new(desired, secret_gvk),
+		);
+
+		let current_yaml = current_redacted.to_yaml().unwrap();
+		let desired_yaml = desired_redacted.to_yaml().unwrap();
+
+		// Verify the YAML output contains masked values, not the original secrets
+		assert_eq!(
+			current_yaml,
+			indoc! {"
+				apiVersion: v1
+				data:
+				  password: '*** (before)'
+				kind: Secret
+				metadata:
+				  name: test
+				  namespace: default
+			"}
+		);
+		assert_eq!(
+			desired_yaml,
+			indoc! {"
+				apiVersion: v1
+				data:
+				  password: '*** (after)'
+				kind: Secret
+				metadata:
+				  name: test
+				  namespace: default
+			"}
+		);
+	}
+
+	#[test]
+	fn test_secret_redaction_equal_values_use_default_mask() {
+		let secret_gvk = GroupVersionKind::gvk("", "v1", "Secret");
+
+		let secret = serde_json::json!({
+			"apiVersion": "v1",
+			"kind": "Secret",
+			"metadata": {"name": "test"},
+			"data": {"password": "c2FtZXNlY3JldA=="}
+		});
+
+		let (current_redacted, desired_redacted) = RedactedObject::redact_pair(
+			UnredactedObject::new(secret.clone(), secret_gvk.clone()),
+			UnredactedObject::new(secret, secret_gvk),
+		);
+
+		let current_yaml = current_redacted.to_yaml().unwrap();
+		let desired_yaml = desired_redacted.to_yaml().unwrap();
+
+		// Equal values should use default mask "***"
+		let expected = indoc! {"
+			apiVersion: v1
+			data:
+			  password: '***'
+			kind: Secret
+			metadata:
+			  name: test
+		"};
+		assert_eq!(current_yaml, expected);
+		assert_eq!(desired_yaml, expected);
 	}
 }

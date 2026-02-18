@@ -1,0 +1,6 @@
+extra_args = [
+  "--ext-str",
+  "stringVar=hello-world",
+  "--ext-code",
+  'codeVar={"count":42,"enabled":true}',
+]

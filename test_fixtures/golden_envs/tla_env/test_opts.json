@@ -1,8 +1,0 @@
-{
-  "tla_str": {
-    "stringArg": "tla-value"
-  },
-  "tla_code": {
-    "codeArg": "{\"value\": 100, \"active\": true}"
-  }
-}

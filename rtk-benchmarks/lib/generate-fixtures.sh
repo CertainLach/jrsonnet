@@ -13,7 +13,7 @@ set -euo pipefail
 # Generate all fixtures in FIXTURES_DIR
 generate_fixtures() {
   local fixtures_dir="$1"
-  
+
   echo "Generating test fixtures in ${fixtures_dir}..." >&2
 
   # Initialize git repo (required by tk for tool imports command)

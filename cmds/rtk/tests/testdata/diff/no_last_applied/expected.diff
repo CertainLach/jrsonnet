@@ -1,0 +1,11 @@
+--- a/apps.v1.Deployment.default.test-deploy
++++ b/apps.v1.Deployment.default.test-deploy
+@@ -14,7 +14,7 @@
+         app: test
+     spec:
+       containers:
+-      - image: nginx:1.24
++      - image: nginx:1.25
+         name: app
+       - image: fluent-bit:2.0
+         name: sidecar

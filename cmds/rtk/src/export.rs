@@ -14,8 +14,6 @@ use std::{
 	thread,
 };
 
-use crate::yaml::sort_json_keys;
-
 use anyhow::{bail, Context, Result};
 use gtmpl::{FuncError, Value};
 use rayon::iter::{IntoParallelIterator, ParallelIterator};
@@ -26,6 +24,7 @@ use tracing::{debug, trace};
 use crate::{
 	discover::{find_environments_with_opts, DiscoveredEnv},
 	eval::{eval, EvalOpts},
+	yaml::sort_json_keys,
 };
 
 /// When exporting manifests to files, it becomes increasingly hard to map manifests back to its environment.

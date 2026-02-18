@@ -1,0 +1,8 @@
+[args]
+export = [
+  "--format",
+  "{{ .metadata.namespace | default \"_cluster\" }}/{{.kind}}-{{.metadata.name}}",
+  "--extension",
+  "golden",
+  "--recursive",
+]

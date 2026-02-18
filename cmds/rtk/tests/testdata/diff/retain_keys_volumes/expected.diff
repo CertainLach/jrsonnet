@@ -1,0 +1,10 @@
+--- a/v1.Pod.default.test-pod
++++ b/v1.Pod.default.test-pod
+@@ -11,6 +11,5 @@
+   - image: nginx:1.24
+     name: nginx
+   volumes:
+-  - configMap:
+-      name: my-config
++  - emptyDir: {}
+     name: my-vol

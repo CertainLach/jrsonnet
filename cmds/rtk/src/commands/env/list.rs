@@ -5,8 +5,7 @@ use std::io::Write;
 use anyhow::Result;
 use clap::Args;
 
-use crate::commands::util::UnimplementedArgs;
-use crate::env as env_impl;
+use crate::{commands::util::UnimplementedArgs, env as env_impl};
 
 #[derive(Args)]
 pub struct ListArgs {

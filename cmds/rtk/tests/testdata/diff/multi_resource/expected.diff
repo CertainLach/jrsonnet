@@ -10,10 +10,11 @@
    name: app-config
 --- /dev/null
 +++ b/v1.Secret.default.app-secret
-@@ -0,0 +1,8 @@
+@@ -1 +1,8 @@
+-null
 +apiVersion: v1
 +data:
-+  password: cGFzc3dvcmQ=
++  password: '***'
 +kind: Secret
 +metadata:
 +  name: app-secret

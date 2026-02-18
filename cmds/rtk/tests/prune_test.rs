@@ -1,263 +1,154 @@
 //! Integration tests for the prune command using a mock Kubernetes API server.
 //!
-//! These tests call the actual `prune_environment` entrypoint with a mock
-//! ClusterConnection, testing the full prune flow from Jsonnet evaluation through
-//! to cluster deletion.
+//! These tests focus on prune-command behavior (dry-run, confirmation, deletion),
+//! while prune detection correctness is primarily covered by diff tests with
+//! `with_prune=true`.
 
-use k8s_mock::{DiscoveryMode, HttpMockK8sServer};
+use std::os::fd::FromRawFd;
+use std::path::{Path, PathBuf};
+
+#[path = "test_utils.rs"]
+mod test_utils;
+
+use k8s_mock::DiscoveryMode;
 use rtk::{
 	commands::{
 		diff::ColorMode,
 		prune::{prune_environment, AutoApprove, PruneOpts},
 	},
-	k8s::client::ClusterConnection,
-	spec::Spec,
+	k8s::{client::ClusterConnection, diff::ResourceDiff},
 };
 
-/// Load manifests from YAML files in a directory.
-fn load_manifests_from_dir(dir: &std::path::Path) -> Vec<serde_json::Value> {
-	let mut manifests = Vec::new();
-	if !dir.exists() {
-		return manifests;
-	}
-
-	let mut entries: Vec<_> = std::fs::read_dir(dir)
-		.expect("failed to read dir")
-		.filter_map(|e| e.ok())
-		.filter(|e| {
-			e.path()
-				.extension()
-				.map(|ext| ext == "yaml" || ext == "yml")
-				.unwrap_or(false)
-		})
-		.collect();
-	entries.sort_by_key(|e| e.path());
-
-	for entry in entries {
-		let content = std::fs::read_to_string(entry.path()).expect("failed to read file");
-		let value: serde_json::Value =
-			serde_yaml::from_str(&content).expect("failed to parse YAML");
-		manifests.push(value);
-	}
-	manifests
+fn fixture_dir(name: &str) -> PathBuf {
+	test_utils::diff_fixture_dir(name)
 }
 
-/// Run a prune test.
-///
-/// Test structure:
-/// - `environment/` - Tanka environment directory
-///   - `main.jsonnet` - environment producing manifests
-///   - `jsonnetfile.json` - marks the project root
-/// - `cluster/` - YAML files representing initial cluster state
-///
-/// The test:
-/// 1. Prunes orphaned resources from the mock cluster
-/// 2. Verifies the expected resources were deleted
-async fn run_prune_test(
-	test_dir: &std::path::Path,
+async fn setup_connection(
+	test_dir: &Path,
 	discovery_mode: DiscoveryMode,
-	expected_deletions: &[(&str, &str)], // (kind, name) pairs
-) {
-	let env_dir = test_dir.join("environment");
-	let cluster_dir = test_dir.join("cluster");
-
-	// Load cluster state as manifests
-	let cluster_state = load_manifests_from_dir(&cluster_dir);
-
-	// Start mock server with cluster state
-	let server = HttpMockK8sServer::builder()
-		.discovery_mode(discovery_mode)
-		.resources(cluster_state)
-		.build()
-		.start()
-		.await;
-
-	// Create connection using the mock server's kubeconfig
-	let spec = Spec {
-		context_names: Some(vec!["mock-context".to_string()]),
-		..Spec::default()
-	};
-	let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
-		.await
-		.expect("failed to create connection");
-
-	// Capture output to a buffer
-	let mut output = Vec::new();
-
-	let opts = PruneOpts {
-		auto_approve: AutoApprove::Always,
-		color: ColorMode::Never,
-		..Default::default()
-	};
-
-	let result = prune_environment(
-		env_dir.to_str().unwrap(),
-		Some(connection),
-		rtk::eval::EvalOpts::default(),
-		opts,
-		&mut output,
-	)
-	.await;
-
-	let diffs = result.expect("prune should succeed");
-
-	// Verify expected deletions
-	let mut actual_deletions: Vec<_> = diffs
-		.iter()
-		.map(|d| (d.gvk.kind.as_str(), d.name.as_str()))
-		.collect();
-	actual_deletions.sort();
-
-	let mut expected: Vec<_> = expected_deletions.to_vec();
-	expected.sort();
-
-	assert_eq!(
-		actual_deletions, expected,
-		"deleted resources mismatch.\nExpected: {:?}\nActual: {:?}",
-		expected, actual_deletions
-	);
+) -> (k8s_mock::RunningHttpMockK8sServer, ClusterConnection) {
+	let cluster_state = test_utils::load_manifests_from_dir(&test_dir.join("cluster"));
+	test_utils::setup_connection_from_cluster_state(cluster_state, discovery_mode, false).await
 }
 
-/// Run a prune test that expects no deletions.
-async fn run_prune_no_deletions_test(test_dir: &std::path::Path, discovery_mode: DiscoveryMode) {
-	let env_dir = test_dir.join("environment");
-	let cluster_dir = test_dir.join("cluster");
-
-	// Load cluster state as manifests
-	let cluster_state = load_manifests_from_dir(&cluster_dir);
-
-	// Start mock server with cluster state
-	let server = HttpMockK8sServer::builder()
-		.discovery_mode(discovery_mode)
-		.resources(cluster_state)
-		.build()
-		.start()
-		.await;
-
-	// Create connection using the mock server's kubeconfig
-	let spec = Spec {
-		context_names: Some(vec!["mock-context".to_string()]),
-		..Spec::default()
-	};
-	let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
-		.await
-		.expect("failed to create connection");
-
-	// Capture output to a buffer
+async fn run_prune(
+	env_dir: &Path,
+	connection: ClusterConnection,
+	opts: PruneOpts,
+) -> anyhow::Result<Vec<ResourceDiff>> {
 	let mut output = Vec::new();
-
-	let opts = PruneOpts {
-		auto_approve: AutoApprove::Always,
-		color: ColorMode::Never,
-		..Default::default()
-	};
-
-	let result = prune_environment(
-		env_dir.to_str().unwrap(),
+	prune_environment(
+		env_dir.to_str().expect("env path should be UTF-8"),
 		Some(connection),
 		rtk::eval::EvalOpts::default(),
 		opts,
 		&mut output,
 	)
-	.await;
+	.await
+}
 
-	let diffs = result.expect("prune should succeed");
-
-	assert!(
-		diffs.is_empty(),
-		"expected no deletions, but found: {:?}",
-		diffs
-			.iter()
-			.map(|d| format!("{}/{}", d.gvk.kind, d.name))
-			.collect::<Vec<_>>()
-	);
+fn default_prune_opts() -> PruneOpts {
+	PruneOpts {
+		auto_approve: AutoApprove::Always,
+		color: ColorMode::Never,
+		..Default::default()
+	}
 }
 
 #[cfg(test)]
 mod tests {
 	use super::*;
 
-	/// Test pruning a resource that was removed from manifests.
 	#[tokio::test]
-	async fn resource_deleted_aggregated_discovery() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("resource_deleted");
-		// The "delete-this" ConfigMap should be pruned
-		run_prune_test(
-			&test_dir,
-			DiscoveryMode::Aggregated,
-			&[("ConfigMap", "delete-this")],
-		)
-		.await;
+	async fn prune_dry_run_does_not_delete() {
+		let test_dir = fixture_dir("resource_deleted");
+		let env_dir = test_dir.join("environment");
+		let (_server, connection) = setup_connection(&test_dir, DiscoveryMode::Aggregated).await;
+
+		let mut dry_run_opts = default_prune_opts();
+		dry_run_opts.dry_run = Some("client".to_string());
+
+		let dry_run_diffs = run_prune(&env_dir, connection.clone(), dry_run_opts)
+			.await
+			.expect("dry-run prune should succeed");
+		assert_eq!(dry_run_diffs.len(), 1, "dry-run should find one deletion");
+		assert_eq!(dry_run_diffs[0].name, "delete-this");
+
+		let delete_diffs = run_prune(&env_dir, connection, default_prune_opts())
+			.await
+			.expect("real prune after dry-run should succeed");
+		assert_eq!(
+			delete_diffs.len(),
+			1,
+			"resource should still exist after dry-run"
+		);
+		assert_eq!(delete_diffs[0].name, "delete-this");
 	}
 
 	#[tokio::test]
-	async fn resource_deleted_legacy_discovery() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("resource_deleted");
-		run_prune_test(
-			&test_dir,
-			DiscoveryMode::Legacy,
-			&[("ConfigMap", "delete-this")],
-		)
-		.await;
-	}
+	async fn prune_is_idempotent_after_delete() {
+		let test_dir = fixture_dir("resource_deleted");
+		let env_dir = test_dir.join("environment");
+		let (_server, connection) = setup_connection(&test_dir, DiscoveryMode::Legacy).await;
 
-	/// Test that only resources with the tanka.dev/environment label are pruned.
-	#[tokio::test]
-	async fn prune_labeled_only_aggregated_discovery() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("prune_labeled_only");
-		// Only "orphaned-config" has the tanka label and is not in manifests
-		// "external-config" should not be pruned (no tanka label)
-		run_prune_test(
-			&test_dir,
-			DiscoveryMode::Aggregated,
-			&[("ConfigMap", "orphaned-config")],
-		)
-		.await;
+		let first = run_prune(&env_dir, connection.clone(), default_prune_opts())
+			.await
+			.expect("first prune should succeed");
+		assert_eq!(
+			first.len(),
+			1,
+			"first prune should delete exactly one resource"
+		);
+		assert_eq!(first[0].name, "delete-this");
+
+		let second = run_prune(&env_dir, connection, default_prune_opts())
+			.await
+			.expect("second prune should succeed");
+		assert!(
+			second.is_empty(),
+			"second prune should have nothing left to delete"
+		);
 	}
 
 	#[tokio::test]
-	async fn prune_labeled_only_legacy_discovery() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("prune_labeled_only");
-		run_prune_test(
-			&test_dir,
-			DiscoveryMode::Legacy,
-			&[("ConfigMap", "orphaned-config")],
-		)
-		.await;
+	async fn prune_auto_approve_never_errors_in_non_interactive_mode() {
+		// Close stdin so is_terminal() returns false even when the test
+		// runner is invoked from an interactive terminal.
+		drop(unsafe { std::os::fd::OwnedFd::from_raw_fd(0) });
+
+		let test_dir = fixture_dir("resource_deleted");
+		let env_dir = test_dir.join("environment");
+		let (_server, connection) = setup_connection(&test_dir, DiscoveryMode::Aggregated).await;
+
+		let mut opts = default_prune_opts();
+		opts.auto_approve = AutoApprove::Never;
+
+		let err = run_prune(&env_dir, connection, opts)
+			.await
+			.expect_err("non-interactive prune should fail when prompting is required");
+		let msg = format!("{err:#}");
+		assert!(
+			msg.contains("cannot prompt for confirmation in non-interactive mode"),
+			"unexpected error message: {msg}"
+		);
 	}
 
-	/// Test that prune with no orphans results in no deletions.
-	#[tokio::test]
-	async fn prune_no_orphans_aggregated() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("inject_labels");
-		// All resources in cluster are also in manifests
-		run_prune_no_deletions_test(&test_dir, DiscoveryMode::Aggregated).await;
-	}
-
-	/// Test that manifests without explicit namespace match cluster resources.
-	///
-	/// BUG: When a manifest relies on spec.namespace (no explicit namespace),
-	/// it should still match cluster resources that have the namespace set.
-	/// Without the fix, the manifest key is (v1, ConfigMap, None, "keep-config")
-	/// but cluster key is (v1, ConfigMap, Some("default"), "keep-config"),
-	/// causing a false positive deletion.
 	#[tokio::test]
 	async fn prune_implicit_namespace_no_false_deletion() {
-		let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-			.join("tests/testdata/diff")
-			.join("prune_implicit_namespace");
-		// The resource should NOT be deleted - manifest without namespace should
-		// match cluster resource with namespace
-		run_prune_no_deletions_test(&test_dir, DiscoveryMode::Aggregated).await;
+		let test_dir = fixture_dir("implicit_namespace_prune");
+		let env_dir = test_dir.join("environment");
+		let (_server, connection) = setup_connection(&test_dir, DiscoveryMode::Aggregated).await;
+
+		let diffs = run_prune(&env_dir, connection, default_prune_opts())
+			.await
+			.expect("prune should succeed");
+		assert!(
+			diffs.is_empty(),
+			"expected no deletions, but found: {:?}",
+			diffs
+				.iter()
+				.map(|d| format!("{}/{}", d.gvk.kind, d.name))
+				.collect::<Vec<_>>()
+		);
 	}
 }

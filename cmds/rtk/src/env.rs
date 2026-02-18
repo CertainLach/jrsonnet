@@ -415,9 +415,11 @@ fn load_static_env(path: &Path) -> Result<Environment> {
 
 #[cfg(test)]
 mod tests {
-	use super::*;
 	use std::io::Cursor;
+
 	use tempfile::TempDir;
+
+	use super::*;
 
 	fn create_inline_env_fixture(dir: &Path) {
 		// Create jsonnetfile.json at root (required for project root detection)

@@ -3,15 +3,15 @@ use std::{borrow::Cow, cell::Cell, fmt::Write, ptr};
 use crate::{bail, in_description_frame, Result, ResultExt, Val};
 
 // Thread-local flag to control float formatting style in std.toString
-// When true (default), uses Go's %.17g format (e.g., 0.59999999999999998)
-// When false, uses Rust's shortest representation (e.g., 0.6)
+// When true, uses Go's %.17g format (e.g., 0.59999999999999998)
+// When false (default), uses Rust's shortest representation (e.g., 0.6)
 thread_local! {
-	static USE_GO_STYLE_FLOATS: Cell<bool> = const { Cell::new(true) };
+	static USE_GO_STYLE_FLOATS: Cell<bool> = const { Cell::new(false) };
 }
 
 /// Set whether to use Go-style float formatting in std.toString
-/// - true (default): Use Go's %.17g format (matches go-jsonnet)
-/// - false: Use Rust's Display (shortest representation, matches jrsonnet binary)
+/// - true: Use Go's %.17g format (matches go-jsonnet)
+/// - false (default): Use Rust's Display (shortest representation, matches jrsonnet binary)
 pub fn set_use_go_style_floats(use_go_style: bool) {
 	USE_GO_STYLE_FLOATS.with(|s| s.set(use_go_style));
 }

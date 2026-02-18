@@ -4,6 +4,9 @@
 //! ClusterConnection, testing the full diff flow from Jsonnet evaluation through
 //! to cluster comparison.
 
+#[path = "test_utils.rs"]
+mod test_utils;
+
 use k8s_mock::{DiscoveryMode, HttpMockK8sServer};
 use rtk::{
 	commands::diff::{diff_environment, ColorMode, DiffOpts},
@@ -11,41 +14,13 @@ use rtk::{
 	spec::{DiffStrategy, Spec},
 };
 
-/// Load manifests from YAML files in a directory.
-fn load_manifests_from_dir(dir: &std::path::Path) -> Vec<serde_json::Value> {
-	let mut manifests = Vec::new();
-	if !dir.exists() {
-		return manifests;
-	}
-
-	let mut entries: Vec<_> = std::fs::read_dir(dir)
-		.expect("failed to read dir")
-		.filter_map(|e| e.ok())
-		.filter(|e| {
-			e.path()
-				.extension()
-				.map(|ext| ext == "yaml" || ext == "yml")
-				.unwrap_or(false)
-		})
-		.collect();
-	entries.sort_by_key(|e| e.path());
-
-	for entry in entries {
-		let content = std::fs::read_to_string(entry.path()).expect("failed to read file");
-		let value: serde_json::Value =
-			serde_yaml::from_str(&content).expect("failed to parse YAML");
-		manifests.push(value);
-	}
-	manifests
-}
-
 /// Run a diff test with custom options.
 ///
 /// Test structure:
 /// - `environment/` - Tanka environment directory
 ///   - `main.jsonnet` - environment producing manifests
 ///   - `jsonnetfile.json` - marks the project root
-/// - `cluster/` - YAML files representing current cluster state
+/// - `cluster/` - YAML files representing current cluster state (may include CRDs)
 /// - `expected.diff` - expected unified diff output (for normal diff mode)
 /// - `expected.txt` - expected text output (for summarize mode, takes precedence)
 async fn run_diff_test_with_opts(
@@ -57,24 +32,9 @@ async fn run_diff_test_with_opts(
 	let cluster_dir = test_dir.join("cluster");
 
 	// Load cluster state as manifests
-	let cluster_state = load_manifests_from_dir(&cluster_dir);
-
-	// Start mock server with cluster state
-	let server = HttpMockK8sServer::builder()
-		.discovery_mode(discovery_mode)
-		.resources(cluster_state)
-		.build()
-		.start()
-		.await;
-
-	// Create connection using the mock server's kubeconfig
-	let spec = Spec {
-		context_names: Some(vec!["mock-context".to_string()]),
-		..Spec::default()
-	};
-	let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
-		.await
-		.expect("failed to create connection");
+	let cluster_state = test_utils::load_manifests_from_dir(&cluster_dir);
+	let (_server, connection) =
+		test_utils::setup_connection_from_cluster_state(cluster_state, discovery_mode, true).await;
 
 	// Capture diff output to a buffer
 	let mut output = Vec::new();
@@ -86,16 +46,15 @@ async fn run_diff_test_with_opts(
 	};
 
 	// Call the diff_environment entrypoint (evaluates Jsonnet and diffs)
-	let result = diff_environment(
+	diff_environment(
 		env_dir.to_str().unwrap(),
 		Some(connection),
 		rtk::eval::EvalOpts::default(),
 		opts,
 		&mut output,
 	)
-	.await;
-
-	let _diffs = result.expect("diff failed");
+	.await
+	.expect("diff_environment failed");
 
 	// Compare output against expected file (expected.diff or expected.txt)
 	let actual = String::from_utf8(output).expect("diff output should be valid UTF-8");
@@ -114,8 +73,12 @@ async fn run_diff_test_with_opts(
 
 #[cfg(test)]
 mod error_tests {
+	use assert_matches::assert_matches;
 	use k8s_mock::DiscoveryMode;
-	use rtk::k8s::diff::{DiffEngine, DiffError};
+	use rtk::k8s::{
+		diff::{DiffEngine, DiffError},
+		discovery::DiscoveryError,
+	};
 
 	use super::*;
 
@@ -192,7 +155,7 @@ mod error_tests {
 		assert!(matches!(result, Err(DiffError::MissingName)));
 	}
 
-	/// Test that diffing a manifest with an unknown resource type returns an error.
+	/// Test that an unknown resource type fails API cache construction.
 	#[tokio::test]
 	async fn test_diff_unknown_resource_type() {
 		let server = HttpMockK8sServer::builder()
@@ -216,7 +179,7 @@ mod error_tests {
 			"metadata": { "name": "test" }
 		})];
 
-		let engine = DiffEngine::new(
+		let err = DiffEngine::new(
 			connection,
 			DiffStrategy::Native,
 			"default".to_string(),
@@ -224,10 +187,21 @@ mod error_tests {
 			false,
 		)
 		.await
-		.expect("failed to create engine");
+		.err()
+		.expect("expected unknown resource type to fail during engine creation");
 
-		let result = engine.diff_manifest(&manifests[0]).await;
-		assert!(matches!(result, Err(DiffError::UnknownResourceType { .. })));
+		assert_matches!(
+			err,
+			DiffError::BuildingApiCache(source)
+				if matches!(
+					*source,
+					DiscoveryError::ResourceDiscovery {
+						ref api_version,
+						ref kind,
+						..
+					} if api_version == "custom.example.com/v1" && kind == "UnknownResource"
+				)
+		);
 	}
 
 	/// Test that prune without injectLabels returns an error.
@@ -289,17 +263,13 @@ mod tests {
 			paste::paste! {
 				#[tokio::test]
 				async fn [<$name _aggregated_discovery>]() {
-					let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-						.join("tests/testdata/diff")
-						.join(stringify!($name));
+					let test_dir = test_utils::diff_fixture_dir(stringify!($name));
 					run_diff_test_with_opts(&test_dir, DiscoveryMode::Aggregated, $opts).await;
 				}
 
 				#[tokio::test]
 				async fn [<$name _legacy_discovery>]() {
-					let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-						.join("tests/testdata/diff")
-						.join(stringify!($name));
+					let test_dir = test_utils::diff_fixture_dir(stringify!($name));
 					run_diff_test_with_opts(&test_dir, DiscoveryMode::Legacy, $opts).await;
 				}
 			}
@@ -307,22 +277,34 @@ mod tests {
 	}
 
 	// Basic tests with default options
-	diff_test!(configmap_unchanged);
+	diff_test!(cluster_scoped);
 	diff_test!(configmap_modified);
-	diff_test!(multi_resource);
-	diff_test!(multiple_namespaces);
-	diff_test!(non_inline_env);
+	diff_test!(configmap_unchanged);
 	diff_test!(deployment_modified);
 	diff_test!(deployment_nested_changes);
-	diff_test!(cluster_scoped);
-	diff_test!(namespace_not_exists);
 	diff_test!(inject_labels);
+	diff_test!(multiple_namespaces);
+	diff_test!(multi_resource);
+	diff_test!(namespace_not_exists);
+	diff_test!(implicit_namespace);
+	diff_test!(no_last_applied);
+	diff_test!(non_inline_env);
+
+	// Strategic merge patch tests
+	diff_test!(strategic_merge_delete);
+	diff_test!(strategic_merge_sidecar);
+	diff_test!(delete_from_primitive_list);
+	diff_test!(retain_keys_volumes);
+	diff_test!(service_composite_key);
 
 	// Pruning tests
 	diff_test!(resource_deleted, {
 		DiffOpts::builder().with_prune(true).build()
 	});
 	diff_test!(prune_labeled_only, {
+		DiffOpts::builder().with_prune(true).build()
+	});
+	diff_test!(implicit_namespace_prune, {
 		DiffOpts::builder().with_prune(true).build()
 	});
 
@@ -351,4 +333,164 @@ mod tests {
 
 	// Summarize mode test
 	diff_test!(summarize, { DiffOpts::builder().summarize(true).build() });
+
+	// CRD tests - custom merge keys from OpenAPI schemas
+	diff_test!(crd_merge_keys);
+}
+
+/// Tests for CRD support with custom merge keys via OpenAPI schemas.
+#[cfg(test)]
+mod crd_tests {
+	use std::collections::HashMap;
+
+	use indoc::indoc;
+	use k8s_mock::{DiscoveryMode, HttpMockK8sServer, MockApiResource, MockDiscovery};
+	use rtk::{
+		k8s::{client::ClusterConnection, diff::DiffEngine},
+		spec::{DiffStrategy, Spec},
+	};
+
+	/// Test that CRD merge keys from OpenAPI schemas are respected during diff.
+	///
+	/// This test verifies that when a CRD has custom merge keys (x-kubernetes-list-map-keys)
+	/// in its OpenAPI schema, the diff engine correctly uses them for strategic merge.
+	#[tokio::test]
+	async fn test_crd_merge_keys_from_openapi() {
+		// Define a CRD OpenAPI schema with custom merge keys
+		let crd_schema = serde_json::json!({
+			"openapi": "3.0.0",
+			"info": { "title": "Example CRD API", "version": "v1" },
+			"components": {
+				"schemas": {
+					"com.example.v1.DatabaseCluster": {
+						"properties": {
+							"spec": {
+								"$ref": "#/components/schemas/com.example.v1.DatabaseClusterSpec"
+							}
+						}
+					},
+					"com.example.v1.DatabaseClusterSpec": {
+						"properties": {
+							// This is the key field: a list with custom merge keys
+							"instances": {
+								"type": "array",
+								"x-kubernetes-list-map-keys": ["name"],
+								"x-kubernetes-list-type": "map",
+								"items": {
+									"$ref": "#/components/schemas/com.example.v1.Instance"
+								}
+							}
+						}
+					},
+					"com.example.v1.Instance": {
+						"properties": {
+							"name": { "type": "string" },
+							"replicas": { "type": "integer" },
+							"storage": { "type": "string" }
+						}
+					}
+				}
+			}
+		});
+
+		let mut openapi_schemas = HashMap::new();
+		openapi_schemas.insert("apis/example.com/v1".to_string(), crd_schema);
+
+		// Create discovery with the CRD type
+		let discovery = MockDiscovery::default().with_group(
+			"example.com/v1",
+			vec![MockApiResource::namespaced(
+				"databaseclusters",
+				"DatabaseCluster",
+			)],
+		);
+
+		// Current cluster state: CRD with two instances
+		let cluster_state = vec![serde_json::json!({
+			"apiVersion": "example.com/v1",
+			"kind": "DatabaseCluster",
+			"metadata": {
+				"name": "my-db",
+				"namespace": "default"
+			},
+			"spec": {
+				"instances": [
+					{ "name": "primary", "replicas": 1, "storage": "10Gi" },
+					{ "name": "replica", "replicas": 2, "storage": "10Gi" }
+				]
+			}
+		})];
+
+		// Start mock server with CRD support
+		let server = HttpMockK8sServer::builder()
+			.discovery_mode(DiscoveryMode::Aggregated)
+			.discovery(discovery)
+			.openapi_schemas(openapi_schemas)
+			.resources(cluster_state)
+			.build()
+			.start()
+			.await;
+
+		let spec = Spec {
+			context_names: Some(vec!["mock-context".to_string()]),
+			..Spec::default()
+		};
+		let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
+			.await
+			.expect("failed to create connection");
+
+		// Desired state: modify only the replica instance's replicas field
+		// The merge key "name" should preserve the primary instance unchanged
+		let manifests = vec![serde_json::json!({
+			"apiVersion": "example.com/v1",
+			"kind": "DatabaseCluster",
+			"metadata": {
+				"name": "my-db",
+				"namespace": "default"
+			},
+			"spec": {
+				"instances": [
+					{ "name": "primary", "replicas": 1, "storage": "10Gi" },
+					{ "name": "replica", "replicas": 3, "storage": "20Gi" }  // Changed: replicas 2->3, storage 10Gi->20Gi
+				]
+			}
+		})];
+
+		let engine = DiffEngine::new(
+			connection,
+			DiffStrategy::Native,
+			"default".to_string(),
+			&manifests,
+			false,
+		)
+		.await
+		.expect("failed to create engine");
+
+		let diffs = engine
+			.diff_all(&manifests, false, None, false)
+			.await
+			.expect("diff failed");
+
+		// Get the unified diff output
+		assert_eq!(diffs.len(), 1, "expected exactly one diff");
+		let diff = &diffs[0];
+		let diff_str = diff.unified_diff(DiffStrategy::Native);
+
+		// Verify the exact diff output showing merge key-aware changes
+		// The diff shows only the replica instance's changed fields (replicas: 2->3, storage: 10Gi->20Gi)
+		// while the primary instance remains in context but unchanged
+		let expected = indoc! {"
+			--- a/example.com.v1.DatabaseCluster.default.my-db
+			+++ b/example.com.v1.DatabaseCluster.default.my-db
+			@@ -9,5 +9,5 @@
+			     replicas: 1
+			     storage: 10Gi
+			   - name: replica
+			-    replicas: 2
+			-    storage: 10Gi
+			+    replicas: 3
+			+    storage: 20Gi
+		"};
+		assert_eq!(diff_str, expected);
+	}
 }

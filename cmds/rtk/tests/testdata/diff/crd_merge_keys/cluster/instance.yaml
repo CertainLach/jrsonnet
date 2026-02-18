@@ -1,0 +1,14 @@
+# Instance of DatabaseCluster CRD - current cluster state
+apiVersion: example.com/v1
+kind: DatabaseCluster
+metadata:
+  name: my-db
+  namespace: default
+spec:
+  instances:
+    - name: primary
+      replicas: 1
+      storage: 10Gi
+    - name: replica
+      replicas: 2
+      storage: 10Gi

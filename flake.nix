@@ -59,6 +59,15 @@
         rust = pkgs.rust-bin.fromRustupToolchainFile ./rust-toolchain.toml;
 
         craneLib = (crane.mkLib pkgs).overrideToolchain rust;
+
+        # Build dependencies once and share across all packages.
+        # buildDepsOnly only needs Cargo sources to compile dependencies.
+        cargoArtifacts = craneLib.buildDepsOnly {
+          src = craneLib.cleanCargoSource ./.;
+          pname = "rustanka-deps";
+          version = "0.1.0";
+          cargoExtraArgs = "--locked";
+        };
       in {
         legacyPackages = {
           jsonnetImpls = {
@@ -135,16 +144,16 @@
           };
 
           jrsonnet = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
+            inherit craneLib cargoArtifacts;
           };
 
           jrsonnet-experimental = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
+            inherit craneLib cargoArtifacts;
             withExperimentalFeatures = true;
           };
 
           jrsonnet-nightly = pkgs.callPackage ./nix/jrsonnet.nix {
-            inherit craneLib;
+            inherit craneLib cargoArtifacts;
             withNightlyFeatures = true;
           };
 
@@ -155,20 +164,36 @@
             };
           };
 
+          tanka = pkgs.callPackage ./nix/tanka.nix {};
+
           rtk = pkgs.callPackage ./nix/rtk.nix {
-            inherit craneLib;
+            inherit craneLib cargoArtifacts tanka;
+          };
+          mock-k8s-server = pkgs.callPackage ./nix/mock-k8s-server.nix {
+            inherit craneLib cargoArtifacts;
           };
           rtk-benchmarks = pkgs.callPackage ./nix/rtk-benchmarks.nix {
             inherit (config) packages;
           };
 
-          tanka = pkgs.callPackage ./nix/tanka.nix {};
+          tk-compare = pkgs.callPackage ./nix/tk-compare.nix {
+            inherit craneLib cargoArtifacts;
+          };
+          tk-compare-run = pkgs.callPackage ./nix/tk-compare-run.nix {
+            inherit (config) packages;
+          };
         };
 
         apps = {
           rtk-benchmarks = {
             type = "app";
             program = "${config.packages.rtk-benchmarks}/bin/rtk-benchmarks";
+            meta.description = "Run rtk benchmarks comparing rtk vs tk performance";
+          };
+          tk-compare-run = {
+            type = "app";
+            program = "${config.packages.tk-compare-run}/bin/tk-compare-run";
+            meta.description = "Compare tk and rtk output for compatibility testing";
           };
         };
 

@@ -1,5 +1,5 @@
-// Test environment for --extension json
-// This tests that JSON output format works consistently between tk and rtk
+// Test environment with JSON-like payload content.
+// Export output is YAML, matching tk behavior.
 
 local env = {
   apiVersion: 'tanka.dev/v1alpha1',

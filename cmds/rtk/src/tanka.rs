@@ -6,6 +6,7 @@ use std::{
 	collections::HashMap,
 	io::{BufReader, Read, Write},
 	process::{Command, Stdio},
+	rc::Rc,
 	sync::RwLock,
 	thread,
 };
@@ -18,8 +19,6 @@ use jrsonnet_macros::builtin;
 use jrsonnet_stdlib::RegexCacheInner;
 use serde_json;
 use sha2::{Digest, Sha256};
-
-use std::rc::Rc;
 
 // Global Helm template cache - caches raw YAML output from helm to avoid
 // redundant helm invocations (same optimization as Go Tanka)

@@ -13,9 +13,19 @@ pub enum DiscoveryMode {
 }
 
 /// Pre-configured discovery responses.
+#[derive(Clone)]
 pub struct MockDiscovery {
 	pub core_resources: Vec<MockApiResource>,
 	pub group_resources: HashMap<String, Vec<MockApiResource>>,
+}
+
+impl MockDiscovery {
+	/// Add a custom API group with resources (e.g., for CRDs).
+	pub fn with_group(mut self, group_version: &str, resources: Vec<MockApiResource>) -> Self {
+		self.group_resources
+			.insert(group_version.to_string(), resources);
+		self
+	}
 }
 
 impl Default for MockDiscovery {
@@ -41,6 +51,7 @@ impl Default for MockDiscovery {
 }
 
 /// A mock API resource definition.
+#[derive(Clone)]
 pub struct MockApiResource {
 	pub name: String,
 	pub kind: String,

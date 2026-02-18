@@ -1,0 +1,10 @@
+--- a/v1.Service.default.test-svc
++++ b/v1.Service.default.test-svc
+@@ -15,6 +15,6 @@
+   - name: https
+     port: 443
+     protocol: TCP
+-    targetPort: 443
++    targetPort: 8443
+   selector:
+     app: test

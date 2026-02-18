@@ -318,10 +318,10 @@ impl TracePrinter for StdTracePrinter {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum QuoteValuesBehavior {
 	/// Values are always quoted regardless of quote_keys (matches go-jsonnet)
-	#[default]
 	GoJsonnet,
 	/// quote_values follows quote_keys: when quote_keys=false, quote_values=false
 	/// This matches the jrsonnet binary behavior
+	#[default]
 	Jrsonnet,
 }
 
@@ -339,9 +339,9 @@ pub struct ManifestYamlDocFormatting {
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
 pub enum ManifestYamlStreamEmptyBehavior {
 	/// Empty arrays produce "---\n\n" (document marker + empty line) - matches go-jsonnet
-	#[default]
 	GoJsonnet,
 	/// Empty arrays produce "\n" (just a newline) - matches jrsonnet binary
+	#[default]
 	Jrsonnet,
 }
 

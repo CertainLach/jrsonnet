@@ -9,8 +9,7 @@ use clap::Args;
 use regex::Regex;
 use walkdir::WalkDir;
 
-use crate::importers as importers_impl;
-use crate::jpath::DEFAULT_ENTRYPOINT;
+use crate::{importers as importers_impl, jpath::DEFAULT_ENTRYPOINT};
 
 #[derive(Args)]
 pub struct ImportersCountArgs {

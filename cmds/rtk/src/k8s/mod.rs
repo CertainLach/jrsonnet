@@ -7,7 +7,9 @@ pub mod apply;
 pub mod client;
 pub mod diff;
 pub mod discovery;
+pub mod openapi;
 pub mod output;
+pub mod redacted_object;
 
 /// Kubernetes API resource scope.
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]

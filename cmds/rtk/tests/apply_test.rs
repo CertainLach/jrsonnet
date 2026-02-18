@@ -4,43 +4,14 @@
 //! ClusterConnection, testing the full apply flow from Jsonnet evaluation through
 //! to cluster apply.
 
-use k8s_mock::{DiscoveryMode, HttpMockK8sServer};
-use rtk::{
-	commands::{
-		apply::{apply_environment, ApplyOpts, AutoApprove},
-		diff::ColorMode,
-	},
-	k8s::client::ClusterConnection,
-	spec::Spec,
+#[path = "test_utils.rs"]
+mod test_utils;
+
+use k8s_mock::DiscoveryMode;
+use rtk::commands::{
+	apply::{apply_environment, ApplyOpts, AutoApprove},
+	diff::ColorMode,
 };
-
-/// Load manifests from YAML files in a directory.
-fn load_manifests_from_dir(dir: &std::path::Path) -> Vec<serde_json::Value> {
-	let mut manifests = Vec::new();
-	if !dir.exists() {
-		return manifests;
-	}
-
-	let mut entries: Vec<_> = std::fs::read_dir(dir)
-		.expect("failed to read dir")
-		.filter_map(|e| e.ok())
-		.filter(|e| {
-			e.path()
-				.extension()
-				.map(|ext| ext == "yaml" || ext == "yml")
-				.unwrap_or(false)
-		})
-		.collect();
-	entries.sort_by_key(|e| e.path());
-
-	for entry in entries {
-		let content = std::fs::read_to_string(entry.path()).expect("failed to read file");
-		let value: serde_json::Value =
-			serde_yaml::from_str(&content).expect("failed to parse YAML");
-		manifests.push(value);
-	}
-	manifests
-}
 
 /// Run an apply test.
 ///
@@ -59,24 +30,9 @@ async fn run_apply_test(test_dir: &std::path::Path, discovery_mode: DiscoveryMod
 	let cluster_dir = test_dir.join("cluster");
 
 	// Load cluster state as manifests
-	let cluster_state = load_manifests_from_dir(&cluster_dir);
-
-	// Start mock server with cluster state
-	let server = HttpMockK8sServer::builder()
-		.discovery_mode(discovery_mode)
-		.resources(cluster_state)
-		.build()
-		.start()
-		.await;
-
-	// Create connection using the mock server's kubeconfig
-	let spec = Spec {
-		context_names: Some(vec!["mock-context".to_string()]),
-		..Spec::default()
-	};
-	let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
-		.await
-		.expect("failed to create connection");
+	let cluster_state = test_utils::load_manifests_from_dir(&cluster_dir);
+	let (_server, connection) =
+		test_utils::setup_connection_from_cluster_state(cluster_state, discovery_mode, false).await;
 
 	// Capture output to a buffer
 	let mut output = Vec::new();
@@ -140,24 +96,9 @@ async fn run_apply_no_changes_test(test_dir: &std::path::Path, discovery_mode: D
 	let cluster_dir = test_dir.join("cluster");
 
 	// Load cluster state as manifests
-	let cluster_state = load_manifests_from_dir(&cluster_dir);
-
-	// Start mock server with cluster state
-	let server = HttpMockK8sServer::builder()
-		.discovery_mode(discovery_mode)
-		.resources(cluster_state)
-		.build()
-		.start()
-		.await;
-
-	// Create connection using the mock server's kubeconfig
-	let spec = Spec {
-		context_names: Some(vec!["mock-context".to_string()]),
-		..Spec::default()
-	};
-	let connection = ClusterConnection::from_spec_with_kubeconfig(&spec, server.kubeconfig())
-		.await
-		.expect("failed to create connection");
+	let cluster_state = test_utils::load_manifests_from_dir(&cluster_dir);
+	let (_server, connection) =
+		test_utils::setup_connection_from_cluster_state(cluster_state, discovery_mode, false).await;
 
 	// Capture output to a buffer
 	let mut output = Vec::new();
@@ -197,18 +138,13 @@ mod tests {
 			paste::paste! {
 				#[tokio::test]
 				async fn [<$name _aggregated_discovery>]() {
-					// Use diff test fixtures since they have the same structure
-					let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-						.join("tests/testdata/diff")
-						.join(stringify!($name));
+					let test_dir = test_utils::diff_fixture_dir(stringify!($name));
 					run_apply_test(&test_dir, DiscoveryMode::Aggregated).await;
 				}
 
 				#[tokio::test]
 				async fn [<$name _legacy_discovery>]() {
-					let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-						.join("tests/testdata/diff")
-						.join(stringify!($name));
+					let test_dir = test_utils::diff_fixture_dir(stringify!($name));
 					run_apply_test(&test_dir, DiscoveryMode::Legacy).await;
 				}
 			}
@@ -221,9 +157,7 @@ mod tests {
 			paste::paste! {
 				#[tokio::test]
 				async fn [<$name _no_changes_aggregated>]() {
-					let test_dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR"))
-						.join("tests/testdata/diff")
-						.join(stringify!($name));
+					let test_dir = test_utils::diff_fixture_dir(stringify!($name));
 					run_apply_no_changes_test(&test_dir, DiscoveryMode::Aggregated).await;
 				}
 			}

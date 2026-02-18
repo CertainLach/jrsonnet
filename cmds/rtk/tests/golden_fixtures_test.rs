@@ -1,56 +1,80 @@
 use std::{
-	collections::HashMap,
+	collections::BTreeMap,
 	fs,
 	path::{Path, PathBuf},
 };
 
-use rtk::{
-	discover::find_environments_with_opts,
-	eval::EvalOpts,
-	export::{export, ExportOpts},
-};
+use clap::{Parser, Subcommand};
+use rtk::commands;
 use serde::Deserialize;
-use similar::{ChangeTag, TextDiff};
 
-/// The export format for golden fixtures - matches GOLDEN_EXPORT_FORMAT in Makefile
-/// Uses default for namespace to handle cluster-scoped resources (CRDs, ClusterRoles, etc.)
-const EXPORT_FORMAT: &str =
-	"{{ .metadata.namespace | default \"_cluster\" }}/{{.kind}}-{{.metadata.name}}";
-
-/// Test options that can be specified in test_opts.json for each fixture
-/// These are CLI arguments that should be passed to both tk and rtk for consistency testing
 #[derive(Debug, Default, Deserialize)]
 #[serde(default)]
-struct TestOpts {
-	/// External variables (code values) - maps to --ext-code key=value
-	ext_code: HashMap<String, String>,
-	/// External variables (string values) - maps to --ext-str key=value
-	ext_str: HashMap<String, String>,
-	/// File extension - maps to --extension
-	extension: Option<String>,
-	/// Deleted environments for merge testing - maps to --merge-deleted-envs
-	merge_deleted_envs: Vec<String>,
-	/// Label selector - maps to --selector
-	selector: Option<String>,
-	/// Skip manifest.json generation - maps to --skip-manifest
-	skip_manifest: Option<bool>,
-	/// Regex filter on resources - maps to --target
-	target: Vec<String>,
-	/// Top-level arguments (code values) - maps to --tla-code key=value
-	tla_code: HashMap<String, String>,
-	/// Top-level arguments (string values) - maps to --tla-str key=value
-	tla_str: HashMap<String, String>,
+struct FixtureConfigLayer {
+	extra_args: Option<Vec<String>>,
+	args: Option<BTreeMap<String, Vec<String>>>,
 }
 
-/// Load test options from test_opts.json if it exists in the env directory
-fn load_test_opts(env_path: &Path) -> TestOpts {
-	let opts_path = env_path.join("test_opts.json");
-	if opts_path.exists() {
-		let content = fs::read_to_string(&opts_path).expect("Failed to read test_opts.json");
-		serde_json::from_str(&content).expect("Failed to parse test_opts.json")
-	} else {
-		TestOpts::default()
+#[derive(Debug, Default)]
+struct FixtureConfig {
+	extra_args: Vec<String>,
+	args: BTreeMap<String, Vec<String>>,
+}
+
+impl FixtureConfig {
+	fn merge_layer(&mut self, layer: FixtureConfigLayer) {
+		if let Some(extra_args) = layer.extra_args {
+			self.extra_args.extend(extra_args);
+		}
+		if let Some(args) = layer.args {
+			for (command, new_args) in args {
+				self.args.entry(command).or_default().extend(new_args);
+			}
+		}
 	}
+
+	fn args_for_command(&self, command: &str) -> Vec<String> {
+		let mut args = self.extra_args.clone();
+		if let Some(command_args) = self.args.get(command) {
+			args.extend(command_args.clone());
+		}
+		args
+	}
+}
+
+#[derive(Parser)]
+struct GoldenCli {
+	#[command(subcommand)]
+	command: GoldenCommand,
+}
+
+#[derive(Subcommand)]
+enum GoldenCommand {
+	Export(commands::export::ExportArgs),
+}
+
+fn load_fixture_export_args(suite_path: &Path, env_path: &Path) -> Vec<String> {
+	let mut config = FixtureConfig::default();
+
+	// Load suite-level config first (defaults), then fixture-specific overrides
+	let mut config_dirs = vec![suite_path];
+	if env_path != suite_path {
+		config_dirs.push(env_path);
+	}
+
+	for config_dir in config_dirs {
+		let config_path = config_dir.join("tk-compare.toml");
+		if !config_path.exists() {
+			continue;
+		}
+		let content = fs::read_to_string(&config_path)
+			.unwrap_or_else(|e| panic!("Failed to read {}: {}", config_path.display(), e));
+		let layer: FixtureConfigLayer = toml::from_str(&content)
+			.unwrap_or_else(|e| panic!("Failed to parse {}: {}", config_path.display(), e));
+		config.merge_layer(layer);
+	}
+
+	config.args_for_command("export")
 }
 
 /// Helper function to get absolute path to test_fixtures
@@ -64,26 +88,27 @@ fn fixtures_path(subpath: &str) -> PathBuf {
 		.join(subpath)
 }
 
-/// Recursively collect all files in a directory with their relative paths
-fn collect_files(dir: &Path) -> std::collections::HashMap<String, String> {
-	let mut files = std::collections::HashMap::new();
-	if !dir.exists() {
-		return files;
-	}
-	for entry in walkdir::WalkDir::new(dir) {
-		let entry = entry.unwrap();
-		if entry.file_type().is_file() {
-			let rel_path = entry
-				.path()
-				.strip_prefix(dir)
-				.unwrap()
-				.to_string_lossy()
-				.to_string();
-			let content = fs::read_to_string(entry.path()).unwrap();
-			files.insert(rel_path, content);
+fn copy_golden_without_manifest(src: &Path, dst: &Path) {
+	for entry in walkdir::WalkDir::new(src) {
+		let entry = entry.expect("walkdir entry");
+		let path = entry.path();
+		if !entry.file_type().is_file() {
+			continue;
 		}
+		let rel_path = path
+			.strip_prefix(src)
+			.expect("strip prefix")
+			.to_string_lossy()
+			.to_string();
+		if rel_path == "manifest.json" {
+			continue;
+		}
+		let target = dst.join(&rel_path);
+		if let Some(parent) = target.parent() {
+			fs::create_dir_all(parent).expect("create parent");
+		}
+		fs::copy(path, &target).expect("copy file");
 	}
-	files
 }
 
 /// Discover all golden test environments in test_fixtures/golden_envs/
@@ -114,6 +139,29 @@ fn discover_golden_envs() -> Vec<(String, PathBuf)> {
 	envs
 }
 
+fn run_rtk_export(env_path: &Path, output_dir: &Path, extra_args: &[String]) {
+	let mut argv = vec![
+		"rtk".to_string(),
+		"export".to_string(),
+		output_dir.to_string_lossy().to_string(),
+		env_path.to_string_lossy().to_string(),
+	];
+	argv.extend(extra_args.iter().cloned());
+
+	let cli = GoldenCli::try_parse_from(&argv)
+		.unwrap_or_else(|e| panic!("failed to parse argv {:?}: {}", argv, e));
+	let GoldenCommand::Export(args) = cli.command;
+	let mut output = Vec::new();
+	commands::export::run(args, &mut output).unwrap_or_else(|e| {
+		panic!(
+			"rtk export failed for argv {:?}\nstderr:\n{}error:\n{}",
+			argv,
+			String::from_utf8_lossy(&output),
+			e
+		)
+	});
+}
+
 /// Run a golden test comparing rtk export output against tk-generated golden files
 fn run_golden_test(env_path: &Path) {
 	let temp_dir = tempfile::TempDir::new().unwrap();
@@ -127,115 +175,32 @@ fn run_golden_test(env_path: &Path) {
 		golden_dir
 	);
 
-	// Load test-specific options if they exist
-	let test_opts = load_test_opts(env_path);
+	let suite_path = env_path.parent().expect("env_path should have a parent");
+	let mut extra_args = load_fixture_export_args(suite_path, env_path);
+	extra_args.extend([
+		"--skip-manifest".to_string(),
+		"--parallel".to_string(),
+		"1".to_string(),
+	]);
+	run_rtk_export(env_path, output_dir, &extra_args);
 
-	// Build eval options from test_opts
-	let eval_opts = EvalOpts {
-		ext_str: test_opts.ext_str.clone(),
-		ext_code: test_opts.ext_code.clone(),
-		tla_str: test_opts.tla_str.clone(),
-		tla_code: test_opts.tla_code.clone(),
-		..Default::default()
-	};
+	let filtered_golden_dir = tempfile::TempDir::new().unwrap();
+	copy_golden_without_manifest(&golden_dir, filtered_golden_dir.path());
+	let comparison = rtk_diff::directory::compare_directories_detailed(
+		filtered_golden_dir.path().to_string_lossy().as_ref(),
+		output_dir.to_string_lossy().as_ref(),
+	)
+	.unwrap();
 
-	let envs =
-		find_environments_with_opts(&[env_path.to_string_lossy().to_string()], &eval_opts).unwrap();
-	let env_count = envs.len();
-	let recursive = env_count > 1;
-
-	// Use extension from test_opts or default to "golden"
-	let extension = test_opts.extension.unwrap_or_else(|| "golden".to_string());
-
-	// Use skip_manifest from test_opts or default to true
-	let skip_manifest = test_opts.skip_manifest.unwrap_or(true);
-
-	let opts = ExportOpts {
-		output_dir: output_dir.to_path_buf(),
-		extension,
-		format: EXPORT_FORMAT.to_string(),
-		parallelism: 1,
-		eval_opts,
-		name: None,
-		recursive,
-		selector: test_opts.selector,
-		skip_manifest,
-		target: test_opts.target,
-		merge_deleted_envs: test_opts.merge_deleted_envs,
-		..Default::default()
-	};
-
-	let result = export(&[env_path.to_string_lossy().to_string()], opts).unwrap();
-
-	// Note: When using --selector filter, we may export fewer environments than discovered
-	// The golden files represent the filtered output, so we compare against actual output
-	assert!(
-		result.successful > 0 || env_count == 0,
-		"Should export at least one environment (discovered {}, exported {})",
-		env_count,
-		result.successful
-	);
-	assert_eq!(result.failed, 0, "Should have no failures");
-
-	let golden_files: std::collections::HashMap<_, _> = collect_files(&golden_dir)
-		.into_iter()
-		.filter(|(k, _)| k != "manifest.json")
-		.collect();
-	let output_files = collect_files(output_dir);
-
-	let golden_keys: std::collections::HashSet<_> = golden_files.keys().collect();
-	let output_keys: std::collections::HashSet<_> = output_files.keys().collect();
-
-	assert_eq!(
-		golden_keys, output_keys,
-		"File sets should match.\nGolden: {:?}\nOutput: {:?}",
-		golden_keys, output_keys
-	);
-
-	let mut all_failures = Vec::new();
-	let mut sorted_paths: Vec<_> = golden_files.keys().collect();
-	sorted_paths.sort();
-
-	for path in sorted_paths {
-		let golden_content = golden_files.get(path).unwrap();
-		let output_content = output_files.get(path).unwrap();
-		if golden_content != output_content {
-			let diff = TextDiff::from_lines(golden_content, output_content);
-			let mut diff_output = String::new();
-			// Only show changed lines with line numbers
-			for (idx, group) in diff.grouped_ops(3).iter().enumerate() {
-				if idx > 0 {
-					diff_output.push_str("...\n");
-				}
-				for op in group {
-					for change in diff.iter_changes(op) {
-						let (sign, line_num) = match change.tag() {
-							ChangeTag::Delete => ("-", change.old_index().map(|i| i + 1)),
-							ChangeTag::Insert => ("+", change.new_index().map(|i| i + 1)),
-							ChangeTag::Equal => continue, // Skip unchanged lines
-						};
-						let line_str = line_num.map(|n| format!("{:>5}", n)).unwrap_or_default();
-						diff_output.push_str(&format!("{} {}| {}", sign, line_str, change));
-					}
-				}
-			}
-			all_failures.push(format!(
-				"=== {} ===\n--- golden (expected)\n+++ output (actual)\n\n{}",
-				path, diff_output
-			));
-		}
-	}
-
-	if !all_failures.is_empty() {
+	if !comparison.matched {
 		panic!(
 			"Content mismatch for {} file(s):\n\n{}",
-			all_failures.len(),
-			all_failures.join("\n\n")
+			comparison.differences.len(),
+			comparison.differences.join("\n\n")
 		);
 	}
 }
 
-/// Main test that discovers and runs all golden fixture tests
 #[test]
 fn test_all_golden_fixtures() {
 	let envs = discover_golden_envs();

@@ -1,0 +1,14 @@
+[package]
+name = "k8s"
+version = "0.1.0"
+edition = "2021"
+description = "Shared Kubernetes utilities for rtk"
+
+[dependencies]
+phf = { workspace = true }
+serde = { workspace = true }
+serde_json = { workspace = true }
+thiserror = { workspace = true }
+
+[dev-dependencies]
+rstest = "0.26.1"

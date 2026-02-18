@@ -6,12 +6,13 @@
   hyperfine,
   packages,
 }: let
-  inherit (packages) rtk jrsonnet tanka;
+  inherit (packages) rtk mock-k8s-server jrsonnet tanka;
 
   src = ./rtk-benchmarks.sh;
   binName = "rtk-benchmarks";
   runtimeDeps = [
     rtk
+    mock-k8s-server
     tanka
     hyperfine
     jrsonnet

@@ -1,0 +1,34 @@
+# Configuration for comparing Grafana Tanka (tk) with rustanka (rtk)
+#
+# Usage:
+#   cargo run -p tk-compare --release -- tk-compare-grafana.toml
+#
+# Environment variables:
+#   TK_PATH  - Path to tk executable (optional; default: tk)
+#   RTK_PATH - Path to rtk executable (optional; default: rtk)
+
+[[tests]]
+name = "golden eval"
+working_dir = "{{testcase}}"
+workspace = true
+fixtures_dir = "test_fixtures/golden_envs"
+args = ["eval", "."]
+compare = ["{{tk-compare}}", "compare", "json"]
+
+[[tests]]
+name = "golden export"
+working_dir = "{{testcase}}"
+workspace = true
+fixtures_dir = "test_fixtures/golden_envs"
+args = ["export", "{{destination}}", "."]
+compare = ["{{tk-compare}}", "compare", "directory"]
+
+[[tests]]
+name = "diff"
+working_dir = "."
+workspace = false
+fixtures_dir = "cmds/rtk/tests/testdata/diff"
+fixture_name_prefix = "diff"
+fixture_cluster_dir = "cluster"
+args = ["diff", "{{testcase}}/environment"]
+compare = ["{{tk-compare}}", "compare", "unified-diff"]

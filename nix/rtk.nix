@@ -1,23 +1,28 @@
 {
   lib,
   craneLib,
+  cargoArtifacts,
   kustomize,
   kubernetes-helm,
+  tanka,
 }: let
-  testInputs = [kustomize kubernetes-helm];
+  testInputs = [kustomize kubernetes-helm tanka];
 in
   craneLib.buildPackage {
+    inherit cargoArtifacts;
+
     src = lib.cleanSourceWith {
       src = ../.;
       filter = path: type:
         (lib.hasInfix "/test_fixtures/" path)
         || (lib.hasInfix "/cmds/rtk/testdata/" path)
-        || (lib.hasSuffix "\.jsonnet" path)
-        || (lib.hasSuffix "\.json" path)
-        || (lib.hasSuffix "\.yaml" path)
-        || (lib.hasSuffix "\.yml" path)
-        || (lib.hasSuffix "\.golden" path)
-        || (lib.hasSuffix "\.conf" path)
+        || (lib.hasInfix "/cmds/rtk/tests/testdata/" path)
+        || (lib.hasSuffix ".jsonnet" path)
+        || (lib.hasSuffix ".json" path)
+        || (lib.hasSuffix ".yaml" path)
+        || (lib.hasSuffix ".yml" path)
+        || (lib.hasSuffix ".golden" path)
+        || (lib.hasSuffix ".conf" path)
         || (craneLib.filterCargoSources path type);
     };
     pname = "rtk";
@@ -28,6 +33,7 @@ in
     checkInputs = testInputs;
 
     cargoExtraArgs = "--locked -p rtk";
+    cargoProfile = "release-fast";
 
     passthru = {
       inherit testInputs;

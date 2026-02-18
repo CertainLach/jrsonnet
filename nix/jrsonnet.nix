@@ -1,6 +1,7 @@
 {
   lib,
   craneLib,
+  cargoArtifacts,
   makeWrapper,
   withNightlyFeatures ? false,
   withExperimentalFeatures ? false,
@@ -8,10 +9,12 @@
 }:
 with lib;
   craneLib.buildPackage {
+    inherit cargoArtifacts;
+
     src = lib.cleanSourceWith {
       src = ../.;
       filter = path: type:
-        (lib.hasSuffix "\.jsonnet" path)
+        (lib.hasSuffix ".jsonnet" path)
         || (craneLib.filterCargoSources path type);
     };
     pname = "jrsonnet";
