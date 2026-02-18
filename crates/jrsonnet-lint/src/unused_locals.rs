@@ -305,8 +305,8 @@ impl UnusedLocalsVisitor {
 					self.visit_expr(&expr);
 				}
 			}
-		ExprString(_) | ExprNumber(_) | ExprLiteral(_) | ExprImport(_) => {}
-		ExprArray(e) => {
+			ExprString(_) | ExprNumber(_) | ExprLiteral(_) | ExprImport(_) => {}
+			ExprArray(e) => {
 				for expr in e.exprs() {
 					self.visit_expr(&expr);
 				}
@@ -340,7 +340,7 @@ impl UnusedLocalsVisitor {
 					self.pop_scope_and_report();
 				}
 			}
-		ExprVar(e) => {
+			ExprVar(e) => {
 				if let Some(name) = e.name() {
 					if let Some((text, _)) = Self::name_text_and_range(&name) {
 						self.mark_used(&text);
