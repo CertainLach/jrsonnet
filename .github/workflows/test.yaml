@@ -1,8 +1,8 @@
 name: Test
 on: [ workflow_call ]
 jobs:
-  test:
-    name: Test
+  check-golden-fixtures:
+    name: Check golden files
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.4
@@ -24,5 +24,18 @@ jobs:
           jrsonnet --version
       - name: Check golden files are up to date
         run: make check-golden-fixtures
+
+  test:
+    name: Run tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@b4ffde65f46336ab88eb53be808477a3936bae11 # v4.1.4
+      - uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
+      - name: Install tk (tanka)
+        run: |
+          TK_VERSION=$(curl -s https://api.github.com/repos/grafana/tanka/releases/latest | grep '"tag_name"' | sed -E 's/.*"v([^"]+)".*/\1/')
+          curl -fSL -o "/usr/local/bin/tk" "https://github.com/grafana/tanka/releases/latest/download/tk-linux-amd64"
+          chmod +x /usr/local/bin/tk
+          tk --version
       - run: cargo test --all
 
