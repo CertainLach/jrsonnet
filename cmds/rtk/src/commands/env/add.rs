@@ -5,6 +5,8 @@ use std::io::Write;
 use anyhow::Result;
 use clap::Args;
 
+use crate::env::{env_add, EnvSpecOptions};
+
 #[derive(Args)]
 pub struct AddArgs {
 	/// Path for the new environment
@@ -40,6 +42,14 @@ pub struct AddArgs {
 }
 
 /// Run the env add subcommand.
-pub fn run<W: Write>(_args: AddArgs, _writer: W) -> Result<()> {
-	anyhow::bail!("not implemented")
+pub fn run<W: Write>(args: AddArgs, _writer: W) -> Result<()> {
+	let opts = EnvSpecOptions {
+		namespace: args.namespace,
+		server: args.server,
+		server_from_context: args.server_from_context,
+		context_name: args.context_name,
+		diff_strategy: args.diff_strategy,
+		inject_labels: Some(args.inject_labels),
+	};
+	env_add(&args.path, args.inline, &opts)
 }

@@ -7,6 +7,30 @@ use std::{
 	path::{Path, PathBuf},
 };
 
+/// Guard that sets the current directory for the duration of a test and restores it on drop.
+#[cfg(test)]
+pub struct CurrentDirGuard {
+	previous: Option<PathBuf>,
+}
+
+#[cfg(test)]
+impl CurrentDirGuard {
+	pub fn new(path: &Path) -> Self {
+		let previous = std::env::current_dir().ok();
+		let _ = std::env::set_current_dir(path);
+		Self { previous }
+	}
+}
+
+#[cfg(test)]
+impl Drop for CurrentDirGuard {
+	fn drop(&mut self) {
+		if let Some(ref p) = self.previous {
+			let _ = std::env::set_current_dir(p);
+		}
+	}
+}
+
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result as JrsonnetResult},
 	ImportResolver,

@@ -10,7 +10,190 @@ use anyhow::{Context, Result};
 use rayon::prelude::*;
 use tabwriter::TabWriter;
 
-use crate::spec::Environment;
+use crate::jpath;
+use crate::spec::{Environment, Spec};
+
+/// Options shared between env add and env set for building spec.
+/// For env set, only `Some`/non-empty values are applied.
+pub struct EnvSpecOptions {
+	pub namespace: Option<String>,
+	pub server: Option<String>,
+	pub server_from_context: Option<String>,
+	pub context_name: Vec<String>,
+	pub diff_strategy: Option<String>,
+	/// If None, do not update (env set). If Some(b), set spec.inject_labels (env add always sets).
+	pub inject_labels: Option<bool>,
+}
+
+/// Resolve API server URL from a kubeconfig context name (for --server-from-context).
+fn server_from_kubeconfig_context(context_name: &str) -> Result<String> {
+	let kubeconfig =
+		kube::config::Kubeconfig::read().context("reading KUBECONFIG for --server-from-context")?;
+	let ctx = kubeconfig
+		.contexts
+		.iter()
+		.find(|c| c.name == context_name)
+		.with_context(|| format!("context {:?} not found in KUBECONFIG", context_name))?;
+	let cluster_name = ctx
+		.context
+		.as_ref()
+		.and_then(|c| Some(c.cluster.as_str()))
+		.with_context(|| format!("context {:?} has no cluster", context_name))?;
+	let cluster = kubeconfig
+		.clusters
+		.iter()
+		.find(|c| c.name == cluster_name)
+		.with_context(|| format!("cluster {:?} not found in KUBECONFIG", cluster_name))?;
+	cluster
+		.cluster
+		.as_ref()
+		.and_then(|c| c.server.clone())
+		.with_context(|| format!("cluster {:?} has no server", cluster_name))
+}
+
+fn apply_spec_options(spec: &mut Spec, opts: &EnvSpecOptions) -> Result<()> {
+	if let Some(ns) = &opts.namespace {
+		spec.namespace = ns.clone();
+	}
+	if let Some(s) = &opts.server {
+		spec.api_server = Some(s.clone());
+	}
+	if let Some(ctx) = &opts.server_from_context {
+		let server = server_from_kubeconfig_context(ctx)?;
+		spec.api_server = Some(server);
+	}
+	if !opts.context_name.is_empty() {
+		spec.context_names = Some(opts.context_name.clone());
+	}
+	if let Some(d) = &opts.diff_strategy {
+		spec.diff_strategy = Some(d.clone());
+	}
+	if let Some(b) = opts.inject_labels {
+		spec.inject_labels = Some(b);
+	}
+	Ok(())
+}
+
+/// Add a new environment: create directory, main.jsonnet, and optionally spec.json.
+pub fn env_add(path: &str, inline: bool, opts: &EnvSpecOptions) -> Result<()> {
+	let path_buf = PathBuf::from(path);
+	let (root, env_dir) = if path_buf.is_absolute() {
+		let env_dir = if path_buf.exists() {
+			path_buf.canonicalize().unwrap_or(path_buf)
+		} else {
+			path_buf
+		};
+		let root = jpath::find_root(env_dir.parent().unwrap_or(&env_dir))
+			.context("could not find project root (no jsonnetfile.json or tkrc.yaml)")?;
+		(root, env_dir)
+	} else {
+		let cwd = std::env::current_dir().context("current_dir")?;
+		let root = jpath::find_root(&cwd)
+			.context("could not find project root (no jsonnetfile.json or tkrc.yaml)")?;
+		let env_dir = root.join(path);
+		let env_dir = if env_dir.exists() {
+			env_dir.canonicalize().unwrap_or(env_dir)
+		} else {
+			env_dir
+		};
+		(root, env_dir)
+	};
+
+	if env_dir.exists() {
+		let has_marker =
+			env_dir.join("main.jsonnet").exists() || env_dir.join("spec.json").exists();
+		if has_marker {
+			anyhow::bail!("environment already exists at {}", env_dir.display());
+		}
+	}
+	fs::create_dir_all(&env_dir).context("create environment directory")?;
+
+	let rel_path = env_dir
+		.strip_prefix(&root)
+		.map(|p| p.to_string_lossy().to_string())
+		.unwrap_or_else(|_| env_dir.display().to_string());
+
+	if inline {
+		let namespace = opts.namespace.as_deref().unwrap_or("default");
+		let server: String = opts
+			.server
+			.clone()
+			.or_else(|| {
+				opts.server_from_context
+					.as_ref()
+					.and_then(|c| server_from_kubeconfig_context(c).ok())
+			})
+			.unwrap_or_else(|| "https://localhost:6443".to_string());
+		let name = rel_path.replace('/', "-");
+		let main_content = format!(
+			r#"{{
+  apiVersion: 'tanka.dev/v1alpha1',
+  kind: 'Environment',
+  metadata: {{ name: '{}' }},
+  spec: {{ namespace: '{}', apiServer: '{}' }},
+  data: {{}},
+}}"#,
+			name,
+			namespace,
+			server.as_str()
+		);
+		fs::write(env_dir.join("main.jsonnet"), main_content).context("write main.jsonnet")?;
+		return Ok(());
+	}
+
+	// Static environment: main.jsonnet + spec.json
+	fs::write(env_dir.join("main.jsonnet"), "{}").context("write main.jsonnet")?;
+
+	let mut env = Environment::new();
+	env.metadata.name = Some(rel_path.clone());
+	env.metadata.namespace = Some(format!("{}/main.jsonnet", rel_path));
+	apply_spec_options(&mut env.spec, opts)?;
+
+	let spec_json = serde_json::to_string_pretty(&env).context("serialize spec.json")?;
+	fs::write(env_dir.join("spec.json"), spec_json).context("write spec.json")?;
+	Ok(())
+}
+
+/// Remove environment(s) by path. Each path is resolved to an environment directory and removed.
+pub fn env_remove(paths: &[String]) -> Result<()> {
+	for path in paths {
+		let base = crate::jpath::resolve(path)
+			.map(|r| r.base)
+			.with_context(|| {
+				format!(
+					"could not resolve environment at {} (not an environment or not found)",
+					path
+				)
+			})?;
+		if base.join("spec.json").exists() || base.join("main.jsonnet").exists() {
+			fs::remove_dir_all(&base).with_context(|| format!("remove {}", base.display()))?;
+		} else {
+			anyhow::bail!(
+				"not an environment directory (no spec.json or main.jsonnet): {}",
+				base.display()
+			);
+		}
+	}
+	Ok(())
+}
+
+/// Update an existing environment's spec.json with the given options.
+pub fn env_set(path: &str, opts: &EnvSpecOptions) -> Result<()> {
+	let jpath_result = crate::jpath::resolve(path).context("resolve environment path")?;
+	let spec_path = jpath_result.base.join("spec.json");
+	if !spec_path.exists() {
+		anyhow::bail!(
+			"environment at {} has no spec.json (inline environment); use env add to create a static environment",
+			jpath_result.base.display()
+		);
+	}
+	let content = fs::read_to_string(&spec_path).context("read spec.json")?;
+	let mut env: Environment = serde_json::from_str(&content).context("parse spec.json")?;
+	apply_spec_options(&mut env.spec, opts)?;
+	let spec_json = serde_json::to_string_pretty(&env).context("serialize spec.json")?;
+	fs::write(&spec_path, spec_json).context("write spec.json")?;
+	Ok(())
+}
 
 /// Recursively prune empty objects from a JSON value (mutates in place)
 fn prune_empty_objects(value: &mut serde_json::Value) {
@@ -801,5 +984,186 @@ mod tests {
 			"Nested jsonnetfile.json from child dir; got '{}'",
 			ns[0]
 		);
+	}
+
+	// -----------------------------------------------------------------------
+	// env add / remove / set tests (mirror Tanka behavior)
+	// -----------------------------------------------------------------------
+
+	fn create_project_root(dir: &Path) {
+		fs::write(
+			dir.join("jsonnetfile.json"),
+			r#"{"version": 1, "dependencies": [], "legacyImports": true}"#,
+		)
+		.unwrap();
+	}
+
+	#[test]
+	fn test_env_add_creates_static_environment() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_path = root.join("environments/dev");
+
+		let opts = EnvSpecOptions {
+			namespace: Some("my-namespace".to_string()),
+			server: Some("https://kube.example.com".to_string()),
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: Some(true),
+		};
+		env_add(env_path.to_str().unwrap(), false, &opts).unwrap();
+
+		assert!(env_path.is_dir(), "environments/dev should exist");
+		assert!(env_path.join("main.jsonnet").exists());
+		assert!(env_path.join("spec.json").exists());
+
+		let main = fs::read_to_string(env_path.join("main.jsonnet")).unwrap();
+		assert_eq!(main.trim(), "{}");
+
+		let spec_content = fs::read_to_string(env_path.join("spec.json")).unwrap();
+		let spec_value: serde_json::Value = serde_json::from_str(&spec_content).unwrap();
+		assert_eq!(spec_value["spec"]["namespace"], "my-namespace");
+		assert_eq!(spec_value["spec"]["apiServer"], "https://kube.example.com");
+		assert_eq!(spec_value["spec"]["injectLabels"], true);
+	}
+
+	#[test]
+	fn test_env_add_inline_creates_main_only() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_path = root.join("env-inline");
+
+		let opts = EnvSpecOptions {
+			namespace: Some("inline-ns".to_string()),
+			server: Some("https://inline.example.com".to_string()),
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: None,
+		};
+		env_add(env_path.to_str().unwrap(), true, &opts).unwrap();
+
+		assert!(env_path.is_dir());
+		assert!(env_path.join("main.jsonnet").exists());
+		assert!(
+			!env_path.join("spec.json").exists(),
+			"inline env should not have spec.json"
+		);
+
+		let main = fs::read_to_string(env_path.join("main.jsonnet")).unwrap();
+		assert!(main.contains("tanka.dev/v1alpha1"));
+		assert!(main.contains("inline-ns"));
+		assert!(main.contains("https://inline.example.com"));
+	}
+
+	#[test]
+	fn test_env_add_fails_when_already_exists() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_path = root.join("environments/dev");
+
+		let opts = EnvSpecOptions {
+			namespace: None,
+			server: None,
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: Some(false),
+		};
+		env_add(env_path.to_str().unwrap(), false, &opts).unwrap();
+		let err = env_add(env_path.to_str().unwrap(), false, &opts).unwrap_err();
+		assert!(err.to_string().contains("already exists"));
+	}
+
+	#[test]
+	fn test_env_set_updates_spec() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_path = root.join("environments/dev");
+
+		let add_opts = EnvSpecOptions {
+			namespace: Some("original-ns".to_string()),
+			server: Some("https://original.example.com".to_string()),
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: Some(false),
+		};
+		env_add(env_path.to_str().unwrap(), false, &add_opts).unwrap();
+
+		let set_opts = EnvSpecOptions {
+			namespace: Some("updated-ns".to_string()),
+			server: None,
+			server_from_context: None,
+			context_name: vec!["my-context".to_string()],
+			diff_strategy: Some("server".to_string()),
+			inject_labels: Some(true),
+		};
+		env_set(env_path.to_str().unwrap(), &set_opts).unwrap();
+
+		let spec_content = fs::read_to_string(env_path.join("spec.json")).unwrap();
+		let spec_value: serde_json::Value = serde_json::from_str(&spec_content).unwrap();
+		assert_eq!(spec_value["spec"]["namespace"], "updated-ns");
+		assert_eq!(
+			spec_value["spec"]["contextNames"],
+			serde_json::json!(["my-context"])
+		);
+		assert_eq!(spec_value["spec"]["diffStrategy"], "server");
+		assert_eq!(spec_value["spec"]["injectLabels"], true);
+	}
+
+	#[test]
+	fn test_env_remove_deletes_environment() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_path = root.join("environments/to-remove");
+
+		let opts = EnvSpecOptions {
+			namespace: Some("default".to_string()),
+			server: None,
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: Some(false),
+		};
+		env_add(env_path.to_str().unwrap(), false, &opts).unwrap();
+		assert!(env_path.exists());
+
+		env_remove(&[env_path.to_string_lossy().to_string()]).unwrap();
+		assert!(!env_path.exists());
+	}
+
+	#[test]
+	fn test_env_remove_multiple() {
+		let temp_dir = TempDir::new().unwrap();
+		let root = temp_dir.path();
+		create_project_root(root);
+		let env_a = root.join("environments/a");
+		let env_b = root.join("environments/b");
+
+		let opts = EnvSpecOptions {
+			namespace: Some("default".to_string()),
+			server: None,
+			server_from_context: None,
+			context_name: vec![],
+			diff_strategy: None,
+			inject_labels: Some(false),
+		};
+		env_add(env_a.to_str().unwrap(), false, &opts).unwrap();
+		env_add(env_b.to_str().unwrap(), false, &opts).unwrap();
+
+		env_remove(&[
+			env_a.to_string_lossy().to_string(),
+			env_b.to_string_lossy().to_string(),
+		])
+		.unwrap();
+		assert!(!env_a.exists());
+		assert!(!env_b.exists());
 	}
 }
