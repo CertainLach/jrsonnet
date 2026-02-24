@@ -27,6 +27,7 @@ sha2 = "0.10"
 
 # jrsonnet dependencies for evaluation
 jrsonnet-evaluator.workspace = true
+jrsonnet-lint.workspace = true
 jrsonnet-stdlib.workspace = true
 jrsonnet-parser.workspace = true
 jrsonnet-macros.workspace = true

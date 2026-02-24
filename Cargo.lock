@@ -1581,6 +1581,16 @@ dependencies = [
 ]
 
 [[package]]
+name = "jrsonnet-lint"
+version = "0.5.0-pre97"
+dependencies = [
+ "clap",
+ "jrsonnet-rowan-parser",
+ "rowan",
+ "thiserror 1.0.69",
+]
+
+[[package]]
 name = "jrsonnet-macros"
 version = "0.5.0-pre97"
 dependencies = [
@@ -2875,6 +2885,7 @@ dependencies = [
  "indoc",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
+ "jrsonnet-lint",
  "jrsonnet-macros",
  "jrsonnet-parser",
  "jrsonnet-stdlib",
