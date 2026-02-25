@@ -14,6 +14,12 @@ use regex::Regex;
 
 use crate::jpath;
 
+/// Compiled regexes for import scanning, created once and reused across recursive calls.
+struct ImportRegexes {
+	imports: Regex,
+	chart_dirs: Vec<Regex>,
+}
+
 /// Find all transitive imports of an environment at the given path.
 ///
 /// Returns a sorted list of file paths relative to the project root,
@@ -35,11 +41,31 @@ pub fn transitive_imports(dir: &str) -> Result<Vec<String>> {
 	// Build import paths for resolution
 	let import_paths: Vec<PathBuf> = jpath_result.import_paths.clone();
 
+	// Compile regexes once for the entire traversal
+	let regexes = ImportRegexes {
+		imports: Regex::new(r#"import(str)?\s+['"]([^'"%()]+)['"]"#)?,
+		chart_dirs: vec![
+			Regex::new(
+				r#"std\.native\(\s*['"]helmTemplate['"]\s*\)\s*\([^,]+,\s*['"]([^'"]+)['"]"#,
+			)?,
+			Regex::new(r#"\.template\(\s*[^,]+,\s*['"]([^'"]+)['"]"#)?,
+			Regex::new(r#"std\.native\(\s*['"]kustomizeBuild['"]\s*\)\s*\(\s*['"]([^'"]+)['"]"#)?,
+			Regex::new(r#"\.build\(\s*['"]([^'"]+)['"]"#)?,
+		],
+	};
+
 	// Track all imports
 	let mut imports: HashSet<PathBuf> = HashSet::new();
 
 	// Recursively find all imports
-	import_recursive(&mut imports, entrypoint, &content, &import_paths, root)?;
+	import_recursive(
+		&mut imports,
+		entrypoint,
+		&content,
+		&import_paths,
+		root,
+		&regexes,
+	)?;
 
 	// Add the entrypoint itself
 	imports.insert(entrypoint.clone());
@@ -71,12 +97,11 @@ fn import_recursive(
 	content: &str,
 	import_paths: &[PathBuf],
 	root: &Path,
+	regexes: &ImportRegexes,
 ) -> Result<()> {
-	let imports_regexp = Regex::new(r#"import(str)?\s+['"]([^'"%()]+)['"]"#)?;
-
 	let current_dir = current_file.parent().unwrap_or(Path::new("/"));
 
-	for cap in imports_regexp.captures_iter(content) {
+	for cap in regexes.imports.captures_iter(content) {
 		let is_importstr = cap.get(1).is_some();
 		let import_path_str = cap.get(2).map(|m| m.as_str()).unwrap_or("");
 
@@ -111,13 +136,105 @@ fn import_recursive(
 			if ext == "jsonnet" || ext == "libsonnet" {
 				// Read and recurse
 				if let Ok(file_content) = fs::read_to_string(&canonical) {
-					import_recursive(imports, &canonical, &file_content, import_paths, root)?;
+					import_recursive(
+						imports,
+						&canonical,
+						&file_content,
+						import_paths,
+						root,
+						regexes,
+					)?;
+				}
+			}
+		}
+	}
+
+	// Extract chart/kustomize directory references and add all files within them
+	for re in &regexes.chart_dirs {
+		for cap in re.captures_iter(content) {
+			if let Some(chart_path) = cap.get(1) {
+				let chart_dirs = resolve_chart_dirs_for_imports(current_dir, chart_path.as_str());
+				for chart_dir in chart_dirs {
+					for entry in walkdir::WalkDir::new(&chart_dir)
+						.into_iter()
+						.filter_map(|e| e.ok())
+					{
+						let path = entry.path();
+						if path.is_file() && is_chart_relevant_file(path) {
+							let canonical = fs::canonicalize(path).unwrap_or(path.to_path_buf());
+							imports.insert(canonical);
+						}
+					}
 				}
 			}
 		}
 	}
 
 	Ok(())
+}
+
+/// Check if a file inside a chart/kustomize directory could affect template output.
+/// Excludes documentation (.md) and license files.
+fn is_chart_relevant_file(path: &Path) -> bool {
+	let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+	let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+	ext != "md" && filename != "LICENSE"
+}
+
+/// Resolve chart directory paths from a string that may be static or dynamic.
+/// Same logic as importers::resolve_chart_dirs but returns PathBuf for use in imports.
+fn resolve_chart_dirs_for_imports(file_dir: &Path, chart_path: &str) -> Vec<PathBuf> {
+	let mut dirs = Vec::new();
+
+	// First try the path as-is (static path case)
+	let resolved = file_dir.join(chart_path);
+	if let Ok(canonical_dir) = fs::canonicalize(&resolved) {
+		if canonical_dir.is_dir() {
+			dirs.push(canonical_dir);
+			return dirs;
+		}
+	}
+
+	// Path doesn't resolve directly - strip dynamic suffix and match by prefix
+	let clean_path = chart_path.trim_end_matches('/').replace("%s", "");
+
+	let parent_part = Path::new(&clean_path).parent();
+	let prefix = Path::new(&clean_path)
+		.file_name()
+		.and_then(|n| n.to_str())
+		.unwrap_or("");
+
+	if let Some(parent_rel) = parent_part {
+		let parent_dir = file_dir.join(parent_rel);
+		if let Ok(canonical_parent) = fs::canonicalize(&parent_dir) {
+			if canonical_parent.is_dir() {
+				if prefix.is_empty() {
+					if let Ok(entries) = fs::read_dir(&canonical_parent) {
+						for entry in entries.filter_map(|e| e.ok()) {
+							let path = entry.path();
+							if path.is_dir() {
+								dirs.push(path);
+							}
+						}
+					}
+				} else if let Ok(entries) = fs::read_dir(&canonical_parent) {
+					for entry in entries.filter_map(|e| e.ok()) {
+						let path = entry.path();
+						if path.is_dir() {
+							if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+								if name.starts_with(prefix) {
+									dirs.push(path);
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	dirs
 }
 
 /// Resolve an import path to an absolute file path
@@ -205,6 +322,70 @@ mod tests {
 				"trees/generic.libsonnet",
 				"trees/peach.jsonnet",
 			]
+		);
+	}
+
+	fn test_root_charts() -> PathBuf {
+		PathBuf::from(env!("CARGO_MANIFEST_DIR")).join("testdata/importTreeCharts")
+	}
+
+	#[test]
+	fn test_transitive_imports_includes_helm_chart_files() {
+		let result = transitive_imports(test_root_charts().to_str().unwrap()).unwrap();
+
+		assert!(
+			result.contains(&"charts/my-chart/Chart.yaml".to_string()),
+			"should include Chart.yaml, got: {:?}",
+			result
+		);
+		assert!(
+			result.contains(&"charts/my-chart/values.yaml".to_string()),
+			"should include values.yaml, got: {:?}",
+			result
+		);
+		assert!(
+			result.contains(&"charts/my-chart/templates/deployment.yaml".to_string()),
+			"should include templates/deployment.yaml, got: {:?}",
+			result
+		);
+	}
+
+	#[test]
+	fn test_transitive_imports_includes_kustomize_files() {
+		let result = transitive_imports(test_root_charts().to_str().unwrap()).unwrap();
+
+		assert!(
+			result.contains(&"kustomize/kustomization.yaml".to_string()),
+			"should include kustomization.yaml, got: {:?}",
+			result
+		);
+		assert!(
+			result.contains(&"kustomize/deployment.yaml".to_string()),
+			"should include kustomize deployment.yaml, got: {:?}",
+			result
+		);
+	}
+
+	#[test]
+	fn test_transitive_imports_excludes_non_chart_files() {
+		let result = transitive_imports(test_root_charts().to_str().unwrap()).unwrap();
+
+		assert!(
+			!result.contains(&"charts/my-chart/README.md".to_string()),
+			"should not include README.md, got: {:?}",
+			result
+		);
+	}
+
+	#[test]
+	fn test_transitive_imports_includes_non_yaml_chart_files() {
+		// Files like .txt configs embedded in configmaps should be included
+		let result = transitive_imports(test_root_charts().to_str().unwrap()).unwrap();
+
+		assert!(
+			result.contains(&"charts/my-chart/config.txt".to_string()),
+			"should include config.txt, got: {:?}",
+			result
 		);
 	}
 }

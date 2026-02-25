@@ -482,3 +482,137 @@ fn test_relative_import_from_lib_to_env_should_not_match_as_lib_vendor() {
 		"lib file with relative import starting with ../ should not match via lib/vendor check"
 	);
 }
+
+#[test]
+fn test_helm_chart_values_file_finds_environment() {
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"environments/uses-helm-chart/charts/my-chart/values.yaml",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path("environments/uses-helm-chart/main.jsonnet")]
+	);
+}
+
+#[test]
+fn test_helm_chart_template_file_finds_environment() {
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"environments/uses-helm-chart/charts/my-chart/templates/deployment.yaml",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path("environments/uses-helm-chart/main.jsonnet")]
+	);
+}
+
+#[test]
+fn test_kustomize_file_finds_environment() {
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"environments/uses-kustomize/kustomize/deployment.yaml",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path("environments/uses-kustomize/main.jsonnet")]
+	);
+}
+
+#[test]
+fn test_helm_chart_dynamic_version_finds_environment() {
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"environments/uses-helm-chart-dynamic/charts/my-dynamic-chart-1.0.0/values.yaml",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path(
+			"environments/uses-helm-chart-dynamic/main.jsonnet"
+		)]
+	);
+}
+
+#[test]
+fn test_helm_chart_readme_in_lib_is_ignored() {
+	// README.md inside a chart directory in lib/ should NOT trigger importers,
+	// because .md files are not relevant to Helm template output.
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path("lib/helm-chart-lib/charts/my-lib-chart/README.md")],
+	)
+	.unwrap();
+	assert_eq!(result, Vec::<String>::new());
+}
+
+#[test]
+fn test_helm_chart_yaml_in_lib_finds_environment() {
+	// values.yaml inside a chart directory in lib/ SHOULD trigger importers.
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"lib/helm-chart-lib/charts/my-lib-chart/values.yaml",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path("environments/uses-helm-chart-in-lib/main.jsonnet")]
+	);
+}
+
+#[test]
+fn test_helm_chart_non_yaml_file_finds_environment() {
+	// Non-yaml files (e.g., .txt configs embedded in configmaps) should also trigger importers.
+	let root = PathBuf::from(env!("CARGO_MANIFEST_DIR"))
+		.join("testdata/findImporters")
+		.to_string_lossy()
+		.to_string();
+	let result = rtk::importers::find_importers(
+		&root,
+		vec![abs_path(
+			"environments/uses-helm-chart/charts/my-chart/config.txt",
+		)],
+	)
+	.unwrap();
+	assert_eq!(
+		result,
+		vec![abs_path("environments/uses-helm-chart/main.jsonnet")]
+	);
+}

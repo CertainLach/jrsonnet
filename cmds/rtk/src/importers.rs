@@ -12,6 +12,7 @@ const DEFAULT_ENTRYPOINT: &str = "main.jsonnet";
 struct CachedJsonnetFile {
 	base: String,
 	imports: Vec<String>,
+	chart_dirs: Vec<String>,
 	is_main_file: bool,
 }
 
@@ -365,6 +366,20 @@ fn find_importers_recursive<'a>(
 		.jsonnet_files
 		.par_iter()
 		.filter_map(|(jsonnet_file_path, jsonnet_file_content)| {
+			// Check if file is inside any referenced chart/kustomize directory
+			if !jsonnet_file_content.chart_dirs.is_empty()
+				&& is_chart_relevant_file(&search_for_file_canonical)
+			{
+				for chart_dir in &jsonnet_file_content.chart_dirs {
+					if search_for_file_canonical.starts_with(chart_dir) {
+						return Some((
+							jsonnet_file_path.clone(),
+							jsonnet_file_content.is_main_file,
+						));
+					}
+				}
+			}
+
 			if jsonnet_file_content.imports.is_empty() {
 				return None;
 			}
@@ -544,6 +559,21 @@ fn build_importers_context(root: &str) -> Result<ImportersContext> {
 	// Compile regex once (thread-safe to share across threads)
 	let imports_regexp = Regex::new(r#"import(str)?\s+['"]([^'"%()]+)['"]"#)?;
 
+	// Chart directory regexes for helmTemplate and kustomizeBuild
+	// These capture the chart path string which may be a full static path or a prefix
+	// used in string concatenation/interpolation (e.g., './charts/' + version, './charts/%s' % v)
+	let chart_dir_regexes: Vec<Regex> = vec![
+		// Direct helmTemplate - 2nd positional arg is chart path
+		Regex::new(r#"std\.native\(\s*['"]helmTemplate['"]\s*\)\s*\([^,]+,\s*['"]([^'"]+)['"]"#)?,
+		// Wrapper helmTemplate - .template(name, 'chart-path')
+		// First arg can be a string literal or a variable
+		Regex::new(r#"\.template\(\s*[^,]+,\s*['"]([^'"]+)['"]"#)?,
+		// Direct kustomizeBuild - 1st positional arg is path
+		Regex::new(r#"std\.native\(\s*['"]kustomizeBuild['"]\s*\)\s*\(\s*['"]([^'"]+)['"]"#)?,
+		// Wrapper kustomizeBuild - .build('path')
+		Regex::new(r#"\.build\(\s*['"]([^'"]+)['"]"#)?,
+	];
+
 	// Process files in parallel, also computing canonical paths
 	use rayon::prelude::*;
 	let results: Result<Vec<_>> = files
@@ -559,6 +589,18 @@ fn build_importers_context(root: &str) -> Result<ImportersContext> {
 				}
 			}
 
+			// Extract chart directory references
+			let file_dir = Path::new(file).parent().unwrap_or(Path::new("/"));
+			let mut chart_dirs = Vec::new();
+			for re in &chart_dir_regexes {
+				for cap in re.captures_iter(&content) {
+					if let Some(chart_path) = cap.get(1) {
+						let dirs = resolve_chart_dirs(file_dir, chart_path.as_str());
+						chart_dirs.extend(dirs);
+					}
+				}
+			}
+
 			// Compute canonical path for this file
 			let canonical = fs::canonicalize(file)
 				.map(|p| p.to_string_lossy().to_string())
@@ -569,6 +611,7 @@ fn build_importers_context(root: &str) -> Result<ImportersContext> {
 				CachedJsonnetFile {
 					base: String::new(),
 					imports,
+					chart_dirs,
 					is_main_file,
 				},
 				canonical,
@@ -688,6 +731,82 @@ fn find_base(path: &str, root: &str) -> Result<String> {
 
 	// If no main.jsonnet found, return the root
 	Ok(root.to_string())
+}
+
+/// Check if a file inside a chart/kustomize directory could affect template output.
+/// Excludes documentation (.md) and license files.
+fn is_chart_relevant_file(path: &str) -> bool {
+	let path = Path::new(path);
+	let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+	let filename = path.file_name().and_then(|n| n.to_str()).unwrap_or("");
+
+	ext != "md" && filename != "LICENSE"
+}
+
+/// Resolve chart directory paths from a string that may be static or dynamic.
+///
+/// For static paths like `./charts/my-chart`, resolves directly.
+/// For dynamic paths like `./charts/%s` or `./charts/` (used with string concatenation),
+/// finds all subdirectories matching the prefix.
+fn resolve_chart_dirs(file_dir: &Path, chart_path: &str) -> Vec<String> {
+	let mut dirs = Vec::new();
+
+	// First try the path as-is (static path case)
+	let resolved = file_dir.join(chart_path);
+	if let Ok(canonical_dir) = fs::canonicalize(&resolved) {
+		if canonical_dir.is_dir() {
+			dirs.push(canonical_dir.to_string_lossy().to_string());
+			return dirs;
+		}
+	}
+
+	// Path doesn't resolve directly - it likely contains a format specifier (%s)
+	// or is a prefix used with string concatenation (e.g., './charts/' + version).
+	// Strip the dynamic suffix to get the parent directory, then match all subdirectories
+	// whose names start with the static prefix portion.
+	let clean_path = chart_path.trim_end_matches('/').replace("%s", "");
+
+	let parent_part = Path::new(&clean_path).parent();
+	let prefix = Path::new(&clean_path)
+		.file_name()
+		.and_then(|n| n.to_str())
+		.unwrap_or("");
+
+	if let Some(parent_rel) = parent_part {
+		let parent_dir = file_dir.join(parent_rel);
+		if let Ok(canonical_parent) = fs::canonicalize(&parent_dir) {
+			if canonical_parent.is_dir() {
+				if prefix.is_empty() {
+					// The entire path is a directory prefix (e.g., './charts/')
+					// Match all subdirectories
+					if let Ok(entries) = fs::read_dir(&canonical_parent) {
+						for entry in entries.filter_map(|e| e.ok()) {
+							let path = entry.path();
+							if path.is_dir() {
+								dirs.push(path.to_string_lossy().to_string());
+							}
+						}
+					}
+				} else {
+					// Match subdirectories starting with the prefix
+					if let Ok(entries) = fs::read_dir(&canonical_parent) {
+						for entry in entries.filter_map(|e| e.ok()) {
+							let path = entry.path();
+							if path.is_dir() {
+								if let Some(name) = path.file_name().and_then(|n| n.to_str()) {
+									if name.starts_with(prefix) {
+										dirs.push(path.to_string_lossy().to_string());
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+
+	dirs
 }
 
 /// Check if two paths match, using a pre-computed canonical cache to avoid syscalls.
