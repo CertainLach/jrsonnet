@@ -127,7 +127,7 @@ pub fn extract_manifests(
 	if !target_filters.is_empty() {
 		let filters: Vec<regex::Regex> = target_filters
 			.iter()
-			.map(|f| regex::Regex::new(f))
+			.map(|f| regex::RegexBuilder::new(f).case_insensitive(true).build())
 			.collect::<Result<Vec<_>, _>>()
 			.context("invalid target filter regex")?;
 

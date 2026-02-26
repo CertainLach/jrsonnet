@@ -317,7 +317,10 @@ fn compile_target_patterns(patterns: &[String]) -> Result<Vec<regex::Regex>> {
 	patterns
 		.iter()
 		.map(|p| {
-			regex::Regex::new(p).map_err(|e| anyhow::anyhow!("Invalid target regex '{}': {}", p, e))
+			regex::RegexBuilder::new(p)
+				.case_insensitive(true)
+				.build()
+				.map_err(|e| anyhow::anyhow!("Invalid target regex '{}': {}", p, e))
 		})
 		.collect()
 }
