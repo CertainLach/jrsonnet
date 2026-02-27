@@ -6,7 +6,7 @@ use std::path::Path;
 
 use anyhow::Result;
 use clap::Args;
-use jrsonnet_lint::{lint_snippet, Diagnostic, LintConfig, ParseError};
+use jrsonnet_lint::{apply_fixes, lint_snippet, Diagnostic, LintConfig, ParseError};
 use walkdir::WalkDir;
 
 /// Exit code when lint problems were found (for process::exit)
@@ -28,6 +28,10 @@ pub struct LintArgs {
 	/// Disable specific checks (comma-separated). Valid: unused_locals
 	#[arg(long = "disable-checks", value_name = "CHECKS", value_delimiter = ',')]
 	pub disable_checks: Vec<String>,
+
+	/// Automatically fix lint issues where possible
+	#[arg(long = "fix")]
+	pub fix: bool,
 }
 
 /// Run the lint command.
@@ -74,9 +78,22 @@ pub fn run<W: Write>(args: LintArgs, _writer: W) -> Result<()> {
 			emit_parse_error(file, &code, &e);
 			had_problems = true;
 		}
-		for d in diagnostics {
-			emit_diagnostic(file, &code, &d);
-			had_problems = true;
+
+		if args.fix {
+			let fixed_code = apply_fixes(&code, &diagnostics);
+			if fixed_code != code {
+				fs::write(file, &fixed_code)?;
+			}
+			// Report any diagnostics that could not be auto-fixed
+			for d in diagnostics.iter().filter(|d| d.fix.is_none()) {
+				emit_diagnostic(file, &code, d);
+				had_problems = true;
+			}
+		} else {
+			for d in diagnostics {
+				emit_diagnostic(file, &code, &d);
+				had_problems = true;
+			}
 		}
 	}
 
@@ -168,6 +185,7 @@ mod tests {
 			exclude: vec![],
 			parallelism: 4,
 			disable_checks: vec!["no_such_check".to_string()],
+			fix: false,
 		};
 		let result = run(args, sink());
 		assert!(result.is_err());
@@ -183,6 +201,7 @@ mod tests {
 			exclude: vec![],
 			parallelism: 4,
 			disable_checks: vec!["unused_locals".to_string()],
+			fix: false,
 		};
 		// Run from cwd; may have no jsonnet files, so Ok(())
 		let result = run(args, sink());
@@ -196,6 +215,7 @@ mod tests {
 			exclude: vec![],
 			parallelism: 4,
 			disable_checks: vec![],
+			fix: false,
 		};
 		let result = run(args, sink());
 		assert!(result.is_err());
@@ -211,9 +231,28 @@ mod tests {
 			exclude: vec![],
 			parallelism: 4,
 			disable_checks: vec![],
+			fix: false,
 		};
 		let result = run(args, sink());
 		assert!(result.is_ok());
+	}
+
+	#[test]
+	fn run_fix_writes_back_fixed_file() {
+		let dir = tempfile::tempdir().unwrap();
+		let path = dir.path().join("main.jsonnet");
+		std::fs::write(&path, "local x = 1;\nlocal y = 2;\ny\n").unwrap();
+		let args = LintArgs {
+			paths: vec![path.to_string_lossy().to_string()],
+			exclude: vec![],
+			parallelism: 4,
+			disable_checks: vec![],
+			fix: true,
+		};
+		let result = run(args, sink());
+		assert!(result.is_ok());
+		let content = std::fs::read_to_string(&path).unwrap();
+		assert_eq!(content, "local y = 2;\ny\n", "file should be fixed");
 	}
 
 	#[test]

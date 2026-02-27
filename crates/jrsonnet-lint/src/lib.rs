@@ -6,7 +6,7 @@ mod config;
 mod unused_locals;
 
 pub use config::LintConfig;
-pub use unused_locals::{lint_snippet, Diagnostic, ParseError};
+pub use unused_locals::{apply_fixes, lint_snippet, Diagnostic, Fix, ParseError};
 
 #[cfg(test)]
 mod tests {
@@ -553,6 +553,71 @@ local metaEnv = { baseEnv: function(data) data, withLabel: function(l) {} };
 				"{filename}: unused_locals diagnostics mismatch\n  actual:   {actual:?}\n  expected: {expected:?}"
 			);
 		}
+	}
+
+	// --- apply_fixes tests ---
+
+	#[test]
+	fn apply_fixes_removes_unused_top_level_local() {
+		let config = LintConfig::default();
+		let code = "local x = 1;\nlocal y = 2;\ny\n";
+		let (diags, _) = lint_snippet(code, &config);
+		assert_eq!(diags.len(), 1);
+		assert!(diags[0].fix.is_some(), "diagnostic should have a fix");
+		let fixed = apply_fixes(code, &diags);
+		assert_eq!(fixed, "local y = 2;\ny\n");
+	}
+
+	#[test]
+	fn apply_fixes_removes_unused_object_local() {
+		let config = LintConfig::default();
+		let code = "{\n  local x = 1,\n  out: 42,\n}\n";
+		let (diags, _) = lint_snippet(code, &config);
+		assert_eq!(
+			diags.len(),
+			1,
+			"expected one unused local, got: {:?}",
+			diags
+		);
+		assert!(diags[0].fix.is_some(), "diagnostic should have a fix");
+		let fixed = apply_fixes(code, &diags);
+		// The object local line should be gone
+		assert!(
+			!fixed.contains("local x"),
+			"fixed code should not contain 'local x': {fixed:?}"
+		);
+		// The output field should remain
+		assert!(
+			fixed.contains("out: 42"),
+			"fixed code should still contain field: {fixed:?}"
+		);
+	}
+
+	#[test]
+	fn apply_fixes_no_fix_for_multi_bind_stmt() {
+		let config = LintConfig::default();
+		// multi-bind: both x and y unused; no auto-fix
+		let code = "local x = 1, y = 2; 42\n";
+		let (diags, _) = lint_snippet(code, &config);
+		assert_eq!(diags.len(), 2);
+		for d in &diags {
+			assert!(d.fix.is_none(), "multi-bind should have no fix: {:?}", d);
+		}
+		let fixed = apply_fixes(code, &diags);
+		// Code unchanged
+		assert_eq!(fixed, code);
+	}
+
+	#[test]
+	fn apply_fixes_multiple_unused_top_level() {
+		let config = LintConfig::default();
+		let code = "local a = 1;\nlocal b = 2;\nlocal c = 3;\na\n";
+		let (diags, _) = lint_snippet(code, &config);
+		assert_eq!(diags.len(), 2);
+		let fixed = apply_fixes(code, &diags);
+		assert!(!fixed.contains("local b"), "b should be removed: {fixed:?}");
+		assert!(!fixed.contains("local c"), "c should be removed: {fixed:?}");
+		assert!(fixed.contains("local a"), "a should remain: {fixed:?}");
 	}
 
 	/// Helper: print actual diagnostics for every file in testdata/unused/ to stdout.

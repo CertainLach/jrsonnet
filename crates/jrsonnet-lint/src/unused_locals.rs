@@ -13,12 +13,21 @@ use rowan::TextRange;
 use crate::checks::UNUSED_LOCALS;
 use crate::config::LintConfig;
 
+/// An auto-fix for a diagnostic: the text range to delete.
+#[derive(Clone, Debug)]
+pub struct Fix {
+	/// Source range to delete to apply the fix.
+	pub range: TextRange,
+}
+
 /// A single lint diagnostic (message, source range, check id).
 #[derive(Clone, Debug)]
 pub struct Diagnostic {
 	pub check: &'static str,
 	pub message: String,
 	pub range: TextRange,
+	/// Auto-fix, if available.
+	pub fix: Option<Fix>,
 }
 
 /// Run all enabled lint checks on a snippet. Returns parse errors first if any,
@@ -43,14 +52,102 @@ pub fn lint_snippet(code: &str, config: &LintConfig) -> (Vec<Diagnostic>, Vec<Pa
 	(diagnostics, parse_errs)
 }
 
+/// Apply auto-fixes from diagnostics to the source code.
+/// Returns the modified code. Fixes are applied in reverse order to preserve offsets.
+/// Each fix range is extended to also consume surrounding whitespace and commas.
+pub fn apply_fixes(code: &str, diagnostics: &[Diagnostic]) -> String {
+	let mut ranges: Vec<(usize, usize)> = diagnostics
+		.iter()
+		.filter_map(|d| {
+			d.fix.as_ref().map(|f| {
+				let start: usize = f.range.start().into();
+				let end: usize = f.range.end().into();
+				extended_fix_range(code, start, end)
+			})
+		})
+		.collect();
+
+	if ranges.is_empty() {
+		return code.to_string();
+	}
+
+	// Sort by start in ascending order, then filter out overlapping ranges
+	ranges.sort_by_key(|&(start, _)| start);
+	let mut filtered: Vec<(usize, usize)> = Vec::new();
+	let mut last_end = 0usize;
+	for (start, end) in ranges {
+		if start >= last_end {
+			filtered.push((start, end));
+			last_end = end;
+		}
+		// else: overlapping range, skip
+	}
+
+	// Apply from end to start to preserve earlier offsets
+	let mut result = code.to_string();
+	for &(start, end) in filtered.iter().rev() {
+		result.replace_range(start..end, "");
+	}
+	result
+}
+
+/// Extends a raw fix range (exact syntax node range) to also consume:
+/// - Leading whitespace (spaces/tabs only, stopping at newlines)
+/// - Trailing comma (if present, skipping whitespace between node end and comma)
+/// - Trailing whitespace and one newline after the comma (or directly after the node)
+fn extended_fix_range(code: &str, start: usize, end: usize) -> (usize, usize) {
+	let bytes = code.as_bytes();
+
+	// Extend backward: consume leading spaces/tabs (not newlines)
+	let mut new_start = start;
+	while new_start > 0 && (bytes[new_start - 1] == b' ' || bytes[new_start - 1] == b'\t') {
+		new_start -= 1;
+	}
+
+	// Extend forward: skip whitespace to find optional comma, then consume whitespace + newline
+	let mut new_end = end;
+	// Skip whitespace before possible comma
+	let mut check = new_end;
+	while check < bytes.len() && (bytes[check] == b' ' || bytes[check] == b'\t') {
+		check += 1;
+	}
+	if check < bytes.len() && bytes[check] == b',' {
+		// Consume the comma
+		new_end = check + 1;
+		// Skip whitespace after comma
+		while new_end < bytes.len() && (bytes[new_end] == b' ' || bytes[new_end] == b'\t') {
+			new_end += 1;
+		}
+	} else {
+		// No comma; consume the whitespace we scanned over
+		new_end = check;
+	}
+
+	// Consume trailing newline
+	if new_end < bytes.len() && bytes[new_end] == b'\n' {
+		new_end += 1;
+	}
+
+	(new_start, new_end)
+}
+
 #[derive(Clone, Debug)]
 pub struct ParseError {
 	pub message: String,
 	pub range: TextRange,
 }
 
-/// Scope: name -> (definition range, was_used).
-type Scope = HashMap<String, (TextRange, bool)>;
+/// Scope binding: tracks the identifier range, usage, and optional fix range.
+struct ScopeBinding {
+	/// Range of the identifier token (used for the diagnostic location).
+	range: TextRange,
+	used: bool,
+	/// Range to delete to fix this unused local (None if auto-fix is not supported).
+	fix_range: Option<TextRange>,
+}
+
+/// Scope: name -> binding info.
+type Scope = HashMap<String, ScopeBinding>;
 
 struct ScopeEntry {
 	bindings: Scope,
@@ -64,23 +161,31 @@ struct UnusedLocalsVisitor {
 }
 
 impl UnusedLocalsVisitor {
-	fn push_scope(&mut self, bindings: Vec<(String, TextRange)>) {
+	fn push_scope(&mut self, bindings: Vec<(String, TextRange, Option<TextRange>)>) {
 		self.push_scope_with_reporting(bindings, true);
 	}
 
 	/// Push a scope whose bindings are tracked for `mark_used` but never reported as unused.
 	fn push_scope_silent(&mut self, bindings: Vec<(String, TextRange)>) {
+		let bindings = bindings.into_iter().map(|(n, r)| (n, r, None)).collect();
 		self.push_scope_with_reporting(bindings, false);
 	}
 
 	fn push_scope_with_reporting(
 		&mut self,
-		bindings: Vec<(String, TextRange)>,
+		bindings: Vec<(String, TextRange, Option<TextRange>)>,
 		report_unused: bool,
 	) {
 		let mut scope = Scope::new();
-		for (name, range) in bindings {
-			scope.insert(name, (range, false));
+		for (name, range, fix_range) in bindings {
+			scope.insert(
+				name,
+				ScopeBinding {
+					range,
+					used: false,
+					fix_range,
+				},
+			);
 		}
 		self.scopes.push(ScopeEntry {
 			bindings: scope,
@@ -90,8 +195,8 @@ impl UnusedLocalsVisitor {
 
 	fn mark_used(&mut self, name: &str) {
 		for entry in self.scopes.iter_mut().rev() {
-			if let Some((_, used)) = entry.bindings.get_mut(name) {
-				*used = true;
+			if let Some(binding) = entry.bindings.get_mut(name) {
+				binding.used = true;
 				break;
 			}
 		}
@@ -100,12 +205,13 @@ impl UnusedLocalsVisitor {
 	fn pop_scope_and_report(&mut self) {
 		if let Some(entry) = self.scopes.pop() {
 			if entry.report_unused {
-				for (name, (range, used)) in entry.bindings {
-					if !used {
+				for (name, binding) in entry.bindings {
+					if !binding.used {
 						self.diagnostics.push(Diagnostic {
 							check: UNUSED_LOCALS,
 							message: format!("unused local `{name}`"),
-							range,
+							range: binding.range,
+							fix: binding.fix_range.map(|r| Fix { range: r }),
 						});
 					}
 				}
@@ -237,9 +343,19 @@ impl UnusedLocalsVisitor {
 		let mut push_count = 0usize;
 		for stmt in expr.stmts() {
 			if let Stmt::StmtLocal(s) = stmt {
-				let mut bindings = Vec::new();
+				// Fix range: remove whole statement only when there's a single bind.
+				// Multi-bind statements (local x = 1, y = 2;) are not auto-fixed.
+				let bind_count = s.binds().count();
+				let fix_range = if bind_count == 1 {
+					Some(s.syntax().text_range())
+				} else {
+					None
+				};
+				let mut bindings: Vec<(String, TextRange, Option<TextRange>)> = Vec::new();
 				for bind in s.binds() {
-					bindings.extend(Self::collect_bind_names(&bind));
+					for (name, range) in Self::collect_bind_names(&bind) {
+						bindings.push((name, range, fix_range));
+					}
 				}
 				if !bindings.is_empty() {
 					self.push_scope(bindings);
@@ -324,9 +440,12 @@ impl UnusedLocalsVisitor {
 				let mut for_push_count = 0usize;
 				for spec in e.comp_specs() {
 					if let CompSpec::ForSpec(f) = spec {
-						let bindings = f
+						let bindings: Vec<(String, TextRange, Option<TextRange>)> = f
 							.bind()
-							.map_or_else(Vec::new, |d| Self::collect_destruct_names(&d));
+							.map_or_else(Vec::new, |d| Self::collect_destruct_names(&d))
+							.into_iter()
+							.map(|(n, r)| (n, r, None))
+							.collect();
 						if !bindings.is_empty() {
 							self.push_scope(bindings);
 							for_push_count += 1;
@@ -439,9 +558,16 @@ impl UnusedLocalsVisitor {
 				let mut push_count = 0usize;
 				for member in list.members() {
 					if let Member::MemberBindStmt(m) = &member {
+						// Fix range: remove the whole MemberBindStmt (the comma is handled by the
+						// fixer's extended_fix_range, which looks for a trailing comma in the text).
+						let fix_range = Some(m.syntax().text_range());
 						if let Some(obj_local) = m.obj_local() {
 							if let Some(bind) = obj_local.bind() {
-								let bindings = Self::collect_bind_names(&bind);
+								let bindings: Vec<(String, TextRange, Option<TextRange>)> =
+									Self::collect_bind_names(&bind)
+										.into_iter()
+										.map(|(n, r)| (n, r, fix_range))
+										.collect();
 								if !bindings.is_empty() {
 									self.push_scope(bindings);
 									push_count += 1;
@@ -502,9 +628,14 @@ impl UnusedLocalsVisitor {
 				let mut push_count = 0usize;
 				for member in comp.member_comps() {
 					if let MemberComp::MemberBindStmt(m) = &member {
+						let fix_range = Some(m.syntax().text_range());
 						if let Some(obj_local) = m.obj_local() {
 							if let Some(bind) = obj_local.bind() {
-								let bindings = Self::collect_bind_names(&bind);
+								let bindings: Vec<(String, TextRange, Option<TextRange>)> =
+									Self::collect_bind_names(&bind)
+										.into_iter()
+										.map(|(n, r)| (n, r, fix_range))
+										.collect();
 								if !bindings.is_empty() {
 									self.push_scope(bindings);
 									push_count += 1;
@@ -526,9 +657,12 @@ impl UnusedLocalsVisitor {
 				let mut for_push_count = 0usize;
 				for spec in comp.comp_specs() {
 					if let CompSpec::ForSpec(f) = spec {
-						let bindings = f
+						let bindings: Vec<(String, TextRange, Option<TextRange>)> = f
 							.bind()
-							.map_or_else(Vec::new, |d| Self::collect_destruct_names(&d));
+							.map_or_else(Vec::new, |d| Self::collect_destruct_names(&d))
+							.into_iter()
+							.map(|(n, r)| (n, r, None))
+							.collect();
 						if !bindings.is_empty() {
 							self.push_scope(bindings);
 							for_push_count += 1;

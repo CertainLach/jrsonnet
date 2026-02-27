@@ -4,7 +4,7 @@
 use std::io::{self, Read};
 
 use clap::Parser;
-use jrsonnet_lint::{lint_snippet, Diagnostic, LintConfig, ParseError};
+use jrsonnet_lint::{apply_fixes, lint_snippet, Diagnostic, LintConfig, ParseError};
 
 #[derive(Parser)]
 #[command(name = "jrsonnet-lint")]
@@ -18,6 +18,10 @@ struct Opts {
 	/// Disable specific checks (comma-separated). Valid: unused_locals
 	#[arg(long = "disable-checks", value_name = "CHECKS", value_delimiter = ',')]
 	disable_checks: Vec<String>,
+
+	/// Automatically fix lint issues where possible (not supported for stdin)
+	#[arg(long = "fix")]
+	fix: bool,
 
 	/// Input files (use - for stdin)
 	#[arg(value_name = "FILE")]
@@ -45,17 +49,17 @@ fn main() {
 	let mut had_problems = false;
 
 	for file in &opts.files {
-		let (code, filename) = if file == "-" {
+		let (code, filename, is_stdin) = if file == "-" {
 			let mut s = String::new();
 			if io::stdin().read_to_string(&mut s).is_err() {
 				eprintln!("ERROR: failed to read stdin");
 				had_error = true;
 				continue;
 			}
-			(s, "<stdin>".to_string())
+			(s, "<stdin>".to_string(), true)
 		} else {
 			match std::fs::read_to_string(file) {
-				Ok(s) => (s, file.clone()),
+				Ok(s) => (s, file.clone(), false),
 				Err(e) => {
 					eprintln!("ERROR: {}: {}", file, e);
 					had_error = true;
@@ -70,9 +74,29 @@ fn main() {
 			emit_parse_error(&filename, &code, &e);
 			had_problems = true;
 		}
-		for d in diagnostics {
-			emit_diagnostic(&filename, &code, &d);
-			had_problems = true;
+
+		if opts.fix && !is_stdin {
+			let fixed = apply_fixes(&code, &diagnostics);
+			if fixed != code {
+				if let Err(e) = std::fs::write(file, &fixed) {
+					eprintln!("ERROR: failed to write {}: {}", file, e);
+					had_error = true;
+					continue;
+				}
+			}
+			// Report any diagnostics that could not be auto-fixed
+			for d in diagnostics.iter().filter(|d| d.fix.is_none()) {
+				emit_diagnostic(&filename, &code, d);
+				had_problems = true;
+			}
+		} else {
+			if opts.fix && is_stdin {
+				eprintln!("WARNING: --fix is not supported for stdin; reporting diagnostics only");
+			}
+			for d in diagnostics {
+				emit_diagnostic(&filename, &code, &d);
+				had_problems = true;
+			}
 		}
 	}
 
@@ -126,6 +150,7 @@ fn print_usage() {
 	eprintln!(
 		"  --disable-checks <CHECKS>   Disable checks (comma-separated). Valid: unused_locals"
 	);
+	eprintln!("  --fix                      Automatically fix lint issues where possible");
 	eprintln!("  --version                  Print version");
 	eprintln!();
 	eprintln!("Environment variables:");
