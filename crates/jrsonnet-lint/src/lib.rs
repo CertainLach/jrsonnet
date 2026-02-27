@@ -301,6 +301,70 @@ mod tests {
 	}
 
 	#[test]
+	fn lint_snippet_triple_colon_visibility_no_parse_error() {
+		// { attribute::: 'value' } must parse without errors (triple colon = unhide visibility)
+		let config = LintConfig::default();
+		let code = "{ attribute::: 'value' }";
+		let (diags, parse_errs) = lint_snippet(code, &config);
+		assert!(
+			parse_errs.is_empty(),
+			"triple colon field must not cause parse errors, got: {:?}",
+			parse_errs
+		);
+		assert!(
+			diags.is_empty(),
+			"triple colon field must not cause lint diagnostics, got: {:?}",
+			diags
+		);
+	}
+
+	#[test]
+	fn lint_snippet_triple_colon_local_used_no_false_positive() {
+		// Local used only in a ::: field must NOT be reported as unused.
+		let config = LintConfig::default();
+		let code = "{ local x = 1, attribute::: x }";
+		let (diags, parse_errs) = lint_snippet(code, &config);
+		assert!(
+			parse_errs.is_empty(),
+			"triple colon field must not cause parse errors, got: {:?}",
+			parse_errs
+		);
+		let unused: Vec<_> = diags
+			.iter()
+			.filter(|d| d.check == "unused_locals")
+			.map(|d| d.message.as_str())
+			.collect();
+		assert!(
+			unused.is_empty(),
+			"local used in ::: field must not be reported as unused, got: {:?}",
+			unused
+		);
+	}
+
+	#[test]
+	fn lint_snippet_triple_colon_plus_modifier_no_parse_error() {
+		// { field+::: value } (with + modifier) must parse and lint cleanly.
+		let config = LintConfig::default();
+		let code = r#"{ local base = {}, field+::: base }"#;
+		let (diags, parse_errs) = lint_snippet(code, &config);
+		assert!(
+			parse_errs.is_empty(),
+			"+::: field must not cause parse errors, got: {:?}",
+			parse_errs
+		);
+		let unused: Vec<_> = diags
+			.iter()
+			.filter(|d| d.check == "unused_locals")
+			.map(|d| d.message.as_str())
+			.collect();
+		assert!(
+			unused.is_empty(),
+			"local used in +::: field must not be reported as unused, got: {:?}",
+			unused
+		);
+	}
+
+	#[test]
 	fn lint_snippet_object_comprehension_loop_var_used_no_false_positive() {
 		// Object comp: loop var used in key and value; must not report as unused.
 		let config = LintConfig::default();

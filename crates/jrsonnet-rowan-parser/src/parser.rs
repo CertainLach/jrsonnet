@@ -342,6 +342,10 @@ fn expr_binding_power(
 }
 
 const COMPSPEC: SyntaxKindSet = TS![for if];
+// `:::` cannot be represented in TS![...] because Rust tokenizes `:::` as the
+// two token trees `::` and `:`, so `TS![: :: :::]` only produces {COLON, COLONCOLON}.
+// Build the set explicitly instead.
+const VISIBILITY_SET: SyntaxKindSet = SyntaxKindSet::new(&[COLON, COLONCOLON, COLONCOLONCOLON]);
 fn compspec(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at_ts(COMPSPEC));
 	if p.at(T![for]) {
@@ -393,11 +397,11 @@ fn field_name(p: &mut Parser) {
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		m.forget(p);
-		p.error_with_recovery_set(TS![; : :: ::: '(']);
+		p.error_with_recovery_set(TS![; '('].union(VISIBILITY_SET));
 	}
 }
 fn visibility(p: &mut Parser) {
-	if p.at_ts(TS![: :: :::]) {
+	if p.at_ts(VISIBILITY_SET) {
 		p.bump();
 	} else {
 		p.error_with_recovery_set(TS![=]);
@@ -457,7 +461,7 @@ fn object(p: &mut Parser) -> CompletedMarker {
 				visibility(p);
 				expr(p);
 				true
-			} else if p.at_ts(TS![: :: :::]) && p.nth_at(1, T![function]) {
+			} else if p.at_ts(VISIBILITY_SET) && p.nth_at(1, T![function]) {
 				visibility(p);
 				p.bump_assert(T![function]);
 				params_desc(p);
