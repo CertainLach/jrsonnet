@@ -31,50 +31,25 @@ pub struct SliceArray {
 }
 
 impl SliceArray {
-	fn iter(&self) -> impl Iterator<Item = Result<Val>> + '_ {
-		self.inner
-			.iter()
-			.skip(self.from as usize)
-			.take((self.to - self.from) as usize)
-			.step_by(self.step as usize)
-	}
-
-	fn iter_lazy(&self) -> impl Iterator<Item = Thunk<Val>> + '_ {
-		self.inner
-			.iter_lazy()
-			.skip(self.from as usize)
-			.take((self.to - self.from) as usize)
-			.step_by(self.step as usize)
-	}
-
-	fn iter_cheap(&self) -> Option<impl crate::arr::ArrayLikeIter<Val> + '_> {
-		Some(
-			self.inner
-				.iter_cheap()?
-				.skip(self.from as usize)
-				.take((self.to - self.from) as usize)
-				.step_by(self.step as usize),
-		)
+	fn map_idx(&self, index: usize) -> usize {
+		self.from as usize + self.step as usize * index
 	}
 }
 impl ArrayLike for SliceArray {
 	fn len(&self) -> usize {
-		iter::repeat(())
-			.take((self.to - self.from) as usize)
-			.step_by(self.step as usize)
-			.count()
+		((self.to - self.from + self.step - 1) / self.step) as usize
 	}
 
 	fn get(&self, index: usize) -> Result<Option<Val>> {
-		self.iter().nth(index).transpose()
+		self.inner.get(self.map_idx(index))
 	}
 
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		self.iter_lazy().nth(index)
+		self.inner.get_lazy(self.map_idx(index))
 	}
 
 	fn get_cheap(&self, index: usize) -> Option<Val> {
-		self.iter_cheap()?.nth(index)
+		self.inner.get_cheap(self.map_idx(index))
 	}
 	fn is_cheap(&self) -> bool {
 		self.inner.is_cheap()
