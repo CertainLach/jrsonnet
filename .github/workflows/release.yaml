@@ -44,14 +44,17 @@ jobs:
       - name: Set version from tag
         run: |
           VERSION=${GITHUB_REF_NAME#v}
-          # Update version in workspace Cargo.toml (used by jrsonnet and jrsonnet-fmt)
+          # Update workspace package version
           sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" Cargo.toml
+          rm Cargo.toml.bak
+          # Update jrsonnet-* workspace member dependency versions (only lines with path =)
+          sed -i.bak "/path = /s/\(version = \)\"[^\"]*\"/\1\"$VERSION\"/" Cargo.toml
           rm Cargo.toml.bak
           # Update version in rtk Cargo.toml
           sed -i.bak "s/^version = \".*\"/version = \"$VERSION\"/" cmds/rtk/Cargo.toml
           rm cmds/rtk/Cargo.toml.bak
           echo "Set versions to $VERSION"
-          grep "^version" Cargo.toml cmds/rtk/Cargo.toml
+          grep -E "^version|jrsonnet-.*version" Cargo.toml cmds/rtk/Cargo.toml
 
       - name: Set up Rust toolchain
         uses: actions-rust-lang/setup-rust-toolchain@1780873c7b576612439a134613cc4cc74ce5538c # v1.15.2
