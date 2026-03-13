@@ -1,0 +1,3 @@
+type error: expected boolean, got string
+    argument <x> evaluation
+    builtinXnor2.jsonnet:1:1-25: function <builtin_xnor> call

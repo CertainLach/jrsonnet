@@ -1,0 +1,4 @@
+local is not defined: x
+    arrcomp5.jsonnet:1:14-16: local <x> access
+    arrcomp5.jsonnet:1:2-4:   local <y> access
+    elem <0> evaluation

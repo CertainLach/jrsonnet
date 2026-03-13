@@ -1,0 +1,2 @@
+assert failed: null
+    error.invariant.avoid_output_change.jsonnet:18:10-25: assertion failure

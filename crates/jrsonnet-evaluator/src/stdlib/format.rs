@@ -138,7 +138,7 @@ pub fn try_parse_cflags(str: &str) -> ParseResult<'_, CFlags> {
 #[derive(Debug, PartialEq, Eq)]
 pub enum Width {
 	Star,
-	Fixed(usize),
+	Fixed(u16),
 }
 pub fn try_parse_field_width(str: &str) -> ParseResult<'_, Width> {
 	if str.is_empty() {
@@ -148,11 +148,11 @@ pub fn try_parse_field_width(str: &str) -> ParseResult<'_, Width> {
 	if bytes[0] == b'*' {
 		return Ok((Width::Star, &str[1..]));
 	}
-	let mut out: usize = 0;
+	let mut out: u16 = 0;
 	let mut digits = 0;
 	while let Some(digit) = (bytes[digits] as char).to_digit(10) {
 		out *= 10;
-		out += digit as usize;
+		out += digit as u16;
 		digits += 1;
 		if digits == bytes.len() {
 			return Err(TruncatedFormatCode);
@@ -300,15 +300,18 @@ const NUMBERS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 #[inline]
 pub fn render_integer(
 	out: &mut String,
+	neg: bool,
 	iv: f64,
-	padding: usize,
-	precision: usize,
+	padding: u16,
+	precision: u16,
 	blank: bool,
 	sign: bool,
 	radix: i64,
-	prefix: &str,
+	zero_prefix: &str,
+	prefix_in_padding: bool,
 	caps: bool,
 ) {
+	debug_assert!(iv >= 0.0, "render_integer receives sign using arg");
 	let iv = iv.floor() as i64;
 	// Digit char indexes in reverse order, i.e
 	// for radix = 16 and n = 12f: [15, 2, 1]
@@ -323,12 +326,14 @@ pub fn render_integer(
 		}
 		nums
 	};
-	let neg = iv < 0;
 	#[allow(clippy::bool_to_int_with_if)]
 	let zp = padding.saturating_sub(if neg || blank || sign { 1 } else { 0 });
+
+	let pref_len = zero_prefix.len() as u16;
 	let zp2 = zp
+		.saturating_sub(if !prefix_in_padding { pref_len } else { 0 })
 		.max(precision)
-		.saturating_sub(prefix.len() + digits.len());
+		.saturating_sub(if prefix_in_padding { pref_len } else { 0 } + digits.len() as u16);
 
 	if neg {
 		out.push('-');
@@ -338,11 +343,13 @@ pub fn render_integer(
 		out.push(' ');
 	}
 
-	out.reserve(zp2);
+	out.reserve(zp2 as usize);
+	if iv != 0 {
+		out.push_str(zero_prefix);
+	}
 	for _ in 0..zp2 {
 		out.push('0');
 	}
-	out.push_str(prefix);
 
 	for digit in digits.into_iter().rev() {
 		let ch = NUMBERS[digit as usize] as char;
@@ -352,25 +359,30 @@ pub fn render_integer(
 
 pub fn render_decimal(
 	out: &mut String,
+	neg: bool,
 	iv: f64,
-	padding: usize,
-	precision: usize,
+	padding: u16,
+	precision: u16,
 	blank: bool,
 	sign: bool,
 ) {
-	render_integer(out, iv, padding, precision, blank, sign, 10, "", false);
+	render_integer(
+		out, neg, iv, padding, precision, blank, sign, 10, "", false, false,
+	);
 }
 pub fn render_octal(
 	out: &mut String,
+	neg: bool,
 	iv: f64,
-	padding: usize,
-	precision: usize,
+	padding: u16,
+	precision: u16,
 	alt: bool,
 	blank: bool,
 	sign: bool,
 ) {
 	render_integer(
 		out,
+		neg,
 		iv,
 		padding,
 		precision,
@@ -378,6 +390,7 @@ pub fn render_octal(
 		sign,
 		8,
 		if alt && iv != 0.0 { "0" } else { "" },
+		true,
 		false,
 	);
 }
@@ -386,8 +399,8 @@ pub fn render_octal(
 pub fn render_hexadecimal(
 	out: &mut String,
 	iv: f64,
-	padding: usize,
-	precision: usize,
+	padding: u16,
+	precision: u16,
 	alt: bool,
 	blank: bool,
 	sign: bool,
@@ -395,7 +408,8 @@ pub fn render_hexadecimal(
 ) {
 	render_integer(
 		out,
-		iv,
+		iv < 0.0,
+		iv.abs(),
 		padding,
 		precision,
 		blank,
@@ -406,6 +420,7 @@ pub fn render_hexadecimal(
 			(true, false) => "0x",
 			(false, _) => "",
 		},
+		false,
 		caps,
 	);
 }
@@ -414,49 +429,36 @@ pub fn render_hexadecimal(
 pub fn render_float(
 	out: &mut String,
 	n: f64,
-	mut padding: usize,
-	precision: usize,
+	mut padding: u16,
+	precision: u16,
 	blank: bool,
 	sign: bool,
 	ensure_pt: bool,
 	trailing: bool,
 ) {
+	// Represent the rounded number as an integer * 1/10**prec.
+	// Note that it can also be equal to 10**prec and we'll need to carry
+	// over to the wholes.  We operate on the absolute numbers, so that we
+	// don't have trouble with the rounding direction.
+	let denominator = 10.0f64.powi(precision as i32);
+	let numerator = n.abs() * denominator + 0.5;
+	let whole = (numerator / denominator).floor();
+	let frac = numerator.floor() % denominator;
+
 	#[allow(clippy::bool_to_int_with_if)]
 	let dot_size = if precision == 0 && !ensure_pt { 0 } else { 1 };
 	padding = padding.saturating_sub(dot_size + precision);
-
+	render_decimal(out, n < 0.0, whole, padding, 0, blank, sign);
 	if precision == 0 {
-		// When precision is 0, round to nearest integer (matching Go's %0.0f behavior)
-		render_decimal(out, n.round(), padding, 0, blank, sign);
 		if ensure_pt {
 			out.push('.');
 		}
 		return;
 	}
-
-	// For precision > 0, we need to handle rounding of the fractional part
-	// The fractional part is rounded by adding 0.5 and flooring
-	let frac = n
-		.fract()
-		.abs()
-		.mul_add(10.0_f64.powf(precision as f64), 0.5)
-		.floor();
-
-	// Check if fractional rounding causes carry to the integer part
-	let max_frac = 10.0_f64.powf(precision as f64);
-	let (int_part, frac_part) = if frac >= max_frac {
-		// Fractional part rounded up to next integer
-		(n.signum() * (n.abs().floor() + 1.0), 0.0)
-	} else {
-		(n.signum() * n.abs().floor(), frac)
-	};
-
-	render_decimal(out, int_part, padding, 0, blank, sign);
-
-	if trailing || frac_part > 0.0 {
+	if trailing || frac > 0.0 {
 		out.push('.');
 		let mut frac_str = String::new();
-		render_decimal(&mut frac_str, frac_part, precision, 0, false, false);
+		render_decimal(&mut frac_str, false, frac, precision, 0, false, false);
 		let mut trim = frac_str.len();
 		if !trailing {
 			for b in frac_str.as_bytes().iter().rev() {
@@ -477,25 +479,38 @@ pub fn render_float(
 pub fn render_float_sci(
 	out: &mut String,
 	n: f64,
-	mut padding: usize,
-	precision: usize,
+	mut padding: u16,
+	precision: u16,
 	blank: bool,
 	sign: bool,
 	ensure_pt: bool,
 	trailing: bool,
 	caps: bool,
 ) {
-	let exponent = n.log10().floor();
+	let exponent = if n == 0.0 {
+		0.0
+	} else {
+		n.abs().log10().floor()
+	};
+
 	let mantissa = if exponent as i16 == -324 {
 		n * 10.0 / 10.0_f64.powf(exponent + 1.0)
 	} else {
 		n / 10.0_f64.powf(exponent)
 	};
 	let mut exponent_str = String::new();
-	render_decimal(&mut exponent_str, exponent, 3, 0, false, true);
+	render_decimal(
+		&mut exponent_str,
+		exponent < 0.0,
+		exponent.abs(),
+		3,
+		0,
+		false,
+		true,
+	);
 
 	// +1 for e
-	padding = padding.saturating_sub(exponent_str.len() + 1);
+	padding = padding.saturating_sub(exponent_str.len() as u16 + 1);
 
 	render_float(
 		out, mantissa, padding, precision, blank, sign, ensure_pt, trailing,
@@ -509,8 +524,8 @@ pub fn format_code(
 	out: &mut String,
 	value: &Val,
 	code: &Code<'_>,
-	width: usize,
-	precision: Option<usize>,
+	width: u16,
+	precision: Option<u16>,
 ) -> Result<()> {
 	let clfags = &code.cflags;
 	let (fpprec, iprec) = precision.map_or((6, 0), |v| (v, v));
@@ -552,7 +567,8 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone())?;
 			render_decimal(
 				&mut tmp_out,
-				value,
+				value <= -1.0,
+				value.abs(),
 				padding,
 				iprec,
 				clfags.blank,
@@ -563,7 +579,8 @@ pub fn format_code(
 			let value = f64::from_untyped(value.clone())?;
 			render_octal(
 				&mut tmp_out,
-				value,
+				value <= -1.0,
+				value.abs(),
 				padding,
 				iprec,
 				clfags.alt,
@@ -631,7 +648,7 @@ pub fn format_code(
 					code.caps,
 				);
 			} else {
-				let digits_before_pt = 1.max(exponent as usize + 1);
+				let digits_before_pt = 1.max(exponent as u16 + 1);
 				render_float(
 					&mut tmp_out,
 					value,
@@ -670,7 +687,7 @@ pub fn format_code(
 		ConvTypeV::Percent => tmp_out.push('%'),
 	};
 
-	let padding = width.saturating_sub(tmp_out.len());
+	let padding = width.saturating_sub(tmp_out.len() as u16);
 
 	if !clfags.left {
 		for _ in 0..padding {
@@ -705,7 +722,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						usize::from_untyped(value.clone())?
+						u16::from_untyped(value.clone())?
 					}
 					Width::Fixed(n) => n,
 				};
@@ -716,7 +733,7 @@ pub fn format_arr(str: &str, mut values: &[Val]) -> Result<String> {
 						}
 						let value = &values[0];
 						values = &values[1..];
-						Some(usize::from_untyped(value.clone())?)
+						Some(u16::from_untyped(value.clone())?)
 					}
 					Some(Width::Fixed(n)) => Some(n),
 					None => None,

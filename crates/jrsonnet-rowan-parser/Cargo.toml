@@ -12,6 +12,7 @@ workspace = true
 [dependencies]
 anyhow.workspace = true
 drop_bomb.workspace = true
+hi-doc.workspace = true
 indoc.workspace = true
 logos.workspace = true
 rowan.workspace = true
@@ -21,3 +22,4 @@ thiserror.workspace = true
 indoc.workspace = true
 insta.workspace = true
 anyhow.workspace = true
+strip-ansi-escapes = "0.2.1"

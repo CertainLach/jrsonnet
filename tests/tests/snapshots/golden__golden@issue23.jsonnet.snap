@@ -1,0 +1,7 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue23.jsonnet
+---
+infinite recursion detected
+    issue23.jsonnet:1:1-26: import "issue23.jsonnet"

@@ -1,0 +1,9 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue126.jsonnet
+---
+{
+    "int_lhs": 4294967296,
+    "unary_plus": 1
+}

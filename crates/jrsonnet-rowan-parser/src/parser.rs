@@ -45,6 +45,18 @@ pub enum SyntaxError {
 		error: String,
 	},
 }
+impl fmt::Display for SyntaxError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		match self {
+			SyntaxError::Unexpected { expected, found } => {
+				write!(f, "unexpected {found:?}, expecting {expected}")
+			}
+			SyntaxError::Missing { expected } => write!(f, "missing {expected}"),
+			SyntaxError::Custom { error } => write!(f, "{error}"),
+			SyntaxError::Hint { error } => write!(f, "{error}"),
+		}
+	}
+}
 
 #[derive(Debug)]
 pub struct LocatedSyntaxError {
@@ -316,12 +328,14 @@ fn expr_binding_power(
 			break;
 		}
 
+		let m = lhs.wrap(p, EXPR, false);
+
 		// Object apply is not a real operator, we dont have something to bump
 		if op != BinaryOperatorKind::MetaObjectApply {
 			p.bump();
 		}
 
-		let m = lhs.wrap(p, EXPR).precede(p);
+		let m = m.precede(p);
 		let parsed_rhs = expr_binding_power(p, right_binding_power)
 			.map(|v| v.precede(p).complete(p, EXPR))
 			.is_ok();
@@ -342,10 +356,6 @@ fn expr_binding_power(
 }
 
 const COMPSPEC: SyntaxKindSet = TS![for if];
-// `:::` cannot be represented in TS![...] because Rust tokenizes `:::` as the
-// two token trees `::` and `:`, so `TS![: :: :::]` only produces {COLON, COLONCOLON}.
-// Build the set explicitly instead.
-const VISIBILITY_SET: SyntaxKindSet = SyntaxKindSet::new(&[COLON, COLONCOLON, COLONCOLONCOLON]);
 fn compspec(p: &mut Parser) -> CompletedMarker {
 	assert!(p.at_ts(COMPSPEC));
 	if p.at(T![for]) {
@@ -397,11 +407,13 @@ fn field_name(p: &mut Parser) {
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		m.forget(p);
-		p.error_with_recovery_set(TS![; '('].union(VISIBILITY_SET));
+		// ::: it split because in TS it is being handled as : ::
+		p.error_with_recovery_set(TS![; : :: '('].with(T![:::]));
 	}
 }
 fn visibility(p: &mut Parser) {
-	if p.at_ts(VISIBILITY_SET) {
+	// ::: it split because in TS it is being handled as : ::
+	if p.at_ts(TS![: ::].with(T![:::])) {
 		p.bump();
 	} else {
 		p.error_with_recovery_set(TS![=]);
@@ -461,7 +473,8 @@ fn object(p: &mut Parser) -> CompletedMarker {
 				visibility(p);
 				expr(p);
 				true
-			} else if p.at_ts(VISIBILITY_SET) && p.nth_at(1, T![function]) {
+			// ::: it split because in TS it is being handled as : ::
+			} else if p.at_ts(TS![: ::].with(T![:::])) && p.nth_at(1, T![function]) {
 				visibility(p);
 				p.bump_assert(T![function]);
 				params_desc(p);
@@ -495,12 +508,13 @@ fn object(p: &mut Parser) -> CompletedMarker {
 			errored.wrap_error(
 				p,
 				"compspec may only be used if there is only one object element",
+				true,
 			);
 		}
 		m.complete(p, OBJ_BODY_MEMBER_LIST);
 	} else if !compspecs.is_empty() {
 		for errored in asserts {
-			errored.wrap_error(p, "asserts can't be used in object comprehensions");
+			errored.wrap_error(p, "asserts can't be used in object comprehensions", true);
 		}
 		m.complete(p, OBJ_BODY_COMP);
 	} else {
@@ -573,7 +587,7 @@ fn args_desc(p: &mut Parser) {
 	}
 
 	for errored in unnamed_after_named {
-		errored.wrap_error(p, "can't use positional arguments after named");
+		errored.wrap_error(p, "can't use positional arguments after named", true);
 	}
 
 	m.complete(p, ARGS_DESC);
@@ -619,6 +633,7 @@ fn array(p: &mut Parser) -> CompletedMarker {
 			spec.wrap_error(
 				p,
 				"compspec may only be used if there is only one array element",
+				true,
 			);
 		}
 
@@ -643,20 +658,20 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 		p.bump();
 		// End
 		if !p.at(T![']']) {
-			expr(p).wrap(p, SLICE_DESC_END);
+			expr(p).wrap(p, SLICE_DESC_END, true);
 		}
 		if p.at(T![:]) {
 			p.bump();
 			// Step
 			if !p.at(T![']']) {
-				expr(p).wrap(p, SLICE_DESC_STEP);
+				expr(p).wrap(p, SLICE_DESC_STEP, true);
 			}
 		}
 	} else if p.at(T![::]) {
 		p.bump();
 		// End
 		if !p.at(T![']']) {
-			expr(p).wrap(p, SLICE_DESC_END);
+			expr(p).wrap(p, SLICE_DESC_END, true);
 		}
 	} else {
 		// It was not a slice
@@ -869,10 +884,10 @@ fn lhs_basic(p: &mut Parser) -> Result<CompletedMarker, CompletedMarker> {
 		p.bump();
 		expr(p);
 		p.expect(T![then]);
-		expr(p).wrap(p, TRUE_EXPR);
+		expr(p).wrap(p, TRUE_EXPR, true);
 		if p.at(T![else]) {
 			p.bump();
-			expr(p).wrap(p, FALSE_EXPR);
+			expr(p).wrap(p, FALSE_EXPR, true);
 		}
 		m.complete(p, EXPR_IF_THEN_ELSE)
 	} else if p.at(T!['[']) {

@@ -1,0 +1,2 @@
+runtime error: in std.join all items should be arrays
+    error.std_join_types2.jsonnet:17:1-32: function <builtin_join> call

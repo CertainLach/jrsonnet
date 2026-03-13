@@ -13,7 +13,7 @@ use self::{
 	parse::{parse_default_function_call, parse_function_call},
 };
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, gc::TraceBox, tb, Context,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, Context,
 	ContextBuilder, Result, Thunk, Val,
 };
 
@@ -40,7 +40,7 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, Trace, PartialEq)]
 pub struct FuncDesc {
 	/// # Example
 	///
@@ -102,7 +102,7 @@ pub enum FuncVal {
 	/// Standard library function.
 	StaticBuiltin(#[trace(skip)] &'static dyn StaticBuiltin),
 	/// User-provided function.
-	Builtin(Cc<TraceBox<dyn Builtin>>),
+	Builtin(BuiltinFunc),
 }
 
 impl Debug for FuncVal {
@@ -128,7 +128,7 @@ static ID: &builtin_id = &builtin_id {};
 
 impl FuncVal {
 	pub fn builtin(builtin: impl Builtin) -> Self {
-		Self::Builtin(Cc::new(tb!(builtin)))
+		Self::Builtin(BuiltinFunc::new(builtin))
 	}
 	pub fn static_builtin(static_builtin: &'static dyn StaticBuiltin) -> Self {
 		Self::StaticBuiltin(static_builtin)
@@ -207,7 +207,7 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		self.evaluate(
-			ContextBuilder::dangerous_empty_state().build(),
+			ContextBuilder::new().build(),
 			CallLocation::native(),
 			args,
 			tailstrict,

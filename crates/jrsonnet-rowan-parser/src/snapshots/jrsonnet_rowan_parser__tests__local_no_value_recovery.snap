@@ -39,11 +39,8 @@ SOURCE_FILE@0..25
 LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA, QUESTION_MARK])) }, range: 25..25 }
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 25..25 }
 ===
-  x syntax error
-   ,-[3:3]
- 2 | local b = 3;
- 3 | 1
-   :   ^^
-   :   |`-- missing expression
-   :   `-- missing L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK
-   `----
+1  │ local a =
+2  │ local b = 3;
+   ·   ╭── missing L_BRACK, L_PAREN, L_BRACE, SEMI, DOT, COMMA or QUESTION_MARK
+3  │ 1
+   ·   ╰── missing expression

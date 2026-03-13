@@ -1,0 +1,11 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/imports.jsonnet
+---
+local a = import 'a.libsonnet';
+local m = import 'm.libsonnet';
+local z = import 'z.libsonnet';
+{
+   result: a + m + z,
+}

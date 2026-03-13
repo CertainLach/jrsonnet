@@ -1,0 +1,2 @@
+parameter blahblah is not defined
+    std.makeArrayNamed3.jsonnet:1:1-55: function <builtin_make_array> call

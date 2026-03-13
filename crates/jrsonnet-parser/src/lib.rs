@@ -12,7 +12,8 @@ mod source;
 mod unescape;
 pub use location::CodeLocation;
 pub use source::{
-	Source, SourceDirectory, SourceFifo, SourceFile, SourcePath, SourcePathT, SourceVirtual,
+	Source, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
+	SourcePathT, SourceVirtual,
 };
 
 pub struct ParserSettings {
@@ -52,9 +53,9 @@ parser! {
 		rule digit() -> char = d:$(['0'..='9']) {d.chars().next().unwrap()}
 		rule end_of_ident() = !['0'..='9' | '_' | 'a'..='z' | 'A'..='Z']
 		/// Sequence of digits
-		rule uint_str() -> &'input str = a:$(digit()+) { a }
+		rule uint_str() -> &'input str = a:$(digit()+ ("_" digit()+)*) { a }
 		/// Number in scientific notation format
-		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.parse().map_err(|_| "<number>") }} / expected!("<number>")
+		rule number() -> f64 = quiet!{a:$(uint_str() ("." uint_str())? (['e'|'E'] (s:['+'|'-'])? uint_str())?) {? a.replace("_","").parse().map_err(|_| "<number>") }} / expected!("<number>")
 
 		/// Reserved word followed by any non-alphanumberic
 		rule reserved() = ("assert" / "else" / "error" / "false" / "for" / "function" / "if" / "import" / "importstr" / "importbin" / "in" / "local" / "null" / "tailstrict" / "then" / "self" / "super" / "true") end_of_ident()
@@ -237,7 +238,11 @@ parser! {
 				Expr::ArrComp(expr, specs)
 			}
 		pub rule number_expr(s: &ParserSettings) -> Expr
-			= n:number() { expr::Expr::Num(n) }
+			= n:number() {? if n.is_finite() {
+				Ok(expr::Expr::Num(n))
+			} else {
+				Err("!!!numbers are finite")
+			}}
 		pub rule var_expr(s: &ParserSettings) -> Expr
 			= n:id() { expr::Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> LocExpr

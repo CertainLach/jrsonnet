@@ -39,9 +39,5 @@ SOURCE_FILE@0..21
 ===
 LocatedSyntaxError { error: Missing { expected: Named("field definition") }, range: 1..1 }
 ===
-  x syntax error
-   ,----
- 1 | {for a in [1, 2, 3]}
-   :  ^
-   :  `-- missing field definition
-   `----
+   ·  ╭── missing field definition
+1  │ {for a in [1, 2, 3]}

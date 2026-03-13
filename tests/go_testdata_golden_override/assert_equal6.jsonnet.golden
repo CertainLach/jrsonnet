@@ -1,0 +1,8 @@
+runtime error: assertion failed: A != B
+A: <A>
+[31m
+</A>
+B: <B>
+
+</B>
+    assert_equal6.jsonnet:1:1-35: function <builtin_assert_equal> call

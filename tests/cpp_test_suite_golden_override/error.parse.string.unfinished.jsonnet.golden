@@ -1,0 +1,2 @@
+syntax error: expected one of "\\\\", "\\u", "\\x", ['"'], ['\\'], [_], got "EOF"
+    error.parse.string.unfinished.jsonnet:17:3

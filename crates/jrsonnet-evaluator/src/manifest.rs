@@ -366,24 +366,25 @@ fn manifest_json_ex_buf(
 			cur_padding.push_str(&options.padding);
 
 			let mut had_fields = false;
-			let mut field_count = 0;
-			for (key, value) in obj.iter(
-				#[cfg(feature = "exp-preserve-order")]
-				options.preserve_order,
-			) {
+			for (i, (key, value)) in obj
+				.iter(
+					#[cfg(feature = "exp-preserve-order")]
+					options.preserve_order,
+				)
+				.enumerate()
+			{
+				had_fields = true;
 				let value = value.with_description(|| format!("field <{key}> evaluation"))?;
 
-				had_fields = true;
-				if field_count > 0 {
+				if i != 0 {
 					buf.push(',');
 				}
-				field_count += 1;
 				match mtype {
 					Manifest | Std => {
 						buf.push_str(options.newline);
 						buf.push_str(cur_padding);
 					}
-					ToString if field_count > 1 => buf.push(' '),
+					ToString if i != 0 => buf.push(' '),
 					Minify | ToString => {}
 				}
 

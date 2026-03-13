@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", <binary op>, EOF, got "x"
+    error_hexnumber.jsonnet:1:2

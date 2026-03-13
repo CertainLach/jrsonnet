@@ -1,5 +1,6 @@
 use base64::{engine::general_purpose::STANDARD, Engine};
 use jrsonnet_evaluator::{
+	bail,
 	function::builtin,
 	runtime_error,
 	typed::{Either, Either2},
@@ -12,8 +13,14 @@ pub fn builtin_encode_utf8(str: IStr) -> IBytes {
 }
 
 #[builtin]
-pub fn builtin_decode_utf8(arr: IBytes) -> Result<IStr> {
-	arr.cast_str().ok_or_else(|| runtime_error!("bad utf8"))
+pub fn builtin_decode_utf8(arr: IBytes, #[default(true)] lossy: bool) -> Result<IStr> {
+	match arr.clone().cast_str() {
+		Some(s) => Ok(s),
+		None if lossy => Ok(String::from_utf8_lossy(arr.as_slice()).into()),
+		None => {
+			bail!("bad utf8")
+		}
+	}
 }
 
 #[builtin]

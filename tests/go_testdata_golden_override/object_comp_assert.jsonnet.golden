@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "f"
+    object_comp_assert.jsonnet:1:32

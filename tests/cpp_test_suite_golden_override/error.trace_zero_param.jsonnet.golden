@@ -1,0 +1,5 @@
+function argument is not passed: str
+Function has the following signature: (str, rest = <default>)
+    error.trace_zero_param.jsonnet:17:11-23: function <builtin_trace> call
+    error.trace_zero_param.jsonnet:19:6-8:   local <v> access
+    field <a> evaluation

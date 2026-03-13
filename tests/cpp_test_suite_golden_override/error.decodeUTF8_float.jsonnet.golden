@@ -1,0 +1,3 @@
+runtime error: cannot convert number with fractional part to u8
+    argument <arr> evaluation
+    error.decodeUTF8_float.jsonnet:1:1-24: function <builtin_decode_utf8> call

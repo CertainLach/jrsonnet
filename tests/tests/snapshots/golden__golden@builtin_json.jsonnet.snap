@@ -1,0 +1,6 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/builtin_json.jsonnet
+---
+"{\n\"a\": 3,\n\"b\": 4,\n\"c\": 6\n}"

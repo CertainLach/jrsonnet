@@ -1,0 +1,3 @@
+type error: number out of bounds: -1 not in 0..9007199254740991
+    argument <len> evaluation
+    builtinSubStr_third_parameter_less_then_zero.jsonnet:1:1-28: function <builtin_substr> call

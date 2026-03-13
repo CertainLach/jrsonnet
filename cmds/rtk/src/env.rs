@@ -482,6 +482,7 @@ fn load_inline_envs(dir: &Path) -> Result<Vec<Environment>> {
 	builder.context_initializer(ctx_init);
 
 	let state = builder.build();
+	let _state_guard = state.enter();
 
 	// Evaluate with noDataEnv wrapper to strip out .data field
 	let eval_script = format!(

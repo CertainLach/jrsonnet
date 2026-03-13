@@ -1,0 +1,2 @@
+syntax error: expected <hex char>, got "t"
+    error.parse.string.invalid_escape_unicode_non_hex.jsonnet:17:7

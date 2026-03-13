@@ -1,0 +1,14 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/self_super.jsonnet
+---
+local base = {
+   foo: 'bar',
+   method(
+   ):: self.foo,
+};
+base {
+   foo: super.foo + '-extended',
+   result: self.method(),
+}

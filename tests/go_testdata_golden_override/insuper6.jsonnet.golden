@@ -1,0 +1,2 @@
+assert failed: null
+    insuper6.jsonnet:1:10-30: assertion failure

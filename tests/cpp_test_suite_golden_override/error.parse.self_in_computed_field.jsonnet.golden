@@ -1,0 +1,2 @@
+syntax error: expected one of "[", "}", <identifier>, <string>, ['"'], ['\''], got "s"
+    error.parse.self_in_computed_field.jsonnet:17:15

@@ -1,0 +1,43 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/array_comp.jsonnet
+---
+[
+    [
+        1,
+        4
+    ],
+    [
+        1,
+        5
+    ],
+    [
+        1,
+        6
+    ],
+    [
+        2,
+        4
+    ],
+    [
+        2,
+        5
+    ],
+    [
+        2,
+        6
+    ],
+    [
+        3,
+        4
+    ],
+    [
+        3,
+        5
+    ],
+    [
+        3,
+        6
+    ]
+]

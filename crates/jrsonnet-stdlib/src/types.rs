@@ -29,3 +29,7 @@ pub fn builtin_is_array(v: Val) -> bool {
 pub fn builtin_is_function(v: Val) -> bool {
 	matches!(v, Val::Func(_))
 }
+#[builtin]
+pub fn builtin_is_null(v: Val) -> bool {
+	matches!(v, Val::Null)
+}

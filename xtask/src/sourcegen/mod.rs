@@ -1,10 +1,10 @@
-use std::path::PathBuf;
+use std::{collections::HashMap, path::PathBuf};
 
 use anyhow::Result;
 use ast::{lower, AstSrc};
 use itertools::Itertools;
 use kinds::{KindsSrc, TokenKind};
-use proc_macro2::{Punct, Spacing, TokenStream};
+use proc_macro2::{Ident, Punct, Spacing, Span, TokenStream};
 use quote::{format_ident, quote};
 use ungrammar::Grammar;
 use util::{ensure_file_contents, reformat, to_pascal_case, to_upper_snake_case};
@@ -202,36 +202,58 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 				quote!(impl ast::#trait_name for #name {})
 			});
 
-			let methods = node.fields.iter().map(|field| {
-				let method_name = field.method_name(kinds);
-				let ty = field.ty();
+			let mut type_positions: HashMap<String, usize> = HashMap::new();
+			let field_positions: Vec<_> = node
+				.fields
+				.iter()
+				.map(|field| {
+					let ty_str = field.ty().to_string();
+					let pos = *type_positions.get(&ty_str).unwrap_or(&0);
+					type_positions.insert(ty_str, pos + 1);
+					pos
+				})
+				.collect();
 
-				if field.is_many() {
-					quote! {
-						pub fn #method_name(&self) -> AstChildren<#ty> {
-							support::children(&self.syntax)
+			let methods = node
+				.fields
+				.iter()
+				.zip(field_positions.iter())
+				.map(|(field, &pos)| {
+					let method_name = field.method_name(kinds);
+					let ty = field.ty();
+
+					if field.is_many() {
+						quote! {
+							pub fn #method_name(&self) -> AstChildren<#ty> {
+								support::children(&self.syntax)
+							}
+						}
+					} else if let Some(token_kind) = field.token_kind(kinds) {
+						quote! {
+							pub fn #method_name(&self) -> Option<#ty> {
+								support::token(&self.syntax, #token_kind)
+							}
+						}
+					} else if field.is_token_enum(grammar) {
+						quote! {
+							pub fn #method_name(&self) -> Option<#ty> {
+								support::token_child(&self.syntax)
+							}
+						}
+					} else if pos == 0 {
+						quote! {
+							pub fn #method_name(&self) -> Option<#ty> {
+								support::children(&self.syntax).next()
+							}
+						}
+					} else {
+						quote! {
+							pub fn #method_name(&self) -> Option<#ty> {
+								support::children(&self.syntax).nth(#pos)
+							}
 						}
 					}
-				} else if let Some(token_kind) = field.token_kind(kinds) {
-					quote! {
-						pub fn #method_name(&self) -> Option<#ty> {
-							support::token(&self.syntax, #token_kind)
-						}
-					}
-				} else if field.is_token_enum(grammar) {
-					quote! {
-						pub fn #method_name(&self) -> Option<#ty> {
-							support::token_child(&self.syntax)
-						}
-					}
-				} else {
-					quote! {
-						pub fn #method_name(&self) -> Option<#ty> {
-							support::child(&self.syntax)
-						}
-					}
-				}
-			});
+				});
 			(
 				quote! {
 					#[pretty_doc_comment_placeholder_workaround]
@@ -533,8 +555,11 @@ pub fn escape_token_macro(token: &str) -> TokenStream {
 	if "{}[]()$".contains(token) {
 		let c = token.chars().next().unwrap();
 		quote! { #c }
-	} else if token.contains('$') {
+	} else if token.contains(|v| v == '$') {
 		quote! { #token }
+	} else if token.chars().all(|v| ('a'..='z').contains(&v)) {
+		let i = Ident::new(&token, Span::call_site());
+		quote! { #i }
 	} else {
 		let cs = token.chars().map(|c| Punct::new(c, Spacing::Joint));
 		quote! { #(#cs)* }

@@ -1,7 +1,6 @@
 use jrsonnet_evaluator::{
-	bail,
+	FileImportResolver, Result, State, Val, bail,
 	trace::{CompactFormat, PathResolver, TraceFormat},
-	FileImportResolver, Result, State, Val,
 };
 use jrsonnet_stdlib::ContextInitializer;
 

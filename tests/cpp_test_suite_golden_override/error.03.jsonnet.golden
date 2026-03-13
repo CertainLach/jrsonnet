@@ -1,0 +1,3 @@
+runtime error: foo
+    error.03.jsonnet:17:21-33: error statement
+    error.03.jsonnet:18:8-10:  field <x> access

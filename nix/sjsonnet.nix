@@ -5,17 +5,17 @@
 {
   stdenv,
   fetchurl,
-  jdk21_headless,
+  jdk25_headless,
   makeWrapper,
-  java ? jdk21_headless,
+  java ? jdk25_headless,
 }:
 stdenv.mkDerivation rec {
   pname = "sjsonnet";
-  version = "0.4.10";
+  version = "0.6.0";
 
   src = fetchurl {
     url = "https://github.com/databricks/${pname}/releases/download/${version}/${pname}-${version}.jar";
-    hash = "sha256-zKlmh+jXm23x78CKwna8fGHNqziWuPipSbWTPUCADrY=";
+    hash = "sha256-HQovfF/hX664apg9Pl9SdrK03b8rmZ9IjHpf7uNY8FM=";
   };
 
   unpackPhase = "true";

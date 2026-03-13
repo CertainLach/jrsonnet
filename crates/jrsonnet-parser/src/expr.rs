@@ -4,12 +4,12 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IStr;
 
 use crate::source::Source;
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
@@ -17,7 +17,7 @@ pub enum FieldName {
 	Dyn(LocExpr),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
 #[repr(u8)]
 pub enum Visibility {
 	/// :
@@ -34,10 +34,10 @@ impl Visibility {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Trace)]
+#[derive(Clone, Debug, PartialEq, Acyclic)]
 pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
@@ -46,14 +46,14 @@ pub struct FieldMember {
 	pub value: LocExpr,
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
 	AssertStmt(AssertStmt),
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
 pub enum UnaryOpType {
 	Plus,
 	Minus,
@@ -77,7 +77,7 @@ impl Display for UnaryOpType {
 	}
 }
 
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
 pub enum BinaryOpType {
 	Mul,
 	Div,
@@ -146,11 +146,11 @@ impl Display for BinaryOpType {
 }
 
 /// name, default value
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct Param(pub Destruct, pub Option<LocExpr>);
 
 /// Defined function parameters
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Acyclic)]
 pub struct ParamsDesc(pub Rc<Vec<Param>>);
 
 impl Deref for ParamsDesc {
@@ -160,7 +160,7 @@ impl Deref for ParamsDesc {
 	}
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct ArgsDesc {
 	pub unnamed: Vec<LocExpr>,
 	pub named: Vec<(IStr, LocExpr)>,
@@ -171,7 +171,7 @@ impl ArgsDesc {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Eq, Trace)]
+#[derive(Debug, Clone, PartialEq, Eq, Acyclic)]
 pub enum DestructRest {
 	/// ...rest
 	Keep(IStr),
@@ -179,7 +179,7 @@ pub enum DestructRest {
 	Drop,
 }
 
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Acyclic)]
 pub enum Destruct {
 	Full(IStr),
 	#[cfg(feature = "exp-destruct")]
@@ -240,7 +240,7 @@ impl Destruct {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Trace)]
+#[derive(Debug, Clone, PartialEq, Acyclic)]
 pub enum BindSpec {
 	Field {
 		into: Destruct,
@@ -261,19 +261,19 @@ impl BindSpec {
 	}
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct IfSpecData(pub LocExpr);
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct ForSpecData(pub Destruct, pub LocExpr);
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum CompSpec {
 	IfSpec(IfSpecData),
 	ForSpec(ForSpecData),
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
 	pub field: FieldMember,
@@ -281,13 +281,13 @@ pub struct ObjComp {
 	pub compspecs: Vec<CompSpec>,
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum ObjBody {
 	MemberList(Vec<Member>),
 	ObjComp(ObjComp),
 }
 
-#[derive(Debug, PartialEq, Eq, Clone, Copy, Trace)]
+#[derive(Debug, PartialEq, Eq, Clone, Copy, Acyclic)]
 pub enum LiteralType {
 	This,
 	Super,
@@ -297,7 +297,7 @@ pub enum LiteralType {
 	False,
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct SliceDesc {
 	pub start: Option<LocExpr>,
 	pub end: Option<LocExpr>,
@@ -305,7 +305,7 @@ pub struct SliceDesc {
 }
 
 /// Syntax base
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum Expr {
 	Literal(LiteralType),
 
@@ -374,7 +374,7 @@ pub enum Expr {
 	Slice(LocExpr, SliceDesc),
 }
 
-#[derive(Debug, PartialEq, Trace)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub struct IndexPart {
 	pub value: LocExpr,
 	#[cfg(feature = "exp-null-coaelse")]
@@ -382,8 +382,7 @@ pub struct IndexPart {
 }
 
 /// file, begin offset, end offset
-#[derive(Clone, PartialEq, Eq, Trace)]
-#[trace(skip)]
+#[derive(Clone, PartialEq, Eq, Acyclic)]
 #[repr(C)]
 pub struct Span(pub Source, pub u32, pub u32);
 impl Span {
@@ -401,7 +400,7 @@ impl Debug for Span {
 }
 
 /// Holds AST expression and its location in source file
-#[derive(Clone, PartialEq, Trace)]
+#[derive(Clone, PartialEq, Acyclic)]
 pub struct LocExpr(Rc<(Expr, Span)>);
 impl LocExpr {
 	pub fn new(expr: Expr, span: Span) -> Self {

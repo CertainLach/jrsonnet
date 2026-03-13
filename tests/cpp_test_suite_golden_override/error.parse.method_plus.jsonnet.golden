@@ -1,0 +1,2 @@
+syntax error: expected one of ":", "::", ":::", got "+"
+    error.parse.method_plus.jsonnet:17:18

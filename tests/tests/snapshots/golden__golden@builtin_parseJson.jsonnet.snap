@@ -1,0 +1,11 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/builtin_parseJson.jsonnet
+---
+{
+    "a": -1,
+    "b": 1,
+    "c": 3.141,
+    "d": [ ]
+}

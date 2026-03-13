@@ -1,2 +1,0 @@
-runtime error: expected argument to throw on evaluation, but it returned instead
-    test_assertThrow.jsonnet:2:1-26: function <assert_throw> call

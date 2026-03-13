@@ -1,7 +1,6 @@
 //! Common test utilities.
 
 use std::{
-	any::Any,
 	collections::HashMap,
 	io::{self, ErrorKind, Write},
 	path::{Path, PathBuf},
@@ -33,9 +32,9 @@ impl Drop for CurrentDirGuard {
 
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result as JrsonnetResult},
-	ImportResolver,
+	AsPathLike, ImportResolver,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Acyclic, Trace};
 use jrsonnet_parser::{SourceFile, SourcePath};
 
 /// A writer that simulates a broken pipe (SIGPIPE scenario).
@@ -58,11 +57,18 @@ impl Write for BrokenPipeWriter {
 ///
 /// Stores files in a HashMap and resolves imports from memory,
 /// avoiding the need for filesystem access in tests.
-#[derive(Default, Trace)]
+#[derive(Default)]
 pub struct MemoryImportResolver {
-	#[trace(skip)]
 	files: HashMap<PathBuf, Vec<u8>>,
 }
+// MemoryImportResolver contains no GC-tracked pointers.
+impl Trace for MemoryImportResolver {
+	fn is_type_tracked() -> bool {
+		false
+	}
+}
+// SAFETY: No cycles possible since there are no GC-tracked pointers.
+unsafe impl Acyclic for MemoryImportResolver {}
 
 impl MemoryImportResolver {
 	pub fn new() -> Self {
@@ -82,7 +88,10 @@ impl MemoryImportResolver {
 }
 
 impl ImportResolver for MemoryImportResolver {
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> JrsonnetResult<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> JrsonnetResult<SourcePath> {
+		let resolve_path = path.as_path();
+		let path_ref: &Path = resolve_path.as_ref();
+
 		// Get the directory of the "from" file
 		let base_dir = if let Some(f) = from.downcast_ref::<SourceFile>() {
 			f.path().parent().map(|p| p.to_path_buf())
@@ -95,26 +104,18 @@ impl ImportResolver for MemoryImportResolver {
 		let base_dir = base_dir.unwrap_or_else(|| PathBuf::from("/"));
 
 		// Try resolving relative to the base directory
-		let resolved = base_dir.join(path);
+		let resolved = base_dir.join(path_ref);
 		if self.files.contains_key(&resolved) {
 			return Ok(SourcePath::new(SourceFile::new(resolved)));
 		}
 
 		// Try as absolute path
-		let absolute = PathBuf::from(path);
+		let absolute = PathBuf::from(path_ref);
 		if self.files.contains_key(&absolute) {
 			return Ok(SourcePath::new(SourceFile::new(absolute)));
 		}
 
-		Err(ImportFileNotFound(from.clone(), path.into()).into())
-	}
-
-	fn resolve(&self, path: &Path) -> JrsonnetResult<SourcePath> {
-		if self.files.contains_key(path) {
-			Ok(SourcePath::new(SourceFile::new(path.to_path_buf())))
-		} else {
-			Err(ResolvedFileNotFound(SourcePath::new(SourceFile::new(path.to_path_buf()))).into())
-		}
+		Err(ImportFileNotFound(from.clone(), path.as_path().to_owned()).into())
 	}
 
 	fn load_file_contents(&self, resolved: &SourcePath) -> JrsonnetResult<Vec<u8>> {
@@ -128,13 +129,5 @@ impl ImportResolver for MemoryImportResolver {
 			.get(path)
 			.cloned()
 			.ok_or_else(|| ResolvedFileNotFound(resolved.clone()).into())
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }

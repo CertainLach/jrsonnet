@@ -23,11 +23,7 @@ LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10
 LocatedSyntaxError { error: Missing { expected: Unnamed(SyntaxKindSet([SEMI, COMMA])) }, range: 10..10 }
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 10..10 }
 ===
-  x syntax error
-   ,----
- 1 | local a =
-   :           ^^^
-   :           `-- missing expression
-   :           |`-- missing SEMI or COMMA
-   :           `-- missing expression
-   `----
+   ·           ╭── missing SEMI or COMMA
+   ·           ┟── missing expression
+1  │ local a =
+   ·           ╰── missing expression

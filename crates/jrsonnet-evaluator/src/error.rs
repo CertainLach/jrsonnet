@@ -2,7 +2,6 @@ use std::{
 	cmp::Ordering,
 	convert::Infallible,
 	fmt::{Debug, Display},
-	path::PathBuf,
 };
 
 use jrsonnet_gcmodule::Trace;
@@ -16,7 +15,7 @@ use crate::{
 	stdlib::format::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
-	ObjValue,
+	ObjValue, ResolvePathOwned,
 };
 
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
@@ -124,10 +123,8 @@ pub enum ErrorKind {
 	#[error("binary operation {1} {0} {2} is not implemented")]
 	BinaryOperatorDoesNotOperateOnValues(BinaryOpType, ValType, ValType),
 
-	#[error("no top level object in this context")]
-	NoTopLevelObjectFound,
-	#[error("self is only usable inside objects")]
-	CantUseSelfOutsideOfObject,
+	#[error("self/super/$ are only usable inside objects")]
+	CantUseSelfSupOutsideOfObject,
 	#[error("no super found")]
 	NoSuperFound,
 
@@ -142,12 +139,12 @@ pub enum ErrorKind {
 	#[error("assert failed: {}", format_empty_str(.0))]
 	AssertionFailed(IStr),
 
-	#[error("local is not defined: {0}{}", format_found(.1, "local"))]
+	#[error("local is not defined: {0}{found}", found = format_found(.1, "local"))]
 	VariableIsNotDefined(IStr, Vec<IStr>),
 	#[error("duplicate local var: {0}")]
 	DuplicateLocalVar(IStr),
 
-	#[error("type mismatch: expected {}, got {2} {0}", .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
+	#[error("type mismatch: expected {expected}, got {2} {0}", expected = .1.iter().map(|e| format!("{e}")).collect::<Vec<_>>().join(", "))]
 	TypeMismatch(&'static str, Vec<ValType>, ValType),
 	#[error("no such field: {}{}", format_empty_str(.0), format_found(.1, "field"))]
 	NoSuchField(IStr, Vec<IStr>),
@@ -158,7 +155,7 @@ pub enum ErrorKind {
 	UnknownFunctionParameter(String),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}{}", format_signature(.1))]
+	#[error("too many args, function has {0}{sig}", sig = format_signature(.1))]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
 	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
 	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
@@ -184,9 +181,7 @@ pub enum ErrorKind {
 	StandaloneSuper,
 
 	#[error("can't resolve {1} from {0}")]
-	ImportFileNotFound(SourcePath, String),
-	#[error("can't resolve absolute {0}")]
-	AbsoluteImportFileNotFound(PathBuf),
+	ImportFileNotFound(SourcePath, ResolvePathOwned),
 	#[error("resolved file not found: {:?}", .0)]
 	ResolvedFileNotFound(SourcePath),
 	#[error("can't import {0}: is a directory")]
@@ -196,9 +191,7 @@ pub enum ErrorKind {
 	#[error("import io error: {0}")]
 	ImportIo(String),
 	#[error("tried to import {1} from {0}, but imports are not supported")]
-	ImportNotSupported(SourcePath, String),
-	#[error("tried to import {0}, but absolute imports are not supported")]
-	AbsoluteImportNotSupported(PathBuf),
+	ImportNotSupported(SourcePath, ResolvePathOwned),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
 	#[error(

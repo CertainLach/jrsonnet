@@ -13,9 +13,5 @@ SOURCE_FILE@0..4
 ===
 LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 2..3 }
 ===
-  x syntax error
-   ,----
- 1 | 2 2
-   :   |
-   :   `-- unexpected tokens after end
-   `----
+   ·   ╭─── unexpected tokens after end
+1  │ 2 2

@@ -1,0 +1,12 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/local_vars.jsonnet
+---
+local x = 10;
+local y = 20;
+local sum = x + y;
+{
+   local inner = 5,
+   result: sum + inner,
+}

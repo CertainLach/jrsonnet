@@ -1,0 +1,25 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/builtin_strings.jsonnet
+---
+{
+    "split": [
+        "ab",
+        "cd",
+        "ef"
+    ],
+    "splitlimit": [
+        "ab",
+        "cd::ef"
+    ],
+    "splitlimitR": [
+        "ab::cd",
+        "ef"
+    ],
+    "splitlimitRNoLimit": [
+        "ab",
+        "cd",
+        "ef"
+    ]
+}

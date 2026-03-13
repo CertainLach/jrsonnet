@@ -1,17 +1,17 @@
-use std::{cell::RefCell, future::Future, path::Path};
+use std::{any::Any, cell::RefCell, future::Future};
 
-use jrsonnet_gcmodule::Trace;
-use jrsonnet_interner::IStr;
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName, ForSpecData,
 	IfSpecData, LocExpr, Member, ObjBody, Param, ParamsDesc, ParserSettings, SliceDesc, Source,
 	SourcePath,
 };
+use rustc_hash::FxHashMap;
 
-use crate::{bail, gc::GcHashMap, FileData, ImportResolver, State};
+use crate::{AsPathLike, FileData, ImportResolver, ResolvePathOwned, State};
 
 pub struct Import {
-	path: IStr,
+	path: ResolvePathOwned,
 	expression: bool,
 }
 
@@ -132,12 +132,12 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			ObjBody::ObjComp(_) => todo!(),
 		}
 	}
-	match &*expr.0 {
+	match &*expr.expr() {
 		Expr::Import(v) | Expr::ImportStr(v) | Expr::ImportBin(v) => {
-			if let Expr::Str(s) = &*v.0 {
+			if let Expr::Str(s) = &*v.expr() {
 				out.0.push(Import {
-					path: s.clone(),
-					expression: matches!(&*expr.0, Expr::Import(_)),
+					path: ResolvePathOwned::Str(s.to_string()),
+					expression: matches!(&*expr.expr(), Expr::Import(_)),
 				});
 			}
 			// Non-string import will fail in runtime
@@ -228,16 +228,14 @@ pub trait AsyncImportResolver {
 	fn resolve_from(
 		&self,
 		from: &SourcePath,
-		path: &str,
+		path: &dyn AsPathLike,
 	) -> impl Future<Output = Result<SourcePath, Self::Error>>;
 	fn resolve_from_default(
 		&self,
-		path: &str,
+		path: &dyn AsPathLike,
 	) -> impl Future<Output = Result<SourcePath, Self::Error>> {
 		async { self.resolve_from(&SourcePath::default(), path).await }
 	}
-	/// Resolves absolute path, doesn't supports jpath and other fancy things
-	fn resolve(&self, path: &Path) -> impl Future<Output = Result<SourcePath, Self::Error>>;
 
 	/// Load resolved file
 	/// This should only be called with value returned
@@ -250,37 +248,27 @@ pub trait AsyncImportResolver {
 	) -> impl Future<Output = Result<Vec<u8>, Self::Error>>;
 }
 
-#[derive(Trace)]
+#[derive(Acyclic)]
 struct ResolvedImportResolver {
-	resolved: RefCell<GcHashMap<(SourcePath, IStr), (SourcePath, bool)>>,
+	resolved: RefCell<FxHashMap<(SourcePath, ResolvePathOwned), (SourcePath, bool)>>,
 }
 impl ImportResolver for ResolvedImportResolver {
 	fn load_file_contents(&self, _resolved: &SourcePath) -> crate::Result<Vec<u8>> {
 		unreachable!("all files should be loaded at this point");
 	}
 
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> crate::Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> crate::Result<SourcePath> {
 		Ok(self
 			.resolved
 			.borrow()
-			.get(&(from.clone(), path.into()))
+			.get(&(from.clone(), path.as_path().to_owned()))
 			.expect("all imports should be resolved at this point")
 			.0
 			.clone())
 	}
 
-	fn resolve_from_default(&self, path: &str) -> crate::Result<SourcePath> {
+	fn resolve_from_default(&self, path: &dyn AsPathLike) -> crate::Result<SourcePath> {
 		self.resolve_from(&SourcePath::default(), path)
-	}
-
-	fn resolve(&self, path: &Path) -> crate::Result<SourcePath> {
-		bail!(crate::error::ErrorKind::AbsoluteImportNotSupported(
-			path.to_owned()
-		))
-	}
-
-	fn as_any(&self) -> &dyn std::any::Any {
-		self
 	}
 }
 
@@ -291,19 +279,18 @@ enum Job {
 }
 
 #[allow(clippy::future_not_send)]
-pub async fn async_import<H>(s: State, handler: H, path: impl AsRef<Path>) -> Result<(), H::Error>
+pub async fn async_import<H>(s: State, handler: H, path: &dyn AsPathLike) -> Result<(), H::Error>
 where
 	H: AsyncImportResolver,
 {
-	let mut resolved = s
-		.import_resolver()
-		.as_any()
+	let resolved = (s.import_resolver() as &dyn Any)
 		.downcast_ref::<ResolvedImportResolver>()
-		.map_or_else(GcHashMap::new, |resolver| {
-			std::mem::take(&mut *resolver.resolved.borrow_mut())
-		});
+		.expect("for async imports, import_resolver should be set to ResolvedImportResolver");
+
+	let mut resolved_map = resolved.resolved.borrow_mut();
+
 	let mut queue = vec![Job::LoadFile {
-		path: handler.resolve(path.as_ref()).await?,
+		path: handler.resolve_from_default(path).await?,
 		parse: true,
 	}];
 	while let Some(job) = queue.pop() {
@@ -344,7 +331,7 @@ where
 			}
 			Job::ResolveImport { from, import } => {
 				if let Some((resolved, expression)) =
-					resolved.get_mut(&(from.clone(), import.path.clone()))
+					resolved_map.get_mut(&(from.clone(), import.path.clone()))
 				{
 					if import.expression && !*expression {
 						*expression = true;
@@ -360,8 +347,5 @@ where
 			}
 		}
 	}
-	s.set_import_resolver(ResolvedImportResolver {
-		resolved: RefCell::new(resolved),
-	});
 	Ok(())
 }

@@ -1,16 +1,17 @@
-use std::{cell::RefCell, collections::BTreeSet, rc::Rc};
+use std::{cell::RefCell, collections::BTreeSet};
 
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	function::{builtin, ArgLike, CallLocation, FuncVal},
+	function::{builtin, CallLocation, FuncVal},
 	manifest::JsonFormat,
 	typed::{Either2, Either4},
 	val::{equals, ArrValue},
-	Context, Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
+	Either, IStr, ObjValue, ObjValueBuilder, ResultExt, Thunk, Val,
 };
+use jrsonnet_gcmodule::Cc;
 
-use crate::{extvar_source, Settings};
+use crate::Settings;
 
 #[builtin]
 pub fn builtin_length(x: Either![IStr, ArrValue, ObjValue, FuncVal]) -> usize {
@@ -47,22 +48,20 @@ pub fn builtin_get(
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
-pub fn builtin_ext_var(this: &builtin_ext_var, ctx: Context, x: IStr) -> Result<Val> {
-	let ctx = ctx.state().create_default_context(extvar_source(&x, ""));
+pub fn builtin_ext_var(this: &builtin_ext_var, x: IStr) -> Result<Val> {
 	this.settings
 		.borrow()
 		.ext_vars
 		.get(&x)
 		.cloned()
 		.ok_or_else(|| UndefinedExternalVariable(x))?
-		.evaluate_arg(ctx, true)?
-		.evaluate()
+		.evaluate_tailstrict()
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 	this.settings
@@ -74,7 +73,7 @@ pub fn builtin_native(this: &builtin_native, x: IStr) -> Val {
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_trace(
 	this: &builtin_trace,
@@ -155,8 +154,16 @@ pub fn builtin_assert_equal(a: Val, b: Val) -> Result<bool> {
 		#[cfg(feature = "exp-preserve-order")]
 		true,
 	);
-	let a = a.manifest(&format).description("<a> manifestification")?;
-	let b = b.manifest(&format).description("<b> manifestification")?;
+	let a = if let Some(a) = a.as_str() {
+		format!("<A>\n{a}\n</A>")
+	} else {
+		a.manifest(&format).description("<a> manifestification")?
+	};
+	let b = if let Some(b) = b.as_str() {
+		format!("<B>\n{b}\n</B>")
+	} else {
+		b.manifest(&format).description("<b> manifestification")?
+	};
 	bail!("assertion failed: A != B\nA: {a}\nB: {b}")
 }
 
@@ -165,11 +172,7 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 	let Some(patch) = patch.as_obj() else {
 		return Ok(patch);
 	};
-	let Some(target) = target.as_obj() else {
-		// Per RFC 7396, if target is not an object, treat it as empty object
-		// and recursively process to strip null values from patch
-		return builtin_merge_patch(Val::Obj(ObjValue::new_empty()), Val::Obj(patch));
-	};
+	let target = target.as_obj().unwrap_or_else(|| ObjValue::empty());
 	let target_fields = target
 		.fields(
 			// FIXME: Makes no sense to preserve order for BTreeSet, it would be better to use IndexSet here?
@@ -197,45 +200,16 @@ pub fn builtin_merge_patch(target: Val, patch: Val) -> Result<Val> {
 
 	let mut out = ObjValueBuilder::new();
 	for field in target_fields.union(&patch_fields) {
-		// Check if patch has this field
-		let patch_has_field = patch_fields.contains(field);
-
-		if !patch_has_field {
-			// Field only in target - copy lazily to avoid triggering errors.
-			// This preserves Jsonnet's lazy evaluation semantics: errors in fields
-			// that are never accessed should not be triggered.
-			if let Some(thunk) = target.get_lazy(field.clone()) {
-				out.field(field.clone()).try_thunk(thunk)?;
-			}
+		let Some(field_patch) = patch.get(field.clone())? else {
+			// All lazy fields might be unified into a single filtered object core instead of creating a thunk per, but this implementation is good enough.
+			let target_field = target.get_lazy(field.clone()).expect("we're iterating over fields union, if field is missing in patch - it exists in target");
+			out.field(field.clone()).thunk(target_field);
 			continue;
-		}
-
-		// Patch has this field - we need to evaluate it
-		let field_patch = patch.get(field.clone())?.expect("field is in patch_fields");
-
+		};
 		if matches!(field_patch, Val::Null) {
-			// Field is being deleted
 			continue;
 		}
-
-		// Check if target has this field
-		let target_has_field = target_fields.contains(field);
-
-		if !target_has_field {
-			// Field only in patch - recursive merge with empty object per RFC 7396
-			// This ensures null values in nested objects are properly removed
-			out.field(field.clone()).value(builtin_merge_patch(
-				Val::Obj(ObjValue::new_empty()),
-				field_patch,
-			)?);
-			continue;
-		}
-
-		// Both have the field - need recursive merge
-		// We must evaluate target here for the recursive call
-		let field_target = target
-			.get(field.clone())?
-			.expect("field is in target_fields");
+		let field_target = target.get(field.clone())?.unwrap_or(Val::Null);
 		out.field(field.clone())
 			.value(builtin_merge_patch(field_target, field_patch)?);
 	}

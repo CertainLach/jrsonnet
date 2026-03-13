@@ -1,0 +1,2 @@
+type error: expected string, got number
+    fieldname_not_string.jsonnet:1:4-9: evaluating field name

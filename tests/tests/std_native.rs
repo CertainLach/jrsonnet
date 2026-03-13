@@ -1,4 +1,4 @@
-use jrsonnet_evaluator::{function::builtin, trace::PathResolver, State};
+use jrsonnet_evaluator::{State, function::builtin, trace::PathResolver};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[builtin]
@@ -14,9 +14,11 @@ fn std_native() {
 	state.context_initializer(std);
 	let state = state.build();
 
-	assert!(state
-		.evaluate_snippet("test", "std.native('example')(1, 3) == 4")
-		.unwrap()
-		.as_bool()
-		.expect("boolean output"));
+	assert!(
+		state
+			.evaluate_snippet("test", "std.native('example')(1, 3) == 4")
+			.unwrap()
+			.as_bool()
+			.expect("boolean output")
+	);
 }

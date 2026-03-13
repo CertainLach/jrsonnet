@@ -4,7 +4,7 @@ mod toml;
 mod xml;
 mod yaml;
 
-use std::{cell::RefCell, rc::Rc};
+use std::cell::RefCell;
 
 pub use ini::IniFormat;
 use jrsonnet_evaluator::{
@@ -12,6 +12,7 @@ use jrsonnet_evaluator::{
 	manifest::{escape_string_json, JsonFormat, YamlStreamFormat},
 	IStr, ObjValue, Result, Val,
 };
+use jrsonnet_gcmodule::Cc;
 pub use python::{PythonFormat, PythonVarsFormat};
 pub use toml::TomlFormat;
 pub use xml::XmlJsonmlFormat;
@@ -84,7 +85,7 @@ pub fn builtin_manifest_json_minified(
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 pub fn builtin_manifest_yaml_doc(
 	this: &builtin_manifest_yaml_doc,
@@ -121,7 +122,7 @@ pub fn builtin_manifest_yaml_doc(
 }
 
 #[builtin(fields(
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 ))]
 #[allow(clippy::fn_params_excessive_bools)]
 pub fn builtin_manifest_yaml_stream(

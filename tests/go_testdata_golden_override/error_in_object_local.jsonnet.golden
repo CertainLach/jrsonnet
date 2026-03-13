@@ -1,0 +1,4 @@
+runtime error: xxx
+    error_in_object_local.jsonnet:1:20-30: error statement
+    error_in_object_local.jsonnet:1:36-47: function <foo> call
+    field <baz> evaluation

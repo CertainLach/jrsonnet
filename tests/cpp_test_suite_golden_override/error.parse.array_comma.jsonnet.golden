@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "]", "{", <binary op>, <comma>, got "3"
+    error.parse.array_comma.jsonnet:17:7

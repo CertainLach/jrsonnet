@@ -1,0 +1,2 @@
+external variable is not defined: staticErrorVar
+    extvar_static_error.jsonnet:1:1-30: function <builtin_ext_var> call

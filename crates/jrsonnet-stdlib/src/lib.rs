@@ -3,6 +3,7 @@
 use std::{
 	cell::{Ref, RefCell, RefMut},
 	collections::HashMap,
+	f64,
 	rc::Rc,
 };
 
@@ -11,12 +12,13 @@ pub use compat::*;
 pub use encoding::*;
 pub use hash::*;
 use jrsonnet_evaluator::{
-	error::{ErrorKind::*, Result},
+	error::Result,
 	function::{CallLocation, FuncVal, TlaArg},
 	trace::PathResolver,
+	val::NumValue,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Acyclic, Cc, Trace};
 use jrsonnet_parser::Source;
 pub use manifest::*;
 pub use math::*;
@@ -48,7 +50,7 @@ mod strings;
 mod types;
 
 #[allow(clippy::too_many_lines)]
-pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
+pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {
 	let mut builder = ObjValueBuilder::new();
 
 	// FIXME: Use PHF
@@ -61,6 +63,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("isObject", builtin_is_object::INST),
 		("isArray", builtin_is_array::INST),
 		("isFunction", builtin_is_function::INST),
+		("isNull", builtin_is_null::INST),
 		// Arrays
 		("makeArray", builtin_make_array::INST),
 		("repeat", builtin_repeat::INST),
@@ -102,6 +105,8 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("floor", builtin_floor::INST),
 		("ceil", builtin_ceil::INST),
 		("log", builtin_log::INST),
+		("log2", builtin_log2::INST),
+		("log10", builtin_log10::INST),
 		("pow", builtin_pow::INST),
 		("sqrt", builtin_sqrt::INST),
 		("sin", builtin_sin::INST),
@@ -119,6 +124,9 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("isOdd", builtin_is_odd::INST),
 		("isInteger", builtin_is_integer::INST),
 		("isDecimal", builtin_is_decimal::INST),
+		("deg2rad", builtin_deg2rad::INST),
+		("rad2deg", builtin_rad2deg::INST),
+		("hypot", builtin_hypot::INST),
 		// Operator
 		("mod", builtin_mod::INST),
 		("primitiveEquals", builtin_primitive_equals::INST),
@@ -198,6 +206,7 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 		("lstripChars", builtin_lstrip_chars::INST),
 		("rstripChars", builtin_rstrip_chars::INST),
 		("stripChars", builtin_strip_chars::INST),
+		("trim", builtin_trim::INST),
 		// Misc
 		("length", builtin_length::INST),
 		("get", builtin_get::INST),
@@ -256,6 +265,10 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	builder.method("trace", builtin_trace { settings });
 	builder.method("id", FuncVal::Id);
 
+	builder.field("pi").hide().value(Val::Num(
+		NumValue::new(f64::consts::PI).expect("pi is finite"),
+	));
+
 	// Regex
 	let regex_cache = RegexCache::default();
 	builder.method(
@@ -284,10 +297,11 @@ pub fn stdlib_uncached(settings: Rc<RefCell<Settings>>) -> ObjValue {
 	builder.build()
 }
 
-pub trait TracePrinter {
+pub trait TracePrinter: Acyclic {
 	fn print_trace(&self, loc: CallLocation, value: IStr);
 }
 
+#[derive(Acyclic)]
 pub struct StdTracePrinter {
 	resolver: PathResolver,
 }
@@ -315,7 +329,7 @@ impl TracePrinter for StdTracePrinter {
 }
 
 /// Controls how quote_values is determined in manifestYamlDoc
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Trace)]
 pub enum QuoteValuesBehavior {
 	/// Values are always quoted regardless of quote_keys (matches go-jsonnet)
 	GoJsonnet,
@@ -327,7 +341,7 @@ pub enum QuoteValuesBehavior {
 
 /// Settings for std.manifestYamlDoc formatting
 /// These settings control how YAML is formatted when using std.manifestYamlDoc
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Trace)]
 pub struct ManifestYamlDocFormatting {
 	/// Controls how quote_values is determined.
 	/// - GoJsonnet (default): values are always quoted
@@ -336,7 +350,7 @@ pub struct ManifestYamlDocFormatting {
 }
 
 /// Controls how empty arrays are formatted in manifestYamlStream
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Trace)]
 pub enum ManifestYamlStreamEmptyBehavior {
 	/// Empty arrays produce "---\n\n" (document marker + empty line) - matches go-jsonnet
 	GoJsonnet,
@@ -346,19 +360,20 @@ pub enum ManifestYamlStreamEmptyBehavior {
 }
 
 /// Settings for std.manifestYamlStream formatting
-#[derive(Debug, Clone, Default)]
+#[derive(Debug, Clone, Default, Trace)]
 pub struct ManifestYamlStreamFormatting {
 	/// Controls how empty arrays are formatted
 	pub empty_behavior: ManifestYamlStreamEmptyBehavior,
 }
 
+#[derive(Clone, Trace)]
 pub struct Settings {
 	/// Used for `std.extVar`
 	pub ext_vars: HashMap<IStr, TlaArg>,
 	/// Used for `std.native`
 	pub ext_natives: HashMap<IStr, FuncVal>,
 	/// Used for `std.trace`
-	pub trace_printer: Box<dyn TracePrinter>,
+	pub trace_printer: Rc<dyn TracePrinter>,
 	/// Used for `std.thisFile`
 	pub path_resolver: PathResolver,
 	/// Used for `std.manifestYamlDoc` formatting options
@@ -367,28 +382,23 @@ pub struct Settings {
 	pub manifest_yaml_stream_formatting: ManifestYamlStreamFormatting,
 }
 
-fn extvar_source(name: &str, code: impl Into<IStr>) -> Source {
-	let source_name = format!("<extvar:{name}>");
-	Source::new_virtual(source_name.into(), code.into())
-}
-
 #[derive(Trace, Clone)]
 pub struct ContextInitializer {
 	/// std without applied thisFile overlay
 	stdlib_obj: ObjValue,
-	settings: Rc<RefCell<Settings>>,
+	settings: Cc<RefCell<Settings>>,
 }
 impl ContextInitializer {
 	pub fn new(resolver: PathResolver) -> Self {
 		let settings = Settings {
 			ext_vars: HashMap::new(),
 			ext_natives: HashMap::new(),
-			trace_printer: Box::new(StdTracePrinter::new(resolver.clone())),
+			trace_printer: Rc::new(StdTracePrinter::new(resolver.clone())),
 			path_resolver: resolver,
 			manifest_yaml_doc_formatting: ManifestYamlDocFormatting::default(),
 			manifest_yaml_stream_formatting: ManifestYamlStreamFormatting::default(),
 		};
-		let settings = Rc::new(RefCell::new(settings));
+		let settings = Cc::new(RefCell::new(settings));
 		let stdlib_obj = stdlib_uncached(settings.clone());
 		Self {
 			stdlib_obj,
@@ -411,23 +421,11 @@ impl ContextInitializer {
 			.ext_vars
 			.insert(name, TlaArg::String(value));
 	}
-	pub fn add_ext_code(&self, name: &str, code: impl Into<IStr>) -> Result<()> {
-		let code = code.into();
-		let source = extvar_source(name, code.clone());
-		let parsed = jrsonnet_parser::parse(
-			&code,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| ImportSyntaxError {
-			path: source,
-			error: Box::new(e),
-		})?;
+	pub fn add_ext_code(&self, name: &str, code: impl AsRef<str>) -> Result<()> {
 		// self.data_mut().volatile_files.insert(source_name, code);
 		self.settings_mut()
 			.ext_vars
-			.insert(name.into(), TlaArg::Code(parsed));
+			.insert(name.into(), TlaArg::InlineCode(code.as_ref().to_owned()));
 		Ok(())
 	}
 	pub fn add_native(&self, name: impl Into<IStr>, cb: impl Into<FuncVal>) {

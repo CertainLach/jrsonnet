@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "f"
+    object_comp_bad_field.jsonnet:1:9

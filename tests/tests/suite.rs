@@ -4,8 +4,8 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	trace::{CompactFormat, PathResolver, TraceFormat},
 	FileImportResolver, State, Val,
+	trace::{CompactFormat, PathResolver, TraceFormat},
 };
 use jrsonnet_stdlib::ContextInitializer;
 
@@ -36,7 +36,7 @@ fn run(file: &Path) {
 }
 
 #[test]
-fn test() -> io::Result<()> {
+fn suite() -> io::Result<()> {
 	let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
 	root.push("suite");
 

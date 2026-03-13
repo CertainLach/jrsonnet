@@ -2,7 +2,6 @@
 
 use std::{
 	alloc::Layout,
-	any::Any,
 	cell::RefCell,
 	collections::HashMap,
 	env::current_dir,
@@ -15,9 +14,9 @@ use std::{
 use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
-	ImportResolver,
+	AsPathLike, ImportResolver, ResolvePath,
 };
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::VM;
@@ -32,16 +31,14 @@ pub type JsonnetImportCallback = unsafe extern "C" fn(
 ) -> c_int;
 
 /// Resolves imports using callback
-#[derive(Trace)]
+#[derive(Acyclic)]
 pub struct CallbackImportResolver {
-	#[trace(skip)]
 	cb: JsonnetImportCallback,
-	#[trace(skip)]
 	ctx: *mut c_void,
 	out: RefCell<HashMap<SourcePath, Vec<u8>>>,
 }
 impl ImportResolver for CallbackImportResolver {
-	fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
+	fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
 		let base = if let Some(p) = from.downcast_ref::<SourceFile>() {
 			let mut o = p.path().to_owned();
 			o.pop();
@@ -54,7 +51,11 @@ impl ImportResolver for CallbackImportResolver {
 			unreachable!("can't resolve this path");
 		};
 		let base = unsafe { crate::unparse_path(&base) };
-		let rel = CString::new(path).unwrap();
+		let rel = path.as_path();
+		let rel = match rel {
+			ResolvePath::Str(s) => CString::new(s.as_bytes()).unwrap(),
+			ResolvePath::Path(p) => unsafe { crate::unparse_path(p) },
+		};
 		let found_here: *mut c_char = null_mut();
 
 		let mut buf = null_mut();
@@ -101,14 +102,6 @@ impl ImportResolver for CallbackImportResolver {
 	}
 	fn load_file_contents(&self, resolved: &SourcePath) -> Result<Vec<u8>> {
 		Ok(self.out.borrow().get(resolved).unwrap().clone())
-	}
-
-	fn as_any(&self) -> &dyn Any {
-		self
-	}
-
-	fn as_any_mut(&mut self) -> &mut dyn Any {
-		self
 	}
 }
 

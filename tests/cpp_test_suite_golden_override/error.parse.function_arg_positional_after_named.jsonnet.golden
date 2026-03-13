@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", <binary op>, <comma>, <named argument>, got ")"
+    error.parse.function_arg_positional_after_named.jsonnet:19:11

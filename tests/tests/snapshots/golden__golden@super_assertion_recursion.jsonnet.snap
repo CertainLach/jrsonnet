@@ -1,0 +1,17 @@
+---
+source: tests/tests/golden.rs
+assertion_line: 45
+expression: result
+input_file: tests/golden/super_assertion_recursion.jsonnet
+---
+infinite recursion detected
+    super_assertion_recursion.jsonnet:20:16-27:    field <deployment> access
+    super_assertion_recursion.jsonnet:17:8-17:9:   assertion condition
+    super_assertion_recursion.jsonnet:28:30-38:    field <enabled> access
+    super_assertion_recursion.jsonnet:28:5-81:     if condition
+    argument <patch> evaluation
+    super_assertion_recursion.jsonnet:26:4-26:5:   function <builtin_merge_patch> call
+    super_assertion_recursion.jsonnet:35:35-40:    field <deployment> access
+    super_assertion_recursion.jsonnet:35:32-35:33: if condition
+    super_assertion_recursion.jsonnet:39:15-55:    function <overrideSuperIfExists> call
+    field <deployment> evaluation

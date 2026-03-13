@@ -1,0 +1,2 @@
+runtime error: too many values to format, expected 2, got 3
+    std.format of x %s

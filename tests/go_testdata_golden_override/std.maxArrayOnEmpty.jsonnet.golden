@@ -1,0 +1,2 @@
+runtime error: expected non-empty array
+    std.maxArrayOnEmpty.jsonnet:1:1-18: function <builtin_max_array> call

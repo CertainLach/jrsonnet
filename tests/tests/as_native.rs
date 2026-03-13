@@ -1,4 +1,4 @@
-use jrsonnet_evaluator::{trace::PathResolver, FileImportResolver, Result, State};
+use jrsonnet_evaluator::{FileImportResolver, Result, State, trace::PathResolver};
 use jrsonnet_stdlib::ContextInitializer;
 
 mod common;

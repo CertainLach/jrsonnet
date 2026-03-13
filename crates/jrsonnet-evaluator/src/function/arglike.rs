@@ -1,9 +1,10 @@
-use hashbrown::HashMap;
+use std::collections::HashMap;
+
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, LocExpr};
+use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
 
-use crate::{evaluate, gc::GcHashMap, typed::Typed, Context, Result, Thunk, Val};
+use crate::{evaluate, typed::Typed, with_state, Context, Result, Thunk, Val};
 
 /// Marker for arguments, which can be evaluated with context set to None
 pub trait OptionalContext {}
@@ -40,22 +41,65 @@ impl<T> OptionalContext for T where T: Typed + Clone {}
 #[derive(Clone, Trace)]
 pub enum TlaArg {
 	String(IStr),
-	Code(LocExpr),
 	Val(Val),
 	Lazy(Thunk<Val>),
+	Import(String),
+	ImportStr(String),
+	InlineCode(String),
 }
-impl ArgLike for TlaArg {
-	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+impl TlaArg {
+	pub fn evaluate_tailstrict(&self) -> Result<Val> {
+		match self {
+			Self::String(s) => Ok(Val::string(s.clone())),
+			Self::Val(val) => Ok(val.clone()),
+			Self::Lazy(lazy) => Ok(lazy.evaluate()?),
+			Self::Import(p) => with_state(|s| {
+				let resolved = s.resolve_from_default(&p.as_str())?;
+				s.import_resolved(resolved)
+			}),
+			Self::ImportStr(p) => with_state(|s| {
+				let resolved = s.resolve_from_default(&p.as_str())?;
+				s.import_resolved_str(resolved).map(Val::string)
+			}),
+			Self::InlineCode(p) => with_state(|s| {
+				let resolved =
+					SourcePath::new(SourceFifo("<inline code>".to_owned(), p.as_bytes().into()));
+				s.import_resolved(resolved)
+			}),
+		}
+	}
+	pub fn evaluate(&self) -> Result<Thunk<Val>> {
 		match self {
 			Self::String(s) => Ok(Thunk::evaluated(Val::string(s.clone()))),
-			Self::Code(code) => Ok(if tailstrict {
-				Thunk::evaluated(evaluate(ctx, code)?)
-			} else {
-				let code = code.clone();
-				Thunk!(move || evaluate(ctx, &code))
-			}),
 			Self::Val(val) => Ok(Thunk::evaluated(val.clone())),
 			Self::Lazy(lazy) => Ok(lazy.clone()),
+			Self::Import(p) => with_state(|s| {
+				let resolved = s.resolve_from_default(&p.as_str())?;
+				Ok(Thunk!(move || s.import_resolved(resolved)))
+			}),
+			Self::ImportStr(p) => with_state(|s| {
+				let resolved = s.resolve_from_default(&p.as_str())?;
+				Ok(Thunk!(move || s
+					.import_resolved_str(resolved)
+					.map(Val::string)))
+			}),
+			Self::InlineCode(p) => with_state(|s| {
+				let resolved =
+					SourcePath::new(SourceFifo("<inline code>".to_owned(), p.as_bytes().into()));
+				Ok(Thunk!(move || s.import_resolved(resolved)))
+			}),
+		}
+	}
+}
+
+// TODO: Is this implementation really required, as there is no Context to use?
+// Maybe something a bit stricter is possible to add, especially with precompiled calls?
+impl ArgLike for TlaArg {
+	fn evaluate_arg(&self, _ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
+		if tailstrict {
+			self.evaluate_tailstrict().map(Thunk::evaluated)
+		} else {
+			self.evaluate()
 		}
 	}
 }
@@ -204,38 +248,6 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 	}
 }
 impl<V, S> OptionalContext for HashMap<IStr, V, S> where V: ArgLike + OptionalContext {}
-
-impl<A: ArgLike> ArgsLike for GcHashMap<IStr, A> {
-	fn unnamed_len(&self) -> usize {
-		self.0.unnamed_len()
-	}
-
-	fn unnamed_iter(
-		&self,
-		ctx: Context,
-		tailstrict: bool,
-		handler: &mut dyn FnMut(usize, Thunk<Val>) -> Result<()>,
-	) -> Result<()> {
-		self.0.unnamed_iter(ctx, tailstrict, handler)
-	}
-
-	fn named_iter(
-		&self,
-		ctx: Context,
-		tailstrict: bool,
-		handler: &mut dyn FnMut(&IStr, Thunk<Val>) -> Result<()>,
-	) -> Result<()> {
-		self.0.named_iter(ctx, tailstrict, handler)
-	}
-
-	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		self.0.named_names(handler);
-	}
-
-	fn is_empty(&self) -> bool {
-		self.0.is_empty()
-	}
-}
 
 macro_rules! impl_args_like {
 	($count:expr; $($gen:ident)*) => {

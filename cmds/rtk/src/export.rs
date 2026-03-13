@@ -557,6 +557,9 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 					},
 				};
 
+				// Collect GC cycles to free memory from evaluation
+				jrsonnet_gcmodule::collect_thread_cycles();
+
 				let _ = tx.send((idx, result));
 			});
 		}
@@ -620,6 +623,9 @@ pub fn export(paths: &[String], opts: ExportOpts) -> Result<ExportResult> {
 						timing: None,
 					},
 				};
+
+				// Collect GC cycles to free memory from evaluation
+				jrsonnet_gcmodule::collect_thread_cycles();
 
 				let _ = tx.send((next_idx, result));
 			});

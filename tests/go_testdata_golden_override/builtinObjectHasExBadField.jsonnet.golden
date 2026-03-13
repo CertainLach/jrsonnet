@@ -1,0 +1,3 @@
+type error: expected string, got number
+    argument <fname> evaluation
+    builtinObjectHasExBadField.jsonnet:1:1-32: function <builtin_object_has_ex> call

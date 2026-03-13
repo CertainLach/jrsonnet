@@ -1,0 +1,4 @@
+runtime error: xxx
+    double_thunk.jsonnet:1:21-33: error statement
+    double_thunk.jsonnet:1:34-36: local <y> access
+    double_thunk.jsonnet:1:37-39: local <x> access

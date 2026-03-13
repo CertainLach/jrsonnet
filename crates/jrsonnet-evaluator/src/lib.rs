@@ -1,11 +1,12 @@
 //! jsonnet interpreter implementation
-#![cfg_attr(feature = "nightly", feature(thread_local, type_alias_impl_trait))]
+#![cfg_attr(nightly, feature(thread_local, type_alias_impl_trait))]
+// Suppress warnings from jrsonnet-gcmodule's Trace derive macro on #[trace(skip)] fields
+#![allow(unused_assignments)]
 
 // For jrsonnet-macros
 extern crate self as jrsonnet_evaluator;
 
 mod arr;
-#[cfg(feature = "async-import")]
 pub mod async_import;
 mod ctx;
 mod dynamic;
@@ -28,8 +29,11 @@ pub mod val;
 use std::{
 	any::Any,
 	cell::{RefCell, RefMut},
+	clone::Clone,
+	collections::hash_map::Entry,
 	fmt::{self, Debug},
-	path::Path,
+	marker::PhantomData,
+	rc::Rc,
 };
 
 pub use ctx::*;
@@ -37,19 +41,27 @@ pub use dynamic::*;
 pub use error::{Error, ErrorKind::*, Result, ResultExt};
 pub use evaluate::*;
 use function::CallLocation;
-use gc::{GcHashMap, TraceBox};
-use hashbrown::hash_map::RawEntryMut;
 pub use import::*;
-use jrsonnet_gcmodule::{Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
 use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
 pub use obj::*;
+pub use rustc_hash;
+use rustc_hash::FxHashMap;
 use stack::check_depth;
 pub use tla::apply_tla;
 pub use val::{Thunk, Val};
+
+use crate::gc::WithCapacityExt as _;
+
+cc_dyn!(
+	#[derive(Clone)]
+	CcUnbound<V>,
+	Unbound<Bound = V>
+);
 
 /// Thunk without bound `super`/`this`
 /// object inheritance may be overriden multiple times, and will be fixed only on field read
@@ -57,7 +69,7 @@ pub trait Unbound: Trace {
 	/// Type of value after object context is bound
 	type Bound;
 	/// Create value bound to specified object context
-	fn bind(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Self::Bound>;
+	fn bind(&self, sup_this: SupThis) -> Result<Self::Bound>;
 }
 
 /// Object fields may, or may not depend on `this`/`super`, this enum allows cheaper reuse of object-independent fields for native code
@@ -65,7 +77,7 @@ pub trait Unbound: Trace {
 #[derive(Clone, Trace)]
 pub enum MaybeUnbound {
 	/// Value needs to be bound to `this`/`super`
-	Unbound(Cc<TraceBox<dyn Unbound<Bound = Val>>>),
+	Unbound(CcUnbound<Val>),
 	/// Value is object-independent
 	Bound(Thunk<Val>),
 }
@@ -77,13 +89,15 @@ impl Debug for MaybeUnbound {
 }
 impl MaybeUnbound {
 	/// Attach object context to value, if required
-	pub fn evaluate(&self, sup: Option<ObjValue>, this: Option<ObjValue>) -> Result<Val> {
+	pub fn evaluate(&self, sup_this: SupThis) -> Result<Val> {
 		match self {
-			Self::Unbound(v) => v.bind(sup, this),
+			Self::Unbound(v) => v.0.bind(sup_this),
 			Self::Bound(v) => Ok(v.evaluate()?),
 		}
 	}
 }
+
+cc_dyn!(CcContextInitializer, ContextInitializer);
 
 /// During import, this trait will be called to create initial context for file.
 /// It may initialize global variables, stdlib for example.
@@ -95,8 +109,8 @@ pub trait ContextInitializer: Trace {
 	/// Initialize default file context.
 	/// Has default implementation, which calls `populate`.
 	/// Prefer to always implement `populate` instead.
-	fn initialize(&self, state: State, for_file: Source) -> Context {
-		let mut builder = ContextBuilder::with_capacity(state, self.reserve_vars());
+	fn initialize(&self, for_file: Source) -> Context {
+		let mut builder = ContextBuilder::with_capacity(self.reserve_vars());
 		self.populate(for_file, &mut builder);
 		builder.build()
 	}
@@ -120,11 +134,11 @@ impl<T> ContextInitializer for Option<T>
 where
 	T: ContextInitializer,
 {
-	fn initialize(&self, state: State, for_file: Source) -> Context {
+	fn initialize(&self, for_file: Source) -> Context {
 		if let Some(ctx) = self {
-			ctx.initialize(state, for_file)
+			ctx.initialize(for_file)
 		} else {
-			().initialize(state, for_file)
+			().initialize(for_file)
 		}
 	}
 
@@ -215,37 +229,66 @@ impl FileData {
 #[derive(Trace)]
 pub struct EvaluationStateInternals {
 	/// Internal state
-	file_cache: RefCell<GcHashMap<SourcePath, FileData>>,
+	file_cache: RefCell<FxHashMap<SourcePath, FileData>>,
 	/// Context initializer, which will be used for imports and everything
 	/// [`NoopContextInitializer`] is used by default, most likely you want to have `jrsonnet-stdlib`
-	context_initializer: TraceBox<dyn ContextInitializer>,
+	context_initializer: CcContextInitializer,
 	/// Used to resolve file locations/contents
-	import_resolver: TraceBox<dyn ImportResolver>,
+	import_resolver: Rc<dyn ImportResolver>,
 }
 
 /// Maintains stack trace and import resolution
 #[derive(Clone, Trace)]
 pub struct State(Cc<EvaluationStateInternals>);
 
+thread_local! {
+	pub static DEFAULT_STATE: State = State::builder().build();
+	pub static STATE: RefCell<Option<State>> = const {RefCell::new(None)};
+}
+pub struct StateEnterGuard(PhantomData<()>);
+impl Drop for StateEnterGuard {
+	fn drop(&mut self) {
+		STATE.with_borrow_mut(|v| *v = None);
+	}
+}
+
+pub fn with_state<V>(v: impl FnOnce(State) -> V) -> V {
+	if let Some(state) = STATE.with_borrow(Clone::clone) {
+		v(state)
+	} else {
+		let s = DEFAULT_STATE.with(Clone::clone);
+		v(s)
+	}
+}
+
 impl State {
+	pub fn enter(&self) -> StateEnterGuard {
+		self.try_enter().expect("entered state already exists")
+	}
+	pub fn try_enter(&self) -> Option<StateEnterGuard> {
+		STATE.with_borrow_mut(|v| {
+			if v.is_none() {
+				*v = Some(self.clone());
+				Some(StateEnterGuard(PhantomData))
+			} else {
+				None
+			}
+		})
+	}
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_str(&self, path: SourcePath) -> Result<IStr> {
 		let mut file_cache = self.file_cache();
-		let mut file = file_cache.raw_entry_mut().from_key(&path);
+		let mut file = file_cache.entry(path.clone());
 
 		let file = match file {
-			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
-			RawEntryMut::Vacant(v) => {
+			Entry::Occupied(ref mut d) => d.get_mut(),
+			Entry::Vacant(v) => {
 				let data = self.import_resolver().load_file_contents(&path)?;
-				v.insert(
-					path.clone(),
-					FileData::new_string(
-						std::str::from_utf8(&data)
-							.map_err(|_| ImportBadFileUtf8(path.clone()))?
-							.into(),
-					),
-				)
-				.1
+				v.insert(FileData::new_string(
+					std::str::from_utf8(&data)
+						.map_err(|_| ImportBadFileUtf8(path.clone()))?
+						.into(),
+				))
 			}
 		};
 		Ok(file
@@ -255,14 +298,13 @@ impl State {
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved_bin(&self, path: SourcePath) -> Result<IBytes> {
 		let mut file_cache = self.file_cache();
-		let mut file = file_cache.raw_entry_mut().from_key(&path);
+		let mut file = file_cache.entry(path.clone());
 
 		let file = match file {
-			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
-			RawEntryMut::Vacant(v) => {
+			Entry::Occupied(ref mut d) => d.get_mut(),
+			Entry::Vacant(v) => {
 				let data = self.import_resolver().load_file_contents(&path)?;
-				v.insert(path.clone(), FileData::new_bytes(data.as_slice().into()))
-					.1
+				v.insert(FileData::new_bytes(data.as_slice().into()))
 			}
 		};
 		if let Some(str) = &file.bytes {
@@ -282,21 +324,17 @@ impl State {
 	/// Should only be called with path retrieved from [`resolve_path`], may panic otherwise
 	pub fn import_resolved(&self, path: SourcePath) -> Result<Val> {
 		let mut file_cache = self.file_cache();
-		let mut file = file_cache.raw_entry_mut().from_key(&path);
+		let mut file = file_cache.entry(path.clone());
 
 		let file = match file {
-			RawEntryMut::Occupied(ref mut d) => d.get_mut(),
-			RawEntryMut::Vacant(v) => {
+			Entry::Occupied(ref mut d) => d.get_mut(),
+			Entry::Vacant(v) => {
 				let data = self.import_resolver().load_file_contents(&path)?;
-				v.insert(
-					path.clone(),
-					FileData::new_string(
-						std::str::from_utf8(&data)
-							.map_err(|_| ImportBadFileUtf8(path.clone()))?
-							.into(),
-					),
-				)
-				.1
+				v.insert(FileData::new_string(
+					std::str::from_utf8(&data)
+						.map_err(|_| ImportBadFileUtf8(path.clone()))?
+						.into(),
+				))
 			}
 		};
 		if let Some(val) = &file.evaluated {
@@ -339,10 +377,10 @@ impl State {
 		let res = evaluate(self.create_default_context(file_name), &parsed);
 
 		let mut file_cache = self.file_cache();
-		let mut file = file_cache.raw_entry_mut().from_key(&path);
+		let mut file = file_cache.entry(path.clone());
 
-		let RawEntryMut::Occupied(file) = &mut file else {
-			unreachable!("this file was just here!")
+		let Entry::Occupied(file) = &mut file else {
+			unreachable!("this file was just here")
 		};
 		let file = file.get_mut();
 		file.evaluating = false;
@@ -356,18 +394,18 @@ impl State {
 	}
 
 	/// Has same semantics as `import 'path'` called from `from` file
-	pub fn import_from(&self, from: &SourcePath, path: &str) -> Result<Val> {
-		let resolved = self.resolve_from(from, path)?;
+	pub fn import_from(&self, from: &SourcePath, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from(from, &path)?;
 		self.import_resolved(resolved)
 	}
-	pub fn import(&self, path: impl AsRef<Path>) -> Result<Val> {
-		let resolved = self.resolve(path)?;
+	pub fn import(&self, path: impl AsPathLike) -> Result<Val> {
+		let resolved = self.resolve_from_default(&path)?;
 		self.import_resolved(resolved)
 	}
 
 	/// Creates context with all passed global variables
 	pub fn create_default_context(&self, source: Source) -> Context {
-		self.context_initializer().initialize(self.clone(), source)
+		self.context_initializer().initialize(source)
 	}
 
 	/// Creates context with all passed global variables, calling custom modifier
@@ -378,7 +416,6 @@ impl State {
 	) -> Context {
 		let default_initializer = self.context_initializer();
 		let mut builder = ContextBuilder::with_capacity(
-			self.clone(),
 			default_initializer.reserve_vars() + context_initializer.reserve_vars(),
 		);
 		default_initializer.populate(source.clone(), &mut builder);
@@ -390,7 +427,7 @@ impl State {
 
 /// Internals
 impl State {
-	fn file_cache(&self) -> RefMut<'_, GcHashMap<SourcePath, FileData>> {
+	fn file_cache(&self) -> RefMut<'_, FxHashMap<SourcePath, FileData>> {
 		self.0.file_cache.borrow_mut()
 	}
 }
@@ -475,20 +512,18 @@ impl State {
 impl State {
 	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve_from(&self, from: &SourcePath, path: &str) -> Result<SourcePath> {
-		self.import_resolver().resolve_from(from, path.as_ref())
+	pub fn resolve_from(&self, from: &SourcePath, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from(from, path)
 	}
-
-	// Only panics in case of [`ImportResolver`] contract violation
 	#[allow(clippy::missing_panics_doc)]
-	pub fn resolve(&self, path: impl AsRef<Path>) -> Result<SourcePath> {
-		self.import_resolver().resolve(path.as_ref())
+	pub fn resolve_from_default(&self, path: &dyn AsPathLike) -> Result<SourcePath> {
+		self.import_resolver().resolve_from_default(path)
 	}
 	pub fn import_resolver(&self) -> &dyn ImportResolver {
 		&*self.0.import_resolver
 	}
 	pub fn context_initializer(&self) -> &dyn ContextInitializer {
-		&*self.0.context_initializer
+		&*self.0.context_initializer.0
 	}
 }
 
@@ -506,29 +541,34 @@ impl Default for State {
 
 #[derive(Default)]
 pub struct StateBuilder {
-	import_resolver: Option<TraceBox<dyn ImportResolver>>,
-	context_initializer: Option<TraceBox<dyn ContextInitializer>>,
+	import_resolver: Option<Rc<dyn ImportResolver>>,
+	context_initializer: Option<CcContextInitializer>,
 }
 impl StateBuilder {
 	pub fn import_resolver(&mut self, import_resolver: impl ImportResolver) -> &mut Self {
-		let _ = self.import_resolver.insert(tb!(import_resolver));
+		let _ = self.import_resolver.insert(Rc::new(import_resolver));
 		self
 	}
 	pub fn context_initializer(
 		&mut self,
 		context_initializer: impl ContextInitializer,
 	) -> &mut Self {
-		let _ = self.context_initializer.insert(tb!(context_initializer));
+		let _ = self
+			.context_initializer
+			.insert(CcContextInitializer::new(context_initializer));
 		self
 	}
 	pub fn build(mut self) -> State {
 		State(Cc::new(EvaluationStateInternals {
-			file_cache: RefCell::new(GcHashMap::new()),
-			context_initializer: self.context_initializer.take().unwrap_or_else(|| tb!(())),
+			file_cache: RefCell::new(FxHashMap::new()),
+			context_initializer: self
+				.context_initializer
+				.take()
+				.unwrap_or_else(|| CcContextInitializer::new(())),
 			import_resolver: self
 				.import_resolver
 				.take()
-				.unwrap_or_else(|| tb!(DummyImportResolver)),
+				.unwrap_or_else(|| Rc::new(DummyImportResolver)),
 		}))
 	}
 }

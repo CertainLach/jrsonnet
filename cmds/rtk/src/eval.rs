@@ -7,9 +7,8 @@ use std::{collections::HashMap, fs, path::Path};
 
 use anyhow::{Context, Result};
 use jrsonnet_evaluator::{
-	function::TlaArg, gc::GcHashMap, set_lenient_super, set_skip_assertions,
-	stack::set_stack_depth_limit, trace::PathResolver, FileImportResolver, IStr, ImportResolver,
-	State,
+	function::TlaArg, rustc_hash::FxHashMap, set_skip_assertions, stack::set_stack_depth_limit,
+	trace::PathResolver, FileImportResolver, IStr, ImportResolver, State,
 };
 use jrsonnet_stdlib::ContextInitializer;
 use tracing::instrument;
@@ -122,12 +121,9 @@ pub fn eval_with_resolver(
 ) -> Result<EvalResult> {
 	set_skip_assertions(false);
 
-	// Enable lenient super mode to handle mixins that reference super fields that don't exist yet
-	// This works around go-jsonnet compatibility issues in libraries like k8s-libsonnet
-	set_lenient_super(true);
-
 	// Set up the evaluator state
 	let state = setup_state(import_resolver, config_base, &spec, &opts)?;
+	let _state_guard = state.enter();
 
 	// Evaluate the entrypoint
 	let result = evaluate_file(&state, entrypoint, &opts)?;
@@ -378,7 +374,7 @@ main{}{}
 
 	// Apply TLA - always attempt to invoke if result is a function
 	// This handles both explicit TLAs and functions with default arguments
-	let result = apply_tla(state, result, opts)?;
+	let result = apply_tla(result, opts)?;
 
 	// Manifest the result to JSON
 	let manifest = result
@@ -389,12 +385,8 @@ main{}{}
 }
 
 /// Apply top-level arguments to a function value
-fn apply_tla(
-	state: &State,
-	val: jrsonnet_evaluator::Val,
-	opts: &EvalOpts,
-) -> Result<jrsonnet_evaluator::Val> {
-	let mut tla_args: GcHashMap<IStr, TlaArg> = GcHashMap::new();
+fn apply_tla(val: jrsonnet_evaluator::Val, opts: &EvalOpts) -> Result<jrsonnet_evaluator::Val> {
+	let mut tla_args: FxHashMap<IStr, TlaArg> = FxHashMap::default();
 
 	// Add string TLAs
 	for (key, value) in &opts.tla_str {
@@ -403,22 +395,10 @@ fn apply_tla(
 
 	// Add code TLAs
 	for (key, value) in &opts.tla_code {
-		let source = jrsonnet_parser::Source::new_virtual(
-			format!("<tla:{}>", key).into(),
-			value.as_str().into(),
-		);
-		let parsed = jrsonnet_parser::parse(
-			value,
-			&jrsonnet_parser::ParserSettings {
-				source: source.clone(),
-			},
-		)
-		.map_err(|e| anyhow::anyhow!("failed to parse TLA code '{}':\n{}", key, e))?;
-
-		tla_args.insert(key.as_str().into(), TlaArg::Code(parsed));
+		tla_args.insert(key.as_str().into(), TlaArg::InlineCode(value.clone()));
 	}
 
-	jrsonnet_evaluator::apply_tla(state.clone(), &tla_args, val)
+	jrsonnet_evaluator::apply_tla(&tla_args, val)
 		.map_err(|e| anyhow::anyhow!("TLA application error:\n{}", e))
 }
 

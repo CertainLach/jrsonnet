@@ -1,7 +1,5 @@
 use clap::{Parser, ValueEnum};
-use jrsonnet_evaluator::trace::{
-	CompactFormat, ExplainingFormat, HiDocFormat, PathResolver, TraceFormat,
-};
+use jrsonnet_evaluator::trace::{CompactFormat, HiDocFormat, PathResolver, TraceFormat};
 
 #[derive(PartialEq, Eq, ValueEnum, Clone)]
 pub enum TraceFormatName {
@@ -9,7 +7,7 @@ pub enum TraceFormatName {
 	Compact,
 	/// Display source code with attached trace annotations
 	Explaining,
-	/// Experimental trace formatting based on hi-doc library
+	/// Trace formatting based on hi-doc library
 	HiDoc,
 }
 
@@ -38,11 +36,7 @@ impl TraceOpts {
 				padding: 4,
 				max_trace,
 			}),
-			TraceFormatName::Explaining => Box::new(ExplainingFormat {
-				resolver,
-				max_trace,
-			}),
-			TraceFormatName::HiDoc => Box::new(HiDocFormat {
+			TraceFormatName::Explaining | TraceFormatName::HiDoc => Box::new(HiDocFormat {
 				resolver,
 				max_trace,
 			}),

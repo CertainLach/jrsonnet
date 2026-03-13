@@ -1,0 +1,11 @@
+runtime error: assertion failed: A != B
+A: <A>
+one
+two
+</A>
+B: <B>
+three
+four
+
+</B>
+    error.assert_equal_str.jsonnet:17:1-46: function <builtin_assert_equal> call

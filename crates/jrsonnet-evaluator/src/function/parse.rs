@@ -2,6 +2,7 @@ use std::mem::replace;
 
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::ParamsDesc;
+use rustc_hash::FxHashMap;
 
 use super::{arglike::ArgsLike, builtin::BuiltinParam};
 use crate::{
@@ -10,7 +11,7 @@ use crate::{
 	error::{ErrorKind::*, Result},
 	evaluate_named,
 	function::builtin::ParamDefault,
-	gc::GcHashMap,
+	gc::WithCapacityExt as _,
 	Context, Pending, Thunk, Val,
 };
 
@@ -30,7 +31,7 @@ pub fn parse_function_call(
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut passed_args =
-		GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
+		FxHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 	if args.unnamed_len() > params.len() {
 		bail!(TooManyArgsFunctionHas(
 			params.len(),
@@ -72,7 +73,7 @@ pub fn parse_function_call(
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let fctx = Context::new_future();
-		let mut defaults = GcHashMap::with_capacity(
+		let mut defaults = FxHashMap::with_capacity(
 			params.iter().map(|p| p.0.capacity_hint()).sum::<usize>()
 				- filled_named
 				- filled_positionals,
@@ -128,11 +129,11 @@ pub fn parse_function_call(
 		}
 
 		Ok(body_ctx
-			.extend(passed_args, None, None, None)
-			.extend(defaults, None, None, None)
+			.extend_bindings(passed_args)
+			.extend_bindings(defaults)
 			.into_future(fctx))
 	} else {
-		let body_ctx = body_ctx.extend(passed_args, None, None, None);
+		let body_ctx = body_ctx.extend_bindings(passed_args);
 		Ok(body_ctx)
 	}
 }
@@ -220,7 +221,7 @@ pub fn parse_builtin_call(
 pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
 	let fctx = Context::new_future();
 
-	let mut bindings = GcHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
+	let mut bindings = FxHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
 
 	for param in params.iter() {
 		if let Some(v) = &param.1 {
@@ -256,7 +257,5 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Re
 		}
 	}
 
-	Ok(body_ctx
-		.extend(bindings, None, None, None)
-		.into_future(fctx))
+	Ok(body_ctx.extend_bindings(bindings).into_future(fctx))
 }

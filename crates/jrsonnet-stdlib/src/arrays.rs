@@ -138,19 +138,37 @@ pub fn builtin_filter_map(
 }
 
 #[builtin]
-pub fn builtin_foldl(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, IStr], init: Val) -> Result<Val> {
 	let mut acc = init;
-	for i in arr.iter() {
-		acc = func.evaluate_simple(&(acc, i?), false)?;
+	match arr {
+		Either2::A(arr) => {
+			for i in arr.iter() {
+				acc = func.evaluate_simple(&(acc, i?), false)?;
+			}
+		}
+		Either2::B(arr) => {
+			for i in arr.chars() {
+				acc = func.evaluate_simple(&(acc, Val::string(i)), false)?;
+			}
+		}
 	}
 	Ok(acc)
 }
 
 #[builtin]
-pub fn builtin_foldr(func: FuncVal, arr: ArrValue, init: Val) -> Result<Val> {
+pub fn builtin_foldr(func: FuncVal, arr: Either![ArrValue, IStr], init: Val) -> Result<Val> {
 	let mut acc = init;
-	for i in arr.iter().rev() {
-		acc = func.evaluate_simple(&(i?, acc), false)?;
+	match arr {
+		Either2::A(arr) => {
+			for i in arr.iter().rev() {
+				acc = func.evaluate_simple(&(i?, acc), false)?;
+			}
+		}
+		Either2::B(arr) => {
+			for i in arr.chars().rev() {
+				acc = func.evaluate_simple(&(Val::string(i), acc), false)?;
+			}
+		}
 	}
 	Ok(acc)
 }

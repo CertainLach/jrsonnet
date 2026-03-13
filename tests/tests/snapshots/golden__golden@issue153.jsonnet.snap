@@ -1,0 +1,10 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/issue153.jsonnet
+---
+{
+    "foo": {
+        "bar": "nope"
+    }
+}

@@ -1,0 +1,5 @@
+infinite recursion detected
+    error.function_infinite_default.jsonnet:17:17-19: local <x> access
+    error.function_infinite_default.jsonnet:17:12-14: local <y> access
+    error.function_infinite_default.jsonnet:17:20-22: local <x> access
+    during TLA call

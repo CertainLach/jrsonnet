@@ -140,8 +140,15 @@ impl CompletedMarker {
 
 		new_m
 	}
-	/// Create new node around existing marker, not counting anything that comes after it
-	fn wrap_raw(self, p: &mut Parser, kind: SyntaxKind, error: Option<SyntaxError>) -> Self {
+	/// Create new node around existing marker
+	/// If previous_pos is set - the wrapping node would not include everything that happened between wrapped node end and the current position of the parser
+	fn wrap_raw(
+		self,
+		p: &mut Parser,
+		kind: SyntaxKind,
+		error: Option<SyntaxError>,
+		previous_pos: bool,
+	) -> Self {
 		let new_m = p.start();
 		match &mut p.events[self.start_event_idx] {
 			Event::Start { forward_parent, .. } => {
@@ -154,30 +161,33 @@ impl CompletedMarker {
 
 		let completed = new_m.complete_raw(p, kind, error);
 
-		match &mut p.events[self.finish_event_idx] {
-			Event::Finish {
-				wrapper,
-				error: _error,
-			} => {
-				*wrapper = Some(
-					NonZeroUsize::new(completed.finish_event_idx - self.finish_event_idx)
-						.expect("!= 0"),
-				);
+		if previous_pos {
+			match &mut p.events[self.finish_event_idx] {
+				Event::Finish {
+					wrapper,
+					error: _error,
+				} => {
+					*wrapper = Some(
+						NonZeroUsize::new(completed.finish_event_idx - self.finish_event_idx)
+							.expect("!= 0"),
+					);
+				}
+				_ => unreachable!(),
 			}
-			_ => unreachable!(),
 		}
 		completed
 	}
-	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind) -> Self {
-		self.wrap_raw(p, kind, None)
+	pub fn wrap(self, p: &mut Parser, kind: SyntaxKind, previous_pos: bool) -> Self {
+		self.wrap_raw(p, kind, None, previous_pos)
 	}
-	pub fn wrap_error(self, p: &mut Parser, msg: impl AsRef<str>) -> Self {
+	pub fn wrap_error(self, p: &mut Parser, msg: impl AsRef<str>, previous_pos: bool) -> Self {
 		self.wrap_raw(
 			p,
 			SyntaxKind::ERROR_CUSTOM,
 			Some(SyntaxError::Custom {
 				error: msg.as_ref().to_owned(),
 			}),
+			previous_pos,
 		)
 	}
 }

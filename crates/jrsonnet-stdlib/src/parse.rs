@@ -9,23 +9,22 @@ pub fn builtin_parse_json(str: IStr) -> Result<Val> {
 
 #[builtin]
 pub fn builtin_parse_yaml(str: IStr) -> Result<Val> {
-	// Use serde-saphyr which properly handles YAML 1.1 features including:
-	// - Multiple merge keys (<<) in the same mapping
-	// - Octal numbers (0755 -> 493)
-	// - Anchor/alias expansion
-	let options = serde_saphyr::Options {
-		legacy_octal_numbers: true,
-		budget: None, // Disable budget limits - we trust the YAML input
-		..Default::default()
-	};
-	let values: Vec<Val> = serde_saphyr::from_multiple_with_options(&str, options)
-		.map_err(|e| runtime_error!("failed to parse yaml: {e}"))?;
-
-	Ok(if values.is_empty() {
+	let out = serde_saphyr::from_multiple_with_options::<Val>(
+		&str,
+		serde_saphyr::Options {
+			// Golang/C++ compat
+			legacy_octal_numbers: true,
+			// Disable budget limits - we trust the YAML input
+			budget: None,
+			..Default::default()
+		},
+	)
+	.map_err(|e| runtime_error!("failed to parse yaml: {e}"))?;
+	Ok(if out.is_empty() {
 		Val::Null
-	} else if values.len() == 1 {
-		values.into_iter().next().unwrap()
+	} else if out.len() == 1 {
+		out.into_iter().next().unwrap()
 	} else {
-		Val::Arr(values.into())
+		Val::Arr(out.into())
 	})
 }

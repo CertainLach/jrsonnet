@@ -1,0 +1,2 @@
+assert failed: null
+    error.invariant.equality.jsonnet:17:10-16: assertion failure

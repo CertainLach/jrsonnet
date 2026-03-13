@@ -17,6 +17,7 @@ use crate::eval_on_empty;
 enum SortKeyType {
 	Number,
 	String,
+	Unspecialized,
 	Unknown,
 }
 
@@ -31,7 +32,7 @@ fn get_sort_type<T>(values: &[T], key_getter: impl Fn(&T) -> &Val) -> Result<Sor
 			(Val::Str(_) | Val::Num(_), _) => {
 				bail!("sort elements should have the same types")
 			}
-			_ => {}
+			(_, _) => return Ok(SortKeyType::Unspecialized),
 		}
 	}
 	Ok(sort_type)
@@ -49,7 +50,7 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => {
+		SortKeyType::Unknown | SortKeyType::Unspecialized => {
 			let mut err = None;
 			// evaluate_compare_op will never return equal on types, which are different from
 			// jsonnet perspective
@@ -88,7 +89,7 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 			Val::Str(s) => s.clone(),
 			_ => unreachable!(),
 		}),
-		SortKeyType::Unknown => {
+		SortKeyType::Unknown | SortKeyType::Unspecialized => {
 			let mut err = None;
 			// evaluate_compare_op will never return equal on types, which are different from
 			// jsonnet perspective

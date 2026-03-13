@@ -25,8 +25,11 @@ pub fn builtin_char(n: u32) -> Result<char> {
 }
 
 #[builtin]
-pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> String {
-	str.replace(&from as &str, &to as &str)
+pub fn builtin_str_replace(str: String, from: IStr, to: IStr) -> Result<String> {
+	if from.is_empty() {
+		bail!("'from' string must not be zero length");
+	}
+	Ok(str.replace(&from as &str, &to as &str))
 }
 
 #[builtin]
@@ -252,6 +255,19 @@ pub fn builtin_strip_chars(str: IStr, chars: IndexableVal) -> Result<IStr> {
 
 	let pattern = new_trim_pattern(chars)?;
 	Ok(str.as_str().trim_matches(pattern).into())
+}
+
+#[builtin]
+pub fn builtin_trim(str: IStr) -> String {
+	let filter =
+		|v: char| {
+			v == ' '
+				|| v == '\t' || v == '\n'
+				|| v == '\u{000c}'
+				|| v == '\r' || v == '\u{0085}'
+				|| v == '\u{00a0}'
+		};
+	str.as_str().trim_matches(filter).to_string()
 }
 
 fn new_trim_pattern(chars: IndexableVal) -> Result<impl Fn(char) -> bool> {

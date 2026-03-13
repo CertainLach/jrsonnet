@@ -1,0 +1,3 @@
+local is not defined: x
+    error.computed_field_scope.jsonnet:17:21-23: local <x> access
+    error.computed_field_scope.jsonnet:17:21-23: evaluating field name

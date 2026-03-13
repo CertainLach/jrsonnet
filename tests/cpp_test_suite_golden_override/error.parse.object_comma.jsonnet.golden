@@ -1,0 +1,2 @@
+syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "z"
+    error.parse.object_comma.jsonnet:17:11

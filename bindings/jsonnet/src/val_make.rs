@@ -56,5 +56,5 @@ pub extern "C" fn jsonnet_json_make_array(_vm: &VM) -> *mut Val {
 /// Make a `JsonnetJsonValue` representing an object.
 #[no_mangle]
 pub extern "C" fn jsonnet_json_make_object(_vm: &VM) -> *mut Val {
-	Box::into_raw(Box::new(Val::Obj(ObjValue::new_empty())))
+	Box::into_raw(Box::new(Val::Obj(ObjValue::empty())))
 }

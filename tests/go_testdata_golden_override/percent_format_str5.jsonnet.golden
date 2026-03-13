@@ -1,0 +1,2 @@
+format error: not enough values
+    std.format of x %s %s

@@ -1,0 +1,16 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/comments.jsonnet
+---
+// File header comment
+{
+   // Comment above field
+   foo: 'bar',
+   /* Block comment */
+   baz: 'qux',
+   nested: {
+      // Hash comment
+      value: 42,
+   },
+}

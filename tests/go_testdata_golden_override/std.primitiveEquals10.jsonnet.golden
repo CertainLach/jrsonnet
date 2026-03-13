@@ -1,0 +1,4 @@
+runtime error: x
+    std.primitiveEquals10.jsonnet:1:21-31: error statement
+    argument <x> evaluation
+    std.primitiveEquals10.jsonnet:1:1-36:  function <builtin_primitive_equals> call

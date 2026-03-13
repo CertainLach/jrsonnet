@@ -181,6 +181,99 @@ fn escape_string_yaml_buf(s: &str, buf: &mut String, _quote_values: bool) {
 	escape_string_json_buf(s, buf);
 }
 
+fn bare_safe(key: &str) -> bool {
+	fn count_char_u(k: &str, c: char) -> usize {
+		let cu = c.to_ascii_uppercase();
+		k.chars().filter(|v| *v == c || *v == cu).count()
+	}
+	fn count_char(k: &str, c: char) -> usize {
+		k.chars().filter(|v| *v == c).count()
+	}
+	fn is_reserved(key: &str) -> bool {
+		const RESERVED: &[&str] = &[
+			// Boolean types taken from https://yaml.org/type/bool.html
+			"true", "false", "yes", "no", "on", "off", "y", "n",
+			// Numerical words taken from https://yaml.org/type/float.html
+			".nan", "-.inf", "+.inf", ".inf", "null",
+			// Invalid keys that contain no invalid characters
+			"-", "---", "",
+		];
+		RESERVED.iter().any(|k| key.eq_ignore_ascii_case(k))
+	}
+
+	// Check for unsafe characters
+	if !key
+		.chars()
+		.all(|v| matches!(v, 'a'..='z' | 'A'..='Z' | '0'..='9'  | '-' | '_' | '.' | '/'))
+	{
+		return false;
+	}
+	// Check for reserved words
+	if is_reserved(key) {
+		return false;
+	}
+	// Check for timestamp values.  Since spaces and colons are already forbidden,
+	// all that could potentially pass is the standard date format (ex MM-DD-YYYY, YYYY-DD-MM, etc).
+	// This check is even more conservative: Keys that meet all of the following:
+	// - all characters match [0-9\-]
+	// - has exactly 2 dashes
+	// are considered dates.
+	if key.chars().all(|v| matches!(v, '0'..='9' | '-')) && count_char(key, '-') == 2 {
+		return false;
+	}
+	// Check for integers.  Keys that meet all of the following:
+	// - all characters match [0-9_\-]
+	// - has at most 1 dash
+	// are considered integers.
+	else if key.chars().all(|v| matches!(v, '0'..='9' | '-' | '_')) && count_char(key, '-') < 2 {
+		return false;
+	}
+	// Check for binary integers.  Keys that meet all of the following:
+	// - all characters match [0-9b_\-]
+	// - has at least 3 characters
+	// - starts with (-)0b
+	// are considered binary integers.
+	else if key
+		.chars()
+		.all(|v| matches!(v, '0'..='9' | '-' | '_' | 'b' | 'B'))
+		&& (key.starts_with("0b") || key.starts_with("-0b"))
+		&& key.len() > 2
+	{
+		return false;
+	}
+	// Check for floats. Keys that meet all of the following:
+	// - all characters match [0-9e._\-]
+	// - has at most a single period
+	// - has at most two dashes
+	// - has at most 1 'e'
+	// are considered floats.
+	else if key
+		.chars()
+		.all(|v| matches!(v, '0'..='9' | '-' | '_' | 'e' | 'E' | '.'))
+		&& count_char_u(key, 'e') < 2
+		&& count_char(key, '-') < 3
+		&& count_char(key, '.') <= 1
+	{
+		return false;
+	}
+	// Check for hexadecimals.  Keys that meet all of the following:
+	// - all characters match [0-9a-fx_\-]
+	// - has at most 1 dash
+	// - has at least 3 characters
+	// - starts with (-)0x
+	// are considered hexadecimals.
+	else if key
+		.chars()
+		.all(|v| matches!(v, '0'..='9' | '-' | '_' | 'x' | 'X' |  'a'..='f' | 'A'..='F' ))
+		&& key.len() >= 3
+		&& count_char(key, '-') < 2
+		&& (key.starts_with("-0x") || key.starts_with("0x"))
+	{
+		return false;
+	}
+	true
+}
+
 #[allow(dead_code)]
 fn manifest_yaml_ex(val: &Val, options: &YamlFormat<'_>) -> Result<String> {
 	let mut out = String::new();
@@ -325,7 +418,7 @@ fn manifest_yaml_ex_buf(
 					buf.push('\n');
 					buf.push_str(&key_padding);
 				}
-				if !options.quote_keys && !yaml_needs_quotes(&key) {
+				if !options.quote_keys && bare_safe(&key) {
 					buf.push_str(&key);
 				} else {
 					escape_string_json_buf(&key, buf);

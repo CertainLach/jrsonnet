@@ -14,10 +14,6 @@ SOURCE_FILE@0..4
 LocatedSyntaxError { error: Missing { expected: Named("expression") }, range: 0..0 }
 LocatedSyntaxError { error: Custom { error: "unexpected tokens after end" }, range: 0..3 }
 ===
-  x syntax error
-   ,----
- 1 | + 2
-   : ^^|
-   : | `-- unexpected tokens after end
-   : `-- missing expression
-   `----
+   · ╭── missing expression
+1  │ + 2
+   · ╰───── unexpected tokens after end
