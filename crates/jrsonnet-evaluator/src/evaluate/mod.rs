@@ -4,7 +4,7 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, FieldName,
-	ForSpecData, IfSpecData, LiteralType, LocExpr, Member, ObjBody, ParamsDesc,
+	ForSpecData, IfSpecData, ImportKind, LiteralType, Member, ObjBody, ParamsDesc, Spanned,
 };
 use jrsonnet_types::ValType;
 use rustc_hash::FxHashMap;
@@ -46,9 +46,9 @@ pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
 	stacker::maybe_grow(RED_ZONE, STACK_PER_RECURSION, f)
 }
 
-pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
-	fn is_trivial(expr: &LocExpr) -> bool {
-		match expr.expr() {
+pub fn evaluate_trivial(expr: &Spanned<Expr>) -> Option<Val> {
+	fn is_trivial(expr: &Spanned<Expr>) -> bool {
+		match &**expr {
 			Expr::Str(_)
 			| Expr::Num(_)
 			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
@@ -56,7 +56,7 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 			_ => false,
 		}
 	}
-	Some(match expr.expr() {
+	Some(match &**expr {
 		Expr::Str(s) => Val::string(s.clone()),
 		Expr::Num(n) => {
 			Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values"))
@@ -79,7 +79,12 @@ pub fn evaluate_trivial(expr: &LocExpr) -> Option<Val> {
 	})
 }
 
-pub fn evaluate_method(ctx: Context, name: IStr, params: ParamsDesc, body: LocExpr) -> Val {
+pub fn evaluate_method(
+	ctx: Context,
+	name: IStr,
+	params: ParamsDesc,
+	body: Rc<Spanned<Expr>>,
+) -> Val {
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
 		name,
 		ctx,
@@ -215,7 +220,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			#[derive(Trace)]
 			struct UnboundValue<B: Trace> {
 				uctx: B,
-				value: LocExpr,
+				value: Rc<Spanned<Expr>>,
 				name: IStr,
 			}
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
@@ -245,7 +250,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			#[derive(Trace)]
 			struct UnboundMethod<B: Trace> {
 				uctx: B,
-				value: LocExpr,
+				value: Rc<Spanned<Expr>>,
 				params: ParamsDesc,
 				name: IStr,
 			}
@@ -301,7 +306,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<O
 				#[derive(Trace)]
 				struct ObjectAssert<B: Trace> {
 					uctx: B,
-					assert: AssertStmt,
+					assert: Rc<AssertStmt>,
 				}
 				impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
 					fn run(&self, sup_this: SupThis) -> Result<()> {
@@ -347,7 +352,7 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 
 pub fn evaluate_apply(
 	ctx: Context,
-	value: &LocExpr,
+	value: &Spanned<Expr>,
 	args: &ArgsDesc,
 	loc: CallLocation<'_>,
 	tailstrict: bool,
@@ -389,23 +394,23 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	Ok(())
 }
 
-pub fn evaluate_named(ctx: Context, expr: &LocExpr, name: IStr) -> Result<Val> {
+pub fn evaluate_named(ctx: Context, expr: &Spanned<Expr>, name: IStr) -> Result<Val> {
 	use Expr::*;
-	Ok(match expr.expr() {
+	Ok(match &**expr {
 		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
 		_ => evaluate(ctx, expr)?,
 	})
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
+pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 	use Expr::*;
 
 	if let Some(trivial) = evaluate_trivial(expr) {
 		return Ok(trivial);
 	}
 	let loc = expr.span();
-	Ok(match expr.expr() {
+	Ok(match &**expr {
 		Literal(LiteralType::This) => Val::Obj(ctx.try_this()?),
 		Literal(LiteralType::Super) => Val::Obj(ctx.try_sup_this()?.standalone_super()?),
 		Literal(LiteralType::Dollar) => Val::Obj(ctx.try_dollar()?),
@@ -420,8 +425,9 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		// Note that other jsonnet implementations will fail on `if value in (super)` expression,
 		// because the standalone super literal is not supported, that is because in other
 		// implementations `in super` treated differently from `in smth_else`.
-		BinaryOp(field, BinaryOpType::In, e)
-			if matches!(e.expr(), Expr::Literal(LiteralType::Super)) =>
+		BinaryOp(bin)
+			if matches!(&*bin.rhs, Expr::Literal(LiteralType::Super))
+				&& bin.op == BinaryOpType::In =>
 		{
 			let sup_this = ctx.try_sup_this()?;
 			// In jsonnet, "field" in e is eager, LHS expression is always executed regardless of super existence.
@@ -429,10 +435,10 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 			if !sup_this.has_super() {
 				return Ok(Val::Bool(false));
 			}
-			let field = evaluate(ctx, field)?;
+			let field = evaluate(ctx, &bin.lhs)?;
 			Val::Bool(sup_this.field_in_super(field.to_string()?))
 		}
-		BinaryOp(v1, o, v2) => evaluate_binary_op_special(ctx, v1, *o, v2)?,
+		BinaryOp(bin) => evaluate_binary_op_special(ctx, &bin.lhs, bin.op, &bin.rhs)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => in_frame(
 			CallLocation::new(&loc),
@@ -441,7 +447,7 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		)?,
 		Index { indexable, parts } => ensure_sufficient_stack(|| {
 			let mut parts = parts.iter();
-			let mut indexable = if matches!(indexable.expr(), Expr::Literal(LiteralType::Super)) {
+			let mut indexable = if matches!(&***indexable, Expr::Literal(LiteralType::Super)) {
 				let part = parts.next().expect("at least part should exist");
 				// sup_this existence check might also be skipped here for null-coalesce...
 				// But I believe this might cause errors.
@@ -574,11 +580,8 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Arr(items) => {
 			if items.is_empty() {
 				Val::Arr(ArrValue::empty())
-			} else if items.len() == 1 {
-				let item = items[0].clone();
-				Val::Arr(ArrValue::lazy(vec![Thunk!(move || evaluate(ctx, &item))]))
 			} else {
-				Val::Arr(ArrValue::expr(ctx, items.iter().cloned()))
+				Val::Arr(ArrValue::expr(ctx, items.clone()))
 			}
 		}
 		ArrComp(expr, comp_specs) => {
@@ -601,38 +604,40 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
 		}
-		AssertExpr(assert, returned) => {
-			evaluate_assert(ctx.clone(), assert)?;
-			evaluate(ctx, returned)?
+		AssertExpr(assert) => {
+			evaluate_assert(ctx.clone(), &assert.assert)?;
+			evaluate(ctx, &assert.rest)?
 		}
 		ErrorStmt(e) => in_frame(
 			CallLocation::new(&loc),
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
-		IfElse {
-			cond,
-			cond_then,
-			cond_else,
-		} => {
+		IfElse (if_else)
+		// {
+		// 	cond,
+		// 	cond_then,
+		// 	cond_else,
+		// }
+		=> {
 			if in_frame(
 				CallLocation::new(&loc),
 				|| "if condition".to_owned(),
-				|| bool::from_untyped(evaluate(ctx.clone(), &cond.0)?),
+				|| bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.0)?),
 			)? {
-				evaluate(ctx, cond_then)?
+				evaluate(ctx, &if_else.cond_then)?
 			} else {
-				match cond_else {
+				match &if_else.cond_else {
 					Some(v) => evaluate(ctx, v)?,
 					None => Val::Null,
 				}
 			}
 		}
-		Slice(value, desc) => {
+		Slice(slice) => {
 			fn parse_idx<T: Typed>(
 				loc: CallLocation<'_>,
 				ctx: Context,
-				expr: Option<&LocExpr>,
+				expr: Option<&Spanned<Expr>>,
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
@@ -646,33 +651,32 @@ pub fn evaluate(ctx: Context, expr: &LocExpr) -> Result<Val> {
 				}
 			}
 
-			let indexable = evaluate(ctx.clone(), value)?;
+			let indexable = evaluate(ctx.clone(), &slice.value)?;
 			let loc = CallLocation::new(&loc);
 
-			let start = parse_idx(loc, ctx.clone(), desc.start.as_ref(), "start")?;
-			let end = parse_idx(loc, ctx.clone(), desc.end.as_ref(), "end")?;
-			let step = parse_idx(loc, ctx, desc.step.as_ref(), "step")?;
+			let start = parse_idx(loc, ctx.clone(), slice.slice.start.as_ref(), "start")?;
+			let end = parse_idx(loc, ctx.clone(), slice.slice.end.as_ref(), "end")?;
+			let step = parse_idx(loc, ctx, slice.slice.step.as_ref(), "step")?;
 
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
-		i @ (Import(path) | ImportStr(path) | ImportBin(path)) => {
-			let Expr::Str(path) = &path.expr() else {
+		Import(kind, path) => {
+			let Expr::Str(path) = &***path else {
 				bail!("computed imports are not supported")
 			};
 			let tmp = loc.clone().0;
 			with_state(|s| {
 				let resolved_path = s.resolve_from(tmp.source_path(), path)?;
-				Ok(match i {
-					Import(_) => in_frame(
+				Ok(match kind {
+					ImportKind::Normal => in_frame(
 						CallLocation::new(&loc),
 						|| format!("import {:?}", path.clone()),
 						|| s.import_resolved(resolved_path),
 					)?,
-					ImportStr(_) => Val::string(s.import_resolved_str(resolved_path)?),
-					ImportBin(_) => {
+					ImportKind::Str => Val::string(s.import_resolved_str(resolved_path)?),
+					ImportKind::Bin => {
 						Val::Arr(ArrValue::bytes(s.import_resolved_bin(resolved_path)?))
 					}
-					_ => unreachable!(),
 				}) as Result<Val>
 			})?
 		}

@@ -19,3 +19,6 @@ jrsonnet-gcmodule.workspace = true
 static_assertions.workspace = true
 
 peg.workspace = true
+
+[dev-dependencies]
+insta.workspace = true

@@ -1,0 +1,13 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"!!a\")"
+---
+UnaryOp(
+    Not,
+    UnaryOp(
+        Not,
+        Var(
+            "a",
+        ) from virtual:<test>:2-3,
+    ) from virtual:<test>:1-3,
+) from virtual:<test>:0-3

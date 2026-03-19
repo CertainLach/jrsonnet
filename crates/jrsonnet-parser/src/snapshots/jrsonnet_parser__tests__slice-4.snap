@@ -1,0 +1,20 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"a[::1]\")"
+---
+Slice(
+    Slice {
+        value: Var(
+            "a",
+        ) from virtual:<test>:0-1,
+        slice: SliceDesc {
+            start: None,
+            end: None,
+            step: Some(
+                Num(
+                    1.0,
+                ) from virtual:<test>:4-5,
+            ),
+        },
+    },
+) from virtual:<test>:0-6

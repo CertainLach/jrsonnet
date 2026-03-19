@@ -4,9 +4,9 @@ use std::{
 	fmt::{Debug, Display},
 };
 
-use jrsonnet_gcmodule::Trace;
+use jrsonnet_gcmodule::{Acyclic, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, LocExpr, Source, SourcePath, Span, UnaryOpType};
+use jrsonnet_parser::{BinaryOpType, Source, SourcePath, Span, Spanned, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -324,7 +324,7 @@ impl std::error::Error for Error {}
 pub trait ErrorSource {
 	fn to_location(self) -> Option<Span>;
 }
-impl ErrorSource for &LocExpr {
+impl<T: Acyclic> ErrorSource for &Spanned<T> {
 	fn to_location(self) -> Option<Span> {
 		Some(self.span())
 	}

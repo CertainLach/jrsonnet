@@ -45,7 +45,7 @@ pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
 pub use jrsonnet_parser as parser;
-use jrsonnet_parser::{LocExpr, ParserSettings, Source, SourcePath};
+use jrsonnet_parser::{Expr, ParserSettings, Source, SourcePath, Spanned};
 pub use obj::*;
 pub use rustc_hash;
 use rustc_hash::FxHashMap;
@@ -186,7 +186,7 @@ impl_context_initializer! {
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
-	parsed: Option<LocExpr>,
+	parsed: Option<Rc<Spanned<Expr>>>,
 	evaluated: Option<Val>,
 
 	evaluating: bool,
@@ -350,6 +350,7 @@ impl State {
 						source: file_name.clone(),
 					},
 				)
+				.map(Rc::new)
 				.map_err(|e| ImportSyntaxError {
 					path: file_name.clone(),
 					error: Box::new(e),

@@ -79,7 +79,7 @@ any_ext!(SourcePathT);
 /// search location is applicable
 ///
 /// Resolver may also return custom implementations of this trait, for example it may return http url in case of remotely loaded files
-#[derive(Eq, Debug, Clone, Acyclic)]
+#[derive(Eq, Clone, Acyclic)]
 pub struct SourcePath(Rc<dyn SourcePathT>);
 impl SourcePath {
 	pub fn new(inner: impl SourcePathT) -> Self {
@@ -109,6 +109,11 @@ impl PartialEq for SourcePath {
 impl Display for SourcePath {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		write!(f, "{}", self.0)
+	}
+}
+impl Debug for SourcePath {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self.0)
 	}
 }
 impl Default for SourcePath {
@@ -213,11 +218,16 @@ impl SourcePathT for SourceDirectory {
 ///
 /// It is used for --ext-code=.../--tla-code=.../standard library source code by default,
 /// and user can construct arbitrary values by hand, without asking import resolver
-#[derive(Acyclic, Hash, PartialEq, Eq, Debug, Clone)]
+#[derive(Acyclic, Hash, PartialEq, Eq, Clone)]
 pub struct SourceVirtual(pub IStr);
 impl Display for SourceVirtual {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		write!(f, "{}", self.0)
+		write!(f, "virtual:{}", self.0)
+	}
+}
+impl fmt::Debug for SourceVirtual {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "virtual:{}", self.0)
 	}
 }
 impl SourcePathT for SourceVirtual {
@@ -263,7 +273,7 @@ impl SourcePathT for SourceFifo {
 
 /// Either real file, or virtual
 /// Hash of FileName always have same value as raw Path, to make it possible to use with raw_entry_mut
-#[derive(Clone, PartialEq, Eq, Debug, Acyclic)]
+#[derive(Clone, PartialEq, Eq, Acyclic)]
 pub struct Source(pub Rc<(SourcePath, IStr)>);
 
 impl Source {
@@ -288,5 +298,10 @@ impl Source {
 	}
 	pub fn map_from_source_location(&self, line: usize, column: usize) -> Option<usize> {
 		location_to_offset(&self.0 .1, line, column)
+	}
+}
+impl fmt::Debug for Source {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{:?}", self.0 .0)
 	}
 }

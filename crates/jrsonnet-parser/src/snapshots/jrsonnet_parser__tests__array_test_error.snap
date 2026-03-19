@@ -1,0 +1,38 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"[a for a in b if c for e in f]\")"
+---
+ArrComp(
+    Var(
+        "a",
+    ) from virtual:<test>:1-2,
+    [
+        ForSpec(
+            ForSpecData(
+                Full(
+                    "a",
+                ),
+                Var(
+                    "b",
+                ) from virtual:<test>:12-13,
+            ),
+        ),
+        IfSpec(
+            IfSpecData(
+                Var(
+                    "c",
+                ) from virtual:<test>:17-18,
+            ),
+        ),
+        ForSpec(
+            ForSpecData(
+                Full(
+                    "e",
+                ),
+                Var(
+                    "f",
+                ) from virtual:<test>:28-29,
+            ),
+        ),
+    ],
+) from virtual:<test>:0-30

@@ -1,12 +1,12 @@
 use std::{
 	any::Any,
 	fmt::{self},
-	num::NonZeroU32,
+	num::NonZeroU32, rc::Rc,
 };
 
 use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::LocExpr;
+use jrsonnet_parser::{Expr, Spanned};
 
 use crate::{function::FuncVal, Context, Result, Thunk, Val};
 
@@ -37,7 +37,7 @@ impl ArrValue {
 		Self::new(RangeArray::empty())
 	}
 
-	pub fn expr(ctx: Context, exprs: impl IntoIterator<Item = LocExpr>) -> Self {
+	pub fn expr(ctx: Context, exprs: Rc<Vec<Spanned<Expr>>>) -> Self {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
 

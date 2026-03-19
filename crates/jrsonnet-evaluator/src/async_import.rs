@@ -1,10 +1,11 @@
+use std::rc::Rc;
 use std::{any::Any, cell::RefCell, future::Future};
 
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName, ForSpecData,
-	IfSpecData, LocExpr, Member, ObjBody, Param, ParamsDesc, ParserSettings, SliceDesc, Source,
-	SourcePath,
+	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName,
+	ForSpecData, IfElse, IfSpecData, ImportKind, Member, ObjBody, Param, ParamsDesc,
+	ParserSettings, Slice, SliceDesc, Source, SourcePath, Spanned,
 };
 use rustc_hash::FxHashMap;
 
@@ -19,7 +20,7 @@ pub struct FoundImports(Vec<Import>);
 
 // Visits all nodes, trying to find import statements
 #[allow(clippy::too_many_lines)]
-pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
+pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
 	fn in_destruct(dest: &Destruct, #[allow(unused_variables)] out: &mut FoundImports) {
 		match dest {
 			#[cfg(feature = "exp-destruct")]
@@ -120,9 +121,9 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 							find_imports(value, out);
 						}
 						Member::BindStmt(_) => todo!(),
-						Member::AssertStmt(AssertStmt(expr, expr2)) => {
-							find_imports(expr, out);
-							if let Some(expr) = expr2 {
+						Member::AssertStmt(assert) => {
+							find_imports(&assert.0, out);
+							if let Some(expr) = &assert.1 {
 								find_imports(expr, out);
 							}
 						}
@@ -132,12 +133,12 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			ObjBody::ObjComp(_) => todo!(),
 		}
 	}
-	match &*expr.expr() {
-		Expr::Import(v) | Expr::ImportStr(v) | Expr::ImportBin(v) => {
-			if let Expr::Str(s) = &*v.expr() {
+	match &**expr {
+		Expr::Import(_, v) => {
+			if let Expr::Str(s) = &***v {
 				out.0.push(Import {
 					path: ResolvePathOwned::Str(s.to_string()),
-					expression: matches!(&*expr.expr(), Expr::Import(_)),
+					expression: matches!(&**expr, Expr::Import(ImportKind::Normal, _)),
 				});
 			}
 			// Non-string import will fail in runtime
@@ -146,7 +147,7 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 		Expr::Literal(_) | Expr::Str(_) | Expr::Num(_) | Expr::Var(_) => {}
 
 		Expr::Arr(arr) => {
-			for expr in arr {
+			for expr in &**arr {
 				find_imports(expr, out);
 			}
 		}
@@ -159,16 +160,20 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			find_imports(expr, out);
 			in_obj(obj, out);
 		}
-		Expr::BinaryOp(a, _, b) => {
-			find_imports(a, out);
-			find_imports(b, out);
+		Expr::BinaryOp(binop) => {
+			find_imports(&binop.lhs, out);
+			find_imports(&binop.rhs, out);
 		}
-		Expr::AssertExpr(AssertStmt(expr, expr2), then) => {
+		Expr::AssertExpr(assert) => {
+			let AssertExpr {
+				assert: AssertStmt(expr, expr2),
+				rest,
+			} = &**assert;
 			find_imports(expr, out);
 			if let Some(expr) = expr2 {
 				find_imports(expr, out);
 			}
-			find_imports(then, out);
+			find_imports(rest, out);
 		}
 		Expr::LocalExpr(specs, expr) => {
 			in_bind(specs, out);
@@ -188,19 +193,24 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 			in_params(params, out);
 			find_imports(expr, out);
 		}
-		Expr::IfElse {
-			cond: IfSpecData(expr),
-			cond_then,
-			cond_else,
-		} => {
+		Expr::IfElse(if_else) => {
+			let IfElse {
+				cond: IfSpecData(expr),
+				cond_then,
+				cond_else,
+			} = &**if_else;
 			find_imports(expr, out);
 			find_imports(cond_then, out);
 			if let Some(expr) = cond_else {
 				find_imports(expr, out);
 			}
 		}
-		Expr::Slice(expr, SliceDesc { start, end, step }) => {
-			find_imports(expr, out);
+		Expr::Slice(slice) => {
+			let Slice {
+				value,
+				slice: SliceDesc { start, end, step },
+			} = &**slice;
+			find_imports(value, out);
 			if let Some(expr) = start {
 				find_imports(expr, out);
 			}
@@ -314,8 +324,9 @@ where
 						};
 						let source = Source::new(path.clone(), code.clone());
 						// If failed - then skip import
-						file.parsed =
-							jrsonnet_parser::parse(&code, &ParserSettings { source }).ok();
+						file.parsed = jrsonnet_parser::parse(&code, &ParserSettings { source })
+							.map(Rc::new)
+							.ok();
 						if let Some(parsed) = &file.parsed {
 							let mut imports = FoundImports(vec![]);
 							find_imports(parsed, &mut imports);

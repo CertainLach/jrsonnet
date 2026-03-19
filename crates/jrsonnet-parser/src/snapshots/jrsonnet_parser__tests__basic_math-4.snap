@@ -1,0 +1,23 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"2//comment\\n+//comment\\n3/*test*/*/*test*/4\")"
+---
+BinaryOp(
+    BinaryOp {
+        lhs: Num(
+            2.0,
+        ) from virtual:<test>:0-1,
+        op: Add,
+        rhs: BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    3.0,
+                ) from virtual:<test>:22-23,
+                op: Mul,
+                rhs: Num(
+                    4.0,
+                ) from virtual:<test>:40-41,
+            },
+        ) from virtual:<test>:22-41,
+    },
+) from virtual:<test>:0-41

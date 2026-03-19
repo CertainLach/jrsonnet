@@ -1,0 +1,23 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"2+2*2\")"
+---
+BinaryOp(
+    BinaryOp {
+        lhs: Num(
+            2.0,
+        ) from virtual:<test>:0-1,
+        op: Add,
+        rhs: BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    2.0,
+                ) from virtual:<test>:2-3,
+                op: Mul,
+                rhs: Num(
+                    2.0,
+                ) from virtual:<test>:4-5,
+            },
+        ) from virtual:<test>:2-5,
+    },
+) from virtual:<test>:0-5

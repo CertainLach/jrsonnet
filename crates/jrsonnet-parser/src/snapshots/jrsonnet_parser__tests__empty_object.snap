@@ -1,0 +1,9 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"{}\")"
+---
+Obj(
+    MemberList(
+        [],
+    ),
+) from virtual:<test>:0-2

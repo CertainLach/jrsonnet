@@ -14,7 +14,7 @@ pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
 	/// {["dyn"+"amic"]: 3}
-	Dyn(LocExpr),
+	Dyn(Spanned<Expr>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
@@ -34,8 +34,8 @@ impl Visibility {
 	}
 }
 
-#[derive(Clone, Debug, PartialEq, Acyclic)]
-pub struct AssertStmt(pub LocExpr, pub Option<LocExpr>);
+#[derive(Debug, PartialEq, Acyclic)]
+pub struct AssertStmt(pub Spanned<Expr>, pub Option<Spanned<Expr>>);
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct FieldMember {
@@ -43,14 +43,14 @@ pub struct FieldMember {
 	pub plus: bool,
 	pub params: Option<ParamsDesc>,
 	pub visibility: Visibility,
-	pub value: LocExpr,
+	pub value: Rc<Spanned<Expr>>,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
-	AssertStmt(AssertStmt),
+	AssertStmt(Rc<AssertStmt>),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
@@ -147,7 +147,7 @@ impl Display for BinaryOpType {
 
 /// name, default value
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct Param(pub Destruct, pub Option<LocExpr>);
+pub struct Param(pub Destruct, pub Option<Rc<Spanned<Expr>>>);
 
 /// Defined function parameters
 #[derive(Debug, Clone, PartialEq, Acyclic)]
@@ -162,11 +162,11 @@ impl Deref for ParamsDesc {
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct ArgsDesc {
-	pub unnamed: Vec<LocExpr>,
-	pub named: Vec<(IStr, LocExpr)>,
+	pub unnamed: Vec<Rc<Spanned<Expr>>>,
+	pub named: Vec<(IStr, Rc<Spanned<Expr>>)>,
 }
 impl ArgsDesc {
-	pub fn new(unnamed: Vec<LocExpr>, named: Vec<(IStr, LocExpr)>) -> Self {
+	pub fn new(unnamed: Vec<Rc<Spanned<Expr>>>, named: Vec<(IStr, Rc<Spanned<Expr>>)>) -> Self {
 		Self { unnamed, named }
 	}
 }
@@ -192,7 +192,7 @@ pub enum Destruct {
 	},
 	#[cfg(feature = "exp-destruct")]
 	Object {
-		fields: Vec<(IStr, Option<Destruct>, Option<LocExpr>)>,
+		fields: Vec<(IStr, Option<Destruct>, Option<Spanned<Expr>>)>,
 		rest: Option<DestructRest>,
 	},
 }
@@ -244,12 +244,12 @@ impl Destruct {
 pub enum BindSpec {
 	Field {
 		into: Destruct,
-		value: LocExpr,
+		value: Rc<Spanned<Expr>>,
 	},
 	Function {
 		name: IStr,
 		params: ParamsDesc,
-		value: LocExpr,
+		value: Rc<Spanned<Expr>>,
 	},
 }
 impl BindSpec {
@@ -262,10 +262,10 @@ impl BindSpec {
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct IfSpecData(pub LocExpr);
+pub struct IfSpecData(pub Spanned<Expr>);
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct ForSpecData(pub Destruct, pub LocExpr);
+pub struct ForSpecData(pub Destruct, pub Spanned<Expr>);
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub enum CompSpec {
@@ -276,7 +276,7 @@ pub enum CompSpec {
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct ObjComp {
 	pub pre_locals: Vec<BindSpec>,
-	pub field: FieldMember,
+	pub field: Rc<FieldMember>,
 	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,
 }
@@ -299,9 +299,42 @@ pub enum LiteralType {
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct SliceDesc {
-	pub start: Option<LocExpr>,
-	pub end: Option<LocExpr>,
-	pub step: Option<LocExpr>,
+	pub start: Option<Spanned<Expr>>,
+	pub end: Option<Spanned<Expr>>,
+	pub step: Option<Spanned<Expr>>,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
+pub struct AssertExpr {
+	pub assert: AssertStmt,
+	pub rest: Spanned<Expr>,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
+pub struct BinaryOp {
+	pub lhs: Spanned<Expr>,
+	pub op: BinaryOpType,
+	pub rhs: Spanned<Expr>,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
+pub enum ImportKind {
+	Normal,
+	Str,
+	Bin,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
+pub struct IfElse {
+	pub cond: IfSpecData,
+	pub cond_then: Spanned<Expr>,
+	pub cond_else: Option<Spanned<Expr>>,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
+pub struct Slice {
+	pub value: Spanned<Expr>,
+	pub slice: SliceDesc,
 }
 
 /// Syntax base
@@ -317,7 +350,7 @@ pub enum Expr {
 	Var(IStr),
 
 	/// Array of expressions: [1, 2, "Hello"]
-	Arr(Vec<LocExpr>),
+	Arr(Rc<Vec<Spanned<Expr>>>),
 	/// Array comprehension:
 	/// ```jsonnet
 	///  ingredients: [
@@ -329,51 +362,43 @@ pub enum Expr {
 	///    ]
 	///  ],
 	/// ```
-	ArrComp(LocExpr, Vec<CompSpec>),
+	ArrComp(Rc<Spanned<Expr>>, Vec<CompSpec>),
 
 	/// Object: {a: 2}
 	Obj(ObjBody),
 	/// Object extension: var1 {b: 2}
-	ObjExtend(LocExpr, ObjBody),
+	ObjExtend(Rc<Spanned<Expr>>, ObjBody),
 
 	/// -2
-	UnaryOp(UnaryOpType, LocExpr),
+	UnaryOp(UnaryOpType, Box<Spanned<Expr>>),
 	/// 2 - 2
-	BinaryOp(LocExpr, BinaryOpType, LocExpr),
+	BinaryOp(Box<BinaryOp>),
 	/// assert 2 == 2 : "Math is broken"
-	AssertExpr(AssertStmt, LocExpr),
+	AssertExpr(Rc<AssertExpr>),
 	/// local a = 2; { b: a }
-	LocalExpr(Vec<BindSpec>, LocExpr),
+	LocalExpr(Vec<BindSpec>, Box<Spanned<Expr>>),
 
-	/// import "hello"
-	Import(LocExpr),
-	/// importStr "file.txt"
-	ImportStr(LocExpr),
-	/// importBin "file.txt"
-	ImportBin(LocExpr),
+	/// import* "hello"
+	Import(ImportKind, Box<Spanned<Expr>>),
 	/// error "I'm broken"
-	ErrorStmt(LocExpr),
+	ErrorStmt(Box<Spanned<Expr>>),
 	/// a(b, c)
-	Apply(LocExpr, ArgsDesc, bool),
+	Apply(Box<Spanned<Expr>>, ArgsDesc, bool),
 	/// a[b], a.b, a?.b
 	Index {
-		indexable: LocExpr,
+		indexable: Box<Spanned<Expr>>,
 		parts: Vec<IndexPart>,
 	},
 	/// function(x) x
-	Function(ParamsDesc, LocExpr),
+	Function(ParamsDesc, Rc<Spanned<Expr>>),
 	/// if true == false then 1 else 2
-	IfElse {
-		cond: IfSpecData,
-		cond_then: LocExpr,
-		cond_else: Option<LocExpr>,
-	},
-	Slice(LocExpr, SliceDesc),
+	IfElse(Box<IfElse>),
+	Slice(Box<Slice>),
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct IndexPart {
-	pub value: LocExpr,
+	pub value: Spanned<Expr>,
 	#[cfg(feature = "exp-null-coaelse")]
 	pub null_coaelse: bool,
 }
@@ -396,28 +421,28 @@ impl Debug for Span {
 	}
 }
 
-/// Holds AST expression and its location in source file
 #[derive(Clone, PartialEq, Acyclic)]
-pub struct LocExpr(Rc<(Expr, Span)>);
-impl LocExpr {
-	pub fn new(expr: Expr, span: Span) -> Self {
-		Self(Rc::new((expr, span)))
+pub struct Spanned<T: Acyclic>(T, Span);
+impl<T: Acyclic> Deref for Spanned<T> {
+	type Target = T;
+	fn deref(&self) -> &Self::Target {
+		&self.0
+	}
+}
+impl<T: Acyclic> Spanned<T> {
+	#[inline]
+	pub fn new(v: T, s: Span) -> Self {
+		Self(v, s)
 	}
 	#[inline]
 	pub fn span(&self) -> Span {
-		self.0 .1.clone()
-	}
-	#[inline]
-	pub fn expr(&self) -> &Expr {
-		&self.0 .0
+		self.1.clone()
 	}
 }
 
-static_assertions::assert_eq_size!(LocExpr, usize);
-
-impl Debug for LocExpr {
+impl<T: Debug + Acyclic> Debug for Spanned<T> {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		let expr = self.expr();
+		let expr = &**self;
 		if f.alternate() {
 			write!(f, "{:#?}", expr)?;
 		} else {

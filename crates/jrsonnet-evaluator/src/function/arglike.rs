@@ -1,8 +1,9 @@
 use std::collections::HashMap;
+use std::rc::Rc;
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{ArgsDesc, LocExpr, SourceFifo, SourcePath};
+use jrsonnet_parser::{ArgsDesc, Expr, SourceFifo, SourcePath, Spanned};
 
 use crate::{evaluate, typed::Typed, with_state, Context, Result, Thunk, Val};
 
@@ -13,7 +14,7 @@ pub trait ArgLike {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>>;
 }
 
-impl ArgLike for &LocExpr {
+impl ArgLike for &Rc<Spanned<Expr>> {
 	fn evaluate_arg(&self, ctx: Context, tailstrict: bool) -> Result<Thunk<Val>> {
 		Ok(if tailstrict {
 			Thunk::evaluated(evaluate(ctx, self)?)

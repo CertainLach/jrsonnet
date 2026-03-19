@@ -1,8 +1,9 @@
-use std::{any::Any, cell::RefCell, fmt::Debug, iter, mem::replace};
+use std::rc::Rc;
+use std::{any::Any, cell::RefCell, fmt::Debug, mem::replace};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
-use jrsonnet_parser::LocExpr;
+use jrsonnet_parser::{Expr, Spanned};
 
 use super::ArrValue;
 use crate::{
@@ -103,25 +104,25 @@ impl ArrayLike for BytesArray {
 }
 
 #[derive(Debug, Trace, Clone)]
-enum ArrayThunk<T: 'static + Trace> {
+enum ArrayThunk {
 	Computed(Val),
 	Errored(Error),
-	Waiting(T),
+	Waiting,
 	Pending,
 }
 
 #[derive(Debug, Trace, Clone)]
 pub struct ExprArray {
 	ctx: Context,
-	cached: Cc<RefCell<Vec<ArrayThunk<LocExpr>>>>,
+	src: Rc<Vec<Spanned<Expr>>>,
+	cached: Cc<RefCell<Vec<ArrayThunk>>>,
 }
 impl ExprArray {
-	pub fn new(ctx: Context, items: impl IntoIterator<Item = LocExpr>) -> Self {
+	pub fn new(ctx: Context, src: Rc<Vec<Spanned<Expr>>>) -> Self {
 		Self {
 			ctx,
-			cached: Cc::new(RefCell::new(
-				items.into_iter().map(ArrayThunk::Waiting).collect(),
-			)),
+			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting; src.len()])),
+			src,
 		}
 	}
 }
@@ -137,16 +138,16 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
-			ArrayThunk::Waiting(..) => {}
+			ArrayThunk::Waiting => {}
 		};
 
-		let ArrayThunk::Waiting(expr) =
+		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
 		};
 
-		let new_value = match evaluate(self.ctx.clone(), &expr) {
+		let new_value = match evaluate(self.ctx.clone(), &self.src[index]) {
 			Ok(v) => v,
 			Err(e) => {
 				self.cached.borrow_mut()[index] = ArrayThunk::Errored(e.clone());
@@ -163,7 +164,7 @@ impl ArrayLike for ExprArray {
 		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting(_) | ArrayThunk::Pending => {}
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		};
 
 		#[derive(Trace)]
@@ -406,7 +407,7 @@ impl ArrayLike for ReverseArray {
 #[derive(Trace, Debug, Clone)]
 pub struct MappedArray<const WITH_INDEX: bool> {
 	inner: ArrValue,
-	cached: Cc<RefCell<Vec<ArrayThunk<()>>>>,
+	cached: Cc<RefCell<Vec<ArrayThunk>>>,
 	mapper: FuncVal,
 }
 impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
@@ -414,7 +415,7 @@ impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
 		let len = inner.len();
 		Self {
 			inner,
-			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting(()); len])),
+			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting; len])),
 			mapper,
 		}
 	}
@@ -439,10 +440,10 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			ArrayThunk::Computed(c) => return Ok(Some(c.clone())),
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
-			ArrayThunk::Waiting(..) => {}
+			ArrayThunk::Waiting => {}
 		};
 
-		let ArrayThunk::Waiting(()) =
+		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
 		else {
 			unreachable!()
@@ -472,7 +473,7 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 		match &self.cached.borrow()[index] {
 			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
 			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting(()) | ArrayThunk::Pending => {}
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		};
 
 		#[derive(Trace)]

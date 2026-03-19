@@ -1,0 +1,23 @@
+---
+source: crates/jrsonnet-parser/src/lib.rs
+expression: "parsep(\"{a:1}\n\n\t\t\t//+213\")"
+---
+Obj(
+    MemberList(
+        [
+            Field(
+                FieldMember {
+                    name: Fixed(
+                        "a",
+                    ),
+                    plus: false,
+                    params: None,
+                    visibility: Normal,
+                    value: Num(
+                        1.0,
+                    ) from virtual:<test>:3-4,
+                },
+            ),
+        ],
+    ),
+) from virtual:<test>:0-5
