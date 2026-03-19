@@ -11,18 +11,7 @@ use rustc_hash::FxHashMap;
 
 use self::destructure::destruct;
 use crate::{
-	arr::ArrValue,
-	bail,
-	destructure::evaluate_dest,
-	error::{suggest_object_fields, ErrorKind::*},
-	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
-	function::{CallLocation, FuncDesc, FuncVal},
-	gc::WithCapacityExt as _,
-	in_frame,
-	typed::Typed,
-	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
-	with_state, Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
-	ResultExt, SupThis, Unbound, Val,
+	Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt, SupThis, Unbound, Val, arr::ArrValue, bail, destructure::evaluate_dest, error::{ErrorKind::*, suggest_object_fields}, evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op}, function::{CallLocation, FuncDesc, FuncVal, builtin::{ParamDefault, ParamName, ParamParse}}, gc::WithCapacityExt as _, in_frame, typed::Typed, val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk}, with_state
 };
 pub mod destructure;
 pub mod operator;
@@ -88,6 +77,15 @@ pub fn evaluate_method(
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
 		name,
 		ctx,
+		params_parse: params
+			.iter()
+			.map(|p| {
+				ParamParse::new(
+					p.0.name().map_or(ParamName::ANONYMOUS, ParamName::new),
+					ParamDefault::exists(p.1.is_some()),
+				)
+			})
+			.collect(),
 		params,
 		body,
 	})))

@@ -1,22 +1,17 @@
-use std::{any::Any, borrow::Cow};
+use std::any::Any;
 
-use jrsonnet_gcmodule::{cc_dyn, Trace, TraceBox};
+use jrsonnet_gcmodule::{cc_dyn, Acyclic, Trace, TraceBox};
 use jrsonnet_interner::IStr;
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
 use crate::{Context, Result, Val};
 
-/// Can't have `str` | `IStr`, because constant `BuiltinParam` causes
-/// `E0492: constant functions cannot refer to interior mutable data`
-#[derive(Clone, Trace)]
-pub struct ParamName(Option<Cow<'static, str>>);
+#[derive(Clone, Acyclic)]
+pub struct ParamName(Option<IStr>);
 impl ParamName {
 	pub const ANONYMOUS: Self = Self(None);
-	pub const fn new_static(name: &'static str) -> Self {
-		Self(Some(Cow::Borrowed(name)))
-	}
-	pub fn new_dynamic(name: String) -> Self {
-		Self(Some(Cow::Owned(name)))
+	pub fn new(name: IStr) -> Self {
+		Self(Some(name))
 	}
 	pub fn as_str(&self) -> Option<&str> {
 		self.0.as_deref()
@@ -33,7 +28,7 @@ impl PartialEq<IStr> for ParamName {
 	}
 }
 
-#[derive(Clone, Copy, Debug, Trace)]
+#[derive(Clone, Copy, Debug, Acyclic)]
 pub enum ParamDefault {
 	None,
 	Exists,
@@ -49,13 +44,26 @@ impl ParamDefault {
 	}
 }
 
-#[derive(Clone, Trace)]
-pub struct BuiltinParam {
+#[macro_export]
+macro_rules! params {
+	(@name unnamed) => { ParamName::ANONYMOUS };
+	(@name named $name:literal) => { ParamName::new($crate::IStr::from($name)) };
+	($($(#[$meta:meta])* [$kind:ident $(($lit:literal))? => $default:expr]),* $(,)?) => {
+		thread_local! {
+			static PARAMS: [ParamParse; { const N: usize = <[u8]>::len(&[$($(#[$meta])* 0u8),*]); N }] = [
+				$($(#[$meta])* ParamParse::new(params!(@name $kind $($lit)?), $default)),*
+			];
+		}
+	};
+}
+
+#[derive(Clone, Acyclic)]
+pub struct ParamParse {
 	name: ParamName,
 	default: ParamDefault,
 }
-impl BuiltinParam {
-	pub const fn new(name: ParamName, default: ParamDefault) -> Self {
+impl ParamParse {
+	pub fn new(name: ParamName, default: ParamDefault) -> Self {
 		Self { name, default }
 	}
 	/// Parameter name for named call parsing
@@ -81,7 +89,7 @@ impl Builtin for BuiltinFunc {
 		self.0.name()
 	}
 
-	fn params(&self) -> &[BuiltinParam] {
+	fn params(&self) -> &[ParamParse] {
 		self.0.params()
 	}
 
@@ -101,7 +109,7 @@ pub trait Builtin: Trace {
 	/// Function name to be used in stack traces
 	fn name(&self) -> &str;
 	/// Parameter names for named calls
-	fn params(&self) -> &[BuiltinParam];
+	fn params(&self) -> &[ParamParse];
 	/// Call the builtin
 	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
 
@@ -118,7 +126,7 @@ where
 
 #[derive(Trace)]
 pub struct NativeCallback {
-	pub(crate) params: Vec<BuiltinParam>,
+	pub(crate) params: Vec<ParamParse>,
 	handler: TraceBox<dyn NativeCallbackHandler>,
 }
 impl NativeCallback {
@@ -127,8 +135,8 @@ impl NativeCallback {
 		Self {
 			params: params
 				.into_iter()
-				.map(|n| BuiltinParam {
-					name: ParamName::new_dynamic(n),
+				.map(|n| ParamParse {
+					name: ParamName::new(n.into()),
 					default: ParamDefault::None,
 				})
 				.collect(),
@@ -144,7 +152,7 @@ impl Builtin for NativeCallback {
 		"<native>"
 	}
 
-	fn params(&self) -> &[BuiltinParam] {
+	fn params(&self) -> &[ParamParse] {
 		&self.params
 	}
 

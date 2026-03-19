@@ -4,7 +4,7 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::ParamsDesc;
 use rustc_hash::FxHashMap;
 
-use super::{arglike::ArgsLike, builtin::BuiltinParam};
+use super::{arglike::ArgsLike, builtin::ParamParse};
 use crate::{
 	bail,
 	destructure::destruct,
@@ -147,7 +147,7 @@ pub fn parse_function_call(
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_builtin_call(
 	ctx: Context,
-	params: &[BuiltinParam],
+	params: &[ParamParse],
 	args: &dyn ArgsLike,
 	tailstrict: bool,
 ) -> Result<Vec<Option<Thunk<Val>>>> {

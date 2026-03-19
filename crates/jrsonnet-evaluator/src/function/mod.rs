@@ -1,6 +1,7 @@
 use std::{fmt::Debug, rc::Rc};
 
 pub use arglike::{ArgLike, ArgsLike, TlaArg};
+use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
@@ -8,7 +9,7 @@ use jrsonnet_parser::{Destruct, Expr, ParamsDesc, Span, Spanned};
 
 use self::{
 	arglike::OptionalContext,
-	builtin::{Builtin, BuiltinParam, ParamDefault, ParamName, StaticBuiltin},
+	builtin::{Builtin, ParamParse, StaticBuiltin},
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
@@ -40,7 +41,8 @@ impl CallLocation<'static> {
 }
 
 /// Represents Jsonnet function defined in code.
-#[derive(Debug, Trace, PartialEq)]
+#[derive(Trace, Educe)]
+#[educe(Debug, PartialEq)]
 pub struct FuncDesc {
 	/// # Example
 	///
@@ -67,6 +69,9 @@ pub struct FuncDesc {
 	pub params: ParamsDesc,
 	/// Function body
 	pub body: Rc<Spanned<Expr>>,
+
+	#[educe(PartialEq = false, Debug = false)]
+	pub(crate) params_parse: Vec<ParamParse>,
 }
 impl FuncDesc {
 	/// Create body context, but fill arguments without defaults with lazy error
@@ -134,25 +139,13 @@ impl FuncVal {
 		Self::StaticBuiltin(static_builtin)
 	}
 
-	pub fn params(&self) -> Vec<BuiltinParam> {
+	pub fn params(&self) -> &[ParamParse] {
 		match self {
-			Self::Id => ID.params().to_vec(),
-			Self::StaticBuiltin(i) => i.params().to_vec(),
-			Self::Builtin(i) => i.params().to_vec(),
-			Self::Normal(p) => p
-				.params
-				.iter()
-				.map(|p| {
-					BuiltinParam::new(
-						p.0.name()
-							.as_ref()
-							.map(IStr::to_string)
-							.map_or(ParamName::ANONYMOUS, ParamName::new_dynamic),
-						ParamDefault::exists(p.1.is_some()),
-					)
-				})
-				.collect(),
-			Self::Thunk(_) => vec![],
+			Self::Id => ID.params(),
+			Self::StaticBuiltin(i) => i.params(),
+			Self::Builtin(i) => i.params(),
+			Self::Normal(p) => &p.params_parse,
+			Self::Thunk(_) => &[],
 		}
 	}
 	/// Amount of non-default required arguments

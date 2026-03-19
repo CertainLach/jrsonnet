@@ -239,9 +239,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			cfg_attrs,
 			..
 		} => {
-			let name = name
-				.as_ref()
-				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
+			let name = name.as_ref().map_or_else(|| quote! {unnamed}, |n| quote! {named(#n)});
 			let default = match optionality {
 				Optionality::Required => quote!(ParamDefault::None),
 				Optionality::Optional => quote!(ParamDefault::Exists),
@@ -249,15 +247,13 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			};
 			Some(quote! {
 				#(#cfg_attrs)*
-				BuiltinParam::new(#name, #default),
+				[#name => #default],
 			})
 		}
 		ArgInfo::Lazy { is_option, name } => {
-			let name = name
-				.as_ref()
-				.map_or_else(|| quote! {None}, |n| quote! {ParamName::new_static(#n)});
+			let name = name.as_ref().map_or_else(|| quote! {unnamed}, |n| quote! {named(#n)});
 			Some(quote! {
-				BuiltinParam::new(#name, ParamDefault::exists(#is_option)),
+				[#name => ParamDefault::exists(#is_option)],
 			})
 		}
 		ArgInfo::Context | ArgInfo::Location | ArgInfo::This => None,
@@ -368,13 +364,13 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 		const _: () = {
 			use ::jrsonnet_evaluator::{
 				State, Val,
-				function::{builtin::{Builtin, StaticBuiltin, BuiltinParam, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
+				function::{builtin::{Builtin, StaticBuiltin, ParamParse, ParamName, ParamDefault}, CallLocation, ArgsLike, parse::parse_builtin_call},
 				Result, Context, typed::Typed,
-				parser::Span,
+				parser::Span, params,
 			};
-			const PARAMS: &'static [BuiltinParam] = &[
+			params!(
 				#(#params_desc)*
-			];
+			);
 
 			#static_ext
 			impl Builtin for #name
@@ -384,12 +380,15 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				fn name(&self) -> &str {
 					stringify!(#name)
 				}
-				fn params(&self) -> &[BuiltinParam] {
-					PARAMS
+				fn params(&self) -> &[ParamParse] {
+					/// Safety: ParamParse contains IStr, which is thread-local, thus neither Send or Sync
+					/// The result of this transmute can not outlive the thread, thus 'static here is equivalent to the
+					/// nightly-only 'thread
+					PARAMS.with(|p| unsafe { std::mem::transmute::<&[ParamParse], &'static [ParamParse]>(p.as_slice()) })
 				}
 				#[allow(unused_variables)]
 				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx.clone(), &PARAMS, args, false)?;
+					let parsed = parse_builtin_call(ctx.clone(), self.params(), args, false)?;
 
 					let result: #result = #name(#(#pass)*);
 					<_ as Typed>::into_result(result)
