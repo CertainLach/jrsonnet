@@ -211,7 +211,7 @@ pub fn find_imports(expr: &LocExpr, out: &mut FoundImports) {
 				find_imports(expr, out);
 			}
 		}
-		Expr::Parened(expr) | Expr::UnaryOp(_, expr) | Expr::ErrorStmt(expr) => {
+		Expr::UnaryOp(_, expr) | Expr::ErrorStmt(expr) => {
 			find_imports(expr, out);
 		}
 	}

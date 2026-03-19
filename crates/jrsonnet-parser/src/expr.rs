@@ -336,9 +336,6 @@ pub enum Expr {
 	/// Object extension: var1 {b: 2}
 	ObjExtend(LocExpr, ObjBody),
 
-	/// (obj)
-	Parened(LocExpr),
-
 	/// -2
 	UnaryOp(UnaryOpType, LocExpr),
 	/// 2 - 2

@@ -313,6 +313,7 @@ parser! {
 		use UnaryOpType::*;
 		rule expr(s: &ParserSettings) -> LocExpr
 			= precedence! {
+				"(" _ e:expr(s) _ ")" {e}
 				start:position!() v:@ end:position!() { LocExpr::new(v, Span(s.source.clone(), start as u32, end as u32)) }
 				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
@@ -359,7 +360,6 @@ parser! {
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(a, body)}
 				--
 				e:expr_basic(s) {e}
-				"(" _ e:expr(s) _ ")" {Expr::Parened(e)}
 			}
 		pub rule index_part(s: &ParserSettings) -> IndexPart
 		= n:("?" _ ensure_null_coaelse())? "." _ value:id_loc(s) {IndexPart {
@@ -559,25 +559,21 @@ pub mod tests {
 					el!(Expr::Num(2.0), 0, 1),
 					Add,
 					el!(
-						Expr::Parened(el!(
-							Expr::BinaryOp(
-								el!(Expr::Num(2.0), 3, 4),
-								Add,
-								el!(
-									Expr::BinaryOp(
-										el!(Expr::Num(2.0), 5, 6),
-										Mul,
-										el!(Expr::Num(2.0), 7, 8),
-									),
-									5,
-									8
+						Expr::BinaryOp(
+							el!(Expr::Num(2.0), 3, 4),
+							Add,
+							el!(
+								Expr::BinaryOp(
+									el!(Expr::Num(2.0), 5, 6),
+									Mul,
+									el!(Expr::Num(2.0), 7, 8),
 								),
+								5,
+								8
 							),
-							3,
-							8
-						)),
-						2,
-						9
+						),
+						3,
+						8
 					),
 				),
 				0,
