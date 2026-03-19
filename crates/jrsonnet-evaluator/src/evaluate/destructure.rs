@@ -170,7 +170,7 @@ pub fn evaluate_dest(
 			let value = value.clone();
 			let data = {
 				let fctx = fctx.clone();
-				Thunk!(move || name.map_or_else(
+				Thunk!(move || name.0.map_or_else(
 					|| evaluate(fctx.unwrap(), &value),
 					|name| evaluate_named(fctx.unwrap(), &value, name),
 				))

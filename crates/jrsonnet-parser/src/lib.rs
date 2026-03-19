@@ -7,9 +7,11 @@ mod expr;
 pub use expr::*;
 pub use jrsonnet_interner::IStr;
 pub use peg;
+pub mod function;
 mod location;
 mod source;
 mod unescape;
+
 pub use location::CodeLocation;
 pub use source::{
 	Source, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
@@ -68,10 +70,10 @@ parser! {
 		rule keyword(id: &'static str) -> ()
 			= ##parse_string_literal(id) end_of_ident()
 
-		pub rule param(s: &ParserSettings) -> expr::Param = name:destruct(s) expr:(_ "=" _ expr:expr(s){expr})? { expr::Param(name, expr.map(Rc::new)) }
-		pub rule params(s: &ParserSettings) -> expr::ParamsDesc
-			= params:param(s) ** comma() comma()? { expr::ParamsDesc(Rc::new(params)) }
-			/ { expr::ParamsDesc(Rc::new(Vec::new())) }
+		pub rule param(s: &ParserSettings) -> expr::ExprParam = destruct:destruct(s) expr:(_ "=" _ expr:expr(s){expr})? { expr::ExprParam { destruct, default: expr.map(Rc::new) } }
+		pub rule params(s: &ParserSettings) -> expr::ExprParams
+			= params:param(s) ** comma() comma()? { expr::ExprParams::new(params) }
+			/ { expr::ExprParams::new(Vec::new()) }
 
 		pub rule arg(s: &ParserSettings) -> (Option<IStr>, Rc<Spanned<Expr>>)
 			= name:(quiet! { (s:id() _ "=" !['='] _ {s})? } / expected!("<argument name>")) expr:expr(s) {(name, Rc::new(expr))}

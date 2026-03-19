@@ -1,7 +1,7 @@
 use std::{
 	cmp::Ordering,
 	convert::Infallible,
-	fmt::{Debug, Display},
+	fmt::{self, Debug, Display},
 };
 
 use jrsonnet_gcmodule::{Acyclic, Trace};
@@ -11,7 +11,7 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{builtin::ParamDefault, CallLocation},
+	function::{CallLocation, FunctionSignature, ParamDefault, ParamName},
 	stdlib::format::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
@@ -47,36 +47,6 @@ pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 	out
 }
 
-fn format_signature(sig: &FunctionSignature) -> String {
-	let mut out = String::new();
-	out.push_str("\nFunction has the following signature: ");
-	out.push('(');
-	if sig.is_empty() {
-		out.push_str("/*no arguments*/");
-	} else {
-		for (i, (name, default)) in sig.iter().enumerate() {
-			if i != 0 {
-				out.push_str(", ");
-			}
-			if let Some(name) = name {
-				out.push_str(name);
-			} else {
-				out.push_str("<unnamed>");
-			}
-			match default {
-				ParamDefault::None => {}
-				ParamDefault::Exists => out.push_str(" = <default>"),
-				ParamDefault::Literal(lit) => {
-					out.push_str(" = ");
-					out.push_str(lit);
-				}
-			}
-		}
-	}
-	out.push(')');
-	out
-}
-
 const fn format_empty_str(str: &str) -> &str {
 	if str.is_empty() {
 		"\"\" (empty string)"
@@ -103,8 +73,6 @@ pub(crate) fn suggest_object_fields(v: &ObjValue, key: IStr) -> Vec<IStr> {
 	heap.sort_by(|a, b| b.0.partial_cmp(&a.0).unwrap_or(Ordering::Equal));
 	heap.into_iter().map(|v| v.1).collect()
 }
-
-type FunctionSignature = Vec<(Option<IStr>, ParamDefault)>;
 
 /// Possible errors
 #[allow(missing_docs)]
@@ -148,13 +116,13 @@ pub enum ErrorKind {
 	#[error("only functions can be called, got {0}")]
 	OnlyFunctionsCanBeCalledGot(ValType),
 	#[error("parameter {0} is not defined")]
-	UnknownFunctionParameter(String),
+	UnknownFunctionParameter(IStr),
 	#[error("argument {0} is already bound")]
 	BindingParameterASecondTime(IStr),
-	#[error("too many args, function has {0}{sig}", sig = format_signature(.1))]
+	#[error("too many args, function has {0}\nFunction has the following signature: {1}")]
 	TooManyArgsFunctionHas(usize, FunctionSignature),
-	#[error("function argument is not passed: {}{}", .0.as_ref().map_or("<unnamed>", IStr::as_str), format_signature(.1))]
-	FunctionParameterNotBoundInCall(Option<IStr>, FunctionSignature),
+	#[error("function argument is not passed: {0}\nFunction has the following signature: {1}")]
+	FunctionParameterNotBoundInCall(ParamName, FunctionSignature),
 
 	#[error("external variable is not defined: {0}")]
 	UndefinedExternalVariable(IStr),

@@ -7,7 +7,10 @@ use std::{
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IStr;
 
-use crate::source::Source;
+use crate::{
+	function::{FunctionSignature, ParamDefault, ParamName, ParamParse},
+	source::Source,
+};
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub enum FieldName {
@@ -41,7 +44,7 @@ pub struct AssertStmt(pub Spanned<Expr>, pub Option<Spanned<Expr>>);
 pub struct FieldMember {
 	pub name: FieldName,
 	pub plus: bool,
-	pub params: Option<ParamsDesc>,
+	pub params: Option<ExprParams>,
 	pub visibility: Visibility,
 	pub value: Rc<Spanned<Expr>>,
 }
@@ -147,16 +150,41 @@ impl Display for BinaryOpType {
 
 /// name, default value
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct Param(pub Destruct, pub Option<Rc<Spanned<Expr>>>);
+pub struct ExprParam {
+	pub destruct: Destruct,
+	pub default: Option<Rc<Spanned<Expr>>>,
+}
 
 /// Defined function parameters
 #[derive(Debug, Clone, PartialEq, Acyclic)]
-pub struct ParamsDesc(pub Rc<Vec<Param>>);
-
-impl Deref for ParamsDesc {
-	type Target = Vec<Param>;
-	fn deref(&self) -> &Self::Target {
-		&self.0
+pub struct ExprParams {
+	pub exprs: Rc<Vec<ExprParam>>,
+	pub signature: FunctionSignature,
+	binds_len: usize,
+}
+impl ExprParams {
+	pub fn len(&self) -> usize {
+		self.exprs.len()
+	}
+	pub fn binds_len(&self) -> usize {
+		self.binds_len
+	}
+	pub fn new(exprs: Vec<ExprParam>) -> Self {
+		Self {
+			signature: FunctionSignature::new(
+				exprs
+					.iter()
+					.map(|p| {
+						ParamParse::new(
+							p.destruct.name(),
+							ParamDefault::exists(p.default.is_some()),
+						)
+					})
+					.collect(),
+			),
+			binds_len: exprs.iter().map(|v| v.destruct.binds_len()).sum(),
+			exprs: Rc::new(exprs),
+		}
 	}
 }
 
@@ -198,14 +226,14 @@ pub enum Destruct {
 }
 impl Destruct {
 	/// Name of destructure, used for function parameter names
-	pub fn name(&self) -> Option<IStr> {
-		match self {
+	pub fn name(&self) -> ParamName {
+		ParamName(match self {
 			Self::Full(name) => Some(name.clone()),
 			#[cfg(feature = "exp-destruct")]
 			_ => None,
-		}
+		})
 	}
-	pub fn capacity_hint(&self) -> usize {
+	pub fn binds_len(&self) -> usize {
 		#[cfg(feature = "exp-destruct")]
 		fn cap_rest(rest: &Option<DestructRest>) -> usize {
 			match rest {
@@ -220,8 +248,8 @@ impl Destruct {
 			Self::Skip => 0,
 			#[cfg(feature = "exp-destruct")]
 			Self::Array { start, rest, end } => {
-				start.iter().map(Destruct::capacity_hint).sum::<usize>()
-					+ end.iter().map(Destruct::capacity_hint).sum::<usize>()
+				start.iter().map(Destruct::binds_len).sum::<usize>()
+					+ end.iter().map(Destruct::binds_len).sum::<usize>()
 					+ cap_rest(rest)
 			}
 			#[cfg(feature = "exp-destruct")]
@@ -248,14 +276,14 @@ pub enum BindSpec {
 	},
 	Function {
 		name: IStr,
-		params: ParamsDesc,
+		params: ExprParams,
 		value: Rc<Spanned<Expr>>,
 	},
 }
 impl BindSpec {
-	pub fn capacity_hint(&self) -> usize {
+	pub fn binds_len(&self) -> usize {
 		match self {
-			BindSpec::Field { into, .. } => into.capacity_hint(),
+			BindSpec::Field { into, .. } => into.binds_len(),
 			BindSpec::Function { .. } => 1,
 		}
 	}
@@ -396,7 +424,7 @@ pub enum Expr {
 		parts: Vec<IndexPart>,
 	},
 	/// function(x) x
-	Function(ParamsDesc, Rc<Spanned<Expr>>),
+	Function(ExprParams, Rc<Spanned<Expr>>),
 	/// if true == false then 1 else 2
 	IfElse(Box<IfElse>),
 	Slice(Box<Slice>),

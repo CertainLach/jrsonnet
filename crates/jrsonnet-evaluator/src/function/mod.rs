@@ -5,23 +5,26 @@ use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{Destruct, Expr, ParamsDesc, Span, Spanned};
+use jrsonnet_parser::{Destruct, Expr, ExprParams, Span, Spanned};
 
 use self::{
 	arglike::OptionalContext,
-	builtin::{Builtin, ParamParse, StaticBuiltin},
+	builtin::{Builtin, StaticBuiltin},
 	native::NativeDesc,
 	parse::{parse_default_function_call, parse_function_call},
 };
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, Context,
-	ContextBuilder, Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, params,
+	Context, ContextBuilder, Result, Thunk, Val,
 };
 
 pub mod arglike;
 pub mod builtin;
 pub mod native;
 pub mod parse;
+pub mod prepared;
+
+pub use jrsonnet_parser::function::*;
 
 /// Function callsite location.
 /// Either from other jsonnet code, specified by expression location, or from native (without location).
@@ -66,12 +69,9 @@ pub struct FuncDesc {
 	pub ctx: Context,
 
 	/// Function parameter definition
-	pub params: ParamsDesc,
+	pub params: ExprParams,
 	/// Function body
 	pub body: Rc<Spanned<Expr>>,
-
-	#[educe(PartialEq = false, Debug = false)]
-	pub(crate) params_parse: Vec<ParamParse>,
 }
 impl FuncDesc {
 	/// Create body context, but fill arguments without defaults with lazy error
@@ -139,24 +139,18 @@ impl FuncVal {
 		Self::StaticBuiltin(static_builtin)
 	}
 
-	pub fn params(&self) -> &[ParamParse] {
+	pub fn params(&self) -> FunctionSignature {
 		match self {
 			Self::Id => ID.params(),
 			Self::StaticBuiltin(i) => i.params(),
 			Self::Builtin(i) => i.params(),
-			Self::Normal(p) => &p.params_parse,
-			Self::Thunk(_) => &[],
+			Self::Normal(p) => p.params.signature.clone(),
+			Self::Thunk(_) => FunctionSignature::empty(),
 		}
 	}
 	/// Amount of non-default required arguments
 	pub fn params_len(&self) -> usize {
-		match self {
-			Self::Id => 1,
-			Self::Normal(n) => n.params.iter().filter(|p| p.1.is_none()).count(),
-			Self::StaticBuiltin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
-			Self::Builtin(i) => i.params().iter().filter(|p| !p.has_default()).count(),
-			Self::Thunk(_) => 0,
-		}
+		self.params().iter().filter(|p| !p.has_default()).count()
 	}
 	/// Function name, as defined in code.
 	pub fn name(&self) -> IStr {
@@ -185,8 +179,8 @@ impl FuncVal {
 				evaluate(body_ctx, &func.body)
 			}
 			Self::Thunk(thunk) => {
-				if args.is_empty() {
-					bail!(TooManyArgsFunctionHas(0, vec![],))
+				if !args.is_empty() {
+					bail!(TooManyArgsFunctionHas(0, FunctionSignature::empty()))
 				}
 				thunk.evaluate()
 			}
@@ -223,12 +217,13 @@ impl FuncVal {
 				if desc.params.len() != 1 {
 					return false;
 				}
-				let param = &desc.params[0];
-				if param.1.is_some() {
+				let param = &desc.params.exprs[0];
+				if param.default.is_some() {
 					return false;
 				}
+
 				#[allow(clippy::infallible_destructuring_match)]
-				let id = match &param.0 {
+				let id = match &param.destruct {
 					Destruct::Full(id) => id,
 					#[cfg(feature = "exp-destruct")]
 					_ => return false,

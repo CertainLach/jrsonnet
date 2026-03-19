@@ -3,9 +3,9 @@ use std::{any::Any, cell::RefCell, future::Future};
 
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{
-	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName,
-	ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, Param, ParamsDesc,
-	ParserSettings, Slice, SliceDesc, Source, SourcePath, Spanned,
+	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, ExprParam, ExprParams,
+	FieldMember, FieldName, ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, ParserSettings,
+	Slice, SliceDesc, Source, SourcePath, Spanned,
 };
 use rustc_hash::FxHashMap;
 
@@ -63,9 +63,9 @@ pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
 			}
 		}
 	}
-	fn in_params(params: &ParamsDesc, out: &mut FoundImports) {
-		for Param(dest, default) in &*params.0 {
-			in_destruct(dest, out);
+	fn in_params(params: &ExprParams, out: &mut FoundImports) {
+		for ExprParam { destruct, default } in &*params.exprs {
+			in_destruct(destruct, out);
 			if let Some(expr) = default {
 				find_imports(expr, out);
 			}

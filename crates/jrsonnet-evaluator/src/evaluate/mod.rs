@@ -3,15 +3,27 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
-	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, FieldName,
-	ForSpecData, IfSpecData, ImportKind, LiteralType, ObjBody, ObjMembers, ParamsDesc, Spanned,
+	function::ParamName, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprParams,
+	FieldMember, FieldName, ForSpecData, IfSpecData, ImportKind, LiteralType, ObjBody, ObjMembers,
+	Spanned,
 };
 use jrsonnet_types::ValType;
 use rustc_hash::FxHashMap;
 
 use self::destructure::destruct;
 use crate::{
-	Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result, ResultExt, SupThis, Unbound, Val, arr::ArrValue, bail, destructure::evaluate_dest, error::{ErrorKind::*, suggest_object_fields}, evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op}, function::{CallLocation, FuncDesc, FuncVal, builtin::{ParamDefault, ParamName, ParamParse}}, gc::WithCapacityExt as _, in_frame, typed::Typed, val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk}, with_state
+	arr::ArrValue,
+	bail,
+	destructure::evaluate_dest,
+	error::{suggest_object_fields, ErrorKind::*},
+	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	function::{CallLocation, FuncDesc, FuncVal},
+	gc::WithCapacityExt as _,
+	in_frame,
+	typed::Typed,
+	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
+	with_state, Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
+	ResultExt, SupThis, Unbound, Val,
 };
 pub mod destructure;
 pub mod operator;
@@ -71,21 +83,12 @@ pub fn evaluate_trivial(expr: &Spanned<Expr>) -> Option<Val> {
 pub fn evaluate_method(
 	ctx: Context,
 	name: IStr,
-	params: ParamsDesc,
+	params: ExprParams,
 	body: Rc<Spanned<Expr>>,
 ) -> Val {
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
 		name,
 		ctx,
-		params_parse: params
-			.iter()
-			.map(|p| {
-				ParamParse::new(
-					p.0.name().map_or(ParamName::ANONYMOUS, ParamName::new),
-					ParamDefault::exists(p.1.is_some()),
-				)
-			})
-			.collect(),
 		params,
 		body,
 	})))
@@ -125,7 +128,7 @@ pub fn evaluate_comp(
 			Val::Arr(list) => {
 				for item in list.iter_lazy() {
 					let fctx = Pending::new();
-					let mut new_bindings = FxHashMap::with_capacity(var.capacity_hint());
+					let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
 					destruct(var, item, fctx.clone(), &mut new_bindings)?;
 					let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
@@ -178,7 +181,7 @@ fn evaluate_object_locals(
 		fn bind(&self, sup_this: SupThis) -> Result<Context> {
 			let fctx = Context::new_future();
 			let mut new_bindings =
-				FxHashMap::with_capacity(self.locals.iter().map(BindSpec::capacity_hint).sum());
+				FxHashMap::with_capacity(self.locals.iter().map(BindSpec::binds_len).sum());
 			for b in self.locals.iter() {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
@@ -249,7 +252,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			struct UnboundMethod<B: Trace> {
 				uctx: B,
 				value: Rc<Spanned<Expr>>,
-				params: ParamsDesc,
+				params: ExprParams,
 				name: IStr,
 			}
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundMethod<B> {
@@ -374,6 +377,13 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 		)?;
 	}
 	Ok(())
+}
+
+pub fn evaluate_named_param(ctx: Context, expr: &Spanned<Expr>, name: ParamName) -> Result<Val> {
+	match name.0 {
+		Some(name) => evaluate_named(ctx, expr, name),
+		None => evaluate(ctx, expr),
+	}
 }
 
 pub fn evaluate_named(ctx: Context, expr: &Spanned<Expr>, name: IStr) -> Result<Val> {
@@ -551,7 +561,7 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 		})?,
 		LocalExpr(bindings, returned) => {
 			let mut new_bindings: FxHashMap<IStr, Thunk<Val>> =
-				FxHashMap::with_capacity(bindings.iter().map(BindSpec::capacity_hint).sum());
+				FxHashMap::with_capacity(bindings.iter().map(BindSpec::binds_len).sum());
 			let fctx = Context::new_future();
 			for b in bindings {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;

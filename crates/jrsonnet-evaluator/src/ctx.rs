@@ -180,6 +180,12 @@ impl ContextBuilder {
 		assert!(old.is_none(), "variable bound twice in single context call");
 		self
 	}
+	pub fn binds(&mut self, bindings: FxHashMap<IStr, Thunk<Val>>) -> &mut Self {
+		for (k, v) in bindings {
+			self.bind(k, v);
+		}
+		self
+	}
 	pub fn build(self) -> Context {
 		if let Some(parent) = self.extend {
 			parent.extend_bindings(self.bindings)

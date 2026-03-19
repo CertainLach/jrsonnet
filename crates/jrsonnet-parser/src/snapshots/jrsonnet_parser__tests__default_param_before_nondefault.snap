@@ -6,26 +6,47 @@ LocalExpr(
     [
         Function {
             name: "x",
-            params: ParamsDesc(
-                [
-                    Param(
-                        Full(
+            params: ExprParams {
+                exprs: [
+                    ExprParam {
+                        destruct: Full(
                             "foo",
                         ),
-                        Some(
+                        default: Some(
                             Str(
                                 "foo",
                             ) from virtual:<test>:14-19,
                         ),
-                    ),
-                    Param(
-                        Full(
+                    },
+                    ExprParam {
+                        destruct: Full(
                             "bar",
                         ),
-                        None,
-                    ),
+                        default: None,
+                    },
                 ],
-            ),
+                signature: FunctionSignature(
+                    [
+                        ParamParse {
+                            name: ParamName(
+                                Some(
+                                    "foo",
+                                ),
+                            ),
+                            default: Exists,
+                        },
+                        ParamParse {
+                            name: ParamName(
+                                Some(
+                                    "bar",
+                                ),
+                            ),
+                            default: None,
+                        },
+                    ],
+                ),
+                binds_len: 2,
+            },
             value: Literal(
                 Null,
             ) from virtual:<test>:28-32,

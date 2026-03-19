@@ -1,16 +1,15 @@
 use std::mem::replace;
 
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::ParamsDesc;
+use jrsonnet_parser::{function::FunctionSignature, ExprParams};
 use rustc_hash::FxHashMap;
 
-use super::{arglike::ArgsLike, builtin::ParamParse};
+use super::arglike::ArgsLike;
 use crate::{
 	bail,
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
-	evaluate_named,
-	function::builtin::ParamDefault,
+	evaluate_named, evaluate_named_param,
 	gc::WithCapacityExt as _,
 	Context, Pending, Thunk, Val,
 };
@@ -26,19 +25,15 @@ use crate::{
 pub fn parse_function_call(
 	ctx: Context,
 	body_ctx: Context,
-	params: &ParamsDesc,
+	params: &ExprParams,
 	args: &dyn ArgsLike,
 	tailstrict: bool,
 ) -> Result<Context> {
-	let mut passed_args =
-		FxHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
-	if args.unnamed_len() > params.len() {
+	let mut passed_args = FxHashMap::with_capacity(params.binds_len());
+	if args.unnamed_len() > params.signature.len() {
 		bail!(TooManyArgsFunctionHas(
-			params.len(),
-			params
-				.iter()
-				.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
-				.collect()
+			params.signature.len(),
+			params.signature.clone(),
 		))
 	}
 
@@ -46,9 +41,8 @@ pub fn parse_function_call(
 	let mut filled_positionals = 0;
 
 	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
-		let name = params[id].0.clone();
 		destruct(
-			&name,
+			&params.exprs[id].destruct,
 			arg,
 			Pending::new_filled(ctx.clone()),
 			&mut passed_args,
@@ -59,8 +53,8 @@ pub fn parse_function_call(
 
 	args.named_iter(ctx, tailstrict, &mut |name, value| {
 		// FIXME: O(n) for arg existence check
-		if !params.iter().any(|p| p.0.name().as_ref() == Some(name)) {
-			bail!(UnknownFunctionParameter((name as &str).to_owned()));
+		if !params.exprs.iter().any(|p| &p.destruct.name() == name) {
+			bail!(UnknownFunctionParameter(name.clone()));
 		}
 		if passed_args.insert(name.clone(), value).is_some() {
 			bail!(BindingParameterASecondTime(name.clone()));
@@ -73,14 +67,16 @@ pub fn parse_function_call(
 		// Some args are unset, but maybe we have defaults for them
 		// Default values should be created in newly created context
 		let fctx = Context::new_future();
-		let mut defaults = FxHashMap::with_capacity(
-			params.iter().map(|p| p.0.capacity_hint()).sum::<usize>()
-				- filled_named
-				- filled_positionals,
-		);
+		let mut defaults =
+			FxHashMap::with_capacity(params.binds_len() - filled_named - filled_positionals);
 
-		for (idx, param) in params.iter().enumerate().filter(|p| p.1 .1.is_some()) {
-			if let Some(name) = param.0.name() {
+		for (idx, into, default) in params
+			.exprs
+			.iter()
+			.enumerate()
+			.filter_map(|(i, p)| Some((i, &p.destruct, p.default.as_ref()?)))
+		{
+			if let Some(name) = into.name().0 {
 				if passed_args.contains_key(&name) {
 					continue;
 				}
@@ -89,17 +85,17 @@ pub fn parse_function_call(
 			}
 
 			destruct(
-				&param.0,
+				&into,
 				{
 					let ctx = fctx.clone();
-					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
-					let value = param.1.clone().expect("default exists");
-					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+					let name = into.name();
+					let value = default.clone();
+					Thunk!(move || evaluate_named_param(ctx.unwrap(), &value, name))
 				},
 				fctx.clone(),
 				&mut defaults,
 			)?;
-			if param.0.name().is_some() {
+			if !into.name().is_anonymous() {
 				filled_named += 1;
 			} else {
 				filled_positionals += 1;
@@ -108,20 +104,17 @@ pub fn parse_function_call(
 
 		// Some args still weren't filled
 		if filled_named + filled_positionals != params.len() {
-			for param in params.iter().skip(args.unnamed_len()) {
+			for param in params.exprs.iter().skip(args.unnamed_len()) {
 				let mut found = false;
 				args.named_names(&mut |name| {
-					if Some(name) == param.0.name().as_ref() {
+					if &param.destruct.name() == name {
 						found = true;
 					}
 				});
 				if !found {
 					bail!(FunctionParameterNotBoundInCall(
-						param.0.clone().name(),
-						params
-							.iter()
-							.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
-							.collect()
+						param.destruct.name(),
+						params.signature.clone()
 					));
 				}
 			}
@@ -147,19 +140,13 @@ pub fn parse_function_call(
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
 pub fn parse_builtin_call(
 	ctx: Context,
-	params: &[ParamParse],
+	params: FunctionSignature,
 	args: &dyn ArgsLike,
 	tailstrict: bool,
 ) -> Result<Vec<Option<Thunk<Val>>>> {
 	let mut passed_args: Vec<Option<Thunk<Val>>> = vec![None; params.len()];
 	if args.unnamed_len() > params.len() {
-		bail!(TooManyArgsFunctionHas(
-			params.len(),
-			params
-				.iter()
-				.map(|p| (p.name().as_str().map(IStr::from), p.default()))
-				.collect()
-		))
+		bail!(TooManyArgsFunctionHas(params.len(), params,))
 	}
 
 	let mut filled_args = 0;
@@ -175,7 +162,7 @@ pub fn parse_builtin_call(
 		let id = params
 			.iter()
 			.position(|p| p.name() == name)
-			.ok_or_else(|| UnknownFunctionParameter((name as &str).to_owned()))?;
+			.ok_or_else(|| UnknownFunctionParameter(name.clone()))?;
 		if replace(&mut passed_args[id], Some(arg)).is_some() {
 			bail!(BindingParameterASecondTime(name.clone()));
 		}
@@ -202,11 +189,8 @@ pub fn parse_builtin_call(
 				});
 				if !found {
 					bail!(FunctionParameterNotBoundInCall(
-						param.name().as_str().map(IStr::from),
-						params
-							.iter()
-							.map(|p| (p.name().as_str().map(IStr::from), p.default()))
-							.collect()
+						param.name().clone(),
+						params,
 					));
 				}
 			}
@@ -218,36 +202,33 @@ pub fn parse_builtin_call(
 
 /// Creates Context, which has all argument default values applied
 /// and with unbound values causing error to be returned
-pub fn parse_default_function_call(body_ctx: Context, params: &ParamsDesc) -> Result<Context> {
+pub fn parse_default_function_call(body_ctx: Context, params: &ExprParams) -> Result<Context> {
 	let fctx = Context::new_future();
 
-	let mut bindings = FxHashMap::with_capacity(params.iter().map(|p| p.0.capacity_hint()).sum());
+	let mut bindings = FxHashMap::with_capacity(params.binds_len());
 
-	for param in params.iter() {
-		if let Some(v) = &param.1 {
+	for param in params.exprs.iter() {
+		if let Some(v) = &param.default {
 			destruct(
-				&param.0.clone(),
+				&param.destruct.clone(),
 				{
 					let ctx = fctx.clone();
-					let name = param.0.name().unwrap_or_else(|| "<destruct>".into());
+					let name = param.destruct.name();
 					let value = v.clone();
-					Thunk!(move || evaluate_named(ctx.unwrap(), &value, name))
+					Thunk!(move || evaluate_named_param(ctx.unwrap(), &value, name))
 				},
 				fctx.clone(),
 				&mut bindings,
 			)?;
 		} else {
 			destruct(
-				&param.0,
+				&param.destruct,
 				{
-					let param_name = param.0.name().unwrap_or_else(|| "<destruct>".into());
+					let param_name = param.destruct.name();
 					let params = params.clone();
 					Thunk!(move || Err(FunctionParameterNotBoundInCall(
-						Some(param_name),
-						params
-							.iter()
-							.map(|p| (p.0.name(), ParamDefault::exists(p.1.is_some())))
-							.collect(),
+						param_name,
+						params.signature.clone()
 					)
 					.into()))
 				},

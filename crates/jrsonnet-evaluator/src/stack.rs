@@ -20,6 +20,7 @@ impl<T> NightlyLocalKey<T> {
 type NightlyLocalKey<T> = std::thread::LocalKey<T>;
 
 #[cfg(nightly)]
+#[macro_export]
 macro_rules! const_tls {
 	(const $name:ident: $t:ty = $expr:expr;) => {
 		#[thread_local]
@@ -27,6 +28,7 @@ macro_rules! const_tls {
 	};
 }
 #[cfg(not(nightly))]
+#[macro_export]
 macro_rules! const_tls {
 	(const $name:ident: $t:ty = $expr:expr;) => {
 		thread_local! {
