@@ -151,7 +151,7 @@ enum CacheValue {
 #[derive(Trace, Default)]
 #[trace(tracking(force))]
 pub struct OopObject {
-	assertions: Vec<CcObjectAssertion>,
+	assertion: Option<CcObjectAssertion>,
 	this_entries: FxHashMap<IStr, ObjMember>,
 }
 impl Debug for OopObject {
@@ -163,7 +163,7 @@ impl Debug for OopObject {
 }
 impl OopObject {
 	fn is_empty(&self) -> bool {
-		self.assertions.is_empty() && self.this_entries.is_empty()
+		self.assertion.is_none() && self.this_entries.is_empty()
 	}
 }
 
@@ -979,11 +979,11 @@ impl ObjValue {
 impl OopObject {
 	pub fn new(
 		this_entries: FxHashMap<IStr, ObjMember>,
-		assertions: Vec<CcObjectAssertion>,
+		assertion: Option<CcObjectAssertion>,
 	) -> Self {
 		Self {
 			this_entries,
-			assertions,
+			assertion,
 		}
 	}
 }
@@ -1042,10 +1042,7 @@ impl ObjectCore for OopObject {
 	}
 
 	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()> {
-		if self.assertions.is_empty() {
-			return Ok(());
-		}
-		for assertion in self.assertions.iter() {
+		if let Some(assertion) = &self.assertion {
 			assertion.0.run(sup_this.clone())?;
 		}
 		Ok(())
@@ -1067,7 +1064,7 @@ impl ObjValueBuilder {
 		Self {
 			sup: vec![],
 			new: OopObject {
-				assertions: vec![],
+				assertion: None,
 				this_entries: FxHashMap::with_capacity(capacity),
 			},
 			next_field_index: FieldIndex::default(),
@@ -1077,17 +1074,17 @@ impl ObjValueBuilder {
 		self.sup.reserve_exact(capacity);
 		self
 	}
-	pub fn reserve_asserts(&mut self, capacity: usize) -> &mut Self {
-		self.new.assertions.reserve_exact(capacity);
-		self
-	}
 	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
 		self.sup = super_obj.0.cores.clone();
 		self
 	}
 
 	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		self.new.assertions.push(CcObjectAssertion::new(assertion));
+		assert!(
+			self.new.assertion.is_none(),
+			"one OopObject can only have one assertion"
+		);
+		self.new.assertion = Some(CcObjectAssertion::new(assertion));
 		self
 	}
 	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {

@@ -597,13 +597,7 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
-		IfElse (if_else)
-		// {
-		// 	cond,
-		// 	cond_then,
-		// 	cond_else,
-		// }
-		=> {
+		IfElse(if_else) => {
 			if in_frame(
 				CallLocation::new(&loc),
 				|| "if condition".to_owned(),
