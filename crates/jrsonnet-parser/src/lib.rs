@@ -139,8 +139,8 @@ parser! {
 			/ obj:destruct_object(s) {obj}
 
 		pub rule bind(s: &ParserSettings) -> expr::BindSpec
-			= into:destruct(s) _ "=" _ expr:expr(s) {expr::BindSpec::Field{into, value: Rc::new(expr)}}
-			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ expr:expr(s) {expr::BindSpec::Function{name, params, value: Rc::new(expr)}}
+			= into:destruct(s) _ "=" _ value:expr(s) {expr::BindSpec::Field{into, value: Rc::new(value)}}
+			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ value:expr(s) {expr::BindSpec::Function{name, params, value: Rc::new(value)}}
 
 		pub rule assertion(s: &ParserSettings) -> expr::AssertStmt
 			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { expr::AssertStmt(cond, msg) }
@@ -207,20 +207,35 @@ parser! {
 			= keyword("local") _ bind:bind(s) {bind}
 		pub rule member(s: &ParserSettings) -> expr::Member
 			= bind:obj_local(s) {expr::Member::BindStmt(bind)}
-			/ assertion:assertion(s) {expr::Member::AssertStmt(Rc::new(assertion))}
+			/ assertion:assertion(s) {expr::Member::AssertStmt(assertion)}
 			/ field:field(s) {expr::Member::Field(field)}
 		pub rule objinside(s: &ParserSettings) -> expr::ObjBody
 			= pre_locals:(b: obj_local(s) comma() {b})* &"[" field:field(s) post_locals:(comma() b:obj_local(s) {b})* _ ("," _)? forspec:forspec(s) others:(_ rest:compspec(s) {rest})? {
 				let mut compspecs = vec![CompSpec::ForSpec(forspec)];
 				compspecs.extend(others.unwrap_or_default());
+				let mut locals = pre_locals;
+				locals.extend(post_locals);
 				expr::ObjBody::ObjComp(expr::ObjComp{
-					pre_locals,
+					locals: Rc::new(locals),
 					field: Rc::new(field),
-					post_locals,
 					compspecs,
 				})
 			}
-			/ members:(member(s) ** comma()) comma()? {expr::ObjBody::MemberList(members)}
+			/ members:(member(s) ** comma()) comma()? {
+				let mut locals = Vec::new();
+				let mut asserts = Vec::new();
+				let mut fields = Vec::new();
+				for member in members {
+					match member {
+						Member::Field(field_member) => fields.push(field_member),
+						Member::BindStmt(bind_spec) => locals.push(bind_spec),
+						Member::AssertStmt(assert_stmt) => asserts.push(assert_stmt),
+					}
+				}
+				expr::ObjBody::MemberList(ObjMembers {
+					locals: Rc::new(locals), asserts: Rc::new(asserts), fields
+				})
+			}
 		pub rule ifspec(s: &ParserSettings) -> IfSpecData
 			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
 		pub rule forspec(s: &ParserSettings) -> ForSpecData

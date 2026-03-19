@@ -4,7 +4,7 @@ use std::{any::Any, cell::RefCell, future::Future};
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_parser::{
 	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, FieldMember, FieldName,
-	ForSpecData, IfElse, IfSpecData, ImportKind, Member, ObjBody, Param, ParamsDesc,
+	ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, Param, ParamsDesc,
 	ParserSettings, Slice, SliceDesc, Source, SourcePath, Spanned,
 };
 use rustc_hash::FxHashMap;
@@ -102,31 +102,30 @@ pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
 	}
 	fn in_obj(obj: &ObjBody, out: &mut FoundImports) {
 		match obj {
-			ObjBody::MemberList(v) => {
-				for member in v {
-					match member {
-						Member::Field(FieldMember {
-							name,
-							params,
-							value,
-							..
-						}) => {
-							match name {
-								FieldName::Fixed(_) => {}
-								FieldName::Dyn(expr) => find_imports(expr, out),
-							}
-							if let Some(params) = params {
-								in_params(params, out);
-							}
-							find_imports(value, out);
-						}
-						Member::BindStmt(_) => todo!(),
-						Member::AssertStmt(assert) => {
-							find_imports(&assert.0, out);
-							if let Some(expr) = &assert.1 {
-								find_imports(expr, out);
-							}
-						}
+			ObjBody::MemberList(obj) => {
+				for FieldMember {
+					name,
+					params,
+					value,
+					..
+				} in &obj.fields
+				{
+					match name {
+						FieldName::Fixed(_) => {}
+						FieldName::Dyn(expr) => find_imports(expr, out),
+					}
+					if let Some(params) = params {
+						in_params(params, out);
+					}
+					find_imports(value, out);
+				}
+				for _ in &*obj.locals {
+					todo!()
+				}
+				for assert in &*obj.asserts {
+					find_imports(&assert.0, out);
+					if let Some(expr) = &assert.1 {
+						find_imports(expr, out);
 					}
 				}
 			}

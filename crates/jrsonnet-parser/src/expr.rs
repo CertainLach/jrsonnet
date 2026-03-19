@@ -47,10 +47,10 @@ pub struct FieldMember {
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub enum Member {
+pub(crate) enum Member {
 	Field(FieldMember),
 	BindStmt(BindSpec),
-	AssertStmt(Rc<AssertStmt>),
+	AssertStmt(AssertStmt),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
@@ -240,7 +240,7 @@ impl Destruct {
 	}
 }
 
-#[derive(Debug, Clone, PartialEq, Acyclic)]
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum BindSpec {
 	Field {
 		into: Destruct,
@@ -275,15 +275,21 @@ pub enum CompSpec {
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct ObjComp {
-	pub pre_locals: Vec<BindSpec>,
+	pub locals: Rc<Vec<BindSpec>>,
 	pub field: Rc<FieldMember>,
-	pub post_locals: Vec<BindSpec>,
 	pub compspecs: Vec<CompSpec>,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
+pub struct ObjMembers {
+	pub locals: Rc<Vec<BindSpec>>,
+	pub asserts: Rc<Vec<AssertStmt>>,
+	pub fields: Vec<FieldMember>,
+}
+
+#[derive(Debug, PartialEq, Acyclic)]
 pub enum ObjBody {
-	MemberList(Vec<Member>),
+	MemberList(ObjMembers),
 	ObjComp(ObjComp),
 }
 

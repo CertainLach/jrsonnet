@@ -4,7 +4,7 @@ use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{
 	ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, FieldMember, FieldName,
-	ForSpecData, IfSpecData, ImportKind, LiteralType, Member, ObjBody, ParamsDesc, Spanned,
+	ForSpecData, IfSpecData, ImportKind, LiteralType, ObjBody, ObjMembers, ParamsDesc, Spanned,
 };
 use jrsonnet_types::ValType;
 use rustc_hash::FxHashMap;
@@ -282,48 +282,38 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_member_list_object(ctx: Context, members: &[Member]) -> Result<ObjValue> {
+pub fn evaluate_member_list_object(ctx: Context, members: &ObjMembers) -> Result<ObjValue> {
 	let mut builder = ObjValueBuilder::new();
-	let locals = Rc::new(
-		members
-			.iter()
-			.filter_map(|m| match m {
-				Member::BindStmt(bind) => Some(bind.clone()),
-				_ => None,
-			})
-			.collect::<Vec<_>>(),
-	);
+	let locals = members.locals.clone();
 
 	// We have single context for all fields, so we can cache binds
 	let uctx = CachedUnbound::new(evaluate_object_locals(ctx.clone(), locals));
 
-	for member in members {
-		match member {
-			Member::Field(field) => {
-				evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
-			}
-			Member::AssertStmt(stmt) => {
-				#[derive(Trace)]
-				struct ObjectAssert<B: Trace> {
-					uctx: B,
-					assert: Rc<AssertStmt>,
+	for field in &members.fields {
+		evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), &field)?;
+	}
+
+	if !members.asserts.is_empty() {
+		#[derive(Trace)]
+		struct ObjectAssert<B: Trace> {
+			uctx: B,
+			asserts: Rc<Vec<AssertStmt>>,
+		}
+		impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
+			fn run(&self, sup_this: SupThis) -> Result<()> {
+				let ctx = self.uctx.bind(sup_this)?;
+				for assert in &*self.asserts {
+					evaluate_assert(ctx.clone(), &assert)?;
 				}
-				impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
-					fn run(&self, sup_this: SupThis) -> Result<()> {
-						let ctx = self.uctx.bind(sup_this)?;
-						evaluate_assert(ctx, &self.assert)
-					}
-				}
-				builder.assert(ObjectAssert {
-					uctx: uctx.clone(),
-					assert: stmt.clone(),
-				});
-			}
-			Member::BindStmt(_) => {
-				// Already handled
+				Ok(())
 			}
 		}
+		builder.assert(ObjectAssert {
+			uctx: uctx.clone(),
+			asserts: members.asserts.clone(),
+		});
 	}
+
 	Ok(builder.build())
 }
 
@@ -332,13 +322,7 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 		ObjBody::MemberList(members) => evaluate_member_list_object(ctx, members)?,
 		ObjBody::ObjComp(obj) => {
 			let mut builder = ObjValueBuilder::new();
-			let locals = Rc::new(
-				obj.pre_locals
-					.iter()
-					.chain(obj.post_locals.iter())
-					.cloned()
-					.collect::<Vec<_>>(),
-			);
+			let locals = obj.locals.clone();
 			evaluate_comp(ctx, &obj.compspecs, &mut |ctx| {
 				let uctx = evaluate_object_locals(ctx.clone(), locals.clone());
 

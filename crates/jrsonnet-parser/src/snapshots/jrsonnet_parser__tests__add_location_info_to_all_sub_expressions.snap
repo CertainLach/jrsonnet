@@ -7,12 +7,16 @@ BinaryOp(
         lhs: ObjExtend(
             Obj(
                 MemberList(
-                    [],
+                    ObjMembers {
+                        locals: [],
+                        asserts: [],
+                        fields: [],
+                    },
                 ),
             ) from virtual:<test>:0-2,
             MemberList(
-                [
-                    BindStmt(
+                ObjMembers {
+                    locals: [
                         Field {
                             into: Full(
                                 "x",
@@ -21,8 +25,9 @@ BinaryOp(
                                 1.0,
                             ) from virtual:<test>:15-16,
                         },
-                    ),
-                    Field(
+                    ],
+                    asserts: [],
+                    fields: [
                         FieldMember {
                             name: Fixed(
                                 "x",
@@ -34,14 +39,18 @@ BinaryOp(
                                 "x",
                             ) from virtual:<test>:21-22,
                         },
-                    ),
-                ],
+                    ],
+                },
             ),
         ) from virtual:<test>:0-24,
         op: Add,
         rhs: Obj(
             MemberList(
-                [],
+                ObjMembers {
+                    locals: [],
+                    asserts: [],
+                    fields: [],
+                },
             ),
         ) from virtual:<test>:27-29,
     },
