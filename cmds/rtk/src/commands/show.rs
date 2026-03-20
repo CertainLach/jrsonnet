@@ -332,4 +332,45 @@ mod tests {
 		let manifests = extract_manifests(&value, &[]).unwrap();
 		assert_eq!(manifests.len(), 2);
 	}
+
+	#[test]
+	fn test_show_injects_namespace_from_spec() {
+		let temp = TempDir::new().unwrap();
+		let root = temp.path();
+		fs::write(root.join("jsonnetfile.json"), r#"{"version": 1}"#).unwrap();
+		fs::create_dir_all(root.join("env")).unwrap();
+		fs::write(
+			root.join("env/main.jsonnet"),
+			r#"{
+				apiVersion: 'v1',
+				kind: 'ConfigMap',
+				metadata: { name: 'test-cm' },
+				data: { key: 'value' }
+			}"#,
+		)
+		.unwrap();
+		fs::write(
+			root.join("env/spec.json"),
+			r#"{
+				"apiVersion": "tanka.dev/v1alpha1",
+				"kind": "Environment",
+				"metadata": { "name": "test-env" },
+				"spec": { "namespace": "my-namespace", "injectLabels": true }
+			}"#,
+		)
+		.unwrap();
+
+		let output = show_environment(
+			root.join("env").to_str().unwrap(),
+			EvalOpts::default(),
+			ShowOpts::default(),
+		)
+		.unwrap();
+
+		assert!(
+			output.contains("namespace: my-namespace"),
+			"Expected namespace injection from spec.json, got:\n{}",
+			output
+		);
+	}
 }

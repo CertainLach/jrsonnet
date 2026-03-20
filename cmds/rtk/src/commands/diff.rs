@@ -445,10 +445,7 @@ async fn check_environment_for_changes(
 		return Ok(false);
 	}
 
-	// Inject tanka.dev/environment label if injectLabels is enabled
-	for manifest in &mut manifests {
-		crate::spec::inject_environment_label(manifest, &eval_result.spec);
-	}
+	process_manifests(&mut manifests, &eval_result.spec);
 
 	// Connect to the cluster
 	let spec_for_connection = spec.cloned().unwrap_or_default();

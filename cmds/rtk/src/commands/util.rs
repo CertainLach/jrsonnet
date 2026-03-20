@@ -370,17 +370,18 @@ pub fn evaluate_single_environment(
 	Ok(env_data)
 }
 
-/// Process manifests by injecting labels and stripping null fields.
+/// Process manifests with the full Tanka pipeline (matching pkg/process/process.go).
 ///
-/// This performs the common pattern of:
-/// 1. Injecting tanka.dev/environment label if injectLabels is enabled
-/// 2. Stripping empty annotations/labels
+/// Applies four steps to each manifest:
+/// 1. Inject metadata.namespace from spec.namespace (namespaced resources only)
+/// 2. Inject tanka.dev/environment label if injectLabels is enabled
+/// 3. Inject spec.resourceDefaults annotations/labels
+/// 4. Strip empty/null annotations and labels
 pub fn process_manifests(manifests: &mut [serde_json::Value], env_spec: &Option<Environment>) {
 	for manifest in manifests.iter_mut() {
+		crate::spec::inject_namespace(manifest, env_spec);
 		crate::spec::inject_environment_label(manifest, env_spec);
-	}
-
-	for manifest in manifests.iter_mut() {
+		crate::spec::inject_resource_defaults(manifest, env_spec);
 		crate::spec::strip_null_metadata_fields(manifest);
 	}
 }

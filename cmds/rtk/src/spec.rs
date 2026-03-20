@@ -409,6 +409,168 @@ fn is_null_or_empty_object(value: Option<&serde_json::Value>) -> bool {
 	}
 }
 
+/// Check if a Kubernetes kind is cluster-wide (not namespaced).
+/// This list is from Tanka's pkg/process/namespace.go
+pub fn is_cluster_wide_kind(kind: &str) -> bool {
+	matches!(
+		kind,
+		"APIService"
+			| "CertificateSigningRequest"
+			| "ClusterRole"
+			| "ClusterRoleBinding"
+			| "ComponentStatus"
+			| "CSIDriver"
+			| "CSINode"
+			| "CustomResourceDefinition"
+			| "MutatingWebhookConfiguration"
+			| "Namespace"
+			| "Node"
+			| "NodeMetrics"
+			| "PersistentVolume"
+			| "PodSecurityPolicy"
+			| "PriorityClass"
+			| "RuntimeClass"
+			| "SelfSubjectAccessReview"
+			| "SelfSubjectRulesReview"
+			| "StorageClass"
+			| "SubjectAccessReview"
+			| "TokenReview"
+			| "ValidatingWebhookConfiguration"
+			| "VolumeAttachment"
+	)
+}
+
+/// Inject namespace into a manifest if needed (matching Tanka's pkg/process/namespace.go).
+///
+/// Sets `metadata.namespace` from `spec.namespace` on namespaced resources that don't
+/// already have one. Cluster-wide resources (Namespace, ClusterRole, etc.) are skipped
+/// unless overridden via the `tanka.dev/namespaced` annotation.
+pub fn inject_namespace(manifest: &mut serde_json::Value, env_spec: &Option<Environment>) {
+	if let serde_json::Value::Object(ref mut obj) = manifest {
+		let kind = obj.get("kind").and_then(|v| v.as_str()).unwrap_or("");
+		let is_cluster_wide = is_cluster_wide_kind(kind);
+
+		if !obj.contains_key("metadata") {
+			obj.insert(
+				"metadata".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+		}
+
+		if let Some(serde_json::Value::Object(ref mut metadata)) = obj.get_mut("metadata") {
+			let mut namespaced = !is_cluster_wide;
+			if let Some(serde_json::Value::Object(annotations)) = metadata.get("annotations") {
+				if let Some(serde_json::Value::String(ns_str)) =
+					annotations.get("tanka.dev/namespaced")
+				{
+					namespaced = ns_str == "true";
+				}
+			}
+
+			if namespaced {
+				let has_namespace = metadata.contains_key("namespace")
+					&& metadata
+						.get("namespace")
+						.and_then(|v| v.as_str())
+						.map(|s| !s.is_empty())
+						.unwrap_or(false);
+
+				if !has_namespace {
+					if let Some(env) = env_spec {
+						if !env.spec.namespace.is_empty() {
+							metadata.insert(
+								"namespace".to_string(),
+								serde_json::Value::String(env.spec.namespace.clone()),
+							);
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
+/// Inject resourceDefaults (annotations, labels, etc.) into manifest metadata.
+/// This replicates Tanka's behavior for spec.resourceDefaults.
+pub fn inject_resource_defaults(
+	manifest: &mut serde_json::Value,
+	env_spec: &Option<Environment>,
+) {
+	let Some(env) = env_spec else { return };
+	let Some(resource_defaults) = &env.spec.resource_defaults else {
+		return;
+	};
+
+	let serde_json::Value::Object(defaults) = resource_defaults else {
+		return;
+	};
+
+	if let serde_json::Value::Object(ref mut obj) = manifest {
+		if !obj.contains_key("metadata") {
+			obj.insert(
+				"metadata".to_string(),
+				serde_json::Value::Object(serde_json::Map::new()),
+			);
+		}
+
+		if let Some(serde_json::Value::Object(ref mut metadata)) = obj.get_mut("metadata") {
+			if let Some(serde_json::Value::Object(default_annotations)) =
+				defaults.get("annotations")
+			{
+				let needs_annotations = match metadata.get("annotations") {
+					None => true,
+					Some(serde_json::Value::Null) => true,
+					Some(serde_json::Value::Object(m)) if m.is_empty() => false,
+					Some(serde_json::Value::Object(_)) => false,
+					_ => true,
+				};
+				if needs_annotations {
+					metadata.insert(
+						"annotations".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+				}
+
+				if let Some(serde_json::Value::Object(ref mut annotations)) =
+					metadata.get_mut("annotations")
+				{
+					for (key, value) in default_annotations {
+						if !annotations.contains_key(key) {
+							annotations.insert(key.clone(), value.clone());
+						}
+					}
+				}
+			}
+
+			if let Some(serde_json::Value::Object(default_labels)) = defaults.get("labels") {
+				let needs_labels = match metadata.get("labels") {
+					None => true,
+					Some(serde_json::Value::Null) => true,
+					Some(serde_json::Value::Object(m)) if m.is_empty() => false,
+					Some(serde_json::Value::Object(_)) => false,
+					_ => true,
+				};
+				if needs_labels {
+					metadata.insert(
+						"labels".to_string(),
+						serde_json::Value::Object(serde_json::Map::new()),
+					);
+				}
+
+				if let Some(serde_json::Value::Object(ref mut labels)) =
+					metadata.get_mut("labels")
+				{
+					for (key, value) in default_labels {
+						if !labels.contains_key(key) {
+							labels.insert(key.clone(), value.clone());
+						}
+					}
+				}
+			}
+		}
+	}
+}
+
 #[cfg(test)]
 mod tests {
 	use rstest::rstest;
@@ -968,5 +1130,242 @@ mod tests {
 
 		strip_null_metadata_fields(&mut manifest);
 		assert!(manifest.get("metadata").is_none());
+	}
+
+	// -----------------------------------------------------------------------
+	// inject_namespace tests (mirrors Tanka's pkg/process/namespace_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_inject_namespace_simple_namespaced() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"testing"
+		);
+	}
+
+	#[test]
+	fn test_inject_namespace_already_present() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				namespace: "ignored".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "namespace": "mycoolnamespace" }
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"mycoolnamespace"
+		);
+	}
+
+	#[test]
+	fn test_inject_namespace_no_default() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				namespace: "".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {}
+		});
+
+		inject_namespace(&mut manifest, &env_spec);
+		assert!(manifest["metadata"].get("namespace").is_none());
+	}
+
+	#[test]
+	fn test_inject_namespace_cluster_wide() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		for kind in [
+			"Namespace",
+			"ClusterRole",
+			"ClusterRoleBinding",
+			"CustomResourceDefinition",
+			"PersistentVolume",
+			"StorageClass",
+			"Node",
+		] {
+			let mut manifest = serde_json::json!({ "kind": kind });
+			inject_namespace(&mut manifest, &env_spec);
+			assert!(
+				manifest["metadata"].get("namespace").is_none(),
+				"{} should not get a namespace",
+				kind
+			);
+		}
+	}
+
+	#[test]
+	fn test_inject_namespace_annotation_override() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				namespace: "testing".to_string(),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "ClusterRole",
+			"metadata": {
+				"annotations": {
+					"tanka.dev/namespaced": "true"
+				}
+			}
+		});
+		inject_namespace(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["namespace"].as_str().unwrap(),
+			"testing"
+		);
+	}
+
+	// -----------------------------------------------------------------------
+	// inject_resource_defaults tests (mirrors Tanka's pkg/process/resourceDefaults_test.go)
+	// -----------------------------------------------------------------------
+
+	#[test]
+	fn test_inject_resource_defaults_no_change() {
+		let env_spec = Some(Environment::default());
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": { "name": "test" }
+		});
+		let expected = manifest.clone();
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest, expected);
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_annotation() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(
+			manifest["metadata"]["annotations"]["a"].as_str().unwrap(),
+			"b"
+		);
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_label() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				resource_defaults: Some(serde_json::json!({
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment"
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest["metadata"]["labels"]["a"].as_str().unwrap(), "b");
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_add_leaves_existing() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" },
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"annotations": { "1": "2" },
+				"labels": { "1": "2" }
+			}
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest["metadata"]["annotations"]["1"], "2");
+		assert_eq!(manifest["metadata"]["annotations"]["a"], "b");
+		assert_eq!(manifest["metadata"]["labels"]["1"], "2");
+		assert_eq!(manifest["metadata"]["labels"]["a"], "b");
+	}
+
+	#[test]
+	fn test_inject_resource_defaults_existing_overrides_spec() {
+		let env_spec = Some(Environment {
+			spec: Spec {
+				resource_defaults: Some(serde_json::json!({
+					"annotations": { "a": "b" },
+					"labels": { "a": "b" }
+				})),
+				..Default::default()
+			},
+			..Default::default()
+		});
+
+		let mut manifest = serde_json::json!({
+			"kind": "Deployment",
+			"metadata": {
+				"annotations": { "a": "c", "1": "2" },
+				"labels": { "a": "c", "1": "2" }
+			}
+		});
+
+		inject_resource_defaults(&mut manifest, &env_spec);
+		assert_eq!(manifest["metadata"]["annotations"]["a"], "c");
+		assert_eq!(manifest["metadata"]["annotations"]["1"], "2");
+		assert_eq!(manifest["metadata"]["labels"]["a"], "c");
+		assert_eq!(manifest["metadata"]["labels"]["1"], "2");
 	}
 }
