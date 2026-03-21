@@ -227,11 +227,11 @@ pub enum Destruct {
 impl Destruct {
 	/// Name of destructure, used for function parameter names
 	pub fn name(&self) -> ParamName {
-		ParamName(match self {
-			Self::Full(name) => Some(name.clone()),
+		match self {
+			Self::Full(name) => ParamName::Named(name.clone()),
 			#[cfg(feature = "exp-destruct")]
-			_ => None,
-		})
+			_ => ParamName::Unnamed,
+		}
 	}
 	pub fn binds_len(&self) -> usize {
 		#[cfg(feature = "exp-destruct")]

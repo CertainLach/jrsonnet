@@ -380,9 +380,9 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 }
 
 pub fn evaluate_named_param(ctx: Context, expr: &Spanned<Expr>, name: ParamName) -> Result<Val> {
-	match name.0 {
-		Some(name) => evaluate_named(ctx, expr, name),
-		None => evaluate(ctx, expr),
+	match name {
+		ParamName::Named(name) => evaluate_named(ctx, expr, name),
+		ParamName::Unnamed => evaluate(ctx, expr),
 	}
 }
 

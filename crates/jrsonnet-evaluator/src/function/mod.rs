@@ -14,8 +14,8 @@ use self::{
 	parse::{parse_default_function_call, parse_function_call},
 };
 use crate::{
-	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, params,
-	Context, ContextBuilder, Result, Thunk, Val,
+	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, Context,
+	ContextBuilder, Result, Thunk, Val,
 };
 
 pub mod arglike;

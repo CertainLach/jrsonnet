@@ -4,9 +4,8 @@ use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::destructure::destruct;
 use crate::gc::WithCapacityExt;
-use crate::val::ThunkValue as _;
 use crate::{bail, error::ErrorKind::*, Result};
-use crate::{evaluate_named, evaluate_named_param, Context, ContextBuilder, Pending, Thunk, Val};
+use crate::{evaluate_named_param, Context, ContextBuilder, Pending, Thunk, Val};
 
 pub struct PreparedCall {
 	// Param, named input.

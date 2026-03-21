@@ -1,7 +1,9 @@
 use std::mem::replace;
 
-use jrsonnet_interner::IStr;
-use jrsonnet_parser::{function::FunctionSignature, ExprParams};
+use jrsonnet_parser::{
+	function::{FunctionSignature, ParamName},
+	ExprParams,
+};
 use rustc_hash::FxHashMap;
 
 use super::arglike::ArgsLike;
@@ -9,7 +11,7 @@ use crate::{
 	bail,
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
-	evaluate_named, evaluate_named_param,
+	evaluate_named_param,
 	gc::WithCapacityExt as _,
 	Context, Pending, Thunk, Val,
 };
@@ -76,7 +78,7 @@ pub fn parse_function_call(
 			.enumerate()
 			.filter_map(|(i, p)| Some((i, &p.destruct, p.default.as_ref()?)))
 		{
-			if let Some(name) = into.name().0 {
+			if let ParamName::Named(name) = into.name() {
 				if passed_args.contains_key(&name) {
 					continue;
 				}

@@ -5,7 +5,7 @@ use rustc_hash::FxHashMap;
 use crate::{
 	bail,
 	error::{ErrorKind::*, Result},
-	evaluate, evaluate_method, evaluate_named, Context, Pending, Thunk, Val,
+	evaluate_method, evaluate_named_param, Context, Pending, Thunk, Val,
 };
 
 #[allow(clippy::too_many_lines)]
@@ -170,10 +170,7 @@ pub fn evaluate_dest(
 			let value = value.clone();
 			let data = {
 				let fctx = fctx.clone();
-				Thunk!(move || name.0.map_or_else(
-					|| evaluate(fctx.unwrap(), &value),
-					|name| evaluate_named(fctx.unwrap(), &value, name),
-				))
+				Thunk!(move || evaluate_named_param(fctx.unwrap(), &value, name))
 			};
 			destruct(into, data, fctx, new_bindings)?;
 		}

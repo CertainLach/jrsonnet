@@ -1,8 +1,6 @@
 use std::any::Any;
-use std::fmt;
 
-use jrsonnet_gcmodule::{cc_dyn, Acyclic, Trace, TraceBox};
-use jrsonnet_interner::IStr;
+use jrsonnet_gcmodule::{cc_dyn, Trace, TraceBox};
 use jrsonnet_parser::function::{FunctionSignature, ParamDefault, ParamName, ParamParse};
 
 use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
@@ -10,8 +8,8 @@ use crate::{Context, Result, Val};
 
 #[macro_export]
 macro_rules! params {
-	(@name unnamed) => { ParamName::ANONYMOUS };
-	(@name named $name:literal) => { ParamName::new($crate::IStr::from($name)) };
+	(@name unnamed) => { ParamName::Unnamed };
+	(@name named $name:literal) => { ParamName::Named($crate::IStr::from($name)) };
 	($($(#[$meta:meta])* [$kind:ident $(($lit:literal))? => $default:expr]),* $(,)?) => {
 		thread_local! {
 			static PARAMS: FunctionSignature = FunctionSignature::new([
@@ -79,7 +77,7 @@ impl NativeCallback {
 			params: FunctionSignature::new(
 				params
 					.into_iter()
-					.map(|n| ParamParse::new(ParamName::new(n.into()), ParamDefault::None))
+					.map(|n| ParamParse::new(ParamName::Named(n.into()), ParamDefault::None))
 					.collect(),
 			),
 			handler: TraceBox(Box::new(handler)),
@@ -88,7 +86,7 @@ impl NativeCallback {
 }
 
 impl Builtin for NativeCallback {
-	fn name(&self) -> &str {
+	fn name(&self) -> &'static str {
 		// TODO: standard natives gets their names from definition
 		// But builitins should already have them
 		"<native>"

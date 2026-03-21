@@ -6,32 +6,38 @@ use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IStr;
 
 #[derive(Clone, Acyclic, Debug, PartialEq, Eq)]
-pub struct ParamName(pub Option<IStr>);
+pub enum ParamName {
+	Unnamed,
+	Named(IStr),
+}
 impl ParamName {
-	pub const ANONYMOUS: Self = Self(None);
-	pub fn new(name: IStr) -> Self {
-		Self(Some(name))
-	}
 	pub fn as_str(&self) -> Option<&str> {
-		self.0.as_deref()
+		match self {
+			ParamName::Unnamed => None,
+			ParamName::Named(istr) => Some(istr),
+		}
 	}
 	pub fn is_anonymous(&self) -> bool {
-		self.0.is_none()
+		matches!(self, Self::Unnamed)
+	}
+	pub fn is_named(&self) -> bool {
+		matches!(self, Self::Named(_))
 	}
 }
 impl PartialEq<IStr> for ParamName {
 	fn eq(&self, other: &IStr) -> bool {
-		self.0
-			.as_ref()
-			.map_or(false, |s| s.as_bytes() == other.as_bytes())
+		match self {
+			ParamName::Unnamed => false,
+			ParamName::Named(istr) => istr == other,
+		}
 	}
 }
 
 impl fmt::Display for ParamName {
 	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
-		match &self.0 {
-			Some(v) => write!(f, "{v}"),
-			None => write!(f, "<unnamed>"),
+		match &self {
+			Self::Named(v) => write!(f, "{v}"),
+			Self::Unnamed => write!(f, "<unnamed>"),
 		}
 	}
 }

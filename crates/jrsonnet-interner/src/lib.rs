@@ -31,6 +31,10 @@ impl Trace for IStr {
 		false
 	}
 }
+
+/// SAFETY:
+///
+/// `IStr` is acyclic
 unsafe impl Acyclic for IStr {}
 
 impl IStr {
