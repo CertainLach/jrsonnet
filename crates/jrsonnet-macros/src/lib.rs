@@ -3,16 +3,32 @@ use std::string::String;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{
-	parenthesized,
-	parse::{Parse, ParseStream},
-	parse_macro_input,
-	punctuated::Punctuated,
-	spanned::Spanned,
-	token::{self, Comma},
-	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn,
-	LitStr, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
+	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn, LitStr, Meta, Pat, Path, PathArguments, Result, ReturnType, Token, Type, parenthesized, parse::{Parse, ParseStream}, parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::{self, Comma}
 };
 
+fn try_parse_attr_noargs<I>(attrs: &[Attribute], ident: I) -> Result<bool>
+where
+	Ident: PartialEq<I>,
+{
+	let attrs = attrs
+		.iter()
+		.filter(|a| a.path().is_ident(&ident))
+		.collect::<Vec<_>>();
+	if attrs.len() > 1 {
+		return Err(Error::new(
+			attrs[1].span(),
+			"this attribute may be specified only once",
+		));
+	} else if attrs.is_empty() {
+		return Ok(false);
+	}
+	let attr = attrs[0];
+
+	match attr.meta {
+		Meta::Path(_) => Ok(true),
+		_ => Ok(false),
+	}
+}
 fn parse_attr<A: Parse, I>(attrs: &[Attribute], ident: I) -> Result<Option<A>>
 where
 	Ident: PartialEq<I>,
@@ -125,9 +141,13 @@ enum Optionality {
 	Required,
 	Optional,
 	Default(Expr),
+	TypeDefault,
 }
 
-#[allow(clippy::large_enum_variant, reason = "this macro is not that hot for it to matter")]
+#[allow(
+	clippy::large_enum_variant,
+	reason = "this macro is not that hot for it to matter"
+)]
 enum ArgInfo {
 	Normal {
 		ty: Box<Type>,
@@ -170,7 +190,10 @@ impl ArgInfo {
 			_ => {}
 		}
 
-		let (optionality, ty) = if let Some(default) = parse_attr::<_, _>(&arg.attrs, "default")? {
+		let (optionality, ty) = if try_parse_attr_noargs(&mut arg.attrs, "default")? {
+			remove_attr(&mut arg.attrs, "default");
+			(Optionality::TypeDefault, ty.clone())
+		} else if let Some(default) = parse_attr::<_, _>(&arg.attrs, "default")? {
 			remove_attr(&mut arg.attrs, "default");
 			(Optionality::Default(default), ty.clone())
 		} else if let Some(ty) = extract_type_from_option(ty)? {
@@ -245,7 +268,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				.map_or_else(|| quote! {unnamed}, |n| quote! {named(#n)});
 			let default = match optionality {
 				Optionality::Required => quote!(ParamDefault::None),
-				Optionality::Optional => quote!(ParamDefault::Exists),
+				Optionality::Optional | Optionality::TypeDefault => quote!(ParamDefault::Exists),
 				Optionality::Default(e) => quote!(ParamDefault::Literal(stringify!(#e))),
 			};
 			Some(quote! {
@@ -303,6 +326,12 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 						#eval
 					} else {
 						let v: #ty = #expr;
+						v
+					},},
+					Optionality::TypeDefault => quote! {if let Some(value) = &parsed[#id] {
+						#eval
+					} else {
+						let v: #ty = Default::default();
 						v
 					},},
 				};
@@ -371,7 +400,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				State, Val,
 				function::{builtin::{Builtin, StaticBuiltin}, FunctionSignature, ParamParse, ParamName, ParamDefault, CallLocation, ArgsLike, parse::parse_builtin_call},
 				Result, Context, typed::Typed,
-				parser::Span, params,
+				parser::Span, params, Thunk,
 			};
 			params!(
 				#(#params_desc)*
@@ -389,9 +418,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 					PARAMS.with(|p| p.clone())
 				}
 				#[allow(unused_variables)]
-				fn call(&self, ctx: Context, location: CallLocation, args: &dyn ArgsLike) -> Result<Val> {
-					let parsed = parse_builtin_call(ctx.clone(), self.params(), args, false)?;
-
+				fn call(&self, location: CallLocation<'_>, parsed: &[Option<Thunk<Val>>]) -> Result<Val> {
 					let result: #result = #name(#(#pass)*);
 					<_ as Typed>::into_result(result)
 				}

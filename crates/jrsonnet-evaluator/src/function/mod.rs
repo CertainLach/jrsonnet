@@ -11,7 +11,8 @@ use self::{
 	arglike::OptionalContext,
 	builtin::{Builtin, StaticBuiltin},
 	native::NativeDesc,
-	parse::{parse_default_function_call, parse_function_call},
+	parse::{parse_builtin_call, parse_default_function_call, parse_function_call},
+	prepared::{parse_prepared_builtin_call, parse_prepared_function_call, PreparedCall},
 };
 use crate::{
 	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, Context,
@@ -22,7 +23,9 @@ pub mod arglike;
 pub mod builtin;
 pub mod native;
 pub mod parse;
-pub mod prepared;
+mod prepared;
+
+pub use prepared::PreparedFuncVal;
 
 pub use jrsonnet_parser::function::*;
 
@@ -173,7 +176,6 @@ impl FuncVal {
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			Self::Id => ID.call(call_ctx, loc, args),
 			Self::Normal(func) => {
 				let body_ctx = func.call_body_context(call_ctx, args, tailstrict)?;
 				evaluate(body_ctx, &func.body)
@@ -184,8 +186,18 @@ impl FuncVal {
 				}
 				thunk.evaluate()
 			}
-			Self::StaticBuiltin(b) => b.call(call_ctx, loc, args),
-			Self::Builtin(b) => b.call(call_ctx, loc, args),
+			Self::Id => {
+				let args = parse_builtin_call(call_ctx, ID.params(), args, tailstrict)?;
+				ID.call(loc, &args)
+			}
+			Self::StaticBuiltin(b) => {
+				let args = parse_builtin_call(call_ctx, b.params(), args, tailstrict)?;
+				b.call(loc, &args)
+			}
+			Self::Builtin(b) => {
+				let args = parse_builtin_call(call_ctx, b.params(), args, tailstrict)?;
+				b.call(loc, &args)
+			}
 		}
 	}
 	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
@@ -199,6 +211,41 @@ impl FuncVal {
 			args,
 			tailstrict,
 		)
+	}
+
+	pub(crate) fn evaluate_prepared(
+		&self,
+		prepared: &PreparedCall,
+		loc: CallLocation<'_>,
+		unnamed: &[Thunk<Val>],
+		named: &[Thunk<Val>],
+		_tailstrict: bool,
+	) -> Result<Val> {
+		match self {
+			FuncVal::Id => {
+				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named)?;
+				ID.call(loc, &args)
+			}
+			FuncVal::Normal(func) => {
+				let body_ctx = parse_prepared_function_call(
+					func.ctx.clone(),
+					prepared,
+					&func.params,
+					unnamed,
+					named,
+				)?;
+				evaluate(body_ctx, &func.body)
+			}
+			FuncVal::Thunk(t) => t.evaluate(),
+			FuncVal::StaticBuiltin(b) => {
+				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named)?;
+				b.call(loc, &args)
+			}
+			FuncVal::Builtin(b) => {
+				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named)?;
+				b.call(loc, &args)
+			}
+		}
 	}
 	/// Convert jsonnet function to plain `Fn` value.
 	pub fn into_native<D: NativeDesc>(self) -> D::Value {

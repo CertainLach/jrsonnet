@@ -1,3 +1,6 @@
+use std::rc::Rc;
+
+use jrsonnet_gcmodule::{Acyclic, Trace};
 use jrsonnet_parser::function::FunctionSignature;
 use jrsonnet_parser::{ExprParams, IStr};
 use rustc_hash::{FxHashMap, FxHashSet};
@@ -7,6 +10,34 @@ use crate::gc::WithCapacityExt;
 use crate::{bail, error::ErrorKind::*, Result};
 use crate::{evaluate_named_param, Context, ContextBuilder, Pending, Thunk, Val};
 
+use super::{CallLocation, FuncVal};
+
+#[derive(Debug, Trace, Clone)]
+pub struct PreparedFuncVal {
+	fun: FuncVal,
+	prepared: Rc<PreparedCall>,
+}
+
+impl PreparedFuncVal {
+	pub fn new(fun: FuncVal, unnamed: usize, named: &[IStr]) -> Result<Self> {
+		let prepared = prepare_call(fun.params(), unnamed, named)?;
+		Ok(Self {
+			fun,
+			prepared: Rc::new(prepared),
+		})
+	}
+	pub fn call(
+		&self,
+		loc: CallLocation<'_>,
+		unnamed: &[Thunk<Val>],
+		named: &[Thunk<Val>],
+	) -> Result<Val> {
+		self.fun
+			.evaluate_prepared(&self.prepared, loc, unnamed, named, false)
+	}
+}
+
+#[derive(Acyclic, Debug)]
 pub struct PreparedCall {
 	// Param, named input.
 	named: Vec<(usize, usize)>,

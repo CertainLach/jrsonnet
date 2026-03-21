@@ -1,28 +1,23 @@
 use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
-	function::{builtin, FuncVal},
-	operator::evaluate_compare_op,
-	val::ArrValue,
-	Result, Thunk, Val,
+	function::builtin, operator::evaluate_compare_op, val::ArrValue, Result, Thunk, Val,
 };
 use jrsonnet_parser::BinaryOpType;
 
+use crate::keyf::KeyF;
+
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_set_member(x: Thunk<Val>, arr: ArrValue, keyF: Option<FuncVal>) -> Result<bool> {
+pub fn builtin_set_member(x: Thunk<Val>, arr: ArrValue, #[default] keyF: KeyF) -> Result<bool> {
 	let mut low = 0;
 	let mut high = arr.len();
 
-	let keyF = keyF
-		.unwrap_or(FuncVal::Id)
-		.into_native::<((Thunk<Val>,), Val)>();
-
-	let x = keyF(x)?;
+	let x = keyF.eval(x)?;
 
 	while low < high {
 		let middle = usize::midpoint(high, low);
-		let comp = keyF(arr.get_lazy(middle).expect("in bounds"))?;
+		let comp = keyF.eval(arr.get_lazy(middle).expect("in bounds"))?;
 		match evaluate_compare_op(&comp, &x, BinaryOpType::Lt)? {
 			Ordering::Less => low = middle + 1,
 			Ordering::Equal => return Ok(true),
@@ -34,14 +29,11 @@ pub fn builtin_set_member(x: Thunk<Val>, arr: ArrValue, keyF: Option<FuncVal>) -
 
 #[builtin]
 #[allow(non_snake_case, clippy::redundant_closure)]
-pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_set_inter(a: ArrValue, b: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	let mut a = a.iter_lazy();
 	let mut b = b.iter_lazy();
 
-	let keyF = keyF
-		.unwrap_or(FuncVal::identity())
-		.into_native::<((Thunk<Val>,), Val)>();
-	let keyF = |v| keyF(v);
+	let keyF = |v| keyF.eval(v);
 
 	let mut av = a.next();
 	let mut bv = b.next();
@@ -73,14 +65,11 @@ pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 
 #[builtin]
 #[allow(non_snake_case, clippy::redundant_closure)]
-pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_set_diff(a: ArrValue, b: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	let mut a = a.iter_lazy();
 	let mut b = b.iter_lazy();
 
-	let keyF = keyF
-		.unwrap_or(FuncVal::identity())
-		.into_native::<((Thunk<Val>,), Val)>();
-	let keyF = |v| keyF(v);
+	let keyF = |v| keyF.eval(v);
 
 	let mut av = a.next();
 	let mut bv = b.next();
@@ -119,14 +108,11 @@ pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Resu
 
 #[builtin]
 #[allow(non_snake_case, clippy::redundant_closure)]
-pub fn builtin_set_union(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Result<ArrValue> {
+pub fn builtin_set_union(a: ArrValue, b: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	let mut a = a.iter_lazy();
 	let mut b = b.iter_lazy();
 
-	let keyF = keyF
-		.unwrap_or(FuncVal::identity())
-		.into_native::<((Thunk<Val>,), Val)>();
-	let keyF = |v| keyF(v);
+	let keyF = |v| keyF.eval(v);
 
 	let mut av = a.next();
 	let mut bv = b.next();

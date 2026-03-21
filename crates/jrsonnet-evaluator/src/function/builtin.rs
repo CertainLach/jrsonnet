@@ -3,8 +3,8 @@ use std::any::Any;
 use jrsonnet_gcmodule::{cc_dyn, Trace, TraceBox};
 use jrsonnet_parser::function::{FunctionSignature, ParamDefault, ParamName, ParamParse};
 
-use super::{arglike::ArgsLike, parse::parse_builtin_call, CallLocation};
-use crate::{Context, Result, Val};
+use super::CallLocation;
+use crate::{Result, Thunk, Val};
 
 #[macro_export]
 macro_rules! params {
@@ -34,8 +34,8 @@ impl Builtin for BuiltinFunc {
 		self.0.params()
 	}
 
-	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
-		self.0.call(ctx, loc, args)
+	fn call(&self, loc: CallLocation<'_>, args: &[Option<Thunk<Val>>]) -> Result<Val> {
+		self.0.call(loc, args)
 	}
 
 	fn as_any(&self) -> &dyn Any {
@@ -52,7 +52,7 @@ pub trait Builtin: Trace {
 	/// Parameter names for named calls
 	fn params(&self) -> FunctionSignature;
 	/// Call the builtin
-	fn call(&self, ctx: Context, loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val>;
+	fn call(&self, loc: CallLocation<'_>, args: &[Option<Thunk<Val>>]) -> Result<Val>;
 
 	fn as_any(&self) -> &dyn Any;
 }
@@ -96,11 +96,10 @@ impl Builtin for NativeCallback {
 		self.params.clone()
 	}
 
-	fn call(&self, ctx: Context, _loc: CallLocation<'_>, args: &dyn ArgsLike) -> Result<Val> {
-		let args = parse_builtin_call(ctx, self.params.clone(), args, true)?;
+	fn call(&self, _loc: CallLocation<'_>, args: &[Option<Thunk<Val>>]) -> Result<Val> {
 		let args = args
 			.into_iter()
-			.map(|a| a.expect("legacy natives have no default params"))
+			.map(|a| a.as_ref().expect("legacy natives have no default params"))
 			.map(|a| a.evaluate())
 			.collect::<Result<Vec<Val>>>()?;
 		self.handler.call(&args)

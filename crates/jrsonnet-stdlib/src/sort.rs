@@ -4,14 +4,14 @@ use std::cmp::Ordering;
 
 use jrsonnet_evaluator::{
 	bail,
-	function::{builtin, FuncVal},
+	function::builtin,
 	operator::evaluate_compare_op,
 	val::{equals, ArrValue},
 	Result, Thunk, Val,
 };
 use jrsonnet_parser::BinaryOpType;
 
-use crate::eval_on_empty;
+use crate::{eval_on_empty, keyf::KeyF};
 
 #[derive(Copy, Clone)]
 enum SortKeyType {
@@ -70,14 +70,11 @@ fn sort_identity(mut values: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(values)
 }
 
-fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn sort_keyf(values: ArrValue, keyf: KeyF) -> Result<Vec<Thunk<Val>>> {
 	// Slow path, user provided key getter
 	let mut vk = Vec::with_capacity(values.len());
 	for value in values.iter_lazy() {
-		vk.push((
-			value.clone(),
-			keyf.evaluate_simple(&(value.clone(),), false)?,
-		));
+		vk.push((value.clone(), keyf.eval(value)?));
 	}
 	let sort_type = get_sort_type(&vk, |v| &v.1)?;
 	match sort_type {
@@ -112,7 +109,7 @@ fn sort_keyf(values: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 }
 
 /// * `key_getter` - None, if identity sort required
-pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
+pub fn sort(values: ArrValue, key_getter: KeyF) -> Result<ArrValue> {
 	if values.len() <= 1 {
 		return Ok(values);
 	}
@@ -126,11 +123,7 @@ pub fn sort(values: ArrValue, key_getter: FuncVal) -> Result<ArrValue> {
 }
 
 #[builtin]
-pub fn builtin_sort(
-	arr: ArrValue,
-
-	#[default(FuncVal::identity())] keyF: FuncVal,
-) -> Result<ArrValue> {
+pub fn builtin_sort(arr: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	super::sort::sort(arr, keyF)
 }
 
@@ -147,14 +140,14 @@ fn uniq_identity(arr: Vec<Val>) -> Result<Vec<Val>> {
 	Ok(out)
 }
 
-fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
+fn uniq_keyf(arr: ArrValue, keyf: KeyF) -> Result<Vec<Thunk<Val>>> {
 	let mut out = Vec::new();
 	let last_value = arr.get_lazy(0).unwrap();
-	let mut last_key = keyf.evaluate_simple(&(last_value.clone(),), false)?;
+	let mut last_key = keyf.eval(last_value.clone())?;
 	out.push(last_value);
 
 	for next in arr.iter_lazy().skip(1) {
-		let next_key = keyf.evaluate_simple(&(next.clone(),), false)?;
+		let next_key = keyf.eval(next.clone())?;
 		if !equals(&last_key, &next_key)? {
 			out.push(next.clone());
 		}
@@ -165,11 +158,7 @@ fn uniq_keyf(arr: ArrValue, keyf: FuncVal) -> Result<Vec<Thunk<Val>>> {
 
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_uniq(
-	arr: ArrValue,
-
-	#[default(FuncVal::identity())] keyF: FuncVal,
-) -> Result<ArrValue> {
+pub fn builtin_uniq(arr: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
@@ -184,11 +173,7 @@ pub fn builtin_uniq(
 
 #[builtin]
 #[allow(non_snake_case)]
-pub fn builtin_set(
-	arr: ArrValue,
-
-	#[default(FuncVal::identity())] keyF: FuncVal,
-) -> Result<ArrValue> {
+pub fn builtin_set(arr: ArrValue, #[default] keyF: KeyF) -> Result<ArrValue> {
 	if arr.len() <= 1 {
 		return Ok(arr);
 	}
@@ -204,21 +189,13 @@ pub fn builtin_set(
 	}
 }
 
-fn eval_keyf(val: Val, key_f: Option<&FuncVal>) -> Result<Val> {
-	if let Some(key_f) = key_f {
-		key_f.evaluate_simple(&(val,), false)
-	} else {
-		Ok(val)
-	}
-}
-
-fn array_top1(arr: ArrValue, key_f: Option<&FuncVal>, ordering: Ordering) -> Result<Val> {
+fn array_top1(arr: ArrValue, keyf: KeyF, ordering: Ordering) -> Result<Val> {
 	let mut iter = arr.iter();
 	let mut min = iter.next().expect("not empty")?;
-	let mut min_key = eval_keyf(min.clone(), key_f)?;
+	let mut min_key = keyf.eval(Thunk::evaluated(min.clone()))?;
 	for item in iter {
 		let cur = item?;
-		let cur_key = eval_keyf(cur.clone(), key_f)?;
+		let cur_key = keyf.eval(Thunk::evaluated(cur.clone()))?;
 		if evaluate_compare_op(&cur_key, &min_key, BinaryOpType::Lt)? == ordering {
 			min = cur;
 			min_key = cur_key;
@@ -230,22 +207,22 @@ fn array_top1(arr: ArrValue, key_f: Option<&FuncVal>, ordering: Ordering) -> Res
 #[builtin]
 pub fn builtin_min_array(
 	arr: ArrValue,
-	keyF: Option<FuncVal>,
+	#[default] keyF: KeyF,
 	onEmpty: Option<Thunk<Val>>,
 ) -> Result<Val> {
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	array_top1(arr, keyF.as_ref(), Ordering::Less)
+	array_top1(arr, keyF, Ordering::Less)
 }
 #[builtin]
 pub fn builtin_max_array(
 	arr: ArrValue,
-	keyF: Option<FuncVal>,
+	#[default] keyF: KeyF,
 	onEmpty: Option<Thunk<Val>>,
 ) -> Result<Val> {
 	if arr.is_empty() {
 		return eval_on_empty(onEmpty);
 	}
-	array_top1(arr, keyF.as_ref(), Ordering::Greater)
+	array_top1(arr, keyF, Ordering::Greater)
 }
