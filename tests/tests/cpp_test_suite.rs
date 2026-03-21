@@ -23,29 +23,29 @@ fn run(file: &Path, root: &Path) -> String {
 	// C++ test suite
 	std_context.add_ext_str("var1".into(), "test".into());
 	std_context
-		.add_ext_code("var2".into(), "{x:1,y:2}")
+		.add_ext_code("var2", "{x:1,y:2}")
 		.expect("code is valid");
 
 	// Golang test suite
 	std_context
-		.add_ext_code("codeVar".into(), "3+3")
+		.add_ext_code("codeVar", "3+3")
 		.expect("code is valid");
 	std_context.add_ext_str("stringVar".into(), "2 + 2".into());
 	std_context
 		.add_ext_code(
-			"selfRecursiveVar".into(),
+			"selfRecursiveVar",
 			r#"[42, std.extVar("selfRecursiveVar")[0] + 1]"#,
 		)
 		.expect("code is valid");
 	std_context
 		.add_ext_code(
-			"mutuallyRecursiveVar1".into(),
+			"mutuallyRecursiveVar1",
 			r#"[42, std.extVar("mutuallyRecursiveVar2")[0] + 1]"#,
 		)
 		.expect("code is valid");
 	std_context
 		.add_ext_code(
-			"mutuallyRecursiveVar2".into(),
+			"mutuallyRecursiveVar2",
 			r#"[42, std.extVar("mutuallyRecursiveVar1")[0] + 1]"#,
 		)
 		.expect("code is valid");
@@ -203,9 +203,9 @@ fn cpp_test_suite() -> io::Result<()> {
 		let root = root_tests.join(root_dir);
 		let root_override = root_tests.join(format!("{root_dir}_golden_override"));
 
-		for entry in fs::read_dir(&root).map_err(|e| io::Error::new(ErrorKind::Other, format!("failed to enumerate cpp_test_suite dir (Note: it needs to be cloned from C++ jsonnet repo for this test): {e}")))? {
+		for entry in fs::read_dir(&root).map_err(|e| io::Error::other(format!("failed to enumerate cpp_test_suite dir (Note: it needs to be cloned from C++ jsonnet repo for this test): {e}")))? {
 		let entry = entry?;
-		if !entry.path().extension().map_or(false, |e| e == "jsonnet") {
+		if entry.path().extension().is_none_or(|e| e != "jsonnet") {
 			continue;
 		}
 
@@ -213,7 +213,7 @@ fn cpp_test_suite() -> io::Result<()> {
 			.path()
 			.file_name()
 			.and_then(|v| v.to_str())
-			.map_or(false, |v| SKIPPED.contains(&v))
+			.is_some_and(|v| SKIPPED.contains(&v))
 		{
 			continue;
 		}
@@ -227,7 +227,7 @@ fn cpp_test_suite() -> io::Result<()> {
 		golden_path2.set_extension("golden");
 
 		let golden_override =
-			root_override.join(&golden_path.file_name().expect("file has basename"));
+			root_override.join(golden_path.file_name().expect("file has basename"));
 
 		// .jsonnet.golden for C++ tests
 		let mut golden = read_file(&golden_path)?;
@@ -282,7 +282,7 @@ fn cpp_test_suite() -> io::Result<()> {
 					}
 				}
 			}
-		};
+		}
 	}
 	}
 

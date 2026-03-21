@@ -239,7 +239,7 @@ impl<V: ArgLike, S> ArgsLike for HashMap<IStr, V, S> {
 	}
 
 	fn named_names(&self, handler: &mut dyn FnMut(&IStr)) {
-		for (name, _) in self {
+		for name in self.keys() {
 			handler(name);
 		}
 	}

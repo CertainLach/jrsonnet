@@ -367,7 +367,7 @@ impl State {
 		let res = evaluate(self.create_default_context(file_name), &parsed);
 
 		let mut file_cache = self.file_cache();
-		let mut file = file_cache.entry(path.clone());
+		let mut file = file_cache.entry(path);
 
 		let Entry::Occupied(file) = &mut file else {
 			unreachable!("this file was just here")

@@ -57,12 +57,13 @@ fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 #[builtin]
 fn param_names(fun: FuncVal) -> Vec<String> {
 	fun.params()
-		.into_iter()
+		.iter()
 		.map(|v| v.name().as_str().unwrap_or("<unnamed>").to_owned())
 		.collect()
 }
 
 #[derive(Trace)]
+#[allow(dead_code)]
 pub struct ContextInitializer;
 impl ContextInitializerT for ContextInitializer {
 	fn populate(&self, _for_file: Source, builder: &mut ContextBuilder) {

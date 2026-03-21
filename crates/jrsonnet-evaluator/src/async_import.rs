@@ -21,7 +21,8 @@ pub struct FoundImports(Vec<Import>);
 // Visits all nodes, trying to find import statements
 #[allow(clippy::too_many_lines)]
 pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
-	fn in_destruct(dest: &Destruct, #[allow(unused_variables)] out: &mut FoundImports) {
+	#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
+	fn in_destruct(dest: &Destruct, out: &mut FoundImports) {
 		match dest {
 			#[cfg(feature = "exp-destruct")]
 			Destruct::Array {
@@ -296,8 +297,6 @@ where
 		.downcast_ref::<ResolvedImportResolver>()
 		.expect("for async imports, import_resolver should be set to ResolvedImportResolver");
 
-	let mut resolved_map = resolved.resolved.borrow_mut();
-
 	let mut queue = vec![Job::LoadFile {
 		path: handler.resolve_from_default(path).await?,
 		parse: true,
@@ -340,14 +339,17 @@ where
 				}
 			}
 			Job::ResolveImport { from, import } => {
-				if let Some((resolved, expression)) =
-					resolved_map.get_mut(&(from.clone(), import.path.clone()))
 				{
-					if import.expression && !*expression {
-						*expression = true;
-						queue.push(Job::ParseFile(resolved.clone()));
+					let mut resolved_map = resolved.resolved.borrow_mut();
+					if let Some((resolved, expression)) =
+						resolved_map.get_mut(&(from.clone(), import.path.clone()))
+					{
+						if import.expression && !*expression {
+							*expression = true;
+							queue.push(Job::ParseFile(resolved.clone()));
+						}
+						continue;
 					}
-					continue;
 				}
 				let resolved = handler.resolve_from(&from, &import.path).await?;
 				queue.push(Job::LoadFile {

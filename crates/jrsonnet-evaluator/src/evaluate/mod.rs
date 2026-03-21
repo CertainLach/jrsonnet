@@ -291,7 +291,7 @@ pub fn evaluate_member_list_object(ctx: Context, members: &ObjMembers) -> Result
 	let uctx = CachedUnbound::new(evaluate_object_locals(ctx.clone(), locals));
 
 	for field in &members.fields {
-		evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), &field)?;
+		evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
 	}
 
 	if !members.asserts.is_empty() {
@@ -304,13 +304,13 @@ pub fn evaluate_member_list_object(ctx: Context, members: &ObjMembers) -> Result
 			fn run(&self, sup_this: SupThis) -> Result<()> {
 				let ctx = self.uctx.bind(sup_this)?;
 				for assert in &*self.asserts {
-					evaluate_assert(ctx.clone(), &assert)?;
+					evaluate_assert(ctx.clone(), assert)?;
 				}
 				Ok(())
 			}
 		}
 		builder.assert(ObjectAssert {
-			uctx: uctx.clone(),
+			uctx,
 			asserts: members.asserts.clone(),
 		});
 	}
@@ -567,7 +567,7 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 				evaluate_dest(b, fctx.clone(), &mut new_bindings)?;
 			}
 			let ctx = ctx.extend_bindings(new_bindings).into_future(fctx);
-			evaluate(ctx, &returned.clone())?
+			evaluate(ctx, returned)?
 		}
 		Arr(items) => {
 			if items.is_empty() {

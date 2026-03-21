@@ -227,9 +227,11 @@ impl From<&[u8]> for IBytes {
 type PoolMap = HashMap<Inner, (), FxBuildHasher>;
 
 thread_local! {
-	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, FxBuildHasher::default()));
+	static POOL: RefCell<PoolMap> = RefCell::new(HashMap::with_capacity_and_hasher(200, FxBuildHasher));
 }
 
+/// Utils for embedding jrsonnet in non-rust.
+///
 /// Jrsonnet golang bindings require that it is possible to move jsonnet
 /// VM between OS threads, and this is not possible due to usage of
 /// `thread_local`. Instead, there is two methods added, one should be

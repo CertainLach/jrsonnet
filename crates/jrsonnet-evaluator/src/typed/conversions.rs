@@ -462,7 +462,7 @@ impl Typed for IBytes {
 		};
 		if let Some(bytes) = a.as_any().downcast_ref::<BytesArray>() {
 			return Ok(bytes.0.as_slice().into());
-		};
+		}
 		<Self as Typed>::TYPE.check(&value)?;
 		// Any::downcast_ref::<ByteArray>(&a);
 		let mut out = Vec::with_capacity(a.len());

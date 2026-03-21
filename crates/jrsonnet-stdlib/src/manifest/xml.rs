@@ -46,7 +46,7 @@ impl Typed for JSONMLValue {
 		};
 		if arr.is_empty() {
 			bail!("JSONML value should have tag (array length should be >=1)");
-		};
+		}
 		let tag = String::from_untyped(
 			arr.get(0)
 				.description("getting JSONML tag")?

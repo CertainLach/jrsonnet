@@ -1,6 +1,7 @@
 use std::{
 	any::Any,
 	cell::{Cell, RefCell},
+	clone::Clone,
 	collections::hash_map::Entry,
 	fmt::{self, Debug},
 	hash::{Hash, Hasher},
@@ -272,7 +273,7 @@ pub struct ObjValue(
 
 impl ObjValue {
 	pub fn empty() -> Self {
-		EMPTY_OBJ.with(|v| v.clone())
+		EMPTY_OBJ.with(Clone::clone)
 	}
 	pub fn is_empty(&self) -> bool {
 		self.0.cores.is_empty() || self.len() == 0
@@ -306,14 +307,13 @@ impl ObjectCore for StandaloneSuperCore {
 			return Ok(GetFor::NotFound);
 		}
 		let v = self.this.get_idx(key, self.sup)?;
-		Ok(v.map_or(GetFor::NotFound, |v| GetFor::Final(v)))
+		Ok(v.map_or(GetFor::NotFound, GetFor::Final))
 	}
 
 	fn field_visibility_core(&self, field: IStr) -> FieldVisibility {
-		match self.this.field_visibility_idx(field, self.sup) {
-			Some(c) => FieldVisibility::Found(c),
-			None => FieldVisibility::NotFound,
-		}
+		self.this
+			.field_visibility_idx(field, self.sup)
+			.map_or(FieldVisibility::NotFound, FieldVisibility::Found)
 	}
 
 	fn run_assertions_core(&self, _sup_this: SupThis) -> Result<()> {

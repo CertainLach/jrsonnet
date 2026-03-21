@@ -127,6 +127,7 @@ enum Optionality {
 	Default(Expr),
 }
 
+#[allow(clippy::large_enum_variant, reason = "this macro is not that hot for it to matter")]
 enum ArgInfo {
 	Normal {
 		ty: Box<Type>,

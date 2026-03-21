@@ -90,6 +90,7 @@ fn bare_safe(key: &str) -> bool {
 		RESERVED.iter().any(|k| key.eq_ignore_ascii_case(k))
 	}
 
+	#[allow(clippy::if_same_then_else)]
 	// Check for unsafe characters
 	if !key
 		.chars()
@@ -98,7 +99,7 @@ fn bare_safe(key: &str) -> bool {
 		return false;
 	}
 	// Check for reserved words
-	if is_reserved(key) {
+	else if is_reserved(key) {
 		return false;
 	}
 	// Check for timestamp values.  Since spaces and colons are already forbidden,
@@ -107,7 +108,7 @@ fn bare_safe(key: &str) -> bool {
 	// - all characters match [0-9\-]
 	// - has exactly 2 dashes
 	// are considered dates.
-	if key.chars().all(|v| matches!(v, '0'..='9' | '-')) && count_char(key, '-') == 2 {
+	else if key.chars().all(|v| matches!(v, '0'..='9' | '-')) && count_char(key, '-') == 2 {
 		return false;
 	}
 	// Check for integers.  Keys that meet all of the following:

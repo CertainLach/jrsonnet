@@ -38,7 +38,7 @@ impl SliceArray {
 }
 impl ArrayLike for SliceArray {
 	fn len(&self) -> usize {
-		((self.to - self.from + self.step - 1) / self.step) as usize
+		(self.to - self.from).div_ceil(self.step) as usize
 	}
 
 	fn get(&self, index: usize) -> Result<Option<Val>> {
@@ -139,7 +139,7 @@ impl ArrayLike for ExprArray {
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
 			ArrayThunk::Waiting => {}
-		};
+		}
 
 		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
@@ -158,15 +158,6 @@ impl ArrayLike for ExprArray {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		if index >= self.len() {
-			return None;
-		}
-		match &self.cached.borrow()[index] {
-			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
-			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting | ArrayThunk::Pending => {}
-		};
-
 		#[derive(Trace)]
 		struct ExprArrThunk {
 			expr: ExprArray,
@@ -181,6 +172,15 @@ impl ArrayLike for ExprArray {
 					.transpose()
 					.expect("index checked")
 			}
+		}
+
+		if index >= self.len() {
+			return None;
+		}
+		match &self.cached.borrow()[index] {
+			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
+			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		}
 
 		Some(Thunk::new(ExprArrThunk {
@@ -441,7 +441,7 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			ArrayThunk::Errored(e) => return Err(e.clone()),
 			ArrayThunk::Pending => return Err(InfiniteRecursionDetected.into()),
 			ArrayThunk::Waiting => {}
-		};
+		}
 
 		let ArrayThunk::Waiting =
 			replace(&mut self.cached.borrow_mut()[index], ArrayThunk::Pending)
@@ -467,15 +467,6 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 		Ok(Some(new_value))
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
-		if index >= self.len() {
-			return None;
-		}
-		match &self.cached.borrow()[index] {
-			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
-			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
-			ArrayThunk::Waiting | ArrayThunk::Pending => {}
-		};
-
 		#[derive(Trace)]
 		struct MappedArrayThunk<const WITH_INDEX: bool> {
 			arr: MappedArray<WITH_INDEX>,
@@ -487,6 +478,15 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 			fn get(&self) -> Result<Self::Output> {
 				self.arr.get(self.index).transpose().expect("index checked")
 			}
+		}
+
+		if index >= self.len() {
+			return None;
+		}
+		match &self.cached.borrow()[index] {
+			ArrayThunk::Computed(c) => return Some(Thunk::evaluated(c.clone())),
+			ArrayThunk::Errored(e) => return Some(Thunk::errored(e.clone())),
+			ArrayThunk::Waiting | ArrayThunk::Pending => {}
 		}
 
 		Some(Thunk::new(MappedArrayThunk {

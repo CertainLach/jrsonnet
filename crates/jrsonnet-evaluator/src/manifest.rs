@@ -240,7 +240,7 @@ fn manifest_json_ex_buf(
 					}
 					ToString if i != 0 => buf.push(' '),
 					Minify | ToString => {}
-				};
+				}
 
 				in_description_frame(
 					|| format!("elem <{i}> manifestification"),
@@ -335,7 +335,7 @@ fn manifest_json_ex_buf(
 			buf.push('}');
 		}
 		Val::Func(_) => bail!("tried to manifest function"),
-	};
+	}
 	Ok(())
 }
 

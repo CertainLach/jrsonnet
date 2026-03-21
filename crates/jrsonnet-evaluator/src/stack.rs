@@ -17,6 +17,7 @@ impl<T> NightlyLocalKey<T> {
 	}
 }
 #[cfg(not(nightly))]
+#[allow(dead_code)]
 type NightlyLocalKey<T> = std::thread::LocalKey<T>;
 
 #[cfg(nightly)]
@@ -60,7 +61,7 @@ impl From<StackOverflowError> for Error {
 pub struct StackDepthGuard(PhantomData<()>);
 impl Drop for StackDepthGuard {
 	fn drop(&mut self) {
-		STACK_LIMIT.with(|limit| limit.current_depth.set(limit.current_depth.get() - 1))
+		STACK_LIMIT.with(|limit| limit.current_depth.set(limit.current_depth.get() - 1));
 	}
 }
 

@@ -65,7 +65,7 @@ impl<D: Trace, T: Trace + Clone> ThunkValue for MemoizedClosureThunk<D, T> {
 			MemoizedClusureThunkInner::Errored(e) => return Err(e.clone()),
 			MemoizedClusureThunkInner::Pending => return Err(InfiniteRecursionDetected.into()),
 			MemoizedClusureThunkInner::Waiting { .. } => (),
-		};
+		}
 		let MemoizedClusureThunkInner::Waiting { env, closure } = replace(
 			&mut *self.0.borrow_mut(),
 			MemoizedClusureThunkInner::Pending,
@@ -288,14 +288,11 @@ impl IndexableVal {
 			Self::Str(s) => {
 				let mut computed_len = None;
 				let mut get_len = || {
-					computed_len.map_or_else(
-						|| {
-							let len = s.chars().count();
-							let _ = computed_len.insert(len);
-							len
-						},
-						|len| len,
-					)
+					computed_len.unwrap_or_else(|| {
+						let len = s.chars().count();
+						let _ = computed_len.insert(len);
+						len
+					})
 				};
 				let mut get_idx = |pos: Option<i32>, default| {
 					match pos {
@@ -446,7 +443,7 @@ impl NumValue {
 	pub const fn get(&self) -> f64 {
 		self.0
 	}
-	pub(crate) fn truncate_for_bitwise(&self) -> Result<i64> {
+	pub(crate) fn truncate_for_bitwise(self) -> Result<i64> {
 		if self.0 < MIN_SAFE_INTEGER || self.0 > MAX_SAFE_INTEGER {
 			bail!("numberic value outside of safe integer range for bitwise operation");
 		}

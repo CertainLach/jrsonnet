@@ -1,6 +1,7 @@
+use std::{collections::HashMap, hash::BuildHasher};
+
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::{BindSpec, Destruct};
-use rustc_hash::FxHashMap;
 
 use crate::{
 	bail,
@@ -10,11 +11,11 @@ use crate::{
 
 #[allow(clippy::too_many_lines)]
 #[allow(unused_variables)]
-pub fn destruct(
+pub fn destruct<H: BuildHasher>(
 	d: &Destruct,
 	parent: Thunk<Val>,
 	fctx: Pending<Context>,
-	new_bindings: &mut FxHashMap<IStr, Thunk<Val>>,
+	new_bindings: &mut HashMap<IStr, Thunk<Val>, H>,
 ) -> Result<()> {
 	match d {
 		Destruct::Full(v) => {
@@ -159,10 +160,10 @@ pub fn destruct(
 	Ok(())
 }
 
-pub fn evaluate_dest(
+pub fn evaluate_dest<H: BuildHasher>(
 	d: &BindSpec,
 	fctx: Pending<Context>,
-	new_bindings: &mut FxHashMap<IStr, Thunk<Val>>,
+	new_bindings: &mut HashMap<IStr, Thunk<Val>, H>,
 ) -> Result<()> {
 	match d {
 		BindSpec::Field { into, value } => {

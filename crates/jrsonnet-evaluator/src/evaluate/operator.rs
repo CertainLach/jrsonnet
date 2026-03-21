@@ -95,9 +95,9 @@ fn is_attempt_to_divide_by_zero(a: &Val, b: &Val) -> bool {
 		// string format
 		(Str(_), _) => false,
 
-		(_, Num(b)) => return **b == 0.,
+		(_, Num(b)) => **b == 0.,
 		#[cfg(feature = "exp-bigint")]
-		(_, BigInt(b)) => return **b == num_bigint::BigInt::ZERO,
+		(_, BigInt(b)) => **b == num_bigint::BigInt::ZERO,
 
 		// something else
 		_ => false,

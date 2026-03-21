@@ -1,4 +1,4 @@
-use std::cell::Cell;
+use std::cell::{Cell, RefCell};
 use std::ops::ControlFlow;
 use std::{fmt, mem};
 
@@ -105,7 +105,7 @@ impl ObjectCore for OopObject {
 
 	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()> {
 		if let Some(assertion) = &self.assertion {
-			assertion.0.run(sup_this.clone())?;
+			assertion.0.run(sup_this)?;
 		}
 		Ok(())
 	}
@@ -196,7 +196,7 @@ impl ObjValueBuilder {
 		ObjValue(Cc::new(ObjValueInner {
 			cores: self.sup,
 			assertions_ran: Cell::new(false),
-			value_cache: Default::default(),
+			value_cache: RefCell::default(),
 		}))
 	}
 }

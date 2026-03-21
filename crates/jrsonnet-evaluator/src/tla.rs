@@ -1,13 +1,14 @@
+use std::{collections::HashMap, hash::BuildHasher};
+
 use jrsonnet_interner::IStr;
 use jrsonnet_parser::Source;
-use rustc_hash::FxHashMap;
 
 use crate::{
 	function::{CallLocation, TlaArg},
 	in_description_frame, with_state, Result, Val,
 };
 
-pub fn apply_tla(args: &FxHashMap<IStr, TlaArg>, val: Val) -> Result<Val> {
+pub fn apply_tla<H: BuildHasher>(args: &HashMap<IStr, TlaArg, H>, val: Val) -> Result<Val> {
 	Ok(if let Val::Func(func) = val {
 		in_description_frame(
 			|| "during TLA call".to_owned(),

@@ -98,9 +98,9 @@ pub fn builtin_flatmap(
 			for c in str.chars() {
 				match func(Either2::A(c.to_string()))? {
 					Val::Str(o) => write!(out, "{o}").unwrap(),
-					Val::Null => continue,
+					Val::Null => {},
 					_ => bail!("in std.join all items should be strings"),
-				};
+				}
 			}
 			Ok(IndexableVal::Str(out.into()))
 		}
@@ -114,9 +114,9 @@ pub fn builtin_flatmap(
 							out.push(oe?);
 						}
 					}
-					Val::Null => continue,
+					Val::Null => {},
 					_ => bail!("in std.join all items should be arrays"),
-				};
+				}
 			}
 			Ok(IndexableVal::Arr(out.into()))
 		}
@@ -205,7 +205,6 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 						out.push(item?);
 					}
 				} else if matches!(item, Val::Null) {
-					continue;
 				} else {
 					bail!("in std.join all items should be arrays");
 				}
@@ -226,7 +225,6 @@ pub fn builtin_join(sep: IndexableVal, arr: ArrValue) -> Result<IndexableVal> {
 					first = false;
 					write!(out, "{item}").unwrap();
 				} else if matches!(item, Val::Null) {
-					continue;
 				} else {
 					bail!("in std.join all items should be strings");
 				}

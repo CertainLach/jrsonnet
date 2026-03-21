@@ -7,6 +7,7 @@ use crate::{ExtFile, ExtStr};
 
 #[derive(Parser)]
 #[clap(next_help_heading = "TOP LEVEL ARGUMENTS")]
+#[allow(clippy::struct_field_names)]
 pub struct TlaOpts {
 	/// Add top level string argument.
 	/// Top level arguments will be passed to function before manifestification stage.

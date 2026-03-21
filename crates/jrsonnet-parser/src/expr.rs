@@ -166,6 +166,10 @@ impl ExprParams {
 	pub fn len(&self) -> usize {
 		self.exprs.len()
 	}
+	pub fn is_empty(&self) -> bool {
+		self.exprs.is_empty()
+	}
+
 	pub fn binds_len(&self) -> usize {
 		self.binds_len
 	}

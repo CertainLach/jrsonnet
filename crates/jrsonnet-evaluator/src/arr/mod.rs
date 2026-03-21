@@ -77,7 +77,7 @@ impl ArrValue {
 			let i = i?;
 			if filter(&i)? {
 				out.push(i);
-			};
+			}
 		}
 		Ok(Self::eager(out))
 	}

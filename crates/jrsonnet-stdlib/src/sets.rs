@@ -21,7 +21,7 @@ pub fn builtin_set_member(x: Thunk<Val>, arr: ArrValue, keyF: Option<FuncVal>) -
 	let x = keyF(x)?;
 
 	while low < high {
-		let middle = (high + low) / 2;
+		let middle = usize::midpoint(high, low);
 		let comp = keyF(arr.get_lazy(middle).expect("in bounds"))?;
 		match evaluate_compare_op(&comp, &x, BinaryOpType::Lt)? {
 			Ordering::Less => low = middle + 1,
@@ -66,7 +66,7 @@ pub fn builtin_set_inter(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 				bv = b.next();
 				bk = bv.map(keyF).transpose()?;
 			}
-		};
+		}
 	}
 	Ok(ArrValue::lazy(out))
 }
@@ -106,7 +106,7 @@ pub fn builtin_set_diff(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Resu
 				bv = b.next();
 				bk = bv.map(keyF).transpose()?;
 			}
-		};
+		}
 	}
 	while let Some(_ac) = &ak {
 		// In a, but not in b
@@ -154,7 +154,7 @@ pub fn builtin_set_union(a: ArrValue, b: ArrValue, keyF: Option<FuncVal>) -> Res
 				bv = b.next();
 				bk = bv.clone().map(keyF).transpose()?;
 			}
-		};
+		}
 	}
 	// a.len() > b.len()
 	while let Some(_ac) = &ak {

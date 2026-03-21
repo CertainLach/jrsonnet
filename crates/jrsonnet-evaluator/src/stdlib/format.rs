@@ -297,6 +297,7 @@ pub fn parse_codes(mut str: &str) -> Result<Vec<Element<'_>>> {
 const NUMBERS: &[u8] = b"0123456789abcdefghijklmnopqrstuvwxyz";
 
 #[inline]
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn render_integer(
 	out: &mut String,
 	neg: bool,
@@ -330,7 +331,7 @@ pub fn render_integer(
 
 	let pref_len = zero_prefix.len() as u16;
 	let zp2 = zp
-		.saturating_sub(if !prefix_in_padding { pref_len } else { 0 })
+		.saturating_sub(if prefix_in_padding { 0 } else { pref_len })
 		.max(precision)
 		.saturating_sub(if prefix_in_padding { pref_len } else { 0 } + digits.len() as u16);
 
@@ -369,6 +370,7 @@ pub fn render_decimal(
 		out, neg, iv, padding, precision, blank, sign, 10, "", false, false,
 	);
 }
+#[allow(clippy::fn_params_excessive_bools)]
 pub fn render_octal(
 	out: &mut String,
 	neg: bool,
@@ -439,8 +441,8 @@ pub fn render_float(
 	// Note that it can also be equal to 10**prec and we'll need to carry
 	// over to the wholes.  We operate on the absolute numbers, so that we
 	// don't have trouble with the rounding direction.
-	let denominator = 10.0f64.powi(precision as i32);
-	let numerator = n.abs() * denominator + 0.5;
+	let denominator = 10.0f64.powi(i32::from(precision));
+	let numerator = n.abs().mul_add(denominator, 0.5);
 	let whole = (numerator / denominator).floor();
 	let frac = numerator.floor() % denominator;
 
@@ -611,7 +613,7 @@ pub fn format_code(
 			} else {
 				value.abs().log10().floor()
 			};
-			if exponent < -4.0 || exponent >= fpprec as f64 {
+			if exponent < -4.0 || exponent >= f64::from(fpprec) {
 				render_float_sci(
 					&mut tmp_out,
 					value,
@@ -661,7 +663,7 @@ pub fn format_code(
 			}
 		},
 		ConvTypeV::Percent => tmp_out.push('%'),
-	};
+	}
 
 	let padding = width.saturating_sub(tmp_out.len() as u16);
 

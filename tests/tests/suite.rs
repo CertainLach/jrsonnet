@@ -32,7 +32,7 @@ fn run(file: &Path) {
 			file.display(),
 			trace_format.format(&e).unwrap()
 		),
-	};
+	}
 }
 
 #[test]
@@ -42,11 +42,9 @@ fn suite() -> io::Result<()> {
 
 	for entry in fs::read_dir(&root)? {
 		let entry = entry?;
-		if !entry.path().extension().map_or(false, |e| e == "jsonnet") {
-			continue;
+		if entry.path().extension().is_some_and(|e| e == "jsonnet") {
+			run(&entry.path());
 		}
-
-		run(&entry.path());
 	}
 
 	Ok(())

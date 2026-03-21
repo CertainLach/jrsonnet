@@ -16,7 +16,7 @@ pub struct LayeredHashMap(Cc<LayeredHashMapInternals>);
 
 impl LayeredHashMap {
 	pub fn iter_keys(self, mut handler: impl FnMut(IStr)) {
-		for (k, _) in &self.0.current {
+		for k in self.0.current.keys() {
 			handler(k.clone());
 		}
 		if let Some(parent) = self.0.parent.clone() {
@@ -47,11 +47,7 @@ impl LayeredHashMap {
 
 	pub fn contains_key(&self, key: &IStr) -> bool {
 		(self.0).current.contains_key(key)
-			|| self
-				.0
-				.parent
-				.as_ref()
-				.map_or(false, |p| p.contains_key(key))
+			|| self.0.parent.as_ref().is_some_and(|p| p.contains_key(key))
 	}
 }
 

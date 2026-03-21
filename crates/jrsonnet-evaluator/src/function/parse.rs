@@ -1,5 +1,3 @@
-use std::mem::replace;
-
 use jrsonnet_parser::{
 	function::{FunctionSignature, ParamName},
 	ExprParams,
@@ -87,7 +85,7 @@ pub fn parse_function_call(
 			}
 
 			destruct(
-				&into,
+				into,
 				{
 					let ctx = fctx.clone();
 					let name = into.name();
@@ -97,7 +95,7 @@ pub fn parse_function_call(
 				fctx.clone(),
 				&mut defaults,
 			)?;
-			if !into.name().is_anonymous() {
+			if into.name().is_named() {
 				filled_named += 1;
 			} else {
 				filled_positionals += 1;
@@ -165,7 +163,7 @@ pub fn parse_builtin_call(
 			.iter()
 			.position(|p| p.name() == name)
 			.ok_or_else(|| UnknownFunctionParameter(name.clone()))?;
-		if replace(&mut passed_args[id], Some(arg)).is_some() {
+		if passed_args[id].replace(arg).is_some() {
 			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_args += 1;
@@ -230,7 +228,7 @@ pub fn parse_default_function_call(body_ctx: Context, params: &ExprParams) -> Re
 					let params = params.clone();
 					Thunk!(move || Err(FunctionParameterNotBoundInCall(
 						param_name,
-						params.signature.clone()
+						params.signature
 					)
 					.into()))
 				},
