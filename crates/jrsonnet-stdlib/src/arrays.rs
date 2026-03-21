@@ -23,7 +23,8 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 		return Ok(ArrValue::empty());
 	}
 	func.evaluate_trivial().map_or_else(
-		|| Ok(ArrValue::range_exclusive(0, *sz).map(func)),
+		// TODO: Different mapped array impl avoiding allocating unnecessary vals
+		|| Ok(ArrValue::range_exclusive(0, *sz).map(Typed::from_untyped(Val::Func(func))?)),
 		|trivial| {
 			let mut out = Vec::with_capacity(*sz as usize);
 			for _ in 0..*sz {
@@ -58,19 +59,22 @@ pub fn builtin_slice(
 }
 
 #[builtin]
-pub fn builtin_map(func: FuncVal, arr: IndexableVal) -> ArrValue {
+pub fn builtin_map(func: NativeFn!((Val) -> Val), arr: IndexableVal) -> ArrValue {
 	let arr = arr.to_array();
 	arr.map(func)
 }
 
 #[builtin]
-pub fn builtin_map_with_index(func: FuncVal, arr: IndexableVal) -> ArrValue {
+pub fn builtin_map_with_index(func: NativeFn!((u32, Val) -> Val), arr: IndexableVal) -> ArrValue {
 	let arr = arr.to_array();
 	arr.map_with_index(func)
 }
 
 #[builtin]
-pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
+pub fn builtin_map_with_key(
+	func: NativeFn!((IStr, Val) -> Val),
+	obj: ObjValue,
+) -> Result<ObjValue> {
 	let mut out = ObjValueBuilder::new();
 	for (k, v) in obj.iter(
 		// Makes sense mapped object should be ordered the same way, should not break anything when the output is not ordered (the default).
@@ -80,15 +84,14 @@ pub fn builtin_map_with_key(func: FuncVal, obj: ObjValue) -> Result<ObjValue> {
 		true,
 	) {
 		let v = v?;
-		out.field(k.clone())
-			.value(func.evaluate_simple(&(k, v), false)?);
+		out.field(k.clone()).value(func.call(k, v)?);
 	}
 	Ok(out.build())
 }
 
 #[builtin]
 pub fn builtin_flatmap(
-	func: NativeFn<((Either![String, Val],), Val)>,
+	func: NativeFn!((Either![String, Val]) -> Val),
 	arr: IndexableVal,
 ) -> Result<IndexableVal> {
 	use std::fmt::Write;
@@ -96,9 +99,9 @@ pub fn builtin_flatmap(
 		IndexableVal::Str(str) => {
 			let mut out = String::new();
 			for c in str.chars() {
-				match func(Either2::A(c.to_string()))? {
+				match func.call(Either2::A(c.to_string()))? {
 					Val::Str(o) => write!(out, "{o}").unwrap(),
-					Val::Null => {},
+					Val::Null => {}
 					_ => bail!("in std.join all items should be strings"),
 				}
 			}
@@ -108,13 +111,13 @@ pub fn builtin_flatmap(
 			let mut out = Vec::new();
 			for el in a.iter() {
 				let el = el?;
-				match func(Either2::B(el))? {
+				match func.call(Either2::B(el))? {
 					Val::Arr(o) => {
 						for oe in o.iter() {
 							out.push(oe?);
 						}
 					}
-					Val::Null => {},
+					Val::Null => {}
 					_ => bail!("in std.join all items should be arrays"),
 				}
 			}
@@ -123,32 +126,38 @@ pub fn builtin_flatmap(
 	}
 }
 
+type FilterFunc = NativeFn!((Val) -> bool);
+
 #[builtin]
-pub fn builtin_filter(func: FuncVal, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| bool::from_untyped(func.evaluate_simple(&(val.clone(),), false)?))
+pub fn builtin_filter(func: FilterFunc, arr: ArrValue) -> Result<ArrValue> {
+	arr.filter(|val| func.call(val.clone()))
 }
 
 #[builtin]
 pub fn builtin_filter_map(
-	filter_func: FuncVal,
-	map_func: FuncVal,
+	filter_func: FilterFunc,
+	map_func: NativeFn!((Val) -> Val),
 	arr: ArrValue,
 ) -> Result<ArrValue> {
 	Ok(builtin_filter(filter_func, arr)?.map(map_func))
 }
 
 #[builtin]
-pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, IStr], init: Val) -> Result<Val> {
+pub fn builtin_foldl(
+	func: NativeFn!((Val, Either![Val, char]) -> Val),
+	arr: Either![ArrValue, IStr],
+	init: Val,
+) -> Result<Val> {
 	let mut acc = init;
 	match arr {
 		Either2::A(arr) => {
 			for i in arr.iter() {
-				acc = func.evaluate_simple(&(acc, i?), false)?;
+				acc = func.call(acc, Either2::A(i?))?;
 			}
 		}
 		Either2::B(arr) => {
-			for i in arr.chars() {
-				acc = func.evaluate_simple(&(acc, Val::string(i)), false)?;
+			for c in arr.chars() {
+				acc = func.call(acc, Either2::B(c))?;
 			}
 		}
 	}
@@ -156,17 +165,21 @@ pub fn builtin_foldl(func: FuncVal, arr: Either![ArrValue, IStr], init: Val) -> 
 }
 
 #[builtin]
-pub fn builtin_foldr(func: FuncVal, arr: Either![ArrValue, IStr], init: Val) -> Result<Val> {
+pub fn builtin_foldr(
+	func: NativeFn!((Either![Val, char], Val) -> Val),
+	arr: Either![ArrValue, IStr],
+	init: Val,
+) -> Result<Val> {
 	let mut acc = init;
 	match arr {
 		Either2::A(arr) => {
 			for i in arr.iter().rev() {
-				acc = func.evaluate_simple(&(i?, acc), false)?;
+				acc = func.call(Either2::A(i?), acc)?;
 			}
 		}
 		Either2::B(arr) => {
-			for i in arr.chars().rev() {
-				acc = func.evaluate_simple(&(Val::string(i), acc), false)?;
+			for c in arr.chars().rev() {
+				acc = func.call(Either2::B(c), acc)?;
 			}
 		}
 	}

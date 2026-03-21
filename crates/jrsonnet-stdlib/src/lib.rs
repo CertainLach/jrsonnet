@@ -38,6 +38,7 @@ mod arrays;
 mod compat;
 mod encoding;
 mod hash;
+mod keyf;
 mod manifest;
 mod math;
 mod misc;
@@ -50,7 +51,6 @@ mod sets;
 mod sort;
 mod strings;
 mod types;
-mod keyf;
 
 #[allow(clippy::too_many_lines)]
 pub fn stdlib_uncached(settings: Cc<RefCell<Settings>>) -> ObjValue {

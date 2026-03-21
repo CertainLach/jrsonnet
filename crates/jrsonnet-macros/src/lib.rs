@@ -3,7 +3,14 @@ use std::string::String;
 use proc_macro2::TokenStream;
 use quote::{quote, quote_spanned};
 use syn::{
-	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn, LitStr, Meta, Pat, Path, PathArguments, Result, ReturnType, Token, Type, parenthesized, parse::{Parse, ParseStream}, parse_macro_input, punctuated::Punctuated, spanned::Spanned, token::{self, Comma}
+	parenthesized,
+	parse::{Parse, ParseStream},
+	parse_macro_input,
+	punctuated::Punctuated,
+	spanned::Spanned,
+	token::{self, Comma},
+	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn,
+	LitStr, Meta, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
 };
 
 fn try_parse_attr_noargs<I>(attrs: &[Attribute], ident: I) -> Result<bool>

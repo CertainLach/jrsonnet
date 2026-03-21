@@ -6,9 +6,11 @@ use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_parser::{Expr, Spanned};
 
 use super::ArrValue;
+use crate::typed::NativeFn;
+use crate::val::NumValue;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, function::FuncVal, typed::Typed,
-	val::ThunkValue, Context, Error, ObjValue, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected, evaluate, typed::Typed, val::ThunkValue, Context,
+	Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {
@@ -404,14 +406,20 @@ impl ArrayLike for ReverseArray {
 	}
 }
 
+#[derive(Trace, Clone, Debug)]
+pub enum ArrayMapper {
+	Plain(NativeFn!((Val) -> Val)),
+	WithIndex(NativeFn!((u32, Val) -> Val)),
+}
+
 #[derive(Trace, Debug, Clone)]
-pub struct MappedArray<const WITH_INDEX: bool> {
+pub struct MappedArray {
 	inner: ArrValue,
 	cached: Cc<RefCell<Vec<ArrayThunk>>>,
-	mapper: FuncVal,
+	mapper: ArrayMapper,
 }
-impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
-	pub fn new(inner: ArrValue, mapper: FuncVal) -> Self {
+impl MappedArray {
+	pub fn new(inner: ArrValue, mapper: ArrayMapper) -> Self {
 		let len = inner.len();
 		Self {
 			inner,
@@ -420,14 +428,13 @@ impl<const WITH_INDEX: bool> MappedArray<WITH_INDEX> {
 		}
 	}
 	fn evaluate(&self, index: usize, value: Val) -> Result<Val> {
-		if WITH_INDEX {
-			self.mapper.evaluate_simple(&(index, value), false)
-		} else {
-			self.mapper.evaluate_simple(&(value,), false)
+		match &self.mapper {
+			ArrayMapper::Plain(f) => f.call(value),
+			ArrayMapper::WithIndex(f) => f.call(index as u32, value),
 		}
 	}
 }
-impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
+impl ArrayLike for MappedArray {
 	fn len(&self) -> usize {
 		self.cached.borrow().len()
 	}
@@ -468,11 +475,11 @@ impl<const WITH_INDEX: bool> ArrayLike for MappedArray<WITH_INDEX> {
 	}
 	fn get_lazy(&self, index: usize) -> Option<Thunk<Val>> {
 		#[derive(Trace)]
-		struct MappedArrayThunk<const WITH_INDEX: bool> {
-			arr: MappedArray<WITH_INDEX>,
+		struct MappedArrayThunk {
+			arr: MappedArray,
 			index: usize,
 		}
-		impl<const WITH_INDEX: bool> ThunkValue for MappedArrayThunk<WITH_INDEX> {
+		impl ThunkValue for MappedArrayThunk {
 			type Output = Val;
 
 			fn get(&self) -> Result<Self::Output> {

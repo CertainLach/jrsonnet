@@ -8,15 +8,13 @@ pub use jrsonnet_macros::builtin;
 use jrsonnet_parser::{Destruct, Expr, ExprParams, Span, Spanned};
 
 use self::{
-	arglike::OptionalContext,
 	builtin::{Builtin, StaticBuiltin},
-	native::NativeDesc,
 	parse::{parse_builtin_call, parse_default_function_call, parse_function_call},
 	prepared::{parse_prepared_builtin_call, parse_prepared_function_call, PreparedCall},
 };
 use crate::{
 	bail, error::ErrorKind::*, evaluate, evaluate_trivial, function::builtin::BuiltinFunc, Context,
-	ContextBuilder, Result, Thunk, Val,
+	Result, Thunk, Val,
 };
 
 pub mod arglike;
@@ -200,18 +198,6 @@ impl FuncVal {
 			}
 		}
 	}
-	pub fn evaluate_simple<A: ArgsLike + OptionalContext>(
-		&self,
-		args: &A,
-		tailstrict: bool,
-	) -> Result<Val> {
-		self.evaluate(
-			ContextBuilder::new().build(),
-			CallLocation::native(),
-			args,
-			tailstrict,
-		)
-	}
 
 	pub(crate) fn evaluate_prepared(
 		&self,
@@ -246,10 +232,6 @@ impl FuncVal {
 				b.call(loc, &args)
 			}
 		}
-	}
-	/// Convert jsonnet function to plain `Fn` value.
-	pub fn into_native<D: NativeDesc>(self) -> D::Value {
-		D::into_native(self)
 	}
 
 	/// Is this function an indentity function.
