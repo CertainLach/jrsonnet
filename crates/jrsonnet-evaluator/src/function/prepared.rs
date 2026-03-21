@@ -180,7 +180,7 @@ pub fn parse_prepared_builtin_call(
 	params: FunctionSignature,
 	unnamed: &[Thunk<Val>],
 	named: &[Thunk<Val>],
-) -> Result<Vec<Option<Thunk<Val>>>> {
+) -> Vec<Option<Thunk<Val>>> {
 	let mut passed_args = vec![None; params.len()];
 
 	for (param_idx, unnamed) in unnamed.iter().enumerate() {
@@ -191,5 +191,5 @@ pub fn parse_prepared_builtin_call(
 		passed_args[param_idx] = Some(named[arg_idx].clone());
 	}
 
-	Ok(passed_args)
+	passed_args
 }

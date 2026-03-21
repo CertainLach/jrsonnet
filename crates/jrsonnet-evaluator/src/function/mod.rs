@@ -208,10 +208,6 @@ impl FuncVal {
 		_tailstrict: bool,
 	) -> Result<Val> {
 		match self {
-			FuncVal::Id => {
-				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named)?;
-				ID.call(loc, &args)
-			}
 			FuncVal::Normal(func) => {
 				let body_ctx = parse_prepared_function_call(
 					func.ctx.clone(),
@@ -223,12 +219,16 @@ impl FuncVal {
 				evaluate(body_ctx, &func.body)
 			}
 			FuncVal::Thunk(t) => t.evaluate(),
+			FuncVal::Id => {
+				let args = parse_prepared_builtin_call(prepared, ID.params(), unnamed, named);
+				ID.call(loc, &args)
+			}
 			FuncVal::StaticBuiltin(b) => {
-				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named)?;
+				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named);
 				b.call(loc, &args)
 			}
 			FuncVal::Builtin(b) => {
-				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named)?;
+				let args = parse_prepared_builtin_call(prepared, b.params(), unnamed, named);
 				b.call(loc, &args)
 			}
 		}
