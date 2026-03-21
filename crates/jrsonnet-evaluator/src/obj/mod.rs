@@ -4,7 +4,6 @@ use std::{
 	collections::hash_map::Entry,
 	fmt::{self, Debug},
 	hash::{Hash, Hasher},
-	mem,
 	num::Saturating,
 	ops::ControlFlow,
 };
@@ -15,13 +14,15 @@ use jrsonnet_interner::IStr;
 use jrsonnet_parser::{Span, Visibility};
 use rustc_hash::{FxHashMap, FxHashSet};
 
+mod oop;
+
+pub use oop::ObjValueBuilder;
+
 use crate::{
 	arr::{PickObjectKeyValues, PickObjectValues},
 	bail,
 	error::{suggest_object_fields, ErrorKind::*},
-	function::{CallLocation, FuncVal},
-	gc::WithCapacityExt as _,
-	identity_hash, in_frame,
+	identity_hash,
 	operator::evaluate_add_op,
 	val::{ArrValue, ThunkValue},
 	CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
@@ -147,26 +148,6 @@ enum CacheValue {
 	Pending,
 }
 
-#[allow(clippy::module_name_repetitions)]
-#[derive(Trace, Default)]
-#[trace(tracking(force))]
-pub struct OopObject {
-	assertion: Option<CcObjectAssertion>,
-	this_entries: FxHashMap<IStr, ObjMember>,
-}
-impl Debug for OopObject {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		f.debug_struct("OopObject")
-			.field("this_entries", &self.this_entries)
-			.finish_non_exhaustive()
-	}
-}
-impl OopObject {
-	fn is_empty(&self) -> bool {
-		self.assertion.is_none() && self.this_entries.is_empty()
-	}
-}
-
 type EnumFieldsHandler<'a> =
 	dyn FnMut(SuperDepth, FieldIndex, IStr, EnumFields) -> ControlFlow<()> + 'a;
 
@@ -278,7 +259,7 @@ thread_local! {
 	static EMPTY_OBJ: ObjValue = ObjValue(Cc::new(ObjValueInner {
 		cores: vec![],
 		assertions_ran: Cell::new(true),
-		value_cache: Default::default(),
+		value_cache: RefCell::default(),
 	}))
 }
 
@@ -353,12 +334,13 @@ impl ObjectCore for OmitFieldsCore {
 	) -> bool {
 		let mut fi = FieldIndex::default();
 		for f in &self.omit {
-			if let ControlFlow::Break(()) = handler(
+			if handler(
 				*super_depth,
 				fi,
 				f.clone(),
 				EnumFields::Omit(Saturating(self.prev_layers)),
-			) {
+			) == ControlFlow::Break(())
+			{
 				return false;
 			}
 			fi = fi.next();
@@ -698,7 +680,7 @@ impl ObjValue {
 				}
 				FieldVisibility::Found(Visibility::Normal) => {
 					if skip.0 == 0 {
-						exists = true
+						exists = true;
 					}
 				}
 				FieldVisibility::NotFound => {}
@@ -750,9 +732,6 @@ impl ObjValue {
 		})
 	}
 	pub fn get_lazy(&self, key: IStr) -> Option<Thunk<Val>> {
-		if !self.has_field_ex(key.clone(), true) {
-			return None;
-		}
 		#[derive(Trace)]
 		struct ObjFieldThunk {
 			obj: ObjValue,
@@ -767,6 +746,10 @@ impl ObjValue {
 					.transpose()
 					.expect("field existence checked")
 			}
+		}
+
+		if !self.has_field_ex(key.clone(), true) {
+			return None;
 		}
 
 		Some(Thunk::new(ObjFieldThunk {
@@ -844,10 +827,8 @@ impl ObjValue {
 								.max(omit_index + new_skip + Saturating(1));
 						}
 						EnumFields::Normal(Visibility::Normal) => {
-							if data.omitted_until <= omit_index {
-								if data.exists_visible.is_none() {
-									data.exists_visible = Some(Visibility::Normal);
-								}
+							if data.omitted_until <= omit_index && data.exists_visible.is_none() {
+								data.exists_visible = Some(Visibility::Normal);
 							}
 						}
 						EnumFields::Normal(Visibility::Hidden) => {
@@ -868,8 +849,8 @@ impl ObjValue {
 								});
 							}
 						}
-					};
-					return ControlFlow::Continue(());
+					}
+					ControlFlow::Continue(())
 				});
 
 			super_depth.deepen();
@@ -976,177 +957,6 @@ impl ObjValue {
 	}
 }
 
-impl OopObject {
-	pub fn new(
-		this_entries: FxHashMap<IStr, ObjMember>,
-		assertion: Option<CcObjectAssertion>,
-	) -> Self {
-		Self {
-			this_entries,
-			assertion,
-		}
-	}
-}
-
-impl ObjectCore for OopObject {
-	fn enum_fields_core(
-		&self,
-		super_depth: &mut SuperDepth,
-		handler: &mut EnumFieldsHandler<'_>,
-	) -> bool {
-		for (name, member) in self.this_entries.iter() {
-			if matches!(
-				handler(
-					*super_depth,
-					member.original_index,
-					name.clone(),
-					EnumFields::Normal(member.flags.visibility()),
-				),
-				ControlFlow::Break(())
-			) {
-				return false;
-			}
-		}
-		true
-	}
-
-	fn has_field_include_hidden_core(&self, name: IStr) -> HasFieldIncludeHidden {
-		if self.this_entries.contains_key(&name) {
-			HasFieldIncludeHidden::Exists
-		} else {
-			HasFieldIncludeHidden::NotFound
-		}
-	}
-
-	fn get_for_core(&self, key: IStr, sup_this: SupThis, omit_only: bool) -> Result<GetFor> {
-		if omit_only {
-			return Ok(GetFor::NotFound);
-		}
-		match self.this_entries.get(&key) {
-			Some(k) => {
-				let v = k.invoke.evaluate(sup_this)?;
-				Ok(if k.flags.add() {
-					GetFor::SuperPlus(v)
-				} else {
-					GetFor::Final(v)
-				})
-			}
-			None => Ok(GetFor::NotFound),
-		}
-	}
-	fn field_visibility_core(&self, name: IStr) -> FieldVisibility {
-		match self.this_entries.get(&name) {
-			Some(f) => FieldVisibility::Found(f.flags.visibility()),
-			None => FieldVisibility::NotFound,
-		}
-	}
-
-	fn run_assertions_core(&self, sup_this: SupThis) -> Result<()> {
-		if let Some(assertion) = &self.assertion {
-			assertion.0.run(sup_this.clone())?;
-		}
-		Ok(())
-	}
-}
-
-#[allow(clippy::module_name_repetitions)]
-pub struct ObjValueBuilder {
-	sup: Vec<CcObjectCore>,
-
-	new: OopObject,
-	next_field_index: FieldIndex,
-}
-impl ObjValueBuilder {
-	pub fn new() -> Self {
-		Self::with_capacity(0)
-	}
-	pub fn with_capacity(capacity: usize) -> Self {
-		Self {
-			sup: vec![],
-			new: OopObject {
-				assertion: None,
-				this_entries: FxHashMap::with_capacity(capacity),
-			},
-			next_field_index: FieldIndex::default(),
-		}
-	}
-	pub fn reserve_cores(&mut self, capacity: usize) -> &mut Self {
-		self.sup.reserve_exact(capacity);
-		self
-	}
-	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
-		self.sup = super_obj.0.cores.clone();
-		self
-	}
-
-	pub fn assert(&mut self, assertion: impl ObjectAssertion + 'static) -> &mut Self {
-		assert!(
-			self.new.assertion.is_none(),
-			"one OopObject can only have one assertion"
-		);
-		self.new.assertion = Some(CcObjectAssertion::new(assertion));
-		self
-	}
-	pub fn field(&mut self, name: impl Into<IStr>) -> ObjMemberBuilder<ValueBuilder<'_>> {
-		let field_index = self.next_field_index;
-		self.next_field_index = self.next_field_index.next();
-		ObjMemberBuilder::new(ValueBuilder(self), name.into(), field_index)
-	}
-	/// Preset for common method definiton pattern:
-	/// Create a hidden field with the function value.
-	///
-	/// `.field(name).hide().value(Val::function(value))`
-	pub fn method(&mut self, name: impl Into<IStr>, value: impl Into<FuncVal>) -> &mut Self {
-		self.field(name).hide().value(Val::Func(value.into()));
-		self
-	}
-	pub fn try_method(
-		&mut self,
-		name: impl Into<IStr>,
-		value: impl Into<FuncVal>,
-	) -> Result<&mut Self> {
-		self.field(name).hide().try_value(Val::Func(value.into()))?;
-		Ok(self)
-	}
-
-	pub fn extend_with_core(&mut self, core: impl ObjectCore) {
-		self.commit();
-		self.sup.push(CcObjectCore::new(core));
-	}
-
-	fn commit(&mut self) {
-		if !self.new.is_empty() {
-			self.sup.push(CcObjectCore::new(mem::take(&mut self.new)));
-		}
-		self.next_field_index = FieldIndex::default();
-	}
-
-	pub fn with_fields_omitted(&mut self, omit: FxHashSet<IStr>) {
-		self.commit();
-		self.sup.push(CcObjectCore::new(OmitFieldsCore {
-			omit,
-			prev_layers: self.sup.len(),
-		}));
-	}
-
-	pub fn build(mut self) -> ObjValue {
-		self.commit();
-		if self.sup.is_empty() {
-			return ObjValue::empty();
-		}
-		ObjValue(Cc::new(ObjValueInner {
-			cores: self.sup,
-			assertions_ran: Cell::new(false),
-			value_cache: Default::default(),
-		}))
-	}
-}
-impl Default for ObjValueBuilder {
-	fn default() -> Self {
-		Self::with_capacity(0)
-	}
-}
-
 #[allow(clippy::module_name_repetitions)]
 #[must_use = "value not added unless binding() was called"]
 pub struct ObjMemberBuilder<Kind> {
@@ -1200,47 +1010,6 @@ impl<Kind> ObjMemberBuilder<Kind> {
 				location: self.location,
 			},
 		)
-	}
-}
-
-pub struct ValueBuilder<'v>(&'v mut ObjValueBuilder);
-impl ObjMemberBuilder<ValueBuilder<'_>> {
-	/// Inserts value, replacing if it is already defined
-	pub fn value(self, value: impl Into<Val>) {
-		let (receiver, name, member) =
-			self.build_member(MaybeUnbound::Bound(Thunk::evaluated(value.into())));
-		let entry = receiver.0.new.this_entries.entry(name);
-		entry.insert_entry(member);
-	}
-	/// Inserts thunk, replacing if it is already defined
-	pub fn thunk(self, value: impl Into<Thunk<Val>>) {
-		let (receiver, name, member) = self.build_member(MaybeUnbound::Bound(value.into()));
-		let entry = receiver.0.new.this_entries.entry(name);
-		entry.insert_entry(member);
-	}
-
-	/// Tries to insert value, returns an error if it was already defined
-	pub fn try_value(self, value: impl Into<Val>) -> Result<()> {
-		self.try_thunk(Thunk::evaluated(value.into()))
-	}
-	pub fn try_thunk(self, value: impl Into<Thunk<Val>>) -> Result<()> {
-		self.binding(MaybeUnbound::Bound(value.into()))
-	}
-	pub fn bindable(self, bindable: impl Unbound<Bound = Val>) -> Result<()> {
-		self.binding(MaybeUnbound::Unbound(CcUnbound::new(bindable)))
-	}
-	pub fn binding(self, binding: MaybeUnbound) -> Result<()> {
-		let (receiver, name, member) = self.build_member(binding);
-		let location = member.location.clone();
-		let old = receiver.0.new.this_entries.insert(name.clone(), member);
-		if old.is_some() {
-			in_frame(
-				CallLocation(location.as_ref()),
-				|| format!("field <{}> initializtion", name.clone()),
-				|| bail!(DuplicateFieldName(name.clone())),
-			)?;
-		}
-		Ok(())
 	}
 }
 

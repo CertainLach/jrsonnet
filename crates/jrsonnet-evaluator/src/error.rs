@@ -1,8 +1,4 @@
-use std::{
-	cmp::Ordering,
-	convert::Infallible,
-	fmt::{self, Debug, Display},
-};
+use std::{cmp::Ordering, convert::Infallible, fmt};
 
 use jrsonnet_gcmodule::{Acyclic, Trace};
 use jrsonnet_interner::IStr;
@@ -11,7 +7,7 @@ use jrsonnet_types::ValType;
 use thiserror::Error;
 
 use crate::{
-	function::{CallLocation, FunctionSignature, ParamDefault, ParamName},
+	function::{CallLocation, FunctionSignature, ParamName},
 	stdlib::format::FormatError,
 	typed::TypeLocError,
 	val::ConvertNumValueError,
@@ -268,8 +264,8 @@ impl Error {
 		&mut (self.0).1
 	}
 }
-impl Display for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Error {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		writeln!(f, "{}", self.0 .0)?;
 		for el in &self.0 .1 .0 {
 			write!(f, "\t{}", el.desc)?;
@@ -282,8 +278,8 @@ impl Display for Error {
 		Ok(())
 	}
 }
-impl Debug for Error {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Debug for Error {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
 		f.debug_tuple("LocError").field(&self.0).finish()
 	}
 }
