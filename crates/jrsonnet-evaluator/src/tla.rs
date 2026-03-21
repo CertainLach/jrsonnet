@@ -1,11 +1,10 @@
 use std::{collections::HashMap, hash::BuildHasher};
 
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::Source;
 
 use crate::{
-	function::{CallLocation, TlaArg},
-	in_description_frame, with_state, Result, Val,
+	function::{CallLocation, PreparedFuncVal, TlaArg},
+	in_description_frame, Result, Val,
 };
 
 pub fn apply_tla<H: BuildHasher>(args: &HashMap<IStr, TlaArg, H>, val: Val) -> Result<Val> {
@@ -13,17 +12,14 @@ pub fn apply_tla<H: BuildHasher>(args: &HashMap<IStr, TlaArg, H>, val: Val) -> R
 		in_description_frame(
 			|| "during TLA call".to_owned(),
 			|| {
-				func.evaluate(
-					with_state(|s| {
-						s.create_default_context(Source::new_virtual(
-							"<top-level-arg>".into(),
-							IStr::empty(),
-						))
-					}),
-					CallLocation::native(),
-					args,
-					false,
-				)
+				let mut names = Vec::with_capacity(args.len());
+				let mut values = Vec::with_capacity(args.len());
+				for (name, value) in args {
+					names.push(name.clone());
+					values.push(value.evaluate()?);
+				}
+				let prepared = PreparedFuncVal::new(func, 0, &names)?;
+				prepared.call(CallLocation::native(), &[], &values)
 			},
 		)?
 	} else {
