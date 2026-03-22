@@ -56,7 +56,7 @@ impl TokenKind {
 			| Self::Error { name, .. } => name,
 		}
 	}
-	pub fn expand_kind(&self) -> TokenStream {
+	pub fn expand_kind(&self, lexer: bool) -> TokenStream {
 		let name = format_ident!("{}", self.name());
 		let attr = match self {
 			Self::Keyword { code, .. } => quote! {#[token(#code)]},
@@ -74,6 +74,11 @@ impl TokenKind {
 				quote! {#[regex(#regex #priority)]}
 			}
 			_ => quote! {},
+		};
+		let attr = if lexer {
+			attr
+		} else {
+			quote! {}
 		};
 		quote! {
 			#attr

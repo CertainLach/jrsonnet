@@ -9,174 +9,176 @@
 	clippy::match_like_matches_macro
 )]
 #[doc = r" The kind of syntax node, e.g. `IDENT`, `USE_KW`, or `STRUCT`."]
-#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug)]
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, logos :: Logos)]
 #[repr(u16)]
 pub enum SyntaxKind {
 	#[doc(hidden)]
 	TOMBSTONE,
 	#[doc(hidden)]
 	EOF,
+	#[token("||")]
 	OR,
+	#[token("??")]
 	NULL_COAELSE,
+	#[token("&&")]
 	AND,
+	#[token("|")]
 	BIT_OR,
+	#[token("^")]
 	BIT_XOR,
+	#[token("&")]
 	BIT_AND,
+	#[token("==")]
 	EQ,
+	#[token("!=")]
 	NE,
+	#[token("<")]
 	LT,
+	#[token(">")]
 	GT,
+	#[token("<=")]
 	LE,
+	#[token(">=")]
 	GE,
+	#[token("<<")]
 	LHS,
+	#[token(">>")]
 	RHS,
+	#[token("+")]
 	PLUS,
+	#[token("-")]
 	MINUS,
+	#[token("*")]
 	MUL,
+	#[token("/")]
 	DIV,
+	#[token("%")]
 	MODULO,
+	#[token("!")]
 	NOT,
+	#[token("~")]
 	BIT_NOT,
+	#[token("[")]
 	L_BRACK,
+	#[token("]")]
 	R_BRACK,
+	#[token("(")]
 	L_PAREN,
+	#[token(")")]
 	R_PAREN,
+	#[token("{")]
 	L_BRACE,
+	#[token("}")]
 	R_BRACE,
+	#[token(":")]
 	COLON,
+	#[token("::")]
 	COLONCOLON,
+	#[token(":::")]
 	COLONCOLONCOLON,
+	#[token(";")]
 	SEMI,
+	#[token(".")]
 	DOT,
+	#[token("...")]
 	DOTDOTDOT,
+	#[token(",")]
 	COMMA,
+	#[token("$")]
 	DOLLAR,
+	#[token("=")]
 	ASSIGN,
+	#[token("?")]
 	QUESTION_MARK,
+	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")]
 	FLOAT,
+	#[regex("(?:0|[1-9][0-9]*)\\.[^0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_POINT,
+	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?[eE][^+\\-0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_EXPONENT,
+	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?[eE][+-][^0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN,
+	#[regex("\"(?s:[^\"\\\\]|\\\\.)*\"")]
 	STRING_DOUBLE,
+	#[regex("\"(?s:[^\"\\\\]|\\\\.)*")]
 	ERROR_STRING_DOUBLE_UNTERMINATED,
+	#[regex("'(?s:[^'\\\\]|\\\\.)*'")]
 	STRING_SINGLE,
+	#[regex("'(?s:[^'\\\\]|\\\\.)*")]
 	ERROR_STRING_SINGLE_UNTERMINATED,
+	#[regex("@\"(?:[^\"]|\"\")*\"")]
 	STRING_DOUBLE_VERBATIM,
+	#[regex("@\"(?:[^\"]|\"\")*")]
 	ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED,
+	#[regex("@'(?:[^']|'')*'")]
 	STRING_SINGLE_VERBATIM,
+	#[regex("@'(?:[^']|'')*")]
 	ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED,
+	#[regex("@[^\"'\\s]\\S+")]
 	ERROR_STRING_VERBATIM_MISSING_QUOTES,
+	#[regex("\\|\\|\\|", crate::string_block::lex_str_block_test)]
 	STRING_BLOCK,
 	ERROR_STRING_BLOCK_UNEXPECTED_END,
 	ERROR_STRING_BLOCK_MISSING_NEW_LINE,
 	ERROR_STRING_BLOCK_MISSING_TERMINATION,
 	ERROR_STRING_BLOCK_MISSING_INDENT,
+	#[regex("[_a-zA-Z][_a-zA-Z0-9]*")]
 	IDENT,
+	#[regex("[ \\t\\n\\r]+")]
 	WHITESPACE,
+	#[regex("//[^\\r\\n]*?(\\r\\n|\\n)?")]
 	SINGLE_LINE_SLASH_COMMENT,
+	#[regex("#[^\\r\\n]*?(\\r\\n|\\n)?")]
 	SINGLE_LINE_HASH_COMMENT,
+	#[regex("/\\*([^*]|\\*[^/])*\\*/")]
 	MULTI_LINE_COMMENT,
+	#[regex("/\\*/")]
 	ERROR_COMMENT_TOO_SHORT,
+	#[regex("/\\*([^*/]|\\*[^/])+")]
 	ERROR_COMMENT_UNTERMINATED,
+	#[token("tailstrict")]
 	TAILSTRICT_KW,
+	#[token("local")]
 	LOCAL_KW,
+	#[token("importstr")]
 	IMPORTSTR_KW,
+	#[token("importbin")]
 	IMPORTBIN_KW,
+	#[token("import")]
 	IMPORT_KW,
+	#[token("if")]
 	IF_KW,
+	#[token("then")]
 	THEN_KW,
+	#[token("else")]
 	ELSE_KW,
+	#[token("function")]
 	FUNCTION_KW,
+	#[token("error")]
 	ERROR_KW,
+	#[token("in")]
 	IN_KW,
 	META_OBJECT_APPLY,
 	ERROR_NO_OPERATOR,
+	#[token("null")]
 	NULL_KW,
+	#[token("true")]
 	TRUE_KW,
+	#[token("false")]
 	FALSE_KW,
+	#[token("self")]
 	SELF_KW,
+	#[token("super")]
 	SUPER_KW,
+	#[token("for")]
 	FOR_KW,
+	#[token("assert")]
 	ASSERT_KW,
 	ERROR_MISSING_TOKEN,
 	ERROR_UNEXPECTED_TOKEN,
 	ERROR_CUSTOM,
 	LEXING_ERROR,
 	__LAST_TOKEN,
-	SOURCE_FILE,
-	EXPR,
-	SUFFIX_INDEX,
-	NAME,
-	SUFFIX_INDEX_EXPR,
-	SUFFIX_SLICE,
-	SLICE_DESC,
-	SUFFIX_APPLY,
-	ARGS_DESC,
-	STMT_LOCAL,
-	STMT_ASSERT,
-	ASSERTION,
-	EXPR_BINARY,
-	EXPR_UNARY,
-	EXPR_OBJ_EXTEND,
-	EXPR_PARENED,
-	EXPR_LITERAL,
-	EXPR_STRING,
-	EXPR_NUMBER,
-	EXPR_ARRAY,
-	EXPR_OBJECT,
-	EXPR_ARRAY_COMP,
-	EXPR_IMPORT,
-	EXPR_VAR,
-	EXPR_IF_THEN_ELSE,
-	TRUE_EXPR,
-	FALSE_EXPR,
-	EXPR_FUNCTION,
-	PARAMS_DESC,
-	EXPR_ERROR,
-	SLICE_DESC_END,
-	SLICE_DESC_STEP,
-	ARG,
-	OBJ_BODY_COMP,
-	OBJ_BODY_MEMBER_LIST,
-	MEMBER_BIND_STMT,
-	OBJ_LOCAL,
-	MEMBER_ASSERT_STMT,
-	MEMBER_FIELD_NORMAL,
-	MEMBER_FIELD_METHOD,
-	FIELD_NAME_FIXED,
-	FIELD_NAME_DYNAMIC,
-	FOR_SPEC,
-	IF_SPEC,
-	BIND_DESTRUCT,
-	BIND_FUNCTION,
-	PARAM,
-	DESTRUCT_FULL,
-	DESTRUCT_SKIP,
-	DESTRUCT_ARRAY,
-	DESTRUCT_OBJECT,
-	DESTRUCT_OBJECT_FIELD,
-	DESTRUCT_REST,
-	DESTRUCT_ARRAY_ELEMENT,
-	SUFFIX,
-	BIND,
-	STMT,
-	OBJ_BODY,
-	COMP_SPEC,
-	EXPR_BASE,
-	MEMBER_COMP,
-	MEMBER,
-	FIELD_NAME,
-	DESTRUCT,
-	DESTRUCT_ARRAY_PART,
-	BINARY_OPERATOR,
-	UNARY_OPERATOR,
-	LITERAL,
-	TEXT,
-	NUMBER,
-	IMPORT_KIND,
-	VISIBILITY,
-	TRIVIA,
-	CUSTOM_ERROR,
 	#[doc(hidden)]
 	__LAST,
 }
@@ -191,14 +193,6 @@ impl SyntaxKind {
 			| LOCAL_KW | IMPORTSTR_KW | IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW
 			| FUNCTION_KW | ERROR_KW | IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW
 			| SUPER_KW | FOR_KW | ASSERT_KW => true,
-			_ => false,
-		}
-	}
-	pub fn is_enum(self) -> bool {
-		match self {
-			SUFFIX | BIND | STMT | OBJ_BODY | COMP_SPEC | EXPR_BASE | MEMBER_COMP | MEMBER
-			| FIELD_NAME | DESTRUCT | DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR
-			| LITERAL | TEXT | NUMBER | IMPORT_KIND | VISIBILITY | TRIVIA | CUSTOM_ERROR => true,
 			_ => false,
 		}
 	}

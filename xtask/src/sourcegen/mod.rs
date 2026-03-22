@@ -89,7 +89,7 @@ pub fn generate_ungrammar() -> Result<()> {
 		kinds.define_node(&name);
 	}
 
-	let syntax_kinds = generate_syntax_kinds(&kinds, &ast)?;
+	let syntax_kinds = generate_syntax_kinds(&kinds, &ast, false)?;
 
 	let nodes = generate_nodes(&kinds, &ast)?;
 	ensure_file_contents(
@@ -106,12 +106,21 @@ pub fn generate_ungrammar() -> Result<()> {
 		)),
 		&nodes,
 	);
+
+	let lexer_syntax_kinds = generate_syntax_kinds(&kinds, &ast, true)?;
+	ensure_file_contents(
+		&PathBuf::from(concat!(
+			env!("CARGO_MANIFEST_DIR"),
+			"/../crates/jrsonnet-lexer/src/generated/syntax_kinds.rs",
+		)),
+		&lexer_syntax_kinds,
+	);
 	Ok(())
 }
 
-fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
+fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc, lexer: bool) -> Result<String> {
 	let t_macros = kinds.tokens().filter_map(TokenKind::expand_t_macros);
-	let token_kinds = kinds.tokens().map(TokenKind::expand_kind);
+	let token_kinds = kinds.tokens().map(|t| t.expand_kind(lexer));
 
 	let keywords = kinds
 		.tokens()
@@ -119,11 +128,15 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 		.map(TokenKind::name)
 		.map(|n| format_ident!("{n}"));
 
-	let nodes = kinds
+	let mut nodes = kinds
 		.nodes
 		.iter()
 		.map(|name| format_ident!("{}", name))
 		.collect::<Vec<_>>();
+
+	if lexer {
+		nodes.clear();
+	}
 
 	let enums = grammar
 		.enums
@@ -134,14 +147,34 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 				.token_enums
 				.iter()
 				.map(|e| format_ident!("{}", to_upper_snake_case(&e.name))),
-		);
+		)
+		.collect::<Vec<_>>();
+	let is_enum = if lexer {
+		quote! {}
+	} else {
+		quote! {
+			pub fn is_enum(self) -> bool {
+				match self {
+					#(#enums)|* => true,
+					_ => false,
+				}
+			}
+		}
+	};
+
+	let derive_logos = if lexer {
+		quote! {
+			, logos::Logos
+		}
+	} else {
+		quote! {}
+	};
 
 	let ast = quote! {
 		#![allow(bad_style, missing_docs, unreachable_pub, clippy::manual_non_exhaustive, clippy::match_like_matches_macro)]
-		use logos::Logos;
 
 		/// The kind of syntax node, e.g. `IDENT`, `USE_KW`, or `STRUCT`.
-		#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug, Logos)]
+		#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Hash, Debug #derive_logos)]
 		#[repr(u16)]
 		pub enum SyntaxKind {
 			#[doc(hidden)]
@@ -164,12 +197,8 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 					_ => false,
 				}
 			}
-			pub fn is_enum(self) -> bool {
-				match self {
-					#(#enums)|* => true,
-					_ => false,
-				}
-			}
+
+			#is_enum
 
 			pub fn from_raw(r: u16) -> Self {
 				assert!(r < Self::__LAST as u16);

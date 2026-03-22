@@ -2,7 +2,6 @@
 
 use event::Sink;
 use generated::nodes::{SourceFile, Trivia};
-use lex::lex;
 use parser::{LocatedSyntaxError, Parser};
 pub use rowan;
 
@@ -14,14 +13,12 @@ mod lex;
 mod marker;
 mod parser;
 mod precedence;
-mod string_block;
 mod tests;
 mod token_set;
 
 pub use ast::{AstChildren, AstNode, AstToken};
 pub use generated::{nodes, syntax_kinds::SyntaxKind};
 pub use language::*;
-pub use string_block::{collect_lexed_str_block, CollectStrBlock};
 pub use token_set::SyntaxKindSet;
 
 use self::{
@@ -30,7 +27,7 @@ use self::{
 };
 
 pub fn parse(input: &str) -> (SourceFile, Vec<LocatedSyntaxError>) {
-	let lexemes = lex(input);
+	let lexemes = lex::lex(input);
 	let kinds = lexemes
 		.iter()
 		.map(|l| l.kind)

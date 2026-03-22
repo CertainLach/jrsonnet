@@ -1,0 +1,13 @@
+[package]
+name = "jrsonnet-lexer"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+logos.workspace = true
+
+[lints]
+workspace = true

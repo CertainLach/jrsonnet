@@ -9,7 +9,7 @@ pub enum StringBlockError {
 use logos::Lexer;
 use StringBlockError::*;
 
-use crate::SyntaxKind;
+use crate::generated::syntax_kinds::SyntaxKind;
 
 pub(crate) fn lex_str_block_test(lex: &mut Lexer<'_, SyntaxKind>) {
 	let _ = lex_str_block(lex);

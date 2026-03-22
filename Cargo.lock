@@ -716,6 +716,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "jrsonnet-lexer"
+version = "0.5.0-pre97"
+dependencies = [
+ "logos",
+]
+
+[[package]]
 name = "jrsonnet-macros"
 version = "0.5.0-pre97"
 dependencies = [
@@ -744,7 +751,7 @@ dependencies = [
  "hi-doc",
  "indoc",
  "insta",
- "logos",
+ "jrsonnet-lexer",
  "rowan",
  "strip-ansi-escapes",
  "thiserror",

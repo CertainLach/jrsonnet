@@ -14,7 +14,7 @@ anyhow.workspace = true
 drop_bomb.workspace = true
 hi-doc.workspace = true
 indoc.workspace = true
-logos.workspace = true
+jrsonnet-lexer = { version = "0.5.0-pre97", path = "../jrsonnet-lexer" }
 rowan.workspace = true
 thiserror.workspace = true
 
