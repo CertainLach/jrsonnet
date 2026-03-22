@@ -8,8 +8,11 @@ use jrsonnet_parser::{Expr, Spanned};
 use super::ArrValue;
 use crate::function::NativeFn;
 use crate::{
-	error::ErrorKind::InfiniteRecursionDetected, evaluate, typed::Typed, val::ThunkValue, Context,
-	Error, ObjValue, Result, Thunk, Val,
+	error::ErrorKind::InfiniteRecursionDetected,
+	evaluate,
+	typed::{IntoUntyped, Typed},
+	val::ThunkValue,
+	Context, Error, ObjValue, Result, Thunk, Val,
 };
 
 pub trait ArrayLike: Any + Trace + Debug {

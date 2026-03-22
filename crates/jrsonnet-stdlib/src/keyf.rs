@@ -1,5 +1,5 @@
 use jrsonnet_evaluator::function::{CallLocation, FuncVal, PreparedFuncVal};
-use jrsonnet_evaluator::typed::{ComplexValType, Typed, ValType};
+use jrsonnet_evaluator::typed::{ComplexValType, FromUntyped, Typed, ValType};
 use jrsonnet_evaluator::{Error, Result, Thunk, Val};
 
 #[derive(Default, Clone)]
@@ -31,11 +31,9 @@ impl KeyF {
 
 impl Typed for KeyF {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
+}
+impl FromUntyped for KeyF {
 	fn from_untyped(untyped: Val) -> Result<Self> {
 		FuncVal::from_untyped(untyped).map(Self::new)
-	}
-
-	fn into_untyped(_typed: Self) -> Result<Val> {
-		unreachable!("unused, todo: port split of Typed trait from #193")
 	}
 }

@@ -5,11 +5,11 @@ use std::{
 	rc::Rc,
 };
 
-use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
+use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::{Expr, Spanned};
 
-use crate::{function::NativeFn, typed::Typed, Context, Result, Thunk, Val};
+use crate::{function::NativeFn, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};
@@ -241,4 +241,3 @@ impl ArrayLike for ArrValue {
 		self.0.is_cheap()
 	}
 }
-

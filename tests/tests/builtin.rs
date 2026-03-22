@@ -5,7 +5,7 @@ use jrsonnet_evaluator::{
 	function::{CallLocation, FuncVal, builtin, builtin::Builtin},
 	parser::Source,
 	trace::PathResolver,
-	typed::Typed,
+	typed::FromUntyped,
 };
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_stdlib::ContextInitializer as StdContextInitializer;

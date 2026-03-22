@@ -3,7 +3,11 @@ use std::marker::PhantomData;
 use jrsonnet_gcmodule::Trace;
 
 use super::PreparedFuncVal;
-use crate::{bail, function::FuncVal, typed::Typed, CallLocation, Result, Val};
+use crate::{
+	function::FuncVal,
+	typed::{FromUntyped, IntoUntyped, Typed},
+	CallLocation, Result, Val,
+};
 use jrsonnet_types::{ComplexValType, ValType};
 
 #[derive(Debug, Trace, Clone)]
@@ -12,8 +16,8 @@ macro_rules! impl_native_desc {
 	($i:expr; $($gen:ident)*) => {
 		impl<$($gen,)* O> NativeFn<($($gen,)* O,)>
 		where
-			$($gen: Typed,)*
-			O: Typed,
+			$($gen: Typed + IntoUntyped,)*
+			O: Typed + FromUntyped,
 		{
 			#[allow(non_snake_case, clippy::too_many_arguments)]
 			pub fn call(
@@ -22,7 +26,7 @@ macro_rules! impl_native_desc {
 			) -> Result<O> {
 				let val = self.0.call(
 					CallLocation::native(),
-					&[$(Typed::into_lazy_untyped($gen),)*],
+					&[$(IntoUntyped::into_lazy_untyped($gen),)*],
 					&[],
 				)?;
 				O::from_untyped(val)
@@ -30,11 +34,9 @@ macro_rules! impl_native_desc {
 		}
 		impl<$($gen,)* O> Typed for NativeFn<($($gen,)* O,)> {
 			const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
+		}
 
-			fn into_untyped(_typed: Self) -> Result<Val> {
-				bail!("can only convert functions from jsonnet to native")
-			}
-
+		impl<$($gen,)* O> FromUntyped for NativeFn<($($gen,)* O,)> {
 			fn from_untyped(untyped: Val) -> Result<Self> {
 				let func = FuncVal::from_untyped(untyped)?;
 				Ok(Self(

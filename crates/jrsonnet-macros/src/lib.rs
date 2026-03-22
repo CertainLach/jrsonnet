@@ -8,15 +8,15 @@ use syn::{
 	parse_macro_input,
 	punctuated::Punctuated,
 	spanned::Spanned,
-	token::{self, Comma},
+	token::Comma,
 	Attribute, DeriveInput, Error, Expr, ExprClosure, FnArg, GenericArgument, Ident, ItemFn,
 	LitStr, Meta, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
 };
 
 use self::typed::derive_typed_inner;
 
-mod typed;
 mod names;
+mod typed;
 
 fn try_parse_attr_noargs<I>(attrs: &[Attribute], ident: I) -> Result<bool>
 where
@@ -202,7 +202,7 @@ impl ArgInfo {
 			_ => {}
 		}
 
-		let (optionality, ty) = if try_parse_attr_noargs(&mut arg.attrs, "default")? {
+		let (optionality, ty) = if try_parse_attr_noargs(&arg.attrs, "default")? {
 			remove_attr(&mut arg.attrs, "default");
 			(Optionality::TypeDefault, ty.clone())
 		} else if let Some(default) = parse_attr::<_, _>(&arg.attrs, "default")? {
@@ -322,7 +322,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				let name = name.as_ref().map_or("<unnamed>", String::as_str);
 				let eval = quote! {jrsonnet_evaluator::in_description_frame(
 					|| format!("argument <{}> evaluation", #name),
-					|| <#ty>::from_untyped(value.evaluate()?),
+					|| <#ty as FromUntyped>::from_untyped(value.evaluate()?),
 				)?};
 				let value = match optionality {
 					Optionality::Required => quote! {{
@@ -411,7 +411,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 			use ::jrsonnet_evaluator::{
 				State, Val,
 				function::{builtin::{Builtin, StaticBuiltin}, FunctionSignature, ParamParse, ParamName, ParamDefault, CallLocation},
-				Result, Context, typed::Typed,
+				Result, Context, typed::{Typed, FromUntyped, IntoUntypedResult},
 				parser::Span, params, Thunk,
 			};
 			params!(
@@ -432,7 +432,7 @@ fn builtin_inner(attr: BuiltinAttrs, mut fun: ItemFn) -> syn::Result<TokenStream
 				#[allow(unused_variables)]
 				fn call(&self, location: CallLocation<'_>, parsed: &[Option<Thunk<Val>>]) -> Result<Val> {
 					let result: #result = #name(#(#pass)*);
-					<_ as Typed>::into_result(result)
+					<_ as IntoUntypedResult>::into_untyped_result(result)
 				}
 				fn as_any(&self) -> &dyn ::std::any::Any {
 					self

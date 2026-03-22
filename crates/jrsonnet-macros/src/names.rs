@@ -1,6 +1,5 @@
 use proc_macro2::TokenStream;
 use quote::quote;
-use std::cell::RefCell;
 
 #[derive(Default)]
 pub struct Names {

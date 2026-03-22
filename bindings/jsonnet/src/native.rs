@@ -6,7 +6,7 @@ use std::{
 use jrsonnet_evaluator::{
 	error::{Error, ErrorKind},
 	function::builtin::{NativeCallback, NativeCallbackHandler},
-	typed::Typed,
+	typed::FromUntyped as _,
 	IStr, Val,
 };
 

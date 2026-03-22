@@ -178,7 +178,7 @@ impl TypedField {
 					None
 				};
 
-				__value.map(<#ty as Typed>::from_untyped).transpose()?
+				__value.map(<#ty as FromUntyped>::from_untyped).transpose()?
 			},
 		}
 	}
@@ -219,7 +219,7 @@ impl TypedField {
 					return Err(ErrorKind::NoSuchField(__names[#error_text].clone(), vec![]).into());
 				};
 
-				<#ty as Typed>::from_untyped(__value)?
+				<#ty as FromUntyped>::from_untyped(__value)?
 			},
 		}
 	}
@@ -258,14 +258,14 @@ impl TypedField {
 						out.field(__names[#name].clone())
 							#hide
 							#add
-							.try_thunk(<#ty as Typed>::into_lazy_untyped(value))?;
+							.try_thunk(<#ty as IntoUntyped>::into_lazy_untyped(value))?;
 					}
 				} else {
 					quote! {
 						out.field(__names[#name].clone())
 							#hide
 							#add
-							.try_value(<#ty as Typed>::into_untyped(value)?)?;
+							.try_value(<#ty as IntoUntyped>::into_untyped(value)?)?;
 					}
 				};
 				if self.is_option {
@@ -313,18 +313,21 @@ pub fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&[
 					#(#fields,)*
 				]);
+			}
 
+			impl #impl_generics FromUntyped for #ident #ty_generics #where_clause {
 				fn from_untyped(value: Val) -> JrResult<Self> {
 					let obj = value.as_obj().expect("shape is correct");
 					Self::parse(&obj)
 				}
+			}
 
+			impl #impl_generics IntoUntyped for #ident #ty_generics #where_clause {
 				fn into_untyped(value: Self) -> JrResult<Val> {
 					let mut out = ObjValueBuilder::with_capacity(#capacity);
 					value.serialize(&mut out)?;
 					Ok(Val::Obj(out.build()))
 				}
-
 			}
 		}
 	};
@@ -344,7 +347,7 @@ pub fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	Ok(quote! {
 		const _: () = {
 			use ::jrsonnet_evaluator::{
-				typed::{ComplexValType, Typed, TypedObj, CheckType},
+				typed::{ComplexValType, Typed, IntoUntyped, FromUntyped, TypedObj, CheckType},
 				Val, State,
 				error::{ErrorKind, Result as JrResult},
 				ObjValueBuilder, ObjValue, IStr,

@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	bail,
 	function::{builtin, FuncVal, NativeFn},
 	runtime_error,
-	typed::{BoundedI32, BoundedUsize, Either2, Typed},
+	typed::{BoundedI32, BoundedUsize, Either2, FromUntyped},
 	val::{equals, ArrValue, IndexableVal},
 	Either, IStr, ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
@@ -24,7 +24,7 @@ pub fn builtin_make_array(sz: BoundedI32<0, { i32::MAX }>, func: FuncVal) -> Res
 	}
 	func.evaluate_trivial().map_or_else(
 		// TODO: Different mapped array impl avoiding allocating unnecessary vals
-		|| Ok(ArrValue::range_exclusive(0, *sz).map(Typed::from_untyped(Val::Func(func))?)),
+		|| Ok(ArrValue::range_exclusive(0, *sz).map(FromUntyped::from_untyped(Val::Func(func))?)),
 		|trivial| {
 			let mut out = Vec::with_capacity(*sz as usize);
 			for _ in 0..*sz {

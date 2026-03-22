@@ -8,7 +8,7 @@ use crate::{
 	error::ErrorKind::*,
 	evaluate,
 	stdlib::std_format,
-	typed::Typed,
+	typed::IntoUntyped as _,
 	val::{equals, StrValue},
 	Context, Result, Val,
 };

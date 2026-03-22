@@ -2,7 +2,7 @@ use std::collections::BTreeMap;
 
 use jrsonnet_evaluator::{
 	manifest::{ManifestFormat, ToStringFormat},
-	typed::Typed,
+	typed::{FromUntyped, Typed},
 	ObjValue, Result, ResultExt, Val,
 };
 use jrsonnet_parser::IStr;

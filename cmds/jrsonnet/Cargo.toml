@@ -11,10 +11,6 @@ version.workspace = true
 workspace = true
 
 [features]
-default = [
-    "exp-regex",
-]
-
 experimental = [
     "exp-preserve-order",
     "exp-destruct",

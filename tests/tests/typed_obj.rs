@@ -2,7 +2,11 @@ mod common;
 
 use std::fmt::Debug;
 
-use jrsonnet_evaluator::{Result, State, trace::PathResolver, typed::Typed};
+use jrsonnet_evaluator::{
+	Result, State,
+	trace::PathResolver,
+	typed::{FromUntyped, IntoUntyped, Typed},
+};
 use jrsonnet_stdlib::ContextInitializer;
 
 #[derive(Clone, Typed, PartialEq, Debug)]
@@ -11,7 +15,9 @@ struct A {
 	b: u16,
 }
 
-fn test_roundtrip<T: Typed + PartialEq + Debug + Clone>(value: T) -> Result<()> {
+fn test_roundtrip<T: Typed + PartialEq + Debug + Clone + FromUntyped + IntoUntyped>(
+	value: T,
+) -> Result<()> {
 	let untyped = T::into_untyped(value.clone())?;
 	let value2 = T::from_untyped(untyped.clone())?;
 	ensure_eq!(value, value2);

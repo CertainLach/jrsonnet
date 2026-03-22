@@ -20,7 +20,7 @@ use crate::{
 	function::{CallLocation, FuncDesc, FuncVal},
 	gc::WithCapacityExt as _,
 	in_frame,
-	typed::Typed,
+	typed::{FromUntyped, IntoUntyped as _, Typed},
 	val::{CachedUnbound, IndexableVal, NumValue, StrValue, Thunk},
 	with_state, Context, Error, ObjValue, ObjValueBuilder, ObjectAssertion, Pending, Result,
 	ResultExt, SupThis, Unbound, Val,
@@ -620,7 +620,7 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 			}
 		}
 		Slice(slice) => {
-			fn parse_idx<T: Typed>(
+			fn parse_idx<T: Typed + FromUntyped>(
 				loc: CallLocation<'_>,
 				ctx: Context,
 				expr: Option<&Spanned<Expr>>,

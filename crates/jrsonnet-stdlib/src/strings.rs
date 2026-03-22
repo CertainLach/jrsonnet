@@ -4,7 +4,7 @@ use jrsonnet_evaluator::{
 	bail,
 	error::{ErrorKind::*, Result},
 	function::builtin,
-	typed::{Either2, Typed, M1},
+	typed::{Either2, FromUntyped, M1},
 	val::{ArrValue, IndexableVal},
 	Either, IStr, Val,
 };

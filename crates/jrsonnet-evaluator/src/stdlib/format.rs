@@ -9,7 +9,7 @@ use thiserror::Error;
 use crate::{
 	bail,
 	error::{format_found, suggest_object_fields, ErrorKind::*},
-	typed::Typed,
+	typed::FromUntyped,
 	Error, ObjValue, Result, Val,
 };
 
