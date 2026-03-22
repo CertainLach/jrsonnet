@@ -1,7 +1,9 @@
+use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_ir::{
-	BinaryOp, Expr, ExprParams, IStr, IndexPart, Member, Slice, SliceDesc, Source, Span, Spanned,
-	ExprParam, ArgsDesc, AssertExpr, ImportKind, LiteralType, IfElse, CompSpec, ForSpecData, IfSpecData, ObjMembers, ObjBody,
-	ObjComp, FieldMember, Visibility, FieldName, unescape, AssertStmt, BindSpec, Destruct, DestructRest,
+	unescape, ArgsDesc, AssertExpr, AssertStmt, BinaryOp, BindSpec, CompSpec, Destruct,
+	DestructRest, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr, IfElse,
+	IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers, Slice,
+	SliceDesc, Source, Span, Spanned, Visibility,
 };
 use peg::parser;
 use std::rc::Rc;
@@ -63,7 +65,7 @@ parser! {
 			= params:param(s) ** comma() comma()? { ExprParams::new(params) }
 			/ { ExprParams::new(Vec::new()) }
 
-		pub rule arg(s: &ParserSettings) -> (Option<IStr>, Rc<Spanned<Expr>>)
+		pub rule arg(s: &ParserSettings) -> (Option<IStr>, Rc<Expr>)
 			= name:(quiet! { (s:id() _ "=" !['='] _ {s})? } / expected!("<argument name>")) expr:expr(s) {(name, Rc::new(expr))}
 
 		pub rule args(s: &ParserSettings) -> ArgsDesc
@@ -133,7 +135,7 @@ parser! {
 			/ name:id() _ "(" _ params:params(s) _ ")" _ "=" _ value:expr(s) {BindSpec::Function{name, params, value: Rc::new(value)}}
 
 		pub rule assertion(s: &ParserSettings) -> AssertStmt
-			= keyword("assert") _ cond:expr(s) msg:(_ ":" _ e:expr(s) {e})? { AssertStmt(cond, msg) }
+			= keyword("assert") _ cond:spanned(<expr(s)>, s) msg:(_ ":" _ e:spanned(<expr(s)>, s) {e})? { AssertStmt(cond, msg) }
 
 		pub rule whole_line() -> &'input str
 			= str:$((!['\n'][_])* "\n") {str}
@@ -241,7 +243,7 @@ parser! {
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
 			= keyword("for") _ id:destruct(s) _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
 		rule compspec(s: &ParserSettings) -> CompSpec
-			= i:ifspec(s) { CompSpec::IfSpec(i) } / f:forspec(s) {CompSpec::ForSpec(f)}
+			= i:spanned(<ifspec(s)>, s) { CompSpec::IfSpec(i) } / f:spanned(<forspec(s)>, s) {CompSpec::ForSpec(f)}
 		pub rule compspecs(s: &ParserSettings) -> Vec<CompSpec>
 			= specs:compspec(s) ++ _ {?
 				if !matches!(specs[0], CompSpec::ForSpec(_)) {
@@ -267,8 +269,12 @@ parser! {
 			} else {
 				Err("!!!numbers are finite")
 			}}
+
+		rule spanned<T: Acyclic>(x: rule<T>, s: &ParserSettings) -> Spanned<T>
+			= a:position!() n:x() b:position!() { Spanned::new(n, Span(s.source.clone(), a as u32, b as u32)) }
+
 		pub rule var_expr(s: &ParserSettings) -> Expr
-			= n:id() { Expr::Var(n) }
+			= n:spanned(<id()>, s) { Expr::Var(n) }
 		pub rule id_loc(s: &ParserSettings) -> Spanned<Expr>
 			= a:position!() n:id() b:position!() { Spanned::new(Expr::Str(n), Span(s.source.clone(), a as u32,b as u32)) }
 		pub rule if_then_else_expr(s: &ParserSettings) -> Expr
@@ -302,7 +308,7 @@ parser! {
 			/ array_expr(s)
 			/ array_comp_expr(s)
 
-			/ kind:import_kind() _ path:expr(s) {Expr::Import(kind, Box::new(path))}
+			/ kind:spanned(<import_kind()>, s) _ path:expr(s) {Expr::Import(kind, Box::new(path))}
 
 			/ var_expr(s)
 			/ local_expr(s)
@@ -313,10 +319,10 @@ parser! {
 				assert, rest
 			})) }
 
-			/ keyword("error") _ expr:expr(s) { Expr::ErrorStmt(Box::new(expr)) }
+			/ err_kw:spanned(<keyword("error")>, s) _ expr:expr(s) { Expr::ErrorStmt(err_kw.1, Box::new(expr)) }
 
 		rule slice_part(s: &ParserSettings) -> Option<Spanned<Expr>>
-			= _ e:(e:expr(s) _{e})? {e}
+			= _ e:(e:spanned(<expr(s)>, s) _{e})? {e}
 		pub rule slice_desc(s: &ParserSettings) -> SliceDesc
 			= start:slice_part(s) ":" pair:(end:slice_part(s) step:(":" e:slice_part(s){e})? {(end, step.flatten())})? {
 				let (end, step) = if let Some((end, step)) = pair {
@@ -340,11 +346,8 @@ parser! {
 			}
 		use jrsonnet_ir::BinaryOpType::*;
 		use jrsonnet_ir::UnaryOpType::*;
-		rule expr(s: &ParserSettings) -> Spanned<Expr>
+		rule expr(s: &ParserSettings) -> Expr
 			= precedence! {
-				"(" _ e:expr(s) _ ")" {e}
-				start:position!() v:@ end:position!() { Spanned::new(v, Span(s.source.clone(), start as u32, end as u32)) }
-				--
 				a:(@) _ binop(<"||">) _ b:@ {expr_bin!(a Or b)}
 				a:(@) _ binop(<"??">) _ ensure_null_coaelse() b:@ {
 					#[cfg(feature = "exp-null-coaelse")] return expr_bin!(a NullCoaelse b);
@@ -385,29 +388,32 @@ parser! {
 				--
 				value:(@) _ "[" _ slice:slice_desc(s) _ "]" {Expr::Slice(Box::new(Slice{value, slice}))}
 				indexable:(@) _ parts:index_part(s)+ {Expr::Index{indexable: Box::new(indexable), parts}}
-				a:(@) _ "(" _ args:args(s) _ ")" ts:(_ keyword("tailstrict"))? {Expr::Apply(Box::new(a), args, ts.is_some())}
+				a:(@) _ args:spanned(<"(" _ a:args(s) _ ")" {a}>, s) ts:(_ keyword("tailstrict"))? {Expr::Apply(Box::new(a), args, ts.is_some())}
 				a:(@) _ "{" _ body:objinside(s) _ "}" {Expr::ObjExtend(Rc::new(a), body)}
 				--
 				e:expr_basic(s) {e}
+				"(" _ e:expr(s) _ ")" {e}
 			}
 		pub rule index_part(s: &ParserSettings) -> IndexPart
 		= n:("?" _ ensure_null_coaelse())? "." _ value:id_loc(s) {IndexPart {
-			value,
+			span: value.1,
+			value: value.0,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
-		/ n:("?" _ "." _ ensure_null_coaelse())? "[" _ value:expr(s) _ "]" {IndexPart {
-			value,
+		/ n:("?" _ "." _ ensure_null_coaelse())? value:spanned(<"[" _ v:expr(s) _ "]" {v}>, s) {IndexPart {
+			span: value.1,
+			value: value.0,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
 
-		pub rule jsonnet(s: &ParserSettings) -> Spanned<Expr> = _ e:expr(s) _ {e}
+		pub rule jsonnet(s: &ParserSettings) -> Expr = _ e:expr(s) _ {e}
 	}
 }
 
 pub type ParseError = peg::error::ParseError<peg::str::LineCol>;
-pub fn parse(str: &str, settings: &ParserSettings) -> Result<Spanned<Expr>, ParseError> {
+pub fn parse(str: &str, settings: &ParserSettings) -> Result<Expr, ParseError> {
 	jsonnet_parser::jsonnet(str, settings)
 }
 /// Used for importstr values

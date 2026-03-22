@@ -118,11 +118,11 @@ enum ArrayThunk {
 #[derive(Debug, Trace, Clone)]
 pub struct ExprArray {
 	ctx: Context,
-	src: Rc<Vec<Spanned<Expr>>>,
+	src: Rc<Vec<Expr>>,
 	cached: Cc<RefCell<Vec<ArrayThunk>>>,
 }
 impl ExprArray {
-	pub fn new(ctx: Context, src: Rc<Vec<Spanned<Expr>>>) -> Self {
+	pub fn new(ctx: Context, src: Rc<Vec<Expr>>) -> Self {
 		Self {
 			ctx,
 			cached: Cc::new(RefCell::new(vec![ArrayThunk::Waiting; src.len()])),

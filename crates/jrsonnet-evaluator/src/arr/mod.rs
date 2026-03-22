@@ -38,7 +38,7 @@ impl ArrValue {
 		Self::new(RangeArray::empty())
 	}
 
-	pub fn expr(ctx: Context, exprs: Rc<Vec<Spanned<Expr>>>) -> Self {
+	pub fn expr(ctx: Context, exprs: Rc<Vec<Expr>>) -> Self {
 		Self::new(ExprArray::new(ctx, exprs))
 	}
 

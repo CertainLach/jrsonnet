@@ -730,6 +730,7 @@ name = "jrsonnet-peg-parser"
 version = "0.5.0-pre97"
 dependencies = [
  "insta",
+ "jrsonnet-gcmodule",
  "jrsonnet-ir",
  "peg",
 ]

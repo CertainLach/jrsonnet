@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use jrsonnet_ir::{
 	function::{FunctionSignature, ParamName},
-	ArgsDesc, Expr, ExprParams, Spanned,
+	ArgsDesc, Expr, ExprParams,
 };
 use rustc_hash::FxHashMap;
 
@@ -15,7 +15,7 @@ use crate::{
 	Context, Pending, Thunk, Val,
 };
 
-fn eval_arg(ctx: Context, arg: &Rc<Spanned<Expr>>, tailstrict: bool) -> Result<Thunk<Val>> {
+fn eval_arg(ctx: Context, arg: &Rc<Expr>, tailstrict: bool) -> Result<Thunk<Val>> {
 	if tailstrict {
 		Ok(Thunk::evaluated(evaluate(ctx, arg)?))
 	} else {

@@ -17,7 +17,7 @@ pub enum FieldName {
 	/// {fixed: 2}
 	Fixed(IStr),
 	/// {["dyn"+"amic"]: 3}
-	Dyn(Spanned<Expr>),
+	Dyn(Expr),
 }
 
 #[derive(Debug, Clone, Copy, PartialEq, Eq, Acyclic)]
@@ -46,7 +46,7 @@ pub struct FieldMember {
 	pub plus: bool,
 	pub params: Option<ExprParams>,
 	pub visibility: Visibility,
-	pub value: Rc<Spanned<Expr>>,
+	pub value: Rc<Expr>,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
@@ -152,7 +152,7 @@ impl Display for BinaryOpType {
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct ExprParam {
 	pub destruct: Destruct,
-	pub default: Option<Rc<Spanned<Expr>>>,
+	pub default: Option<Rc<Expr>>,
 }
 
 /// Defined function parameters
@@ -194,11 +194,11 @@ impl ExprParams {
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct ArgsDesc {
-	pub unnamed: Vec<Rc<Spanned<Expr>>>,
-	pub named: Vec<(IStr, Rc<Spanned<Expr>>)>,
+	pub unnamed: Vec<Rc<Expr>>,
+	pub named: Vec<(IStr, Rc<Expr>)>,
 }
 impl ArgsDesc {
-	pub fn new(unnamed: Vec<Rc<Spanned<Expr>>>, named: Vec<(IStr, Rc<Spanned<Expr>>)>) -> Self {
+	pub fn new(unnamed: Vec<Rc<Expr>>, named: Vec<(IStr, Rc<Expr>)>) -> Self {
 		Self { unnamed, named }
 	}
 }
@@ -277,12 +277,12 @@ impl Destruct {
 pub enum BindSpec {
 	Field {
 		into: Destruct,
-		value: Rc<Spanned<Expr>>,
+		value: Rc<Expr>,
 	},
 	Function {
 		name: IStr,
 		params: ExprParams,
-		value: Rc<Spanned<Expr>>,
+		value: Rc<Expr>,
 	},
 }
 impl BindSpec {
@@ -295,15 +295,15 @@ impl BindSpec {
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct IfSpecData(pub Spanned<Expr>);
+pub struct IfSpecData(pub Expr);
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct ForSpecData(pub Destruct, pub Spanned<Expr>);
+pub struct ForSpecData(pub Destruct, pub Expr);
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub enum CompSpec {
-	IfSpec(IfSpecData),
-	ForSpec(ForSpecData),
+	IfSpec(Spanned<IfSpecData>),
+	ForSpec(Spanned<ForSpecData>),
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
@@ -346,14 +346,14 @@ pub struct SliceDesc {
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct AssertExpr {
 	pub assert: AssertStmt,
-	pub rest: Spanned<Expr>,
+	pub rest: Expr,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct BinaryOp {
-	pub lhs: Spanned<Expr>,
+	pub lhs: Expr,
 	pub op: BinaryOpType,
-	pub rhs: Spanned<Expr>,
+	pub rhs: Expr,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
@@ -366,13 +366,13 @@ pub enum ImportKind {
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct IfElse {
 	pub cond: IfSpecData,
-	pub cond_then: Spanned<Expr>,
-	pub cond_else: Option<Spanned<Expr>>,
+	pub cond_then: Expr,
+	pub cond_else: Option<Expr>,
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct Slice {
-	pub value: Spanned<Expr>,
+	pub value: Expr,
 	pub slice: SliceDesc,
 }
 
@@ -389,7 +389,7 @@ pub enum Expr {
 	Var(Spanned<IStr>),
 
 	/// Array of expressions: [1, 2, "Hello"]
-	Arr(Rc<Vec<Spanned<Expr>>>),
+	Arr(Rc<Vec<Expr>>),
 	/// Array comprehension:
 	/// ```jsonnet
 	///  ingredients: [
@@ -401,35 +401,35 @@ pub enum Expr {
 	///    ]
 	///  ],
 	/// ```
-	ArrComp(Rc<Spanned<Expr>>, Vec<CompSpec>),
+	ArrComp(Rc<Expr>, Vec<CompSpec>),
 
 	/// Object: {a: 2}
 	Obj(ObjBody),
 	/// Object extension: var1 {b: 2}
-	ObjExtend(Rc<Spanned<Expr>>, ObjBody),
+	ObjExtend(Rc<Expr>, ObjBody),
 
 	/// -2
-	UnaryOp(UnaryOpType, Box<Spanned<Expr>>),
+	UnaryOp(UnaryOpType, Box<Expr>),
 	/// 2 - 2
 	BinaryOp(Box<BinaryOp>),
 	/// assert 2 == 2 : "Math is broken"
 	AssertExpr(Rc<AssertExpr>),
 	/// local a = 2; { b: a }
-	LocalExpr(Vec<BindSpec>, Box<Spanned<Expr>>),
+	LocalExpr(Vec<BindSpec>, Box<Expr>),
 
 	/// import* "hello"
-	Import(ImportKind, Box<Spanned<Expr>>),
+	Import(Spanned<ImportKind>, Box<Expr>),
 	/// error "I'm broken"
-	ErrorStmt(Box<Spanned<Expr>>),
+	ErrorStmt(Span, Box<Expr>),
 	/// a(b, c)
-	Apply(Box<Spanned<Expr>>, Spanned<ArgsDesc>, bool),
+	Apply(Box<Expr>, Spanned<ArgsDesc>, bool),
 	/// a[b], a.b, a?.b
 	Index {
-		indexable: Box<Spanned<Expr>>,
+		indexable: Box<Expr>,
 		parts: Vec<IndexPart>,
 	},
 	/// function(x) x
-	Function(ExprParams, Rc<Spanned<Expr>>),
+	Function(ExprParams, Rc<Expr>),
 	/// if true == false then 1 else 2
 	IfElse(Box<IfElse>),
 	Slice(Box<Slice>),
@@ -437,7 +437,8 @@ pub enum Expr {
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct IndexPart {
-	pub value: Spanned<Expr>,
+	pub span: Span,
+	pub value: Expr,
 	#[cfg(feature = "exp-null-coaelse")]
 	pub null_coaelse: bool,
 }
@@ -461,7 +462,7 @@ impl Debug for Span {
 }
 
 #[derive(Clone, PartialEq, Acyclic)]
-pub struct Spanned<T: Acyclic>(T, Span);
+pub struct Spanned<T: Acyclic>(pub T, pub Span);
 impl<T: Acyclic> Deref for Spanned<T> {
 	type Target = T;
 	fn deref(&self) -> &Self::Target {

@@ -53,7 +53,7 @@ pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
 			Expr::Str(_)
 			| Expr::Num(_)
 			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
-			Expr::Arr(a) => a.iter().all(|e| is_trivial(&**e)),
+			Expr::Arr(a) => a.iter().all(|e| is_trivial(&*e)),
 			_ => false,
 		}
 	}
@@ -71,7 +71,7 @@ pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
 			}
 			Val::Arr(ArrValue::eager(
 				n.iter()
-					.map(|e| evaluate_trivial(&**e))
+					.map(|e| evaluate_trivial(&*e))
 					.map(|e| e.expect("checked trivial"))
 					.collect(),
 			))
@@ -80,12 +80,7 @@ pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
 	})
 }
 
-pub fn evaluate_method(
-	ctx: Context,
-	name: IStr,
-	params: ExprParams,
-	body: Rc<Spanned<Expr>>,
-) -> Val {
+pub fn evaluate_method(ctx: Context, name: IStr, params: ExprParams, body: Rc<Expr>) -> Val {
 	Val::Func(FuncVal::Normal(Cc::new(FuncDesc {
 		name,
 		ctx,
@@ -97,18 +92,21 @@ pub fn evaluate_method(
 pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
 	Ok(match field_name {
 		FieldName::Fixed(n) => Some(n.clone()),
-		FieldName::Dyn(expr) => in_frame(
-			CallLocation::new(&expr.span()),
-			|| "evaluating field name".to_string(),
-			|| {
-				let value = evaluate(ctx, expr)?;
-				if matches!(value, Val::Null) {
-					Ok(None)
-				} else {
-					Ok(Some(IStr::from_untyped(value)?))
-				}
-			},
-		)?,
+		FieldName::Dyn(expr) => {
+			// FIXME: Span
+			let value = evaluate(ctx, expr)?;
+			if matches!(value, Val::Null) {
+				None
+			} else {
+				Some(IStr::from_untyped(value)?)
+			}
+		} //
+		  // 	in_frame(
+		  // 	CallLocation::new(&expr.span()),
+		  // 	|| "evaluating field name".to_string(),
+		  // 	|| {
+		  // 	},
+		  // )?,
 	})
 }
 
@@ -119,46 +117,48 @@ pub fn evaluate_comp(
 ) -> Result<()> {
 	match specs.first() {
 		None => callback(ctx)?,
-		Some(CompSpec::IfSpec(IfSpecData(cond))) => {
+		Some(CompSpec::IfSpec(Spanned(IfSpecData(cond), _))) => {
 			if bool::from_untyped(evaluate(ctx.clone(), cond)?)? {
 				evaluate_comp(ctx, &specs[1..], callback)?;
 			}
 		}
-		Some(CompSpec::ForSpec(ForSpecData(var, expr))) => match evaluate(ctx.clone(), expr)? {
-			Val::Arr(list) => {
-				for item in list.iter_lazy() {
-					let fctx = Pending::new();
-					let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
-					destruct(var, item, fctx.clone(), &mut new_bindings)?;
-					let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
+		Some(CompSpec::ForSpec(Spanned(ForSpecData(var, expr), _))) => {
+			match evaluate(ctx.clone(), expr)? {
+				Val::Arr(list) => {
+					for item in list.iter_lazy() {
+						let fctx = Pending::new();
+						let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
+						destruct(var, item, fctx.clone(), &mut new_bindings)?;
+						let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
-					evaluate_comp(ctx, &specs[1..], callback)?;
+						evaluate_comp(ctx, &specs[1..], callback)?;
+					}
 				}
-			}
-			#[cfg(feature = "exp-object-iteration")]
-			Val::Obj(obj) => {
-				for field in obj.fields(
-					// TODO: Should there be ability to preserve iteration order?
-					#[cfg(feature = "exp-preserve-order")]
-					false,
-				) {
-					let fctx = Pending::new();
-					let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
-					let obj = obj.clone();
-					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
-						Thunk::evaluated(Val::string(field.clone())),
-						Thunk!(move || obj.get(field).transpose().expect(
-							"field exists, as field name was obtained from object.fields()",
-						)),
-					])));
-					destruct(var, value, fctx.clone(), &mut new_bindings)?;
-					let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
+				#[cfg(feature = "exp-object-iteration")]
+				Val::Obj(obj) => {
+					for field in obj.fields(
+						// TODO: Should there be ability to preserve iteration order?
+						#[cfg(feature = "exp-preserve-order")]
+						false,
+					) {
+						let fctx = Pending::new();
+						let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
+						let obj = obj.clone();
+						let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
+							Thunk::evaluated(Val::string(field.clone())),
+							Thunk!(move || obj.get(field).transpose().expect(
+								"field exists, as field name was obtained from object.fields()",
+							)),
+						])));
+						destruct(var, value, fctx.clone(), &mut new_bindings)?;
+						let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
-					evaluate_comp(ctx, &specs[1..], callback)?;
+						evaluate_comp(ctx, &specs[1..], callback)?;
+					}
 				}
+				_ => bail!(InComprehensionCanOnlyIterateOverArray),
 			}
-			_ => bail!(InComprehensionCanOnlyIterateOverArray),
-		},
+		}
 	}
 	Ok(())
 }
@@ -221,7 +221,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			#[derive(Trace)]
 			struct UnboundValue<B: Trace> {
 				uctx: B,
-				value: Rc<Spanned<Expr>>,
+				value: Rc<Expr>,
 				name: IStr,
 			}
 			impl<B: Unbound<Bound = Context>> Unbound for UnboundValue<B> {
@@ -235,7 +235,8 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.field(name.clone())
 				.with_add(*plus)
 				.with_visibility(*visibility)
-				.with_location(value.span())
+				// FIXME
+				// .with_location(value.span())
 				.bindable(UnboundValue {
 					uctx,
 					value: value.clone(),
@@ -251,7 +252,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			#[derive(Trace)]
 			struct UnboundMethod<B: Trace> {
 				uctx: B,
-				value: Rc<Spanned<Expr>>,
+				value: Rc<Expr>,
 				params: ExprParams,
 				name: IStr,
 			}
@@ -270,7 +271,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 			builder
 				.field(name.clone())
 				.with_visibility(*visibility)
-				.with_location(value.span())
+				// .with_location(value.span())
 				.bindable(UnboundMethod {
 					uctx,
 					value: value.clone(),
@@ -337,7 +338,7 @@ pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
 
 pub fn evaluate_apply(
 	ctx: Context,
-	value: &Spanned<Expr>,
+	value: &Expr,
 	args: &ArgsDesc,
 	loc: CallLocation<'_>,
 	tailstrict: bool,
@@ -379,16 +380,16 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	Ok(())
 }
 
-pub fn evaluate_named_param(ctx: Context, expr: &Spanned<Expr>, name: ParamName) -> Result<Val> {
+pub fn evaluate_named_param(ctx: Context, expr: &Expr, name: ParamName) -> Result<Val> {
 	match name {
 		ParamName::Named(name) => evaluate_named(ctx, expr, name),
 		ParamName::Unnamed => evaluate(ctx, expr),
 	}
 }
 
-pub fn evaluate_named(ctx: Context, expr: &Spanned<Expr>, name: IStr) -> Result<Val> {
+pub fn evaluate_named(ctx: Context, expr: &Expr, name: IStr) -> Result<Val> {
 	use Expr::*;
-	Ok(match &**expr {
+	Ok(match &*expr {
 		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
 		_ => evaluate(ctx, expr)?,
 	})
@@ -417,7 +418,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 		// because the standalone super literal is not supported, that is because in other
 		// implementations `in super` treated differently from `in smth_else`.
 		BinaryOp(bin)
-			if matches!(&*bin.rhs, Expr::Literal(LiteralType::Super))
+			if matches!(&bin.rhs, Expr::Literal(LiteralType::Super))
 				&& bin.op == BinaryOpType::In =>
 		{
 			let sup_this = ctx.try_sup_this()?;
@@ -433,12 +434,12 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => in_frame(
 			CallLocation::new(&name.span()),
-			|| format!("local <{name}> access"),
+			|| format!("local <{}> access", &**name),
 			|| ctx.binding((**name).clone())?.evaluate(),
 		)?,
 		Index { indexable, parts } => ensure_sufficient_stack(|| {
 			let mut parts = parts.iter();
-			let mut indexable = if matches!(&***indexable, Expr::Literal(LiteralType::Super)) {
+			let mut indexable = if matches!(&**indexable, Expr::Literal(LiteralType::Super)) {
 				let part = parts.next().expect("at least part should exist");
 				// sup_this existence check might also be skipped here for null-coalesce...
 				// But I believe this might cause errors.
@@ -463,7 +464,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 				let name = name.into_flat();
 				match sup_this
 					.get_super(name.clone())
-					.with_description_src(&part.value, || format!("field <{name}> access"))?
+					.with_description_src(&part.span, || format!("field <{name}> access"))?
 				{
 					Some(v) => v,
 					#[cfg(feature = "exp-null-coaelse")]
@@ -485,7 +486,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 				indexable = match (indexable, evaluate(ctx.clone(), &part.value)?) {
 					(Val::Obj(v), Val::Str(key)) => match v
 						.get(key.clone().into_flat())
-						.with_description_src(&part.value, || format!("field <{key}> access"))?
+						.with_description_src(&part.span, || format!("field <{key}> access"))?
 					{
 						Some(v) => v,
 						#[cfg(feature = "exp-null-coaelse")]
@@ -497,7 +498,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 								key.clone().into_flat(),
 								suggestions,
 							)))
-							.with_description_src(&part.value, || format!("field <{key}> access"));
+							.with_description_src(&part.span, || format!("field <{key}> access"));
 						}
 					},
 					(Val::Obj(_), n) => bail!(ValueIndexMustBeTypeGot(
@@ -605,17 +606,21 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			evaluate_assert(ctx.clone(), &assert.assert)?;
 			evaluate(ctx, &assert.rest)?
 		}
-		ErrorStmt(e) => in_frame(
-			CallLocation::new(&e.span()),
+		ErrorStmt(s, e) => in_frame(
+			CallLocation::new(&s),
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
 		IfElse(if_else) => {
-			if in_frame(
-				CallLocation::new(&if_else.cond.0.span()),
-				|| "if condition".to_owned(),
-				|| bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.0)?),
-			)? {
+			if
+			// FIXME
+			//in_frame(
+			// CallLocation::new(&if_else.cond.0.span()),
+			// || "if condition".to_owned(),
+			// ||
+			bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.0)?)?
+			// )?
+			{
 				evaluate(ctx, &if_else.cond_then)?
 			} else {
 				match &if_else.cond_else {
@@ -626,14 +631,13 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 		}
 		Slice(slice) => {
 			fn parse_idx<T: Typed + FromUntyped>(
-				loc: CallLocation<'_>,
 				ctx: Context,
 				expr: Option<&Spanned<Expr>>,
 				desc: &'static str,
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
 					Ok(in_frame(
-						loc,
+						CallLocation::new(&value.span()),
 						|| format!("slice {desc}"),
 						|| <Option<T>>::from_untyped(evaluate(ctx, value)?),
 					)?)
@@ -643,24 +647,23 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			}
 
 			let indexable = evaluate(ctx.clone(), &slice.value)?;
-			let loc = CallLocation::new(&loc);
 
-			let start = parse_idx(loc, ctx.clone(), slice.slice.start.as_ref(), "start")?;
-			let end = parse_idx(loc, ctx.clone(), slice.slice.end.as_ref(), "end")?;
-			let step = parse_idx(loc, ctx, slice.slice.step.as_ref(), "step")?;
+			let start = parse_idx(ctx.clone(), slice.slice.start.as_ref(), "start")?;
+			let end = parse_idx(ctx.clone(), slice.slice.end.as_ref(), "end")?;
+			let step = parse_idx(ctx, slice.slice.step.as_ref(), "step")?;
 
 			IndexableVal::into_untyped(indexable.into_indexable()?.slice(start, end, step)?)?
 		}
 		Import(kind, path) => {
-			let Expr::Str(path) = &***path else {
+			let Expr::Str(path) = &**path else {
 				bail!("computed imports are not supported")
 			};
-			let tmp = loc.clone().0;
 			with_state(|s| {
-				let resolved_path = s.resolve_from(tmp.source_path(), path)?;
-				Ok(match kind {
+				let span = kind.span();
+				let resolved_path = s.resolve_from(span.0.source_path(), path)?;
+				Ok(match &**kind {
 					ImportKind::Normal => in_frame(
-						CallLocation::new(&loc),
+						CallLocation::new(&span),
 						|| format!("import {:?}", path.clone()),
 						|| s.import_resolved(resolved_path),
 					)?,

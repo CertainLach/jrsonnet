@@ -139,7 +139,7 @@ pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
 			if let Expr::Str(s) = &***v {
 				out.0.push(Import {
 					path: ResolvePathOwned::Str(s.to_string()),
-					expression: matches!(&**expr, Expr::Import(ImportKind::Normal, _)),
+					expression: todo!(),
 				});
 			}
 			// Non-string import will fail in runtime

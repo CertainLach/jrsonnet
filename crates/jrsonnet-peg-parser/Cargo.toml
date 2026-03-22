@@ -7,6 +7,7 @@ repository.workspace = true
 version.workspace = true
 
 [dependencies]
+jrsonnet-gcmodule.workspace = true
 jrsonnet-ir.workspace = true
 peg.workspace = true
 

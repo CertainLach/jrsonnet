@@ -5,7 +5,7 @@
 extern crate self as jrsonnet_evaluator;
 
 mod arr;
-pub mod async_import;
+// pub mod async_import;
 mod ctx;
 mod dynamic;
 pub mod error;
@@ -187,7 +187,7 @@ impl_context_initializer! {
 struct FileData {
 	string: Option<IStr>,
 	bytes: Option<IBytes>,
-	parsed: Option<Rc<Spanned<Expr>>>,
+	parsed: Option<Rc<Expr>>,
 	evaluated: Option<Val>,
 
 	evaluating: bool,

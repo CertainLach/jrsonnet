@@ -3,8 +3,8 @@ use std::{fmt::Debug, rc::Rc};
 use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-pub use jrsonnet_macros::builtin;
 use jrsonnet_ir::{ArgsDesc, Destruct, Expr, ExprParams, Span, Spanned};
+pub use jrsonnet_macros::builtin;
 
 use self::{
 	builtin::{Builtin, StaticBuiltin},
@@ -71,7 +71,7 @@ pub struct FuncDesc {
 	/// Function parameter definition
 	pub params: ExprParams,
 	/// Function body
-	pub body: Rc<Spanned<Expr>>,
+	pub body: Rc<Expr>,
 }
 impl FuncDesc {
 	/// Create body context, but fill arguments without defaults with lazy error
@@ -256,7 +256,7 @@ impl FuncVal {
 					#[cfg(feature = "exp-destruct")]
 					_ => return false,
 				};
-				**desc.body == Expr::Var(id.clone())
+				matches!(&*desc.body, Expr::Var(v) if &**v == id)
 			}
 			_ => false,
 		}

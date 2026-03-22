@@ -147,9 +147,9 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 
 pub fn evaluate_binary_op_special(
 	ctx: Context,
-	a: &Spanned<Expr>,
+	a: &Expr,
 	op: BinaryOpType,
-	b: &Spanned<Expr>,
+	b: &Expr,
 ) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
