@@ -3,7 +3,7 @@ use std::{fmt::Debug, rc::Rc};
 use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_ir::{ArgsDesc, Destruct, Expr, ExprParams, Span, Spanned};
+use jrsonnet_ir::{ArgsDesc, Destruct, Expr, ExprParams, Span};
 pub use jrsonnet_macros::builtin;
 
 use self::{

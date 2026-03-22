@@ -1,0 +1,21 @@
+---
+source: crates/jrsonnet-peg-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/multiline.jsonnet
+---
+Arr(
+    [
+        Str(
+            "Hello world!\na\n",
+        ),
+        Str(
+            "Hello world!\na\n",
+        ),
+        Str(
+            "Hello world!\n\ta\n",
+        ),
+        Str(
+            "Hello world!\n a\n",
+        ),
+    ],
+)

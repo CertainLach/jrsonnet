@@ -3,7 +3,7 @@ use std::{any::Any, cell::RefCell, fmt::Debug, mem::replace};
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::{IBytes, IStr};
-use jrsonnet_ir::{Expr, Spanned};
+use jrsonnet_ir::Expr;
 
 use super::ArrValue;
 use crate::function::NativeFn;

@@ -1,6 +1,7 @@
 ---
 source: crates/jrsonnet-peg-parser/src/lib.rs
-expression: "parsep(\"{} { local x = 1, x: x } + {}\")"
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/subexp.jsonnet
 ---
 BinaryOp(
     BinaryOp {
@@ -13,7 +14,7 @@ BinaryOp(
                         fields: [],
                     },
                 ),
-            ) from virtual:<test>:0-2,
+            ),
             MemberList(
                 ObjMembers {
                     locals: [
@@ -23,7 +24,7 @@ BinaryOp(
                             ),
                             value: Num(
                                 1.0,
-                            ) from virtual:<test>:15-16,
+                            ),
                         },
                     ],
                     asserts: [],
@@ -31,18 +32,18 @@ BinaryOp(
                         FieldMember {
                             name: Fixed(
                                 "x",
-                            ),
+                            ) from virtual:<test>:18-19,
                             plus: false,
                             params: None,
                             visibility: Normal,
                             value: Var(
-                                "x",
-                            ) from virtual:<test>:21-22,
+                                "x" from virtual:<test>:21-22,
+                            ),
                         },
                     ],
                 },
             ),
-        ) from virtual:<test>:0-24,
+        ),
         op: Add,
         rhs: Obj(
             MemberList(
@@ -52,6 +53,6 @@ BinaryOp(
                     fields: [],
                 },
             ),
-        ) from virtual:<test>:27-29,
+        ),
     },
-) from virtual:<test>:0-29
+)

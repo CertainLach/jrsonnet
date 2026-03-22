@@ -672,6 +672,7 @@ dependencies = [
  "hi-doc",
  "indoc",
  "insta",
+ "jrsonnet-lexer",
  "jrsonnet-rowan-parser",
 ]
 
@@ -713,6 +714,16 @@ dependencies = [
  "jrsonnet-interner",
  "peg",
  "static_assertions",
+]
+
+[[package]]
+name = "jrsonnet-ir-parser"
+version = "0.5.0-pre97"
+dependencies = [
+ "insta",
+ "jrsonnet-gcmodule",
+ "jrsonnet-ir",
+ "jrsonnet-lexer",
 ]
 
 [[package]]

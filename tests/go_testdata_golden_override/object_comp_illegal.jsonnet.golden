@@ -1,2 +1,2 @@
-syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "f"
-    object_comp_illegal.jsonnet:1:15
+syntax error: expected one of "(", ".", "?", "[", "{", <binary op>, got "}"
+    object_comp_illegal.jsonnet:1:34

@@ -290,7 +290,7 @@ pub trait ErrorSource {
 }
 impl<T: Acyclic> ErrorSource for &Spanned<T> {
 	fn to_location(self) -> Option<Span> {
-		Some(self.span())
+		Some(self.span.clone())
 	}
 }
 impl ErrorSource for &Span {

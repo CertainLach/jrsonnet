@@ -1,0 +1,52 @@
+---
+source: crates/jrsonnet-peg-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/infix.jsonnet
+---
+Arr(
+    [
+        BinaryOp(
+            BinaryOp {
+                lhs: UnaryOp(
+                    Not,
+                    Var(
+                        "a" from virtual:<test>:3-4,
+                    ),
+                ),
+                op: And,
+                rhs: UnaryOp(
+                    Not,
+                    Var(
+                        "b" from virtual:<test>:9-10,
+                    ),
+                ),
+            },
+        ),
+        BinaryOp(
+            BinaryOp {
+                lhs: UnaryOp(
+                    Not,
+                    Var(
+                        "a" from virtual:<test>:13-14,
+                    ),
+                ),
+                op: Div,
+                rhs: UnaryOp(
+                    Not,
+                    Var(
+                        "b" from virtual:<test>:18-19,
+                    ),
+                ),
+            },
+        ),
+        UnaryOp(
+            Not,
+            UnaryOp(
+                Not,
+                Var(
+                    "a" from virtual:<test>:23-24,
+                ),
+            ),
+        ),
+    ],
+)

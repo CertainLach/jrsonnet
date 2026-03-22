@@ -42,10 +42,10 @@ use function::CallLocation;
 pub use import::*;
 use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
+pub use jrsonnet_ir as parser;
+use jrsonnet_ir::{Expr, Source, SourcePath};
 #[doc(hidden)]
 pub use jrsonnet_macros;
-pub use jrsonnet_ir as parser;
-use jrsonnet_ir::{Expr, Source, SourcePath, Spanned};
 use jrsonnet_peg_parser::ParserSettings;
 pub use obj::*;
 pub use rustc_hash;

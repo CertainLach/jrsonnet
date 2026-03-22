@@ -1,2 +1,2 @@
 duplicate field name: x
-    object_comp_duplicate.jsonnet:1:8-10: field <x> initializtion
+    object_comp_duplicate.jsonnet:1:3-7: field <x> initializtion

@@ -42,7 +42,7 @@ pub struct AssertStmt(pub Spanned<Expr>, pub Option<Spanned<Expr>>);
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub struct FieldMember {
-	pub name: FieldName,
+	pub name: Spanned<FieldName>,
 	pub plus: bool,
 	pub params: Option<ExprParams>,
 	pub visibility: Visibility,
@@ -295,15 +295,21 @@ impl BindSpec {
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct IfSpecData(pub Expr);
+pub struct IfSpecData {
+	pub span: Span,
+	pub cond: Expr,
+}
 
 #[derive(Debug, PartialEq, Acyclic)]
-pub struct ForSpecData(pub Destruct, pub Expr);
+pub struct ForSpecData {
+	pub destruct: Destruct,
+	pub over: Expr,
+}
 
 #[derive(Debug, PartialEq, Acyclic)]
 pub enum CompSpec {
-	IfSpec(Spanned<IfSpecData>),
-	ForSpec(Spanned<ForSpecData>),
+	IfSpec(IfSpecData),
+	ForSpec(ForSpecData),
 }
 
 #[derive(Debug, PartialEq, Acyclic)]
@@ -462,21 +468,20 @@ impl Debug for Span {
 }
 
 #[derive(Clone, PartialEq, Acyclic)]
-pub struct Spanned<T: Acyclic>(pub T, pub Span);
+pub struct Spanned<T: Acyclic> {
+	pub value: T,
+	pub span: Span,
+}
 impl<T: Acyclic> Deref for Spanned<T> {
 	type Target = T;
 	fn deref(&self) -> &Self::Target {
-		&self.0
+		&self.value
 	}
 }
 impl<T: Acyclic> Spanned<T> {
 	#[inline]
-	pub fn new(v: T, s: Span) -> Self {
-		Self(v, s)
-	}
-	#[inline]
-	pub fn span(&self) -> Span {
-		self.1.clone()
+	pub fn new(value: T, span: Span) -> Self {
+		Self { value, span }
 	}
 }
 
@@ -488,7 +493,7 @@ impl<T: Debug + Acyclic> Debug for Spanned<T> {
 		} else {
 			write!(f, "{:?}", expr)?;
 		}
-		write!(f, " from {:?}", self.span())?;
+		write!(f, " from {:?}", self.span)?;
 		Ok(())
 	}
 }

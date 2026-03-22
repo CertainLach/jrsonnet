@@ -1,2 +1,3 @@
-syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "f"
-    object_comp_bad_field2.jsonnet:1:11
+{
+    "x": 42
+}

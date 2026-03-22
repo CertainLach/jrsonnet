@@ -181,14 +181,14 @@ parser! {
 			/ "::" {Visibility::Hidden}
 			/ ":" {Visibility::Normal}
 		pub rule field(s: &ParserSettings) -> FieldMember
-			= name:field_name(s) _ plus:"+"? _ visibility:visibility() _ value:expr(s) {FieldMember{
+			= name:spanned(<field_name(s)>, s) _ plus:"+"? _ visibility:visibility() _ value:expr(s) {FieldMember{
 				name,
 				plus: plus.is_some(),
 				params: None,
 				visibility,
 				value: Rc::new(value),
 			}}
-			/ name:field_name(s) _ "(" _ params:params(s) _ ")" _ visibility:visibility() _ value:expr(s) {FieldMember{
+			/ name:spanned(<field_name(s)>, s) _ "(" _ params:params(s) _ ")" _ visibility:visibility() _ value:expr(s) {FieldMember{
 				name,
 				plus: false,
 				params: Some(params),
@@ -239,11 +239,11 @@ parser! {
 				})
 			}
 		pub rule ifspec(s: &ParserSettings) -> IfSpecData
-			= keyword("if") _ expr:expr(s) {IfSpecData(expr)}
+			= i:spanned(<keyword("if")>, s) _ cond:expr(s) {IfSpecData { span: i.span, cond }}
 		pub rule forspec(s: &ParserSettings) -> ForSpecData
-			= keyword("for") _ id:destruct(s) _ keyword("in") _ cond:expr(s) {ForSpecData(id, cond)}
+			= keyword("for") _ destruct:destruct(s) _ keyword("in") _ over:expr(s) { ForSpecData { destruct, over } }
 		rule compspec(s: &ParserSettings) -> CompSpec
-			= i:spanned(<ifspec(s)>, s) { CompSpec::IfSpec(i) } / f:spanned(<forspec(s)>, s) {CompSpec::ForSpec(f)}
+			= i:ifspec(s) { CompSpec::IfSpec(i) } / f:forspec(s) {CompSpec::ForSpec(f)}
 		pub rule compspecs(s: &ParserSettings) -> Vec<CompSpec>
 			= specs:compspec(s) ++ _ {?
 				if !matches!(specs[0], CompSpec::ForSpec(_)) {
@@ -319,7 +319,7 @@ parser! {
 				assert, rest
 			})) }
 
-			/ err_kw:spanned(<keyword("error")>, s) _ expr:expr(s) { Expr::ErrorStmt(err_kw.1, Box::new(expr)) }
+			/ err_kw:spanned(<keyword("error")>, s) _ expr:expr(s) { Expr::ErrorStmt(err_kw.span, Box::new(expr)) }
 
 		rule slice_part(s: &ParserSettings) -> Option<Spanned<Expr>>
 			= _ e:(e:spanned(<expr(s)>, s) _{e})? {e}
@@ -396,14 +396,14 @@ parser! {
 			}
 		pub rule index_part(s: &ParserSettings) -> IndexPart
 		= n:("?" _ ensure_null_coaelse())? "." _ value:id_loc(s) {IndexPart {
-			span: value.1,
-			value: value.0,
+			span: value.span,
+			value: value.value,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
 		/ n:("?" _ "." _ ensure_null_coaelse())? value:spanned(<"[" _ v:expr(s) _ "]" {v}>, s) {IndexPart {
-			span: value.1,
-			value: value.0,
+			span: value.span,
+			value: value.value,
 			#[cfg(feature = "exp-null-coaelse")]
 			null_coaelse: n.is_some(),
 		}}
@@ -423,140 +423,27 @@ pub fn string_to_expr(str: IStr, settings: &ParserSettings) -> Spanned<Expr> {
 }
 
 #[cfg(test)]
-pub mod tests {
-	use insta::assert_snapshot;
+mod tests {
+	use std::fs;
+
+	use insta::{assert_snapshot, glob};
 	use jrsonnet_ir::{IStr, Source};
 
-	use super::parse;
-	use crate::ParserSettings;
-
-	fn parsep(s: &str) -> String {
-		let v = parse(
-			s,
-			&ParserSettings {
-				source: Source::new_virtual("<test>".into(), IStr::empty()),
-			},
-		)
-		.unwrap();
-		format!("{v:#?}")
-	}
-
-	macro_rules! parse {
-		($s:expr) => {
-			assert_snapshot!(parsep($s));
-		};
-	}
+	use crate::{parse, ParserSettings};
 
 	#[test]
-	fn multiline_string() {
-		parse!("|||\n    Hello world!\n     a\n|||");
-		parse!("|||\n  Hello world!\n   a\n|||");
-		parse!("|||\n\t\tHello world!\n\t\t\ta\n|||");
-		parse!("|||\n   Hello world!\n    a\n |||");
-	}
-
-	#[test]
-	fn slice() {
-		parse!("a[1:]");
-		parse!("a[1::]");
-		parse!("a[:1:]");
-		parse!("a[::1]");
-		parse!("str[:len - 1]");
-	}
-
-	#[test]
-	fn string_escaping() {
-		parse!(r#""Hello, \"world\"!""#);
-		parse!(r#"'Hello \'world\'!'"#);
-		parse!(r#"'\\\\'"#);
-	}
-
-	#[test]
-	fn string_unescaping() {
-		parse!(r#""Hello\nWorld""#);
-	}
-
-	#[test]
-	fn string_verbantim() {
-		parse!(r#"@"Hello\n""World""""#);
-	}
-
-	#[test]
-	fn imports() {
-		parse!("import \"hello\"");
-		parse!("importstr \"garnish.txt\"");
-		parse!("importbin \"garnish.bin\"");
-	}
-
-	#[test]
-	fn empty_object() {
-		parse!("{}");
-	}
-
-	#[test]
-	fn basic_math() {
-		parse!("2+2*2");
-		parse!("2	+ 	  2	  *	2   	");
-		parse!("2+(2+2*2)");
-		parse!("2//comment\n+//comment\n3/*test*/*/*test*/4");
-	}
-
-	#[test]
-	fn suffix() {
-		parse!("std.test");
-		parse!("std(2)");
-		parse!("std.test(2)");
-		parse!("a[b]");
-	}
-
-	#[test]
-	fn array_comp() {
-		parse!("[std.deepJoin(x) for x in arr]");
-	}
-
-	#[test]
-	fn reserved() {
-		parse!("null");
-		parse!("nulla");
-	}
-
-	#[test]
-	fn multiple_args_buf() {
-		parse!("a(b, null_fields)");
-	}
-
-	#[test]
-	fn infix_precedence() {
-		parse!("!a && !b");
-		parse!("!a / !b");
-	}
-
-	#[test]
-	fn double_negation() {
-		parse!("!!a");
-	}
-
-	#[test]
-	fn array_test_error() {
-		parse!("[a for a in b if c for e in f]");
-	}
-
-	#[test]
-	fn missing_newline_between_comment_and_eof() {
-		parse!(
-			"{a:1}
-
-			//+213"
-		);
-	}
-
-	#[test]
-	fn default_param_before_nondefault() {
-		parse!("local x(foo = 'foo', bar) = null; null");
-	}
-
-	#[test]
-	fn add_location_info_to_all_sub_expressions() {
-		parse!("{} { local x = 1, x: x } + {}");
+	fn snapshots() {
+		glob!("tests/*.jsonnet", |path| {
+			let input = fs::read_to_string(path).expect("read test file");
+			let v = parse(
+				&input,
+				&ParserSettings {
+					source: Source::new_virtual("<test>".into(), IStr::empty()),
+				},
+			)
+			.unwrap();
+			let v = format!("{v:#?}");
+			assert_snapshot!(v);
+		});
 	}
 }

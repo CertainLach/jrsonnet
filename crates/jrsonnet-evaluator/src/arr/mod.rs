@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
-use jrsonnet_ir::{Expr, Spanned};
+use jrsonnet_ir::Expr;
 
 use crate::{function::NativeFn, Context, Result, Thunk, Val};
 

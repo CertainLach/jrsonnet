@@ -1,6 +1,6 @@
 use std::cmp::Ordering;
 
-use jrsonnet_ir::{BinaryOpType, Expr, Spanned, UnaryOpType};
+use jrsonnet_ir::{BinaryOpType, Expr, UnaryOpType};
 
 use crate::{
 	arr::ArrValue,

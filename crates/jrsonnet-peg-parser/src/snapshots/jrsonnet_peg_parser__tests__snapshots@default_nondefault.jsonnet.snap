@@ -1,6 +1,7 @@
 ---
 source: crates/jrsonnet-peg-parser/src/lib.rs
-expression: "parsep(\"local x(foo = 'foo', bar) = null; null\")"
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/default_nondefault.jsonnet
 ---
 LocalExpr(
     [
@@ -15,7 +16,7 @@ LocalExpr(
                         default: Some(
                             Str(
                                 "foo",
-                            ) from virtual:<test>:14-19,
+                            ),
                         ),
                     },
                     ExprParam {
@@ -45,10 +46,10 @@ LocalExpr(
             },
             value: Literal(
                 Null,
-            ) from virtual:<test>:28-32,
+            ),
         },
     ],
     Literal(
         Null,
-    ) from virtual:<test>:34-38,
-) from virtual:<test>:0-38
+    ),
+)

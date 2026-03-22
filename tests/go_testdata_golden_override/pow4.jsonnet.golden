@@ -1,2 +1,2 @@
 convert num value: non-finite
-    pow4.jsonnet:1:1-18: function <builtin_pow> call
+    pow4.jsonnet:1:8-18: function <builtin_pow> call

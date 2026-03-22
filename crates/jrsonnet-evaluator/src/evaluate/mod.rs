@@ -49,15 +49,15 @@ pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
 
 pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
 	fn is_trivial(expr: &Expr) -> bool {
-		match &*expr {
+		match expr {
 			Expr::Str(_)
 			| Expr::Num(_)
 			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
-			Expr::Arr(a) => a.iter().all(|e| is_trivial(&*e)),
+			Expr::Arr(a) => a.iter().all(is_trivial),
 			_ => false,
 		}
 	}
-	Some(match &*expr {
+	Some(match expr {
 		Expr::Str(s) => Val::string(s.clone()),
 		Expr::Num(n) => {
 			Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values"))
@@ -71,7 +71,7 @@ pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
 			}
 			Val::Arr(ArrValue::eager(
 				n.iter()
-					.map(|e| evaluate_trivial(&*e))
+					.map(evaluate_trivial)
 					.map(|e| e.expect("checked trivial"))
 					.collect(),
 			))
@@ -89,24 +89,21 @@ pub fn evaluate_method(ctx: Context, name: IStr, params: ExprParams, body: Rc<Ex
 	})))
 }
 
-pub fn evaluate_field_name(ctx: Context, field_name: &FieldName) -> Result<Option<IStr>> {
-	Ok(match field_name {
+pub fn evaluate_field_name(ctx: Context, field_name: &Spanned<FieldName>) -> Result<Option<IStr>> {
+	Ok(match &field_name.value {
 		FieldName::Fixed(n) => Some(n.clone()),
-		FieldName::Dyn(expr) => {
-			// FIXME: Span
-			let value = evaluate(ctx, expr)?;
-			if matches!(value, Val::Null) {
-				None
-			} else {
-				Some(IStr::from_untyped(value)?)
-			}
-		} //
-		  // 	in_frame(
-		  // 	CallLocation::new(&expr.span()),
-		  // 	|| "evaluating field name".to_string(),
-		  // 	|| {
-		  // 	},
-		  // )?,
+		FieldName::Dyn(expr) => in_frame(
+			CallLocation::new(&field_name.span),
+			|| "evaluating field name".to_string(),
+			|| {
+				let v = evaluate(ctx, expr)?;
+				Ok(if matches!(v, Val::Null) {
+					None
+				} else {
+					Some(IStr::from_untyped(v)?)
+				})
+			},
+		)?,
 	})
 }
 
@@ -117,18 +114,21 @@ pub fn evaluate_comp(
 ) -> Result<()> {
 	match specs.first() {
 		None => callback(ctx)?,
-		Some(CompSpec::IfSpec(Spanned(IfSpecData(cond), _))) => {
+		Some(CompSpec::IfSpec(IfSpecData { cond, span: _ })) => {
 			if bool::from_untyped(evaluate(ctx.clone(), cond)?)? {
 				evaluate_comp(ctx, &specs[1..], callback)?;
 			}
 		}
-		Some(CompSpec::ForSpec(Spanned(ForSpecData(var, expr), _))) => {
-			match evaluate(ctx.clone(), expr)? {
+		Some(CompSpec::ForSpec(ForSpecData {
+			destruct: into,
+			over,
+		})) => {
+			match evaluate(ctx.clone(), over)? {
 				Val::Arr(list) => {
 					for item in list.iter_lazy() {
 						let fctx = Pending::new();
-						let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
-						destruct(var, item, fctx.clone(), &mut new_bindings)?;
+						let mut new_bindings = FxHashMap::with_capacity(into.binds_len());
+						destruct(into, item, fctx.clone(), &mut new_bindings)?;
 						let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
 						evaluate_comp(ctx, &specs[1..], callback)?;
@@ -235,8 +235,7 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 				.field(name.clone())
 				.with_add(*plus)
 				.with_visibility(*visibility)
-				// FIXME
-				// .with_location(value.span())
+				.with_location(field.name.span.clone())
 				.bindable(UnboundValue {
 					uctx,
 					value: value.clone(),
@@ -361,13 +360,13 @@ pub fn evaluate_assert(ctx: Context, assertion: &AssertStmt) -> Result<()> {
 	let value = &assertion.0;
 	let msg = &assertion.1;
 	let assertion_result = in_frame(
-		CallLocation::new(&value.span()),
+		CallLocation::new(&value.span),
 		|| "assertion condition".to_owned(),
 		|| bool::from_untyped(evaluate(ctx.clone(), value)?),
 	)?;
 	if !assertion_result {
 		in_frame(
-			CallLocation::new(&value.span()),
+			CallLocation::new(&value.span),
 			|| "assertion failure".to_owned(),
 			|| {
 				if let Some(msg) = msg {
@@ -389,7 +388,7 @@ pub fn evaluate_named_param(ctx: Context, expr: &Expr, name: ParamName) -> Resul
 
 pub fn evaluate_named(ctx: Context, expr: &Expr, name: IStr) -> Result<Val> {
 	use Expr::*;
-	Ok(match &*expr {
+	Ok(match expr {
 		Function(params, body) => evaluate_method(ctx, name, params.clone(), body.clone()),
 		_ => evaluate(ctx, expr)?,
 	})
@@ -433,7 +432,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 		BinaryOp(bin) => evaluate_binary_op_special(ctx, &bin.lhs, bin.op, &bin.rhs)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => in_frame(
-			CallLocation::new(&name.span()),
+			CallLocation::new(&name.span),
 			|| format!("local <{}> access", &**name),
 			|| ctx.binding((**name).clone())?.evaluate(),
 		)?,
@@ -591,13 +590,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			&Val::Obj(evaluate_object(ctx, b)?),
 		)?,
 		Apply(value, args, tailstrict) => ensure_sufficient_stack(|| {
-			evaluate_apply(
-				ctx,
-				value,
-				args,
-				CallLocation::new(&args.span()),
-				*tailstrict,
-			)
+			evaluate_apply(ctx, value, args, CallLocation::new(&args.span), *tailstrict)
 		})?,
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
@@ -607,20 +600,16 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			evaluate(ctx, &assert.rest)?
 		}
 		ErrorStmt(s, e) => in_frame(
-			CallLocation::new(&s),
+			CallLocation::new(s),
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
 		IfElse(if_else) => {
-			if
-			// FIXME
-			//in_frame(
-			// CallLocation::new(&if_else.cond.0.span()),
-			// || "if condition".to_owned(),
-			// ||
-			bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.0)?)?
-			// )?
-			{
+			if in_frame(
+				CallLocation::new(&if_else.cond.span),
+				|| "if condition".to_owned(),
+				|| bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.cond)?),
+			)? {
 				evaluate(ctx, &if_else.cond_then)?
 			} else {
 				match &if_else.cond_else {
@@ -637,7 +626,7 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			) -> Result<Option<T>> {
 				if let Some(value) = expr {
 					Ok(in_frame(
-						CallLocation::new(&value.span()),
+						CallLocation::new(&value.span),
 						|| format!("slice {desc}"),
 						|| <Option<T>>::from_untyped(evaluate(ctx, value)?),
 					)?)
@@ -659,11 +648,11 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 				bail!("computed imports are not supported")
 			};
 			with_state(|s| {
-				let span = kind.span();
+				let span = &kind.span;
 				let resolved_path = s.resolve_from(span.0.source_path(), path)?;
 				Ok(match &**kind {
 					ImportKind::Normal => in_frame(
-						CallLocation::new(&span),
+						CallLocation::new(span),
 						|| format!("import {:?}", path.clone()),
 						|| s.import_resolved(resolved_path),
 					)?,

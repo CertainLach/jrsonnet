@@ -1,0 +1,98 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{l:#?}\\n\\n---\\n\\n{e:#?}\")"
+---
+[
+    Lexeme {
+        kind: ASSERT_KW,
+        text: "assert",
+        range: Span(
+            1,
+            7,
+        ),
+    },
+    Lexeme {
+        kind: TRUE_KW,
+        text: "true",
+        range: Span(
+            8,
+            12,
+        ),
+    },
+    Lexeme {
+        kind: L_BRACK,
+        text: "[",
+        range: Span(
+            12,
+            13,
+        ),
+    },
+    Lexeme {
+        kind: FALSE_KW,
+        text: "false",
+        range: Span(
+            13,
+            18,
+        ),
+    },
+    Lexeme {
+        kind: R_BRACK,
+        text: "]",
+        range: Span(
+            18,
+            19,
+        ),
+    },
+    Lexeme {
+        kind: COLON,
+        text: ":",
+        range: Span(
+            20,
+            21,
+        ),
+    },
+    Lexeme {
+        kind: FALSE_KW,
+        text: "false",
+        range: Span(
+            22,
+            27,
+        ),
+    },
+    Lexeme {
+        kind: SEMI,
+        text: ";",
+        range: Span(
+            28,
+            29,
+        ),
+    },
+    Lexeme {
+        kind: TRUE_KW,
+        text: "true",
+        range: Span(
+            30,
+            34,
+        ),
+    },
+]
+
+---
+
+AssertExpr(
+    AssertExpr {
+        assert: AssertStmt(
+            Literal(
+                True,
+            ) from virtual:<test>:8-19,
+            Some(
+                Literal(
+                    False,
+                ) from virtual:<test>:22-27,
+            ),
+        ),
+        rest: Literal(
+            True,
+        ),
+    },
+)
