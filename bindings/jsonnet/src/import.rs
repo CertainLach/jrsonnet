@@ -66,8 +66,8 @@ impl ImportResolver for CallbackImportResolver {
 				base.as_ptr(),
 				rel.as_ptr(),
 				&mut found_here.cast_const(),
-				&mut buf,
-				&mut buf_len,
+				&raw mut buf,
+				&raw mut buf_len,
 			)
 		};
 		let buf_slice: &[u8] = unsafe { std::slice::from_raw_parts(buf.cast(), buf_len) };

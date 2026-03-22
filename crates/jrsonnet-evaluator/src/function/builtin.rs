@@ -98,9 +98,9 @@ impl Builtin for NativeCallback {
 
 	fn call(&self, _loc: CallLocation<'_>, args: &[Option<Thunk<Val>>]) -> Result<Val> {
 		let args = args
-			.into_iter()
+			.iter()
 			.map(|a| a.as_ref().expect("legacy natives have no default params"))
-			.map(|a| a.evaluate())
+			.map(Thunk::evaluate)
 			.collect::<Result<Vec<Val>>>()?;
 		self.handler.call(&args)
 	}

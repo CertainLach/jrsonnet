@@ -2,7 +2,6 @@
 #![cfg(test)]
 
 use hi_doc::{Formatting, SnippetBuilder, Text};
-use thiserror::Error;
 
 use crate::{parse, AstNode};
 
@@ -14,7 +13,7 @@ fn process(text: &str) -> String {
 	if !errors.is_empty() && !text.is_empty() {
 		writeln!(out, "===").unwrap();
 		for err in &errors {
-			writeln!(out, "{:?}", err).unwrap();
+			writeln!(out, "{err:?}").unwrap();
 		}
 		let mut code = text.to_string();
 

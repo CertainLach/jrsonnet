@@ -11,7 +11,7 @@ use StringBlockError::*;
 
 use crate::SyntaxKind;
 
-pub(crate) fn lex_str_block_test<'d>(lex: &mut Lexer<'d, SyntaxKind>) {
+pub(crate) fn lex_str_block_test(lex: &mut Lexer<'_, SyntaxKind>) {
 	let _ = lex_str_block(lex);
 }
 
@@ -48,7 +48,7 @@ impl<'a> Context<'a> {
 	}
 
 	fn eat_if(&mut self, f: impl Fn(char) -> bool) -> usize {
-		if self.peek().map(f).unwrap_or(false) {
+		if self.peek().is_some_and(f) {
 			self.index += 1;
 			return 1;
 		}
@@ -141,9 +141,7 @@ impl<'d> StrBlockLexCtx<'d> for Lexer<'d, SyntaxKind> {
 	}
 }
 
-pub fn collect_lexed_str_block<'s>(
-	input: &'s str,
-) -> Result<CollectStrBlock<'s>, StringBlockError> {
+pub fn collect_lexed_str_block(input: &str) -> Result<CollectStrBlock<'_>, StringBlockError> {
 	let mut collect = CollectStrBlock {
 		truncate: false,
 		lines: vec![],
@@ -179,7 +177,7 @@ impl<'d> StrBlockLexCtx<'d> for CollectStrBlock<'d> {
 	}
 
 	fn mark_line(&mut self, line: &'d str) {
-		self.lines.push(line)
+		self.lines.push(line);
 	}
 }
 

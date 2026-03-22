@@ -52,8 +52,7 @@ impl fmt::Display for SyntaxError {
 				write!(f, "unexpected {found:?}, expecting {expected}")
 			}
 			SyntaxError::Missing { expected } => write!(f, "missing {expected}"),
-			SyntaxError::Custom { error } => write!(f, "{error}"),
-			SyntaxError::Hint { error } => write!(f, "{error}"),
+			SyntaxError::Custom { error } | SyntaxError::Hint { error } => write!(f, "{error}"),
 		}
 	}
 }
@@ -492,7 +491,7 @@ fn object(p: &mut Parser) -> CompletedMarker {
 			} else {
 				m.complete(p, MEMBER_FIELD_NORMAL)
 			};
-		};
+		}
 		while p.at_ts(COMPSPEC) {
 			compspecs.push(compspec(p));
 		}
@@ -747,7 +746,7 @@ fn destruct_object_field(p: &mut Parser) {
 	if p.at(T![:]) {
 		p.bump();
 		destruct(p);
-	};
+	}
 	if p.at(T![=]) {
 		p.bump();
 		expr(p);

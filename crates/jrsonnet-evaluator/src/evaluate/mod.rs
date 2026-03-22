@@ -143,7 +143,7 @@ pub fn evaluate_comp(
 					false,
 				) {
 					let fctx = Pending::new();
-					let mut new_bindings = FxHashMap::with_capacity(var.capacity_hint());
+					let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
 					let obj = obj.clone();
 					let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
 						Thunk::evaluated(Val::string(field.clone())),

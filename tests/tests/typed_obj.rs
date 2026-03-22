@@ -9,7 +9,7 @@ use jrsonnet_evaluator::{
 };
 use jrsonnet_stdlib::ContextInitializer;
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct A {
 	a: u32,
 	b: u16,
@@ -39,7 +39,7 @@ fn simple_object() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct B {
 	a: u32,
 	#[typed(rename = "c")]
@@ -62,7 +62,7 @@ fn renamed_field() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct ObjectKind {
 	#[typed(rename = "apiVersion")]
 	api_version: String,
@@ -70,7 +70,7 @@ struct ObjectKind {
 	kind: String,
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct Object {
 	#[typed(flatten)]
 	kind: ObjectKind,
@@ -104,7 +104,7 @@ fn flattened_object() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct C {
 	a: Option<u32>,
 	b: u16,
@@ -142,14 +142,14 @@ fn optional_field_none() -> Result<()> {
 	Ok(())
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct D {
 	#[typed(flatten(ok))]
 	e: Option<E>,
 	b: u16,
 }
 
-#[derive(Clone, Typed, PartialEq, Debug)]
+#[derive(Clone, Typed, FromUntyped, IntoUntyped, PartialEq, Debug)]
 struct E {
 	v: u32,
 }

@@ -136,7 +136,7 @@ pub fn format_comments(comments: &ChildTrivia, loc: CommentLocation, out: &mut P
 								}
 								line = new_line.to_string();
 							}
-							p!(out, string(line.to_string()) nl);
+							p!(out, string(line.clone()) nl);
 						}
 					}
 					if doc {

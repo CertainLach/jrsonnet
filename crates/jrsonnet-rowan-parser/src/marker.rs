@@ -141,7 +141,7 @@ impl CompletedMarker {
 		new_m
 	}
 	/// Create new node around existing marker
-	/// If previous_pos is set - the wrapping node would not include everything that happened between wrapped node end and the current position of the parser
+	/// If `previous_pos` is set - the wrapping node would not include everything that happened between wrapped node end and the current position of the parser
 	fn wrap_raw(
 		self,
 		p: &mut Parser,

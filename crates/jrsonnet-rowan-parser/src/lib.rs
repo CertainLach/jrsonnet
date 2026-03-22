@@ -26,7 +26,7 @@ pub use token_set::SyntaxKindSet;
 
 use self::{
 	ast::support,
-	generated::nodes::{Expr, ExprBinary, ExprObjExtend},
+	generated::nodes::{Expr, ExprObjExtend},
 };
 
 pub fn parse(input: &str) -> (SourceFile, Vec<LocatedSyntaxError>) {

@@ -676,18 +676,18 @@ dependencies = [
 
 [[package]]
 name = "jrsonnet-gcmodule"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "c33f4f6cdc60f5ae94ebae3dfe7f484ae79b364225d9b19601b24c804cfd8751"
+checksum = "f95b976a79e4000bb9e07ff0709dca0ea27bcf1952d4c17d91fb7364d6145683"
 dependencies = [
  "jrsonnet-gcmodule-derive",
 ]
 
 [[package]]
 name = "jrsonnet-gcmodule-derive"
-version = "0.4.1"
+version = "0.4.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "2b30c95b285f9bb6709f1b3e6fc69b3a25e39b32ff987587fd108f0f22be5fa3"
+checksum = "51d928626220a310ff0cec815e80cf7fe104697184352ca21c40534e0b0d72d9"
 dependencies = [
  "proc-macro2",
  "quote",
@@ -1602,7 +1602,7 @@ version = "0.1.11"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "c2a7b1c03c876122aa43f3020e6c3c3ee5c05081c9a00739faf7503aeba10d22"
 dependencies = [
- "windows-sys 0.59.0",
+ "windows-sys 0.61.2",
 ]
 
 [[package]]

@@ -4,7 +4,7 @@ use ::regex::Regex;
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	rustc_hash::FxBuildHasher,
-	typed::Typed,
+	typed::{IntoUntyped, Typed},
 	val::StrValue,
 	IStr, ObjValue, ObjValueBuilder,
 };
@@ -41,7 +41,7 @@ impl RegexCacheInner {
 	}
 }
 
-#[derive(Typed)]
+#[derive(Typed, IntoUntyped)]
 pub struct RegexMatch {
 	string: IStr,
 	captures: Vec<IStr>,

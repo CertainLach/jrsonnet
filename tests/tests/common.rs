@@ -41,6 +41,7 @@ macro_rules! ensure_val_eq {
 }
 
 #[builtin]
+#[allow(dead_code)]
 fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 	match lazy.evaluate() {
 		Ok(_) => {
@@ -55,6 +56,7 @@ fn assert_throw(lazy: Thunk<Val>, message: String) -> Result<bool> {
 }
 
 #[builtin]
+#[allow(dead_code)]
 fn param_names(fun: FuncVal) -> Vec<String> {
 	fun.params()
 		.iter()

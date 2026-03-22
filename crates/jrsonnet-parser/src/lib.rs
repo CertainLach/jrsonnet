@@ -119,7 +119,7 @@ parser! {
 			}
 		pub rule destruct_object(s: &ParserSettings) -> expr::Destruct
 			= "{" _
-				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:expr(s) {v})? {(name, into, default)})**comma()
+				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:expr(s) {v})? {(name, into, default.map(Rc::new))})**comma()
 				rest:(
 					comma() rest:destruct_rest()? {rest}
 					/ comma()? {None}

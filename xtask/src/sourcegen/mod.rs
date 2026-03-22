@@ -65,9 +65,9 @@ pub fn generate_ungrammar() -> Result<()> {
 							is_lexer_error: true,
 						});
 					}
-				};
+				}
 				continue;
-			};
+			}
 			let name = to_upper_snake_case(token);
 			eprintln!("implicit kw: {token}");
 			kinds.define_token(TokenKind::Keyword {
@@ -447,7 +447,7 @@ fn generate_nodes(kinds: &KindsSrc, grammar: &AstSrc) -> Result<String> {
 			let trait_name = format_ident!("{}", trait_name);
 			let kinds: Vec<_> = nodes
 				.iter()
-				.map(|name| format_ident!("{}", to_upper_snake_case(&name.name.to_string())))
+				.map(|name| format_ident!("{}", to_upper_snake_case(&name.name)))
 				.collect();
 
 			(
@@ -555,10 +555,10 @@ pub fn escape_token_macro(token: &str) -> TokenStream {
 	if "{}[]()$".contains(token) {
 		let c = token.chars().next().unwrap();
 		quote! { #c }
-	} else if token.contains(|v| v == '$') {
+	} else if token.contains('$') {
 		quote! { #token }
-	} else if token.chars().all(|v| ('a'..='z').contains(&v)) {
-		let i = Ident::new(&token, Span::call_site());
+	} else if token.chars().all(|v: char| v.is_ascii_lowercase()) {
+		let i = Ident::new(token, Span::call_site());
 		quote! { #i }
 	} else {
 		let cs = token.chars().map(|c| Punct::new(c, Spacing::Joint));

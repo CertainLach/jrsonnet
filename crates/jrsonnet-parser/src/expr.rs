@@ -224,7 +224,8 @@ pub enum Destruct {
 	},
 	#[cfg(feature = "exp-destruct")]
 	Object {
-		fields: Vec<(IStr, Option<Destruct>, Option<Spanned<Expr>>)>,
+		#[allow(clippy::type_complexity)]
+		fields: Vec<(IStr, Option<Destruct>, Option<Rc<Spanned<Expr>>>)>,
 		rest: Option<DestructRest>,
 	},
 }
@@ -261,7 +262,7 @@ impl Destruct {
 				let mut out = 0;
 				for (_, into, _) in fields {
 					match into {
-						Some(v) => out += v.capacity_hint(),
+						Some(v) => out += v.binds_len(),
 						// Field is destructured to default name
 						None => out += 1,
 					}

@@ -56,7 +56,7 @@ impl<'i> Sink<'i> {
 	fn text_offset(&self) -> TextSize {
 		if self.offset == 0 {
 			return 0.into();
-		};
+		}
 		self.lexemes.get(self.offset).map_or_else(
 			|| {
 				self.lexemes

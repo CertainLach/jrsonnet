@@ -37,8 +37,7 @@ fn with_indent_eoi(cond: ConditionResolver, o: PrintItems, e: EndingComments) ->
 		format_comments(&e.trivia, CommentLocation::EndOfItems, &mut items);
 		items.into_rc_path()
 	};
-	let items =
-		new_line_group(pi!(@i; items(o.into()) items(end_comments_items.into()))).into_rc_path();
+	let items = new_line_group(pi!(@i; items(o) items(end_comments_items.into()))).into_rc_path();
 
 	let indented = with_indent(pi!(@i; nl items(items.into())));
 
@@ -355,6 +354,35 @@ impl Printable for ParamsDesc {
 }
 impl Printable for ArgsDesc {
 	fn print(&self, out: &mut PrintItems) {
+		fn gen_args(children: Vec<Child<Arg>>, multi_line: ConditionResolver) -> PrintItems {
+			let mut out = PrintItems::new();
+
+			let mut args = children.into_iter().peekable();
+			while let Some(ele) = args.next() {
+				if ele.should_start_with_newline {
+					p!(out, nl);
+				}
+				format_comments(&ele.before_trivia, CommentLocation::AboveItem, &mut out);
+				let arg = ele.value;
+				if arg.name().is_some() || arg.assign_token().is_some() {
+					p!(&mut out, {arg.name()} str(" = "));
+				}
+				p!(&mut out, { arg.expr() });
+				let has_more = args.peek().is_some();
+				if has_more {
+					p!(out, str(","));
+				} else {
+					p!(out, if("trailing comma", multi_line, str(",")));
+				}
+				format_comments(&ele.inline_trivia, CommentLocation::ItemInline, &mut out);
+				if has_more {
+					p!(out, if_else("arg separator", multi_line, nl)(sonl));
+				}
+			}
+
+			out
+		}
+
 		let start = LineNumber::new("args start line");
 		let end = LineNumber::new("args end line");
 		let multi_line = Rc::new(move |condition_context: &mut ConditionResolverContext| {
@@ -367,35 +395,6 @@ impl Printable for ArgsDesc {
 			self.r_paren_token().map(Into::into).as_ref(),
 			None,
 		);
-
-		fn gen_args(children: Vec<Child<Arg>>, multi_line: ConditionResolver) -> PrintItems {
-			let mut _out = PrintItems::new();
-			let out = &mut _out;
-
-			let mut args = children.into_iter().peekable();
-			while let Some(ele) = args.next() {
-				if ele.should_start_with_newline {
-					p!(out, nl);
-				}
-				format_comments(&ele.before_trivia, CommentLocation::AboveItem, out);
-				let arg = ele.value;
-				if arg.name().is_some() || arg.assign_token().is_some() {
-					p!(out, {arg.name()} str(" = "));
-				}
-				p!(out, { arg.expr() });
-				let has_more = args.peek().is_some();
-				if has_more {
-					p!(out, str(","));
-				} else {
-					p!(out, if("trailing comma", multi_line, str(",")));
-				}
-				format_comments(&ele.inline_trivia, CommentLocation::ItemInline, out);
-				if has_more {
-					p!(out, if_else("arg separator", multi_line, nl)(sonl));
-				}
-			}
-			_out
-		}
 
 		let args_items = new_line_group(gen_args(children, multi_line.clone())).into_rc_path();
 		let args_indented = with_indent(pi!(@i; nl items(args_items.into())));
@@ -447,6 +446,7 @@ impl Printable for Member {
 }
 
 impl Printable for ObjBody {
+	#[allow(clippy::too_many_lines)]
 	fn print(&self, out: &mut PrintItems) {
 		match self {
 			Self::ObjBodyComp(l) => {
@@ -507,6 +507,30 @@ impl Printable for ObjBody {
 				p!(out, nl <i str("}"));
 			}
 			Self::ObjBodyMemberList(l) => {
+				fn gen_members(
+					children: Vec<Child<Member>>,
+					multi_line: ConditionResolver,
+				) -> PrintItems {
+					let mut out = PrintItems::new();
+					let mut members = children.into_iter().peekable();
+					while let Some(mem) = members.next() {
+						if mem.should_start_with_newline {
+							p!(out, nl);
+						}
+						format_comments(&mem.before_trivia, CommentLocation::AboveItem, &mut out);
+						p!(&mut out, { mem.value });
+						let has_more = members.peek().is_some();
+						if has_more {
+							p!(out, str(","));
+						} else {
+							p!(out, if("trailing comma", multi_line, str(",")));
+						}
+						format_comments(&mem.inline_trivia, CommentLocation::ItemInline, &mut out);
+						p!(out, if_else("member separator", multi_line, nl)(sonl));
+					}
+					out
+				}
+
 				let (children, end_comments) = children_between::<Member>(
 					l.syntax().clone(),
 					l.l_brace_token().map(Into::into).as_ref(),
@@ -530,31 +554,6 @@ impl Printable for ObjBody {
 						is_multiple_lines(ctx, start, end)
 					})
 				};
-
-				fn gen_members(
-					children: Vec<Child<Member>>,
-					multi_line: ConditionResolver,
-				) -> PrintItems {
-					let mut _out = PrintItems::new();
-					let out = &mut _out;
-					let mut members = children.into_iter().peekable();
-					while let Some(mem) = members.next() {
-						if mem.should_start_with_newline {
-							p!(out, nl);
-						}
-						format_comments(&mem.before_trivia, CommentLocation::AboveItem, out);
-						p!(out, { mem.value });
-						let has_more = members.peek().is_some();
-						if has_more {
-							p!(out, str(","));
-						} else {
-							p!(out, if("trailing comma", multi_line, str(",")));
-						}
-						format_comments(&mem.inline_trivia, CommentLocation::ItemInline, out);
-						p!(out, if_else("member separator", multi_line, nl)(sonl));
-					}
-					_out
-				}
 
 				let members_items =
 					new_line_group(gen_members(children, multi_line.clone())).into_rc_path();
@@ -718,6 +717,27 @@ impl Printable for Stmt {
 
 impl Printable for ExprArray {
 	fn print(&self, out: &mut PrintItems) {
+		fn gen_elements(children: Vec<Child<Expr>>, multi_line: ConditionResolver) -> PrintItems {
+			let mut out = PrintItems::new();
+			let mut els = children.into_iter().peekable();
+			while let Some(el) = els.next() {
+				if el.should_start_with_newline {
+					p!(out, nl);
+				}
+				format_comments(&el.before_trivia, CommentLocation::AboveItem, &mut out);
+				p!(&mut out, { el.value });
+				let has_more = els.peek().is_some();
+				if has_more {
+					p!(out, str(","));
+				} else {
+					p!(out, if("trailing comma", multi_line, str(",")));
+				}
+				format_comments(&el.inline_trivia, CommentLocation::ItemInline, &mut out);
+				p!(out, if_else("element separator", multi_line, nl)(sonl));
+			}
+			out
+		}
+
 		let (children, end_comments) = children_between::<Expr>(
 			self.syntax().clone(),
 			self.l_brack_token().map(Into::into).as_ref(),
@@ -739,28 +759,6 @@ impl Printable for ExprArray {
 		} else {
 			Rc::new(move |ctx: &mut ConditionResolverContext| is_multiple_lines(ctx, start, end))
 		};
-
-		fn gen_elements(children: Vec<Child<Expr>>, multi_line: ConditionResolver) -> PrintItems {
-			let mut _out = PrintItems::new();
-			let out = &mut _out;
-			let mut els = children.into_iter().peekable();
-			while let Some(el) = els.next() {
-				if el.should_start_with_newline {
-					p!(out, nl);
-				}
-				format_comments(&el.before_trivia, CommentLocation::AboveItem, out);
-				p!(out, { el.value });
-				let has_more = els.peek().is_some();
-				if has_more {
-					p!(out, str(","));
-				} else {
-					p!(out, if("trailing comma", multi_line, str(",")));
-				}
-				format_comments(&el.inline_trivia, CommentLocation::ItemInline, out);
-				p!(out, if_else("element separator", multi_line, nl)(sonl))
-			}
-			_out
-		}
 
 		let els_items = new_line_group(gen_elements(children, multi_line.clone())).into_rc_path();
 
@@ -800,7 +798,7 @@ impl Printable for ExprBase {
 			Self::ExprString(s) => p!(out, { s.text() }),
 			Self::ExprNumber(n) => p!(out, { n.number() }),
 			Self::ExprArray(a) => {
-				p!(out, { a })
+				p!(out, { a });
 			}
 			Self::ExprObject(obj) => {
 				p!(out, { obj.obj_body() });
@@ -860,6 +858,11 @@ pub struct FormatOptions {
 	// 0 for hard tabs
 	pub indent: u8,
 }
+
+#[allow(
+	clippy::result_large_err,
+	reason = "TODO: there should be an intermediate representation for such reports"
+)]
 pub fn format(input: &str, opts: &FormatOptions) -> Result<String, SnippetBuilder> {
 	let (parsed, errors) = jrsonnet_rowan_parser::parse(input);
 	if !errors.is_empty() {

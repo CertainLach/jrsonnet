@@ -156,7 +156,7 @@ impl TypedField {
 		// optional flatten is handled in same way as serde
 		if self.attr.flatten {
 			return quote! {
-				#ident: <#ty as TypedObj>::parse(&obj).ok(),
+				#ident: <#ty as ParseTypedObj>::parse(&obj).ok(),
 			};
 		}
 
@@ -190,7 +190,7 @@ impl TypedField {
 		// optional flatten is handled in same way as serde
 		if self.attr.flatten {
 			return quote! {
-				#ident: <#ty as TypedObj>::parse(&obj)?,
+				#ident: <#ty as ParseTypedObj>::parse(&obj)?,
 			};
 		}
 
@@ -232,12 +232,12 @@ impl TypedField {
 				if self.is_option {
 					quote! {
 						if let Some(value) = self.#ident {
-							<#ty as TypedObj>::serialize(value, out)?;
+							<#ty as SerializeTypedObj>::serialize(value, out)?;
 						}
 					}
 				} else {
 					quote! {
-						<#ty as TypedObj>::serialize(self.#ident, out)?;
+						<#ty as SerializeTypedObj>::serialize(self.#ident, out)?;
 					}
 				}
 			},

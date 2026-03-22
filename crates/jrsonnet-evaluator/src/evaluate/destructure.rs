@@ -9,6 +9,9 @@ use crate::{
 	evaluate_method, evaluate_named_param, Context, Pending, Thunk, Val,
 };
 
+#[cfg(feature = "exp-preserve-order")]
+use crate::evaluate;
+
 #[allow(clippy::too_many_lines)]
 #[allow(unused_variables)]
 pub fn destruct<H: BuildHasher>(

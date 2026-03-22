@@ -61,9 +61,16 @@ impl<K: Trace> Default for ThunkIntoUntyped<K> {
 	}
 }
 
+#[diagnostic::on_unimplemented(
+	note = "don't implement `ParseTypedObj` directly, it is automatically provided by `FromUntyped` derive"
+)]
 pub trait ParseTypedObj: Typed {
 	fn parse(obj: &ObjValue) -> Result<Self>;
 }
+
+#[diagnostic::on_unimplemented(
+	note = "don't implement `SerializeTypedObj` directly, it is automatically provided by `IntoUntyped` derive"
+)]
 pub trait SerializeTypedObj: Typed {
 	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
 	fn into_object(self) -> Result<ObjValue> {

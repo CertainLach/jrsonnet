@@ -1,12 +1,5 @@
 use std::{
-	any::Any,
-	cell::{Cell, RefCell},
-	clone::Clone,
-	collections::hash_map::Entry,
-	fmt::{self, Debug},
-	hash::{Hash, Hasher},
-	num::Saturating,
-	ops::ControlFlow,
+	any::Any, cell::{Cell, RefCell}, clone::Clone, cmp::Reverse, collections::hash_map::Entry, fmt::{self, Debug}, hash::{Hash, Hasher}, num::Saturating, ops::ControlFlow
 };
 
 use educe::Educe;
@@ -39,18 +32,19 @@ pub mod ordering {
 
 	use jrsonnet_gcmodule::Trace;
 
-	#[derive(Clone, Copy, Default, Debug, Trace)]
+	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
 	pub struct FieldIndex(());
 	impl FieldIndex {
 		pub fn absolute(_v: u32) -> Self {
 			Self(())
 		}
+		#[must_use]
 		pub const fn next(self) -> Self {
 			Self(())
 		}
 	}
 
-	#[derive(Clone, Copy, Default, Debug, Trace)]
+	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
 	pub struct SuperDepth(());
 	impl SuperDepth {
 		pub(super) fn deepen(self) {}
@@ -59,8 +53,6 @@ pub mod ordering {
 
 #[cfg(feature = "exp-preserve-order")]
 pub mod ordering {
-	use std::cmp::Reverse;
-
 	use jrsonnet_gcmodule::Trace;
 
 	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
@@ -69,6 +61,7 @@ pub mod ordering {
 		pub fn absolute(v: u32) -> Self {
 			Self(v)
 		}
+		#[must_use]
 		pub fn next(self) -> Self {
 			Self(self.0 + 1)
 		}
@@ -78,22 +71,20 @@ pub mod ordering {
 	pub struct SuperDepth(u32);
 	impl SuperDepth {
 		pub(super) fn deepen(&mut self) {
-			self.0 += 1
-		}
-	}
-
-	#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
-	pub struct FieldSortKey(Reverse<SuperDepth>, FieldIndex);
-	impl FieldSortKey {
-		pub fn new(depth: SuperDepth, index: FieldIndex) -> Self {
-			Self(Reverse(depth), index)
+			self.0 += 1;
 		}
 	}
 }
 
-#[cfg(feature = "exp-preserve-order")]
-use ordering::FieldSortKey;
 use ordering::{FieldIndex, SuperDepth};
+
+#[derive(Clone, Copy, PartialEq, Eq, PartialOrd, Ord, Debug)]
+pub struct FieldSortKey(Reverse<SuperDepth>, FieldIndex);
+impl FieldSortKey {
+	pub fn new(depth: SuperDepth, index: FieldIndex) -> Self {
+		Self(Reverse(depth), index)
+	}
+}
 
 // 0 - add
 //  12 - visibility
@@ -795,7 +786,7 @@ impl ObjValue {
 struct FieldVisibilityData {
 	omitted_until: Saturating<usize>,
 	exists_visible: Option<Visibility>,
-	#[cfg(feature = "exp-preserve-order")]
+	#[allow(dead_code, reason = "used for exp-object-ordering, ZST otherwise")]
 	key: FieldSortKey,
 }
 impl FieldVisibilityData {
@@ -804,7 +795,7 @@ impl FieldVisibilityData {
 			.expect("non-existing fields shall be dropped at the end of fn fields_visibility()")
 			.is_visible()
 	}
-	#[cfg(feature = "exp-preserve-order")]
+	#[allow(dead_code, reason = "used for exp-object-ordering, ZST otherwise")]
 	fn sort_key(&self) -> FieldSortKey {
 		self.key
 	}
@@ -818,12 +809,11 @@ impl ObjValue {
 		let mut omit_index = Saturating(0);
 		for core in self.0.cores.iter().rev() {
 			core.0
-				.enum_fields_core(&mut super_depth, &mut |_depth, _index, name, visibility| {
+				.enum_fields_core(&mut super_depth, &mut |depth, index, name, visibility| {
 					let entry = out.entry(name);
-					let data = entry.or_insert(FieldVisibilityData {
+					let data = entry.or_insert_with(|| FieldVisibilityData {
 						exists_visible: None,
-						#[cfg(feature = "exp-preserve-order")]
-						key: FieldSortKey::new(_depth, _index),
+						key: FieldSortKey::new(depth, index),
 						omitted_until: omit_index,
 					});
 					match visibility {
