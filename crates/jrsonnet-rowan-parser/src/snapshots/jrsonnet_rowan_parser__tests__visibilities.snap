@@ -1,0 +1,51 @@
+---
+source: crates/jrsonnet-rowan-parser/src/tests.rs
+expression: "{\n\tnormal: 1,\n\thide:: 2,\n\tunhide::: 3,\n}\n"
+---
+SOURCE_FILE@0..41
+  EXPR@0..40
+    EXPR_OBJECT@0..40
+      OBJ_BODY_MEMBER_LIST@0..40
+        L_BRACE@0..1 "{"
+        WHITESPACE@1..3 "\n\t"
+        MEMBER_FIELD_NORMAL@3..12
+          FIELD_NAME_FIXED@3..9
+            NAME@3..9
+              IDENT@3..9 "normal"
+          VISIBILITY@9..10
+            COLON@9..10 ":"
+          WHITESPACE@10..11 " "
+          EXPR@11..12
+            EXPR_NUMBER@11..12
+              FLOAT@11..12 "1"
+        COMMA@12..13 ","
+        WHITESPACE@13..15 "\n\t"
+        MEMBER_FIELD_NORMAL@15..23
+          FIELD_NAME_FIXED@15..19
+            NAME@15..19
+              IDENT@15..19 "hide"
+          VISIBILITY@19..21
+            COLON@19..20 ":"
+            COLON@20..21 ":"
+          WHITESPACE@21..22 " "
+          EXPR@22..23
+            EXPR_NUMBER@22..23
+              FLOAT@22..23 "2"
+        COMMA@23..24 ","
+        WHITESPACE@24..26 "\n\t"
+        MEMBER_FIELD_NORMAL@26..37
+          FIELD_NAME_FIXED@26..32
+            NAME@26..32
+              IDENT@26..32 "unhide"
+          VISIBILITY@32..35
+            COLON@32..33 ":"
+            COLON@33..34 ":"
+            COLON@34..35 ":"
+          WHITESPACE@35..36 " "
+          EXPR@36..37
+            EXPR_NUMBER@36..37
+              FLOAT@36..37 "3"
+        COMMA@37..38 ","
+        WHITESPACE@38..39 "\n"
+        R_BRACE@39..40 "}"
+  WHITESPACE@40..41 "\n"

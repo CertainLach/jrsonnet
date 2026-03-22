@@ -1,0 +1,6 @@
+---
+source: crates/jrsonnet-formatter/src/tests.rs
+expression: reformat(&input)
+input_file: crates/jrsonnet-formatter/src/tests/visibilities.jsonnet
+---
+{ normal: 1, hide:: 2, unhide::: 3 }

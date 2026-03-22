@@ -44,8 +44,8 @@ ExprUnary =
     UnaryOperator
     rhs:Expr
 ExprObjExtend =
-    Expr
-    Expr
+    lhs:Expr
+    rhs:Expr
 ExprParened =
     '('
     Expr
@@ -209,9 +209,7 @@ FieldName =
 |   FieldNameDynamic
 
 Visibility =
-    ':::'
-|   '::'
-|   ':'
+    ':' v1:':'? v2:':'?
 
 Literal =
     'null'

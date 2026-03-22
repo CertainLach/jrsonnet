@@ -11,6 +11,7 @@ dprint-core.workspace = true
 hi-doc.workspace = true
 indoc.workspace = true
 insta.workspace = true
+jrsonnet-lexer = { version = "0.5.0-pre97", path = "../jrsonnet-lexer" }
 jrsonnet-rowan-parser.workspace = true
 
 [lints]

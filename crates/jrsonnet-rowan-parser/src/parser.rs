@@ -406,17 +406,27 @@ fn field_name(p: &mut Parser) {
 		m.complete(p, FIELD_NAME_FIXED);
 	} else {
 		m.forget(p);
-		// ::: it split because in TS it is being handled as : ::
-		p.error_with_recovery_set(TS![; : :: '('].with(T![:::]));
+		// Recover with ::, :::
+		p.error_with_recovery_set(TS![; : '(']);
 	}
 }
 fn visibility(p: &mut Parser) {
-	// ::: it split because in TS it is being handled as : ::
-	if p.at_ts(TS![: ::].with(T![:::])) {
-		p.bump();
-	} else {
+	let m = p.start();
+	if !p.at_ts(TS![:]) {
 		p.error_with_recovery_set(TS![=]);
 	}
+	p.bump();
+	'colons: {
+		if !p.at_ts(TS![:]) {
+			break 'colons;
+		}
+		p.bump();
+		if !p.at_ts(TS![:]) {
+			break 'colons;
+		}
+		p.bump();
+	}
+	m.complete(p, VISIBILITY);
 }
 fn assertion(p: &mut Parser) {
 	let m = p.start();
@@ -472,17 +482,17 @@ fn object(p: &mut Parser) -> CompletedMarker {
 				visibility(p);
 				expr(p);
 				true
-			// ::: it split because in TS it is being handled as : ::
-			} else if p.at_ts(TS![: ::].with(T![:::])) && p.nth_at(1, T![function]) {
-				visibility(p);
-				p.bump_assert(T![function]);
-				params_desc(p);
-				expr(p);
-				true
 			} else {
 				visibility(p);
-				expr(p);
-				false
+				if p.at(T![function]) {
+					p.bump_assert(T![function]);
+					params_desc(p);
+					expr(p);
+					true
+				} else {
+					expr(p);
+					false
+				}
 			};
 			elems += 1;
 
@@ -648,15 +658,14 @@ fn array(p: &mut Parser) -> CompletedMarker {
 fn slice_desc_or_index(p: &mut Parser) -> bool {
 	let m = p.start();
 	p.bump();
-	// TODO: do not treat :, ::, ::: as full tokens?
 	// Start
-	if !p.at(T![:]) && !p.at(T![::]) {
+	if !p.at(T![:]) {
 		expr(p);
 	}
 	if p.at(T![:]) {
 		p.bump();
 		// End
-		if !p.at(T![']']) {
+		if !p.at_ts(TS![']' :]) {
 			expr(p).wrap(p, SLICE_DESC_END, true);
 		}
 		if p.at(T![:]) {
@@ -665,12 +674,6 @@ fn slice_desc_or_index(p: &mut Parser) -> bool {
 			if !p.at(T![']']) {
 				expr(p).wrap(p, SLICE_DESC_STEP, true);
 			}
-		}
-	} else if p.at(T![::]) {
-		p.bump();
-		// End
-		if !p.at(T![']']) {
-			expr(p).wrap(p, SLICE_DESC_END, true);
 		}
 	} else {
 		// It was not a slice

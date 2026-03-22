@@ -11,7 +11,8 @@ SOURCE_FILE@0..36
           FIELD_NAME_FIXED@1..2
             NAME@1..2
               IDENT@1..2 "a"
-          COLON@2..3 ":"
+          VISIBILITY@2..3
+            COLON@2..3 ":"
           EXPR@3..4
             EXPR_NUMBER@3..4
               FLOAT@3..4 "1"
@@ -21,7 +22,8 @@ SOURCE_FILE@0..36
           FIELD_NAME_FIXED@6..7
             NAME@6..7
               IDENT@6..7 "b"
-          COLON@7..8 ":"
+          VISIBILITY@7..8
+            COLON@7..8 ":"
           EXPR@8..9
             EXPR_NUMBER@8..9
               FLOAT@8..9 "1"
@@ -60,7 +62,8 @@ SOURCE_FILE@0..36
           FIELD_NAME_FIXED@31..32
             NAME@31..32
               IDENT@31..32 "c"
-          COLON@32..33 ":"
+          VISIBILITY@32..33
+            COLON@32..33 ":"
           EXPR@33..34
             EXPR_NUMBER@33..34
               FLOAT@33..34 "1"

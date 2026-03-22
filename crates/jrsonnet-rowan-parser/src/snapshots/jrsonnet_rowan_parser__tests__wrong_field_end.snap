@@ -12,7 +12,8 @@ SOURCE_FILE@0..18
           FIELD_NAME_FIXED@3..4
             NAME@3..4
               IDENT@3..4 "a"
-          COLON@4..5 ":"
+          VISIBILITY@4..5
+            COLON@4..5 ":"
           WHITESPACE@5..6 " "
           EXPR@6..7
             EXPR_NUMBER@6..7
@@ -24,7 +25,8 @@ SOURCE_FILE@0..18
           FIELD_NAME_FIXED@10..11
             NAME@10..11
               IDENT@10..11 "b"
-          COLON@11..12 ":"
+          VISIBILITY@11..12
+            COLON@11..12 ":"
           WHITESPACE@12..13 " "
           EXPR@13..14
             EXPR_NUMBER@13..14

@@ -19,7 +19,8 @@ SOURCE_FILE@0..33
                 NAME@5..6
                   IDENT@5..6 "x"
             R_PAREN@6..7 ")"
-          COLON@7..8 ":"
+          VISIBILITY@7..8
+            COLON@7..8 ":"
           WHITESPACE@8..9 " "
           EXPR@9..10
             EXPR_VAR@9..10
@@ -31,7 +32,8 @@ SOURCE_FILE@0..33
           FIELD_NAME_FIXED@13..14
             NAME@13..14
               IDENT@13..14 "a"
-          COLON@14..15 ":"
+          VISIBILITY@14..15
+            COLON@14..15 ":"
           WHITESPACE@15..16 " "
           FUNCTION_KW@16..24 "function"
           PARAMS_DESC@24..27

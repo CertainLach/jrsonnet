@@ -228,8 +228,11 @@ pub struct ExprObjExtend {
 	pub(crate) syntax: SyntaxNode,
 }
 impl ExprObjExtend {
-	pub fn expr(&self) -> Option<Expr> {
+	pub fn lhs(&self) -> Option<Expr> {
 		support::children(&self.syntax).next()
+	}
+	pub fn rhs(&self) -> Option<Expr> {
+		support::children(&self.syntax).nth(1usize)
 	}
 }
 
@@ -562,10 +565,20 @@ impl MemberFieldNormal {
 		support::token(&self.syntax, T![+])
 	}
 	pub fn visibility(&self) -> Option<Visibility> {
-		support::token_child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn expr(&self) -> Option<Expr> {
 		support::children(&self.syntax).next()
+	}
+}
+
+#[derive(Debug, Clone, PartialEq, Eq, Hash)]
+pub struct Visibility {
+	pub(crate) syntax: SyntaxNode,
+}
+impl Visibility {
+	pub fn colon_token(&self) -> Option<SyntaxToken> {
+		support::token(&self.syntax, T![:])
 	}
 }
 
@@ -581,7 +594,7 @@ impl MemberFieldMethod {
 		support::children(&self.syntax).next()
 	}
 	pub fn visibility(&self) -> Option<Visibility> {
-		support::token_child(&self.syntax)
+		support::children(&self.syntax).next()
 	}
 	pub fn expr(&self) -> Option<Expr> {
 		support::children(&self.syntax).next()
@@ -999,19 +1012,6 @@ pub enum ImportKindKind {
 	ImportstrKw,
 	ImportbinKw,
 	ImportKw,
-}
-
-#[derive(Debug, Clone, PartialEq, Eq, Hash)]
-pub struct Visibility {
-	syntax: SyntaxToken,
-	kind: VisibilityKind,
-}
-
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Hash)]
-pub enum VisibilityKind {
-	Coloncoloncolon,
-	Coloncolon,
-	Colon,
 }
 
 #[derive(Debug, Clone, PartialEq, Eq, Hash)]
@@ -1615,6 +1615,21 @@ impl AstNode for MemberAssertStmt {
 impl AstNode for MemberFieldNormal {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		kind == MEMBER_FIELD_NORMAL
+	}
+	fn cast(syntax: SyntaxNode) -> Option<Self> {
+		if Self::can_cast(syntax.kind()) {
+			Some(Self { syntax })
+		} else {
+			None
+		}
+	}
+	fn syntax(&self) -> &SyntaxNode {
+		&self.syntax
+	}
+}
+impl AstNode for Visibility {
+	fn can_cast(kind: SyntaxKind) -> bool {
+		kind == VISIBILITY
 	}
 	fn cast(syntax: SyntaxNode) -> Option<Self> {
 		if Self::can_cast(syntax.kind()) {
@@ -2640,45 +2655,6 @@ impl std::fmt::Display for ImportKind {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}
 }
-impl AstToken for Visibility {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		VisibilityKind::can_cast(kind)
-	}
-	fn cast(syntax: SyntaxToken) -> Option<Self> {
-		let kind = VisibilityKind::cast(syntax.kind())?;
-		Some(Visibility { syntax, kind })
-	}
-	fn syntax(&self) -> &SyntaxToken {
-		&self.syntax
-	}
-}
-impl VisibilityKind {
-	fn can_cast(kind: SyntaxKind) -> bool {
-		match kind {
-			COLONCOLONCOLON | COLONCOLON | COLON => true,
-			_ => false,
-		}
-	}
-	pub fn cast(kind: SyntaxKind) -> Option<Self> {
-		let res = match kind {
-			COLONCOLONCOLON => Self::Coloncoloncolon,
-			COLONCOLON => Self::Coloncolon,
-			COLON => Self::Colon,
-			_ => return None,
-		};
-		Some(res)
-	}
-}
-impl Visibility {
-	pub fn kind(&self) -> VisibilityKind {
-		self.kind
-	}
-}
-impl std::fmt::Display for Visibility {
-	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-		std::fmt::Display::fmt(self.syntax(), f)
-	}
-}
 impl AstToken for Trivia {
 	fn can_cast(kind: SyntaxKind) -> bool {
 		TriviaKind::can_cast(kind)
@@ -3011,6 +2987,11 @@ impl std::fmt::Display for MemberAssertStmt {
 	}
 }
 impl std::fmt::Display for MemberFieldNormal {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		std::fmt::Display::fmt(self.syntax(), f)
+	}
+}
+impl std::fmt::Display for Visibility {
 	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
 		std::fmt::Display::fmt(self.syntax(), f)
 	}

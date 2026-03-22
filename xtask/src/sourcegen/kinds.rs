@@ -240,8 +240,6 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		"{" => "L_BRACE";
 		"}" => "R_BRACE";
 		":" => "COLON";
-		"::" => "COLONCOLON";
-		":::" => "COLONCOLONCOLON";
 		";" => "SEMI";
 		"." => "DOT";
 		"..." => "DOTDOTDOT";

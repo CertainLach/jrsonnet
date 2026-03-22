@@ -8,8 +8,8 @@ use dprint_core::formatting::{
 	ConditionResolver, ConditionResolverContext, LineNumber, PrintItems, PrintOptions,
 };
 use hi_doc::{Formatting, SnippetBuilder};
+use jrsonnet_lexer::collect_lexed_str_block;
 use jrsonnet_rowan_parser::{
-	collect_lexed_str_block,
 	nodes::{
 		Arg, ArgsDesc, Assertion, BinaryOperator, Bind, CompSpec, Destruct, DestructArrayPart,
 		DestructRest, Expr, ExprArray, ExprBase, FieldName, ForSpec, IfSpec, ImportKind, Literal,
@@ -790,7 +790,7 @@ impl Printable for ExprBase {
 			// 	pi
 			// }
 			Self::ExprObjExtend(ex) => {
-				p!(out, {ex.lhs_work()} str(" ") {ex.rhs_work()});
+				p!(out, {ex.lhs()} str(" ") {ex.rhs()});
 			}
 			Self::ExprParened(p) => {
 				p!(out, str("(") {p.expr()} str(")"));

@@ -208,6 +208,14 @@ mk_test!(
 			Trimmed text block
 		|||
 	"#
+
+	visibilities => r#"
+		{
+			normal: 1,
+			hide:: 2,
+			unhide::: 3,
+		}
+	"#
 );
 
 #[test]

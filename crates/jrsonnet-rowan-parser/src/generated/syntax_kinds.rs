@@ -44,8 +44,6 @@ pub enum SyntaxKind {
 	L_BRACE,
 	R_BRACE,
 	COLON,
-	COLONCOLON,
-	COLONCOLONCOLON,
 	SEMI,
 	DOT,
 	DOTDOTDOT,
@@ -142,6 +140,7 @@ pub enum SyntaxKind {
 	OBJ_LOCAL,
 	MEMBER_ASSERT_STMT,
 	MEMBER_FIELD_NORMAL,
+	VISIBILITY,
 	MEMBER_FIELD_METHOD,
 	FIELD_NAME_FIXED,
 	FIELD_NAME_DYNAMIC,
@@ -174,7 +173,6 @@ pub enum SyntaxKind {
 	TEXT,
 	NUMBER,
 	IMPORT_KIND,
-	VISIBILITY,
 	TRIVIA,
 	CUSTOM_ERROR,
 	#[doc(hidden)]
@@ -186,11 +184,10 @@ impl SyntaxKind {
 		match self {
 			OR | NULL_COAELSE | AND | BIT_OR | BIT_XOR | BIT_AND | EQ | NE | LT | GT | LE | GE
 			| LHS | RHS | PLUS | MINUS | MUL | DIV | MODULO | NOT | BIT_NOT | L_BRACK | R_BRACK
-			| L_PAREN | R_PAREN | L_BRACE | R_BRACE | COLON | COLONCOLON | COLONCOLONCOLON
-			| SEMI | DOT | DOTDOTDOT | COMMA | DOLLAR | ASSIGN | QUESTION_MARK | TAILSTRICT_KW
-			| LOCAL_KW | IMPORTSTR_KW | IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW
-			| FUNCTION_KW | ERROR_KW | IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW
-			| SUPER_KW | FOR_KW | ASSERT_KW => true,
+			| L_PAREN | R_PAREN | L_BRACE | R_BRACE | COLON | SEMI | DOT | DOTDOTDOT | COMMA
+			| DOLLAR | ASSIGN | QUESTION_MARK | TAILSTRICT_KW | LOCAL_KW | IMPORTSTR_KW
+			| IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW | FUNCTION_KW | ERROR_KW
+			| IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW | SUPER_KW | FOR_KW | ASSERT_KW => true,
 			_ => false,
 		}
 	}
@@ -198,7 +195,7 @@ impl SyntaxKind {
 		match self {
 			SUFFIX | BIND | STMT | OBJ_BODY | COMP_SPEC | EXPR_BASE | MEMBER_COMP | MEMBER
 			| FIELD_NAME | DESTRUCT | DESTRUCT_ARRAY_PART | BINARY_OPERATOR | UNARY_OPERATOR
-			| LITERAL | TEXT | NUMBER | IMPORT_KIND | VISIBILITY | TRIVIA | CUSTOM_ERROR => true,
+			| LITERAL | TEXT | NUMBER | IMPORT_KIND | TRIVIA | CUSTOM_ERROR => true,
 			_ => false,
 		}
 	}
@@ -211,6 +208,6 @@ impl SyntaxKind {
 	}
 }
 #[macro_export]
-macro_rules ! T { [||] => { $ crate :: SyntaxKind :: OR } ; [??] => { $ crate :: SyntaxKind :: NULL_COAELSE } ; [&&] => { $ crate :: SyntaxKind :: AND } ; [|] => { $ crate :: SyntaxKind :: BIT_OR } ; [^] => { $ crate :: SyntaxKind :: BIT_XOR } ; [&] => { $ crate :: SyntaxKind :: BIT_AND } ; [==] => { $ crate :: SyntaxKind :: EQ } ; [!=] => { $ crate :: SyntaxKind :: NE } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LE } ; [>=] => { $ crate :: SyntaxKind :: GE } ; [<<] => { $ crate :: SyntaxKind :: LHS } ; [>>] => { $ crate :: SyntaxKind :: RHS } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: MUL } ; [/] => { $ crate :: SyntaxKind :: DIV } ; [%] => { $ crate :: SyntaxKind :: MODULO } ; [!] => { $ crate :: SyntaxKind :: NOT } ; [~] => { $ crate :: SyntaxKind :: BIT_NOT } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['{'] => { $ crate :: SyntaxKind :: L_BRACE } ; ['}'] => { $ crate :: SyntaxKind :: R_BRACE } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [::] => { $ crate :: SyntaxKind :: COLONCOLON } ; [:::] => { $ crate :: SyntaxKind :: COLONCOLONCOLON } ; [;] => { $ crate :: SyntaxKind :: SEMI } ; [.] => { $ crate :: SyntaxKind :: DOT } ; [...] => { $ crate :: SyntaxKind :: DOTDOTDOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['$'] => { $ crate :: SyntaxKind :: DOLLAR } ; [=] => { $ crate :: SyntaxKind :: ASSIGN } ; [?] => { $ crate :: SyntaxKind :: QUESTION_MARK } ; [tailstrict] => { $ crate :: SyntaxKind :: TAILSTRICT_KW } ; [local] => { $ crate :: SyntaxKind :: LOCAL_KW } ; [importstr] => { $ crate :: SyntaxKind :: IMPORTSTR_KW } ; [importbin] => { $ crate :: SyntaxKind :: IMPORTBIN_KW } ; [import] => { $ crate :: SyntaxKind :: IMPORT_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [function] => { $ crate :: SyntaxKind :: FUNCTION_KW } ; [error] => { $ crate :: SyntaxKind :: ERROR_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [null] => { $ crate :: SyntaxKind :: NULL_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [self] => { $ crate :: SyntaxKind :: SELF_KW } ; [super] => { $ crate :: SyntaxKind :: SUPER_KW } ; [for] => { $ crate :: SyntaxKind :: FOR_KW } ; [assert] => { $ crate :: SyntaxKind :: ASSERT_KW } }
+macro_rules ! T { [||] => { $ crate :: SyntaxKind :: OR } ; [??] => { $ crate :: SyntaxKind :: NULL_COAELSE } ; [&&] => { $ crate :: SyntaxKind :: AND } ; [|] => { $ crate :: SyntaxKind :: BIT_OR } ; [^] => { $ crate :: SyntaxKind :: BIT_XOR } ; [&] => { $ crate :: SyntaxKind :: BIT_AND } ; [==] => { $ crate :: SyntaxKind :: EQ } ; [!=] => { $ crate :: SyntaxKind :: NE } ; [<] => { $ crate :: SyntaxKind :: LT } ; [>] => { $ crate :: SyntaxKind :: GT } ; [<=] => { $ crate :: SyntaxKind :: LE } ; [>=] => { $ crate :: SyntaxKind :: GE } ; [<<] => { $ crate :: SyntaxKind :: LHS } ; [>>] => { $ crate :: SyntaxKind :: RHS } ; [+] => { $ crate :: SyntaxKind :: PLUS } ; [-] => { $ crate :: SyntaxKind :: MINUS } ; [*] => { $ crate :: SyntaxKind :: MUL } ; [/] => { $ crate :: SyntaxKind :: DIV } ; [%] => { $ crate :: SyntaxKind :: MODULO } ; [!] => { $ crate :: SyntaxKind :: NOT } ; [~] => { $ crate :: SyntaxKind :: BIT_NOT } ; ['['] => { $ crate :: SyntaxKind :: L_BRACK } ; [']'] => { $ crate :: SyntaxKind :: R_BRACK } ; ['('] => { $ crate :: SyntaxKind :: L_PAREN } ; [')'] => { $ crate :: SyntaxKind :: R_PAREN } ; ['{'] => { $ crate :: SyntaxKind :: L_BRACE } ; ['}'] => { $ crate :: SyntaxKind :: R_BRACE } ; [:] => { $ crate :: SyntaxKind :: COLON } ; [;] => { $ crate :: SyntaxKind :: SEMI } ; [.] => { $ crate :: SyntaxKind :: DOT } ; [...] => { $ crate :: SyntaxKind :: DOTDOTDOT } ; [,] => { $ crate :: SyntaxKind :: COMMA } ; ['$'] => { $ crate :: SyntaxKind :: DOLLAR } ; [=] => { $ crate :: SyntaxKind :: ASSIGN } ; [?] => { $ crate :: SyntaxKind :: QUESTION_MARK } ; [tailstrict] => { $ crate :: SyntaxKind :: TAILSTRICT_KW } ; [local] => { $ crate :: SyntaxKind :: LOCAL_KW } ; [importstr] => { $ crate :: SyntaxKind :: IMPORTSTR_KW } ; [importbin] => { $ crate :: SyntaxKind :: IMPORTBIN_KW } ; [import] => { $ crate :: SyntaxKind :: IMPORT_KW } ; [if] => { $ crate :: SyntaxKind :: IF_KW } ; [then] => { $ crate :: SyntaxKind :: THEN_KW } ; [else] => { $ crate :: SyntaxKind :: ELSE_KW } ; [function] => { $ crate :: SyntaxKind :: FUNCTION_KW } ; [error] => { $ crate :: SyntaxKind :: ERROR_KW } ; [in] => { $ crate :: SyntaxKind :: IN_KW } ; [null] => { $ crate :: SyntaxKind :: NULL_KW } ; [true] => { $ crate :: SyntaxKind :: TRUE_KW } ; [false] => { $ crate :: SyntaxKind :: FALSE_KW } ; [self] => { $ crate :: SyntaxKind :: SELF_KW } ; [super] => { $ crate :: SyntaxKind :: SUPER_KW } ; [for] => { $ crate :: SyntaxKind :: FOR_KW } ; [assert] => { $ crate :: SyntaxKind :: ASSERT_KW } }
 #[allow(unused_imports)]
 pub use T;
