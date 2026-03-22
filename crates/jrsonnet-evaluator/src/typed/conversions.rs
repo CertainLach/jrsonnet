@@ -8,7 +8,7 @@ use jrsonnet_types::{ComplexValType, ValType};
 use crate::{
 	arr::{ArrValue, BytesArray},
 	bail,
-	function::{CallLocation, FuncDesc, FuncVal, PreparedFuncVal},
+	function::{FuncDesc, FuncVal},
 	typed::CheckType,
 	val::{IndexableVal, NumValue, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
@@ -674,66 +674,6 @@ where
 		}
 	}
 }
-
-#[derive(Debug, Trace, Clone)]
-pub struct NativeFn<D: 'static>(pub(crate) PreparedFuncVal, PhantomData<D>);
-macro_rules! impl_native_desc {
-	($i:expr; $($gen:ident)*) => {
-		impl<$($gen,)* O> NativeFn<($($gen,)* O,)>
-		where
-			$($gen: Typed,)*
-			O: Typed,
-		{
-			pub fn call(
-				&self,
-				$($gen: $gen,)*
-			) -> Result<O> {
-				let val = self.0.call(
-					CallLocation::native(),
-					&[$(Typed::into_lazy_untyped($gen),)*],
-					&[],
-				)?;
-				O::from_untyped(val)
-			}
-		}
-		impl<$($gen,)* O> Typed for NativeFn<($($gen,)* O,)> {
-			const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Func);
-
-			fn into_untyped(_typed: Self) -> Result<Val> {
-				bail!("can only convert functions from jsonnet to native")
-			}
-
-			fn from_untyped(untyped: Val) -> Result<Self> {
-				let func = FuncVal::from_untyped(untyped)?;
-				Ok(Self(
-					PreparedFuncVal::new(func, $i, &[])?,
-					PhantomData,
-				))
-			}
-		}
-	};
-	($i:expr; $($cur:ident)* @ $c:ident $($rest:ident)*) => {
-		impl_native_desc!($i; $($cur)*);
-		impl_native_desc!($i + 1; $($cur)* $c @ $($rest)*);
-	};
-	($i:expr; $($cur:ident)* @) => {
-		impl_native_desc!($i; $($cur)*);
-	}
-}
-
-impl_native_desc! {
-	0; @ A B C D E F G H I J K L
-}
-
-mod native_macro {
-	#[macro_export]
-	macro_rules! NativeFn {
-		(($($t:ty),* $(,)?) -> $res:ty) => {
-			NativeFn<($($t,)* $res)>
-		}
-	}
-}
-pub use crate::NativeFn;
 
 impl Typed for NumValue {
 	const TYPE: &'static ComplexValType = &ComplexValType::Simple(ValType::Num);

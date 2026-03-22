@@ -2,9 +2,9 @@
 
 use jrsonnet_evaluator::{
 	bail,
-	function::{builtin, FuncVal},
+	function::{builtin, FuncVal, NativeFn},
 	runtime_error,
-	typed::{BoundedI32, BoundedUsize, Either2, NativeFn, Typed},
+	typed::{BoundedI32, BoundedUsize, Either2, Typed},
 	val::{equals, ArrValue, IndexableVal},
 	Either, IStr, ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };

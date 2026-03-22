@@ -13,7 +13,8 @@ pub use encoding::*;
 pub use hash::*;
 use jrsonnet_evaluator::{
 	error::Result,
-	function::{CallLocation, FuncVal, TlaArg},
+	function::{CallLocation, FuncVal},
+	tla::TlaArg,
 	trace::PathResolver,
 	val::NumValue,
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,

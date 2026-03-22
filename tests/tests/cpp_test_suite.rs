@@ -6,10 +6,10 @@ use std::{
 
 use jrsonnet_evaluator::{
 	FileImportResolver, IStr, ObjValueBuilder, State, Val, apply_tla,
-	function::TlaArg,
 	gc::WithCapacityExt as _,
 	manifest::JsonFormat,
 	rustc_hash::FxHashMap,
+	tla::TlaArg,
 	trace::{CompactFormat, PathResolver, TraceFormat},
 };
 use jrsonnet_stdlib::ContextInitializer;

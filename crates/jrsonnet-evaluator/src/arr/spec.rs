@@ -6,8 +6,7 @@ use jrsonnet_interner::{IBytes, IStr};
 use jrsonnet_parser::{Expr, Spanned};
 
 use super::ArrValue;
-use crate::typed::NativeFn;
-use crate::val::NumValue;
+use crate::function::NativeFn;
 use crate::{
 	error::ErrorKind::InfiniteRecursionDetected, evaluate, typed::Typed, val::ThunkValue, Context,
 	Error, ObjValue, Result, Thunk, Val,

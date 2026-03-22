@@ -1,11 +1,10 @@
 use std::{fmt::Debug, rc::Rc};
 
-pub use arglike::{ArgLike, ArgsLike, TlaArg};
 use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{Destruct, Expr, ExprParams, Span, Spanned};
+use jrsonnet_parser::{ArgsDesc, Destruct, Expr, ExprParams, Span, Spanned};
 
 use self::{
 	builtin::{Builtin, StaticBuiltin},
@@ -17,12 +16,12 @@ use crate::{
 	Result, Thunk, Val,
 };
 
-pub mod arglike;
 pub mod builtin;
-pub mod native;
-pub mod parse;
+mod native;
+mod parse;
 mod prepared;
 
+pub use native::NativeFn;
 pub use prepared::PreparedFuncVal;
 
 pub use jrsonnet_parser::function::*;
@@ -81,10 +80,10 @@ impl FuncDesc {
 	}
 
 	/// Create context, with which body code will run
-	pub fn call_body_context(
+	pub(crate) fn call_body_context(
 		&self,
 		call_ctx: Context,
-		args: &dyn ArgsLike,
+		args: &ArgsDesc,
 		tailstrict: bool,
 	) -> Result<Context> {
 		parse_function_call(call_ctx, self.ctx.clone(), &self.params, args, tailstrict)
@@ -170,7 +169,7 @@ impl FuncVal {
 		&self,
 		call_ctx: Context,
 		loc: CallLocation<'_>,
-		args: &dyn ArgsLike,
+		args: &ArgsDesc,
 		tailstrict: bool,
 	) -> Result<Val> {
 		match self {
@@ -179,7 +178,7 @@ impl FuncVal {
 				evaluate(body_ctx, &func.body)
 			}
 			Self::Thunk(thunk) => {
-				if !args.is_empty() {
+				if !args.named.is_empty() || !args.unnamed.is_empty() {
 					bail!(TooManyArgsFunctionHas(0, FunctionSignature::empty()))
 				}
 				thunk.evaluate()

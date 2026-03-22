@@ -9,7 +9,7 @@ use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
 use jrsonnet_parser::{Expr, Spanned};
 
-use crate::{typed::NativeFn, Context, Result, Thunk, Val};
+use crate::{function::NativeFn, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};

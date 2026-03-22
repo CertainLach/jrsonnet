@@ -19,7 +19,7 @@ mod map;
 mod obj;
 pub mod stack;
 pub mod stdlib;
-mod tla;
+pub mod tla;
 pub mod trace;
 pub mod typed;
 pub mod val;

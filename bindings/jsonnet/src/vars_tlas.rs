@@ -2,7 +2,8 @@
 
 use std::{ffi::CStr, os::raw::c_char};
 
-use jrsonnet_evaluator::{function::TlaArg, IStr};
+use jrsonnet_evaluator::tla::TlaArg;
+use jrsonnet_evaluator::IStr;
 
 use crate::VM;
 

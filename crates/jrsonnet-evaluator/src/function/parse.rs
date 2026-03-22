@@ -1,18 +1,28 @@
+use std::rc::Rc;
+
 use jrsonnet_parser::{
 	function::{FunctionSignature, ParamName},
-	ExprParams,
+	ArgsDesc, Expr, ExprParams, Spanned,
 };
 use rustc_hash::FxHashMap;
 
-use super::arglike::ArgsLike;
 use crate::{
 	bail,
 	destructure::destruct,
 	error::{ErrorKind::*, Result},
-	evaluate_named_param,
+	evaluate, evaluate_named_param,
 	gc::WithCapacityExt as _,
 	Context, Pending, Thunk, Val,
 };
+
+fn eval_arg(ctx: Context, arg: &Rc<Spanned<Expr>>, tailstrict: bool) -> Result<Thunk<Val>> {
+	if tailstrict {
+		Ok(Thunk::evaluated(evaluate(ctx, arg)?))
+	} else {
+		let arg = arg.clone();
+		Ok(Thunk!(move || evaluate(ctx, &arg)))
+	}
+}
 
 /// Creates correct [context](Context) for function body evaluation returning error on invalid call.
 ///
@@ -22,15 +32,15 @@ use crate::{
 /// * `params`: function parameters' definition
 /// * `args`: passed function arguments
 /// * `tailstrict`: if set to `true` function arguments are eagerly executed, otherwise - lazily
-pub fn parse_function_call(
+pub(crate) fn parse_function_call(
 	ctx: Context,
 	body_ctx: Context,
 	params: &ExprParams,
-	args: &dyn ArgsLike,
+	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Context> {
 	let mut passed_args = FxHashMap::with_capacity(params.binds_len());
-	if args.unnamed_len() > params.signature.len() {
+	if args.unnamed.len() > params.signature.len() {
 		bail!(TooManyArgsFunctionHas(
 			params.signature.len(),
 			params.signature.clone(),
@@ -40,28 +50,29 @@ pub fn parse_function_call(
 	let mut filled_named = 0;
 	let mut filled_positionals = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
+	for (id, arg) in args.unnamed.iter().enumerate() {
 		destruct(
 			&params.exprs[id].destruct,
-			arg,
+			eval_arg(ctx.clone(), arg, tailstrict)?,
 			Pending::new_filled(ctx.clone()),
 			&mut passed_args,
 		)?;
 		filled_positionals += 1;
-		Ok(())
-	})?;
+	}
 
-	args.named_iter(ctx, tailstrict, &mut |name, value| {
+	for (name, value) in &args.named {
 		// FIXME: O(n) for arg existence check
 		if !params.exprs.iter().any(|p| &p.destruct.name() == name) {
 			bail!(UnknownFunctionParameter(name.clone()));
 		}
-		if passed_args.insert(name.clone(), value).is_some() {
+		if passed_args
+			.insert(name.clone(), eval_arg(ctx.clone(), value, tailstrict)?)
+			.is_some()
+		{
 			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_named += 1;
-		Ok(())
-	})?;
+	}
 
 	if filled_named + filled_positionals < params.len() {
 		// Some args are unset, but maybe we have defaults for them
@@ -104,13 +115,13 @@ pub fn parse_function_call(
 
 		// Some args still weren't filled
 		if filled_named + filled_positionals != params.len() {
-			for param in params.exprs.iter().skip(args.unnamed_len()) {
+			for param in params.exprs.iter().skip(args.unnamed.len()) {
 				let mut found = false;
-				args.named_names(&mut |name| {
+				for (name, _) in &args.named {
 					if &param.destruct.name() == name {
 						found = true;
 					}
-				});
+				}
 				if !found {
 					bail!(FunctionParameterNotBoundInCall(
 						param.destruct.name(),
@@ -141,34 +152,35 @@ pub fn parse_function_call(
 pub fn parse_builtin_call(
 	ctx: Context,
 	params: FunctionSignature,
-	args: &dyn ArgsLike,
+	args: &ArgsDesc,
 	tailstrict: bool,
 ) -> Result<Vec<Option<Thunk<Val>>>> {
 	let mut passed_args: Vec<Option<Thunk<Val>>> = vec![None; params.len()];
-	if args.unnamed_len() > params.len() {
+	if args.unnamed.len() > params.len() {
 		bail!(TooManyArgsFunctionHas(params.len(), params,))
 	}
 
 	let mut filled_args = 0;
 
-	args.unnamed_iter(ctx.clone(), tailstrict, &mut |id, arg| {
-		passed_args[id] = Some(arg);
+	for (id, arg) in args.unnamed.iter().enumerate() {
+		passed_args[id] = Some(eval_arg(ctx.clone(), arg, tailstrict)?);
 		filled_args += 1;
-		Ok(())
-	})?;
+	}
 
-	args.named_iter(ctx, tailstrict, &mut |name, arg| {
+	for (name, arg) in &args.named {
 		// FIXME: O(n) for arg existence check
 		let id = params
 			.iter()
 			.position(|p| p.name() == name)
 			.ok_or_else(|| UnknownFunctionParameter(name.clone()))?;
-		if passed_args[id].replace(arg).is_some() {
+		if passed_args[id]
+			.replace(eval_arg(ctx.clone(), arg, tailstrict)?)
+			.is_some()
+		{
 			bail!(BindingParameterASecondTime(name.clone()));
 		}
 		filled_args += 1;
-		Ok(())
-	})?;
+	}
 
 	if filled_args < params.len() {
 		for (id, _) in params.iter().enumerate().filter(|(_, p)| p.has_default()) {
@@ -180,13 +192,13 @@ pub fn parse_builtin_call(
 
 		// Some args still wasn't filled
 		if filled_args != params.len() {
-			for param in params.iter().skip(args.unnamed_len()) {
+			for param in params.iter().skip(args.unnamed.len()) {
 				let mut found = false;
-				args.named_names(&mut |name| {
+				for (name, _) in &args.named {
 					if param.name() == name {
 						found = true;
 					}
-				});
+				}
 				if !found {
 					bail!(FunctionParameterNotBoundInCall(
 						param.name().clone(),
