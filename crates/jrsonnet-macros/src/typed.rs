@@ -301,43 +301,40 @@ pub fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 
 	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
 
-	let capacity = fields.len();
+	let fields = fields
+		.iter()
+		.filter_map(TypedField::expand_field)
+		.collect::<Vec<_>>();
+	Ok(quote! {
+		const _: () = {
+			use ::jrsonnet_evaluator::typed::__typed_macro_prelude::*;
 
-	let typed = {
-		let fields = fields
-			.iter()
-			.filter_map(TypedField::expand_field)
-			.collect::<Vec<_>>();
-		quote! {
 			impl #impl_generics Typed for #ident #ty_generics #where_clause {
 				const TYPE: &'static ComplexValType = &ComplexValType::ObjectRef(&[
 					#(#fields,)*
 				]);
 			}
-
-			impl #impl_generics FromUntyped for #ident #ty_generics #where_clause {
-				fn from_untyped(value: Val) -> JrResult<Self> {
-					let obj = value.as_obj().expect("shape is correct");
-					Self::parse(&obj)
-				}
-			}
-
-			impl #impl_generics IntoUntyped for #ident #ty_generics #where_clause {
-				fn into_untyped(value: Self) -> JrResult<Val> {
-					let mut out = ObjValueBuilder::with_capacity(#capacity);
-					value.serialize(&mut out)?;
-					Ok(Val::Obj(out.build()))
-				}
-			}
-		}
+		};
+	})
+}
+pub fn derive_into_untyped_inner(input: DeriveInput) -> Result<TokenStream> {
+	let syn::Data::Struct(data) = &input.data else {
+		return Err(Error::new(input.span(), "only structs supported"));
 	};
+
+	let ident = &input.ident;
+	let fields = data
+		.fields
+		.iter()
+		.map(TypedField::parse)
+		.collect::<Result<Vec<_>>>()?;
+
+	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+	let capacity = fields.len();
 
 	let mut names = Names::default();
 
-	let fields_parse = fields
-		.iter()
-		.map(|f| f.expand_parse(&mut names))
-		.collect::<Vec<_>>();
 	let fields_serialize = fields
 		.iter()
 		.map(|f| f.expand_serialize(&mut names))
@@ -346,18 +343,19 @@ pub fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 	let names_expanded = names.expand();
 	Ok(quote! {
 		const _: () = {
-			use ::jrsonnet_evaluator::{
-				typed::{ComplexValType, Typed, IntoUntyped, FromUntyped, TypedObj, CheckType},
-				Val, State,
-				error::{ErrorKind, Result as JrResult},
-				ObjValueBuilder, ObjValue, IStr,
-			};
+			use ::jrsonnet_evaluator::typed::__typed_macro_prelude::*;
 
-			#typed
+			impl #impl_generics IntoUntyped for #ident #ty_generics #where_clause {
+				fn into_untyped(value: Self) -> JrResult<Val> {
+					let mut out = ObjValueBuilder::with_capacity(#capacity);
+					value.serialize(&mut out)?;
+					Ok(Val::Obj(out.build()))
+				}
+			}
 
 			#names_expanded
 
-			impl #impl_generics TypedObj for #ident #ty_generics #where_clause {
+			impl #impl_generics SerializeTypedObj for #ident #ty_generics #where_clause {
 				fn serialize(self, out: &mut ObjValueBuilder) -> JrResult<()> {
 					NAMES.with(|__names| {
 						#(#fields_serialize)*
@@ -365,6 +363,46 @@ pub fn derive_typed_inner(input: DeriveInput) -> Result<TokenStream> {
 						Ok(())
 					})
 				}
+			}
+		};
+	})
+}
+pub fn derive_from_untyped_inner(input: DeriveInput) -> Result<TokenStream> {
+	let syn::Data::Struct(data) = &input.data else {
+		return Err(Error::new(input.span(), "only structs supported"));
+	};
+
+	let ident = &input.ident;
+	let fields = data
+		.fields
+		.iter()
+		.map(TypedField::parse)
+		.collect::<Result<Vec<_>>>()?;
+
+	let (impl_generics, ty_generics, where_clause) = input.generics.split_for_impl();
+
+	let mut names = Names::default();
+
+	let fields_parse = fields
+		.iter()
+		.map(|f| f.expand_parse(&mut names))
+		.collect::<Vec<_>>();
+
+	let names_expanded = names.expand();
+	Ok(quote! {
+		const _: () = {
+			use ::jrsonnet_evaluator::typed::__typed_macro_prelude::*;
+
+			impl #impl_generics FromUntyped for #ident #ty_generics #where_clause {
+				fn from_untyped(value: Val) -> JrResult<Self> {
+					let obj = value.as_obj().expect("shape is correct");
+					Self::parse(&obj)
+				}
+			}
+
+			#names_expanded
+
+			impl #impl_generics ParseTypedObj for #ident #ty_generics #where_clause {
 				fn parse(obj: &ObjValue) -> JrResult<Self> {
 					NAMES.with(|__names| Ok(Self {
 						#(#fields_parse)*

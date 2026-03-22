@@ -609,7 +609,7 @@ impl PickObjectKeyValues {
 	}
 }
 
-#[derive(Typed)]
+#[derive(Typed, IntoUntyped)]
 pub struct KeyValue {
 	key: IStr,
 	value: Thunk<Val>,

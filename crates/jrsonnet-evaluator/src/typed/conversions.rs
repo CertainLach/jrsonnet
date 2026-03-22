@@ -2,7 +2,6 @@ use std::{collections::BTreeMap, marker::PhantomData, ops::Deref};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::{IBytes, IStr};
-pub use jrsonnet_macros::Typed;
 use jrsonnet_types::{ComplexValType, ValType};
 
 use crate::{
@@ -13,6 +12,19 @@ use crate::{
 	val::{IndexableVal, NumValue, StrValue, ThunkMapper},
 	ObjValue, ObjValueBuilder, Result, ResultExt, Thunk, Val,
 };
+
+#[doc(hidden)]
+pub mod __typed_macro_prelude {
+	pub use ::jrsonnet_evaluator::{
+		error::{ErrorKind, Result as JrResult},
+		typed::{
+			CheckType, ComplexValType, FromUntyped, IntoUntyped, ParseTypedObj, SerializeTypedObj,
+			Typed,
+		},
+		IStr, ObjValue, ObjValueBuilder, State, Val,
+	};
+}
+pub use jrsonnet_macros::{FromUntyped, IntoUntyped, Typed};
 
 #[derive(Trace)]
 struct ThunkFromUntyped<K: Trace>(PhantomData<fn() -> K>);
@@ -49,9 +61,11 @@ impl<K: Trace> Default for ThunkIntoUntyped<K> {
 	}
 }
 
-pub trait TypedObj: Typed {
-	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
+pub trait ParseTypedObj: Typed {
 	fn parse(obj: &ObjValue) -> Result<Self>;
+}
+pub trait SerializeTypedObj: Typed {
+	fn serialize(self, out: &mut ObjValueBuilder) -> Result<()>;
 	fn into_object(self) -> Result<ObjValue> {
 		let mut builder = ObjValueBuilder::new();
 		self.serialize(&mut builder)?;

@@ -13,7 +13,7 @@ use syn::{
 	LitStr, Meta, Pat, Path, PathArguments, Result, ReturnType, Token, Type,
 };
 
-use self::typed::derive_typed_inner;
+use self::typed::{derive_from_untyped_inner, derive_into_untyped_inner, derive_typed_inner};
 
 mod names;
 mod typed;
@@ -447,6 +447,24 @@ pub fn derive_typed(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
 	let input = parse_macro_input!(item as DeriveInput);
 
 	match derive_typed_inner(input) {
+		Ok(v) => v.into(),
+		Err(e) => e.to_compile_error().into(),
+	}
+}
+#[proc_macro_derive(IntoUntyped, attributes(typed))]
+pub fn derive_into_untyped(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(item as DeriveInput);
+
+	match derive_into_untyped_inner(input) {
+		Ok(v) => v.into(),
+		Err(e) => e.to_compile_error().into(),
+	}
+}
+#[proc_macro_derive(FromUntyped, attributes(typed))]
+pub fn derive_from_untyped(item: proc_macro::TokenStream) -> proc_macro::TokenStream {
+	let input = parse_macro_input!(item as DeriveInput);
+
+	match derive_from_untyped_inner(input) {
 		Ok(v) => v.into(),
 		Err(e) => e.to_compile_error().into(),
 	}
