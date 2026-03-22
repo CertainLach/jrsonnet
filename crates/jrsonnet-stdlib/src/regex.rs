@@ -4,8 +4,9 @@ use ::regex::Regex;
 use jrsonnet_evaluator::{
 	error::{ErrorKind::*, Result},
 	rustc_hash::FxBuildHasher,
+	typed::Typed,
 	val::StrValue,
-	IStr, ObjValueBuilder, Val,
+	IStr, ObjValue, ObjValueBuilder,
 };
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_macros::builtin;
@@ -20,7 +21,7 @@ impl Default for RegexCacheInner {
 		Self {
 			cache: RefCell::new(LruCache::with_hasher(
 				NonZeroUsize::new(20).unwrap(),
-				FxBuildHasher::default(),
+				FxBuildHasher,
 			)),
 		}
 	}
@@ -40,21 +41,27 @@ impl RegexCacheInner {
 	}
 }
 
-pub fn regex_match_inner(regex: &Regex, str: String) -> Result<Val> {
-	let mut out = ObjValueBuilder::with_capacity(3);
+#[derive(Typed)]
+pub struct RegexMatch {
+	string: IStr,
+	captures: Vec<IStr>,
+	#[typed(rename = "namedCaptures")]
+	named_captures: ObjValue,
+}
 
+fn regex_match_inner(regex: &Regex, str: String) -> Result<Option<RegexMatch>> {
 	let mut captures = Vec::with_capacity(regex.captures_len());
 	let mut named_captures = ObjValueBuilder::with_capacity(regex.capture_names().len());
 
 	let Some(captured) = regex.captures(&str) else {
-		return Ok(Val::Null);
+		return Ok(None);
 	};
 
 	for ele in captured.iter().skip(1) {
 		if let Some(ele) = ele {
-			captures.push(Val::Str(StrValue::Flat(ele.as_str().into())));
+			captures.push(ele.as_str().into());
 		} else {
-			captures.push(Val::Str(StrValue::Flat(IStr::empty())));
+			captures.push(IStr::empty());
 		}
 	}
 	for (i, name) in regex
@@ -67,13 +74,11 @@ pub fn regex_match_inner(regex: &Regex, str: String) -> Result<Val> {
 		named_captures.field(name).try_value(capture)?;
 	}
 
-	out.field("string")
-		.value(Val::Str(captured.get(0).unwrap().as_str().into()));
-	out.field("captures").value(Val::Arr(captures.into()));
-	out.field("namedCaptures")
-		.value(Val::Obj(named_captures.build()));
-
-	Ok(Val::Obj(out.build()))
+	Ok(Some(RegexMatch {
+		string: captured.get(0).expect("regex matched").as_str().into(),
+		named_captures: named_captures.build(),
+		captures,
+	}))
 }
 
 #[builtin(fields(
@@ -83,7 +88,7 @@ pub fn builtin_regex_partial_match(
 	this: &builtin_regex_partial_match,
 	pattern: IStr,
 	str: String,
-) -> Result<Val> {
+) -> Result<Option<RegexMatch>> {
 	let regex = this.cache.parse(pattern)?;
 	regex_match_inner(&regex, str)
 }
@@ -95,7 +100,7 @@ pub fn builtin_regex_full_match(
 	this: &builtin_regex_full_match,
 	pattern: StrValue,
 	str: String,
-) -> Result<Val> {
+) -> Result<Option<RegexMatch>> {
 	let pattern = format!("^{pattern}$").into();
 	let regex = this.cache.parse(pattern)?;
 	regex_match_inner(&regex, str)

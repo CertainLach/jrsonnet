@@ -21,6 +21,8 @@ use rustc_hash::FxBuildHasher;
 mod inner;
 use inner::Inner;
 
+mod names;
+
 /// Interned string
 ///
 /// Provides O(1) comparsions and hashing, cheap copy, and cheap conversion to [`IBytes`]

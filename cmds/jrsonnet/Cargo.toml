@@ -11,6 +11,10 @@ version.workspace = true
 workspace = true
 
 [features]
+default = [
+    "exp-regex",
+]
+
 experimental = [
     "exp-preserve-order",
     "exp-destruct",
@@ -18,7 +22,6 @@ experimental = [
     "exp-object-iteration",
     "exp-bigint",
     "exp-apply",
-    "exp-regex",
 ]
 # Use mimalloc as allocator
 mimalloc = ["mimallocator"]

@@ -12,11 +12,12 @@ use std::{
 use educe::Educe;
 use jrsonnet_gcmodule::{cc_dyn, Acyclic, Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{Span, Visibility};
+use jrsonnet_parser::Span;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 mod oop;
 
+pub use jrsonnet_parser::Visibility;
 pub use oop::ObjValueBuilder;
 
 use crate::{
@@ -30,7 +31,7 @@ use crate::{
 };
 
 #[cfg(not(feature = "exp-preserve-order"))]
-mod ordering {
+pub mod ordering {
 	#![allow(
 		// This module works as stub for preserve-order feature
 		clippy::unused_self,
@@ -41,6 +42,9 @@ mod ordering {
 	#[derive(Clone, Copy, Default, Debug, Trace)]
 	pub struct FieldIndex(());
 	impl FieldIndex {
+		pub fn absolute(_v: u32) -> Self {
+			Self(())
+		}
 		pub const fn next(self) -> Self {
 			Self(())
 		}
@@ -54,7 +58,7 @@ mod ordering {
 }
 
 #[cfg(feature = "exp-preserve-order")]
-mod ordering {
+pub mod ordering {
 	use std::cmp::Reverse;
 
 	use jrsonnet_gcmodule::Trace;
@@ -62,6 +66,9 @@ mod ordering {
 	#[derive(Clone, Copy, Default, Debug, Trace, PartialEq, Eq, PartialOrd, Ord)]
 	pub struct FieldIndex(u32);
 	impl FieldIndex {
+		pub fn absolute(v: u32) -> Self {
+			Self(v)
+		}
 		pub fn next(self) -> Self {
 			Self(self.0 + 1)
 		}
@@ -149,7 +156,7 @@ enum CacheValue {
 	Pending,
 }
 
-type EnumFieldsHandler<'a> =
+pub type EnumFieldsHandler<'a> =
 	dyn FnMut(SuperDepth, FieldIndex, IStr, EnumFields) -> ControlFlow<()> + 'a;
 
 pub enum EnumFields {
