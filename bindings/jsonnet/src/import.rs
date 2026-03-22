@@ -17,7 +17,7 @@ use jrsonnet_evaluator::{
 	AsPathLike, ImportResolver, ResolvePath,
 };
 use jrsonnet_gcmodule::Acyclic;
-use jrsonnet_parser::{SourceDirectory, SourceFile, SourcePath};
+use jrsonnet_ir::{SourceDirectory, SourceFile, SourcePath};
 
 use crate::VM;
 

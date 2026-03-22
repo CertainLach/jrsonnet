@@ -31,7 +31,7 @@ use jrsonnet_evaluator::{
 	AsPathLike, FileImportResolver, IStr, ImportResolver, Result, State, Val,
 };
 use jrsonnet_gcmodule::Acyclic;
-use jrsonnet_parser::SourcePath;
+use jrsonnet_ir::SourcePath;
 use jrsonnet_stdlib::ContextInitializer;
 
 /// WASM stub

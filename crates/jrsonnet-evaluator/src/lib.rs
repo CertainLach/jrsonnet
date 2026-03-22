@@ -44,8 +44,9 @@ use jrsonnet_gcmodule::{cc_dyn, Cc, Trace};
 pub use jrsonnet_interner::{IBytes, IStr};
 #[doc(hidden)]
 pub use jrsonnet_macros;
-pub use jrsonnet_parser as parser;
-use jrsonnet_parser::{Expr, ParserSettings, Source, SourcePath, Spanned};
+pub use jrsonnet_ir as parser;
+use jrsonnet_ir::{Expr, Source, SourcePath, Spanned};
+use jrsonnet_peg_parser::ParserSettings;
 pub use obj::*;
 pub use rustc_hash;
 use rustc_hash::FxHashMap;
@@ -344,7 +345,7 @@ impl State {
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
-				jrsonnet_parser::parse(
+				jrsonnet_peg_parser::parse(
 					&code,
 					&ParserSettings {
 						source: file_name.clone(),
@@ -460,7 +461,7 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = jrsonnet_peg_parser::parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
@@ -481,7 +482,7 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_parser::parse(
+		let parsed = jrsonnet_peg_parser::parse(
 			&code,
 			&ParserSettings {
 				source: source.clone(),

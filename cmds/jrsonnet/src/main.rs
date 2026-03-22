@@ -11,7 +11,7 @@ use jrsonnet_evaluator::{
 	error::{Error as JrError, ErrorKind},
 	ResultExt, State, Val,
 };
-use jrsonnet_parser::{SourceDefaultIgnoreJpath, SourcePath};
+use jrsonnet_ir::{SourceDefaultIgnoreJpath, SourcePath};
 
 #[cfg(feature = "mimalloc")]
 #[global_allocator]

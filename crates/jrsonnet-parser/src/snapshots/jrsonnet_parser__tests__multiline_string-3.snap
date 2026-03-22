@@ -1,7 +1,0 @@
----
-source: crates/jrsonnet-parser/src/lib.rs
-expression: "parsep(\"|||\\n\\t\\tHello world!\\n\\t\\t\\ta\\n|||\")"
----
-Str(
-    "Hello world!\n\ta\n",
-) from virtual:<test>:0-27

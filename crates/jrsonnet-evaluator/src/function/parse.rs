@@ -1,6 +1,6 @@
 use std::rc::Rc;
 
-use jrsonnet_parser::{
+use jrsonnet_ir::{
 	function::{FunctionSignature, ParamName},
 	ArgsDesc, Expr, ExprParams, Spanned,
 };

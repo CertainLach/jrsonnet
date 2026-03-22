@@ -609,7 +609,7 @@ dependencies = [
  "jrsonnet-cli",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
- "jrsonnet-parser",
+ "jrsonnet-ir",
  "mimallocator",
  "serde",
  "serde_json",
@@ -623,7 +623,7 @@ dependencies = [
  "clap",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
- "jrsonnet-parser",
+ "jrsonnet-ir",
  "jrsonnet-stdlib",
 ]
 
@@ -637,8 +637,9 @@ dependencies = [
  "hi-doc",
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
+ "jrsonnet-ir",
  "jrsonnet-macros",
- "jrsonnet-parser",
+ "jrsonnet-peg-parser",
  "jrsonnet-types",
  "num-bigint",
  "pathdiff",
@@ -704,6 +705,17 @@ dependencies = [
 ]
 
 [[package]]
+name = "jrsonnet-ir"
+version = "0.5.0-pre97"
+dependencies = [
+ "insta",
+ "jrsonnet-gcmodule",
+ "jrsonnet-interner",
+ "peg",
+ "static_assertions",
+]
+
+[[package]]
 name = "jrsonnet-macros"
 version = "0.5.0-pre97"
 dependencies = [
@@ -714,14 +726,12 @@ dependencies = [
 ]
 
 [[package]]
-name = "jrsonnet-parser"
+name = "jrsonnet-peg-parser"
 version = "0.5.0-pre97"
 dependencies = [
  "insta",
- "jrsonnet-gcmodule",
- "jrsonnet-interner",
+ "jrsonnet-ir",
  "peg",
- "static_assertions",
 ]
 
 [[package]]
@@ -746,8 +756,8 @@ dependencies = [
  "base64",
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
+ "jrsonnet-ir",
  "jrsonnet-macros",
- "jrsonnet-parser",
  "lru",
  "md5",
  "num-bigint",
@@ -812,7 +822,7 @@ dependencies = [
  "jrsonnet-evaluator",
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
- "jrsonnet-parser",
+ "jrsonnet-ir",
  "jrsonnet-stdlib",
 ]
 

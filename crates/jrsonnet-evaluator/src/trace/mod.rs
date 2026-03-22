@@ -6,9 +6,9 @@ use std::{
 };
 
 use jrsonnet_gcmodule::Trace;
-use jrsonnet_parser::CodeLocation;
+use jrsonnet_ir::CodeLocation;
 #[cfg(feature = "explaining-traces")]
-use jrsonnet_parser::Span;
+use jrsonnet_ir::Span;
 
 use crate::{error::ErrorKind, Error};
 

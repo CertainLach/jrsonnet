@@ -2,7 +2,7 @@ use std::{collections::HashMap, hash::BuildHasher};
 
 use jrsonnet_gcmodule::Trace;
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{SourceFifo, SourcePath};
+use jrsonnet_ir::{SourceFifo, SourcePath};
 
 use crate::{
 	function::{CallLocation, PreparedFuncVal},

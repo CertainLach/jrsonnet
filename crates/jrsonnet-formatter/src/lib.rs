@@ -855,7 +855,7 @@ impl Printable for SourceFile {
 }
 
 pub struct FormatOptions {
-	// 0 for hard tabs
+	// 0 for hard tabs, otherwise number of spaces
 	pub indent: u8,
 }
 

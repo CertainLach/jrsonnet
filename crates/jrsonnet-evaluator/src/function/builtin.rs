@@ -1,7 +1,7 @@
 use std::any::Any;
 
 use jrsonnet_gcmodule::{cc_dyn, Trace, TraceBox};
-use jrsonnet_parser::function::{FunctionSignature, ParamDefault, ParamName, ParamParse};
+use jrsonnet_ir::function::{FunctionSignature, ParamDefault, ParamName, ParamParse};
 
 use super::CallLocation;
 use crate::{Result, Thunk, Val};

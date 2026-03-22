@@ -1,0 +1,7 @@
+---
+source: crates/jrsonnet-peg-parser/src/lib.rs
+expression: "parsep(r#\"\"Hello\\nWorld\"\"#)"
+---
+Str(
+    "Hello\nWorld",
+) from virtual:<test>:0-14

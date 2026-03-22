@@ -1,8 +1,8 @@
 use std::rc::Rc;
 
 use jrsonnet_gcmodule::{Acyclic, Trace};
-use jrsonnet_parser::function::FunctionSignature;
-use jrsonnet_parser::{ExprParams, IStr};
+use jrsonnet_ir::function::FunctionSignature;
+use jrsonnet_ir::{ExprParams, IStr};
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use crate::destructure::destruct;

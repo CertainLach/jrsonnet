@@ -7,7 +7,7 @@ use std::{
 
 use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::{Expr, Spanned};
+use jrsonnet_ir::{Expr, Spanned};
 
 use crate::{function::NativeFn, Context, Result, Thunk, Val};
 
@@ -85,7 +85,7 @@ impl ArrValue {
 
 	pub fn extended(a: Self, b: Self) -> Self {
 		// TODO: benchmark for an optimal value, currently just a arbitrary choice
-		const ARR_EXTEND_THRESHOLD: usize = 100;
+		const ARR_EXTEND_THRESHOLD: usize = 1000;
 
 		if a.is_empty() {
 			b

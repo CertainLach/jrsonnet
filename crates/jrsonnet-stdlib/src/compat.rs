@@ -8,7 +8,7 @@ use jrsonnet_evaluator::{
 #[allow(non_snake_case)]
 pub fn builtin___compare(v1: Val, v2: Val) -> Result<i32> {
 	Ok(
-		match evaluate_compare_op(&v1, &v2, jrsonnet_parser::BinaryOpType::Lt)? {
+		match evaluate_compare_op(&v1, &v2, jrsonnet_ir::BinaryOpType::Lt)? {
 			Ordering::Less => -1,
 			Ordering::Equal => 0,
 			Ordering::Greater => 1,
@@ -30,7 +30,7 @@ macro_rules! arr_comp {
 			let ordering = evaluate_compare_op(
 				&Val::Arr(arr1),
 				&Val::Arr(arr2),
-				jrsonnet_parser::BinaryOpType::Lt,
+				jrsonnet_ir::BinaryOpType::Lt,
 			)?;
 			Ok($operator.contains(&ordering))
 		}

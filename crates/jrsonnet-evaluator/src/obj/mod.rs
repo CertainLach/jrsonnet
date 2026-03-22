@@ -5,12 +5,12 @@ use std::{
 use educe::Educe;
 use jrsonnet_gcmodule::{cc_dyn, Acyclic, Cc, Trace, Weak};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::Span;
+use jrsonnet_ir::Span;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 mod oop;
 
-pub use jrsonnet_parser::Visibility;
+pub use jrsonnet_ir::Visibility;
 pub use oop::ObjValueBuilder;
 
 use crate::{

@@ -10,7 +10,7 @@ use std::{
 use fs::File;
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_interner::IBytes;
-use jrsonnet_parser::{
+use jrsonnet_ir::{
 	IStr, SourceDefaultIgnoreJpath, SourceDirectory, SourceFifo, SourceFile, SourcePath,
 };
 

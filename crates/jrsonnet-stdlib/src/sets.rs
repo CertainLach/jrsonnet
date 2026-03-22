@@ -3,7 +3,7 @@ use std::cmp::Ordering;
 use jrsonnet_evaluator::{
 	function::builtin, operator::evaluate_compare_op, val::ArrValue, Result, Thunk, Val,
 };
-use jrsonnet_parser::BinaryOpType;
+use jrsonnet_ir::BinaryOpType;
 
 use crate::keyf::KeyF;
 

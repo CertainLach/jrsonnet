@@ -4,7 +4,7 @@ use educe::Educe;
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
 pub use jrsonnet_macros::builtin;
-use jrsonnet_parser::{ArgsDesc, Destruct, Expr, ExprParams, Span, Spanned};
+use jrsonnet_ir::{ArgsDesc, Destruct, Expr, ExprParams, Span, Spanned};
 
 use self::{
 	builtin::{Builtin, StaticBuiltin},
@@ -24,7 +24,7 @@ mod prepared;
 pub use native::NativeFn;
 pub use prepared::PreparedFuncVal;
 
-pub use jrsonnet_parser::function::*;
+pub use jrsonnet_ir::function::*;
 
 /// Function callsite location.
 /// Either from other jsonnet code, specified by expression location, or from native (without location).

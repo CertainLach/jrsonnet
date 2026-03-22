@@ -2,7 +2,7 @@ use std::rc::Rc;
 
 use jrsonnet_gcmodule::{Cc, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{
+use jrsonnet_ir::{
 	function::ParamName, ArgsDesc, AssertStmt, BinaryOpType, BindSpec, CompSpec, Expr, ExprParams,
 	FieldMember, FieldName, ForSpecData, IfSpecData, ImportKind, LiteralType, ObjBody, ObjMembers,
 	Spanned,
@@ -47,17 +47,17 @@ pub fn ensure_sufficient_stack<R>(f: impl FnOnce() -> R) -> R {
 	stacker::maybe_grow(RED_ZONE, STACK_PER_RECURSION, f)
 }
 
-pub fn evaluate_trivial(expr: &Spanned<Expr>) -> Option<Val> {
-	fn is_trivial(expr: &Spanned<Expr>) -> bool {
-		match &**expr {
+pub fn evaluate_trivial(expr: &Expr) -> Option<Val> {
+	fn is_trivial(expr: &Expr) -> bool {
+		match &*expr {
 			Expr::Str(_)
 			| Expr::Num(_)
 			| Expr::Literal(LiteralType::False | LiteralType::True | LiteralType::Null) => true,
-			Expr::Arr(a) => a.iter().all(is_trivial),
+			Expr::Arr(a) => a.iter().all(|e| is_trivial(&**e)),
 			_ => false,
 		}
 	}
-	Some(match &**expr {
+	Some(match &*expr {
 		Expr::Str(s) => Val::string(s.clone()),
 		Expr::Num(n) => {
 			Val::Num(NumValue::new(*n).expect("parser will not allow non-finite values"))
@@ -71,7 +71,7 @@ pub fn evaluate_trivial(expr: &Spanned<Expr>) -> Option<Val> {
 			}
 			Val::Arr(ArrValue::eager(
 				n.iter()
-					.map(evaluate_trivial)
+					.map(|e| evaluate_trivial(&**e))
 					.map(|e| e.expect("checked trivial"))
 					.collect(),
 			))
@@ -395,14 +395,13 @@ pub fn evaluate_named(ctx: Context, expr: &Spanned<Expr>, name: IStr) -> Result<
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
+pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 	use Expr::*;
 
 	if let Some(trivial) = evaluate_trivial(expr) {
 		return Ok(trivial);
 	}
-	let loc = expr.span();
-	Ok(match &**expr {
+	Ok(match expr {
 		Literal(LiteralType::This) => Val::Obj(ctx.try_this()?),
 		Literal(LiteralType::Super) => Val::Obj(ctx.try_sup_this()?.standalone_super()?),
 		Literal(LiteralType::Dollar) => Val::Obj(ctx.try_dollar()?),
@@ -433,9 +432,9 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 		BinaryOp(bin) => evaluate_binary_op_special(ctx, &bin.lhs, bin.op, &bin.rhs)?,
 		UnaryOp(o, v) => evaluate_unary_op(*o, &evaluate(ctx, v)?)?,
 		Var(name) => in_frame(
-			CallLocation::new(&loc),
+			CallLocation::new(&name.span()),
 			|| format!("local <{name}> access"),
-			|| ctx.binding(name.clone())?.evaluate(),
+			|| ctx.binding((**name).clone())?.evaluate(),
 		)?,
 		Index { indexable, parts } => ensure_sufficient_stack(|| {
 			let mut parts = parts.iter();
@@ -591,7 +590,13 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 			&Val::Obj(evaluate_object(ctx, b)?),
 		)?,
 		Apply(value, args, tailstrict) => ensure_sufficient_stack(|| {
-			evaluate_apply(ctx, value, args, CallLocation::new(&loc), *tailstrict)
+			evaluate_apply(
+				ctx,
+				value,
+				args,
+				CallLocation::new(&args.span()),
+				*tailstrict,
+			)
 		})?,
 		Function(params, body) => {
 			evaluate_method(ctx, "anonymous".into(), params.clone(), body.clone())
@@ -601,13 +606,13 @@ pub fn evaluate(ctx: Context, expr: &Spanned<Expr>) -> Result<Val> {
 			evaluate(ctx, &assert.rest)?
 		}
 		ErrorStmt(e) => in_frame(
-			CallLocation::new(&loc),
+			CallLocation::new(&e.span()),
 			|| "error statement".to_owned(),
 			|| bail!(RuntimeError(evaluate(ctx, e)?.to_string()?,)),
 		)?,
 		IfElse(if_else) => {
 			if in_frame(
-				CallLocation::new(&loc),
+				CallLocation::new(&if_else.cond.0.span()),
 				|| "if condition".to_owned(),
 				|| bool::from_untyped(evaluate(ctx.clone(), &if_else.cond.0)?),
 			)? {

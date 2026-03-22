@@ -1,0 +1,7 @@
+---
+source: crates/jrsonnet-peg-parser/src/lib.rs
+expression: "parsep(\"null\")"
+---
+Literal(
+    Null,
+) from virtual:<test>:0-4

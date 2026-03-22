@@ -2,7 +2,7 @@ use std::{cmp::Ordering, convert::Infallible, fmt};
 
 use jrsonnet_gcmodule::{Acyclic, Trace};
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BinaryOpType, Source, SourcePath, Span, Spanned, UnaryOpType};
+use jrsonnet_ir::{BinaryOpType, Source, SourcePath, Span, Spanned, UnaryOpType};
 use jrsonnet_types::ValType;
 use thiserror::Error;
 
@@ -169,7 +169,7 @@ pub enum ErrorKind {
 	ImportSyntaxError {
 		path: Source,
 		#[trace(skip)]
-		error: Box<jrsonnet_parser::ParseError>,
+		error: Box<jrsonnet_peg_parser::ParseError>,
 	},
 
 	#[error("runtime error: {}", format_empty_str(.0))]

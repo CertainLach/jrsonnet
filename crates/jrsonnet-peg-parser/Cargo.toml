@@ -1,0 +1,22 @@
+[package]
+name = "jrsonnet-peg-parser"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[dependencies]
+jrsonnet-ir.workspace = true
+peg.workspace = true
+
+[lints]
+workspace = true
+
+[dev-dependencies]
+insta.workspace = true
+
+[features]
+default = []
+exp-destruct = ["jrsonnet-ir/exp-destruct"]
+exp-null-coaelse = ["jrsonnet-ir/exp-null-coaelse"]

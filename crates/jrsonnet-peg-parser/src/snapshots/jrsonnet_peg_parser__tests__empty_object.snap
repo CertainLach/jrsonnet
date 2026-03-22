@@ -1,0 +1,13 @@
+---
+source: crates/jrsonnet-peg-parser/src/lib.rs
+expression: "parsep(\"{}\")"
+---
+Obj(
+    MemberList(
+        ObjMembers {
+            locals: [],
+            asserts: [],
+            fields: [],
+        },
+    ),
+) from virtual:<test>:0-2

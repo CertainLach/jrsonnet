@@ -29,7 +29,7 @@ exp-regex = [
 
 [dependencies]
 jrsonnet-evaluator = { workspace = true, features = ["explaining-traces"] }
-jrsonnet-parser.workspace = true
+jrsonnet-ir.workspace = true
 jrsonnet-stdlib.workspace = true
 jrsonnet-gcmodule.workspace = true
 

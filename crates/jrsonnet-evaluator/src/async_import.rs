@@ -2,11 +2,12 @@ use std::rc::Rc;
 use std::{any::Any, cell::RefCell, future::Future};
 
 use jrsonnet_gcmodule::Acyclic;
-use jrsonnet_parser::{
+use jrsonnet_ir::{
 	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, ExprParam, ExprParams,
-	FieldMember, FieldName, ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, ParserSettings,
-	Slice, SliceDesc, Source, SourcePath, Spanned,
+	FieldMember, FieldName, ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, Slice, SliceDesc,
+	Source, SourcePath, Spanned,
 };
+use jrsonnet_peg_parser::ParserSettings;
 use rustc_hash::FxHashMap;
 
 use crate::{AsPathLike, FileData, ImportResolver, ResolvePathOwned, State};
@@ -322,7 +323,7 @@ where
 						};
 						let source = Source::new(path.clone(), code.clone());
 						// If failed - then skip import
-						file.parsed = jrsonnet_parser::parse(&code, &ParserSettings { source })
+						file.parsed = jrsonnet_peg_parser::parse(&code, &ParserSettings { source })
 							.map(Rc::new)
 							.ok();
 						if let Some(parsed) = &file.parsed {

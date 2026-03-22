@@ -1,7 +1,7 @@
 use std::{collections::HashMap, hash::BuildHasher};
 
 use jrsonnet_interner::IStr;
-use jrsonnet_parser::{BindSpec, Destruct};
+use jrsonnet_ir::{BindSpec, Destruct};
 
 use crate::{
 	bail,
@@ -31,7 +31,7 @@ pub fn destruct<H: BuildHasher>(
 		Destruct::Skip => {}
 		#[cfg(feature = "exp-destruct")]
 		Destruct::Array { start, rest, end } => {
-			use jrsonnet_parser::DestructRest;
+			use jrsonnet_ir::DestructRest;
 
 			let min_len = start.len() + end.len();
 			let has_rest = rest.is_some();

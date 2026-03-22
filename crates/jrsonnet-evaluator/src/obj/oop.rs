@@ -8,7 +8,7 @@ use crate::{
 	bail, error::ErrorKind::*, in_frame, CcUnbound, MaybeUnbound, Result, Thunk, Unbound, Val,
 };
 use jrsonnet_gcmodule::{Cc, Trace};
-use jrsonnet_parser::IStr;
+use jrsonnet_ir::IStr;
 use rustc_hash::{FxHashMap, FxHashSet};
 
 use super::ordering::{FieldIndex, SuperDepth};

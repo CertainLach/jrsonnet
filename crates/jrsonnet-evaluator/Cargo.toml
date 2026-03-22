@@ -22,17 +22,18 @@ anyhow-error = ["anyhow"]
 # Allows to preserve field order in objects
 exp-preserve-order = []
 # Implements field destructuring
-exp-destruct = ["jrsonnet-parser/exp-destruct"]
+exp-destruct = ["jrsonnet-peg-parser/exp-destruct"]
 # Iteration over objects yields [key, value] elements
 exp-object-iteration = []
 # Bigint type
 exp-bigint = ["num-bigint", "jrsonnet-types/exp-bigint"]
 # obj?.field, obj?.['field']
-exp-null-coaelse = ["jrsonnet-parser/exp-null-coaelse"]
+exp-null-coaelse = ["jrsonnet-peg-parser/exp-null-coaelse"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
-jrsonnet-parser.workspace = true
+jrsonnet-ir.workspace = true
+jrsonnet-peg-parser.workspace = true
 jrsonnet-types.workspace = true
 jrsonnet-macros.workspace = true
 jrsonnet-gcmodule.workspace = true

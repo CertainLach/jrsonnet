@@ -20,7 +20,7 @@ use jrsonnet_evaluator::{
 	ContextBuilder, IStr, ObjValue, ObjValueBuilder, Thunk, Val,
 };
 use jrsonnet_gcmodule::{Acyclic, Cc, Trace};
-use jrsonnet_parser::Source;
+use jrsonnet_ir::Source;
 pub use manifest::*;
 pub use math::*;
 pub use misc::*;

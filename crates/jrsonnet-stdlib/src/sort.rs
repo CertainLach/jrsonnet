@@ -9,7 +9,7 @@ use jrsonnet_evaluator::{
 	val::{equals, ArrValue},
 	Result, Thunk, Val,
 };
-use jrsonnet_parser::BinaryOpType;
+use jrsonnet_ir::BinaryOpType;
 
 use crate::{eval_on_empty, keyf::KeyF};
 

@@ -160,6 +160,7 @@
               ]
               ++ lib.optionals (!stdenv.isDarwin) [
                 valgrind
+                kdePackages.kcachegrind
               ];
           };
         };

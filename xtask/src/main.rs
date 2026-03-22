@@ -52,10 +52,9 @@ fn main() -> Result<()> {
 		} => {
 			let out = sh.create_temp_dir()?;
 
-			// build-std
 			cmd!(
 				sh,
-				"cargo build -Zbuild-std --target={target} --profile releasedebug"
+				"cargo build --target={target} --profile releasedebug"
 			)
 			.run()?;
 			let built = format!("./target/{target}/releasedebug/jrsonnet");
