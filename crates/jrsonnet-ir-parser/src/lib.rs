@@ -304,10 +304,10 @@ fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> Result<SliceD
 		None
 	};
 	let step = if p.try_eat(T![:]) {
-		if !p.at(T![']']) {
-			Some(spanned(p, expr)?)
-		} else {
+		if p.at(T![']']) {
 			None
+		} else {
+			Some(spanned(p, expr)?)
 		}
 	} else {
 		None
