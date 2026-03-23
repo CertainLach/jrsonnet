@@ -18,24 +18,26 @@ default = ["explaining-traces", "ir-parser"]
 explaining-traces = ["annotate-snippets", "hi-doc"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
-# Use hand-written recursive descent parser instead of PEG parser
+# Use hand-written recursive descent parser
 ir-parser = ["dep:jrsonnet-ir-parser"]
+# Use PEG parser
+peg-parser = ["dep:jrsonnet-peg-parser"]
 
 # Allows to preserve field order in objects
 exp-preserve-order = []
 # Implements field destructuring
-exp-destruct = ["jrsonnet-peg-parser/exp-destruct"]
+exp-destruct = ["jrsonnet-peg-parser?/exp-destruct", "jrsonnet-ir-parser?/exp-destruct"]
 # Iteration over objects yields [key, value] elements
 exp-object-iteration = []
 # Bigint type
 exp-bigint = ["num-bigint", "jrsonnet-types/exp-bigint"]
 # obj?.field, obj?.['field']
-exp-null-coaelse = ["jrsonnet-peg-parser/exp-null-coaelse", "jrsonnet-ir-parser?/exp-null-coaelse"]
+exp-null-coaelse = ["jrsonnet-peg-parser?/exp-null-coaelse", "jrsonnet-ir-parser?/exp-null-coaelse"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
 jrsonnet-ir.workspace = true
-jrsonnet-peg-parser.workspace = true
+jrsonnet-peg-parser = { workspace = true, optional = true }
 jrsonnet-ir-parser = { workspace = true, optional = true }
 jrsonnet-types.workspace = true
 jrsonnet-macros.workspace = true

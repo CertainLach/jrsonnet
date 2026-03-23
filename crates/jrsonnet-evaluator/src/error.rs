@@ -14,6 +14,22 @@ use crate::{
 	ObjValue, ResolvePathOwned,
 };
 
+#[derive(Debug, Clone)]
+pub struct SyntaxErrorLocation {
+	pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct SyntaxError {
+	pub message: String,
+	pub location: SyntaxErrorLocation,
+}
+impl fmt::Display for SyntaxError {
+	fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+		write!(f, "{}", self.message)
+	}
+}
+
 pub(crate) fn format_found(list: &[IStr], what: &str) -> String {
 	if list.is_empty() {
 		return String::new();
@@ -154,31 +170,11 @@ pub enum ErrorKind {
 	ImportNotSupported(SourcePath, ResolvePathOwned),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
-	#[cfg(not(feature = "ir-parser"))]
-	#[error(
-		"syntax error: {}",
-		// Peg has no fancier way to handle critical parsing errors https://github.com/kevinmehall/rust-peg/issues/225
-		{.error.expected.tokens().find(|t| t.starts_with("!!!")).map_or_else(|| {
-			format!(
-				"expected {}, got {:?}",
-				.error.expected,
-				.path.code().chars().nth(error.location.offset)
-				.map_or_else(|| "EOF".into(), |c| c.to_string())
-			)
-		}, |v| v[3..].into())}
-	)]
-	ImportSyntaxError {
-		path: Source,
-		#[trace(skip)]
-		error: Box<jrsonnet_peg_parser::ParseError>,
-	},
-
-	#[cfg(feature = "ir-parser")]
 	#[error("syntax error: {error}")]
 	ImportSyntaxError {
 		path: Source,
 		#[trace(skip)]
-		error: Box<jrsonnet_ir_parser::ParseError>,
+		error: Box<SyntaxError>,
 	},
 
 	#[error("runtime error: {}", format_empty_str(.0))]
