@@ -228,21 +228,16 @@ pub(crate) fn lex_str_block<'a>(lex: &mut impl StrBlockLexCtx<'a>) -> Result<(),
 		debug_assert_ne!(num_whitespace, 0, "Unexpected value for num_whitespace");
 		ctx.skip(num_whitespace);
 
-		let line_start = ctx.index;
-		let mut line_size = 0;
-		loop {
-			match ctx.next() {
-				None => {
-					lex.eat_error(&ctx);
-					return Err(UnexpectedEnd);
-				}
-				Some('\n') => {
-					lex.mark_line(&ctx.source[line_start..line_start + line_size]);
-					break;
-				}
-				Some(c) => {
-					line_size += c.len_utf8();
-				}
+		let rest = ctx.rest();
+		match rest.find('\n') {
+			None => {
+				ctx.index = ctx.source.len();
+				lex.eat_error(&ctx);
+				return Err(UnexpectedEnd);
+			}
+			Some(nl_pos) => {
+				lex.mark_line(&rest[..nl_pos]);
+				ctx.index += nl_pos + 1;
 			}
 		}
 
