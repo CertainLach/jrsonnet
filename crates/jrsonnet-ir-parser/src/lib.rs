@@ -3,9 +3,9 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_ir::{
 	unescape, ArgsDesc, AssertExpr, AssertStmt, BinaryOp, BinaryOpType, BindSpec, CompSpec,
-	Destruct, DestructRest, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr,
-	IfElse, IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers,
-	Slice, SliceDesc, Source, Span, Spanned, UnaryOpType, Visibility,
+	Destruct, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr, IfElse,
+	IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers, Slice,
+	SliceDesc, Source, Span, Spanned, UnaryOpType, Visibility,
 };
 use jrsonnet_lexer::{collect_lexed_str_block, Lexeme, Lexer, SyntaxKind, T};
 
@@ -30,7 +30,7 @@ impl std::fmt::Display for ParseError {
 	}
 }
 
-type R<T> = Result<T, ParseError>;
+type Result<T> = std::result::Result<T, ParseError>;
 
 struct Parser<'a> {
 	lexemes: Vec<Lexeme<'a>>,
@@ -103,7 +103,7 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn eat(&mut self, t: SyntaxKind) -> R<()> {
+	fn eat(&mut self, t: SyntaxKind) -> Result<()> {
 		if !self.at(t) {
 			return Err(self.error(format!(
 				"expected {}, got {}",
@@ -138,15 +138,13 @@ impl<'a> Parser<'a> {
 		}
 	}
 
-	fn expect_ident(&mut self) -> R<IStr> {
+	fn expect_ident(&mut self) -> Result<IStr> {
 		if !self.at(SyntaxKind::IDENT) {
 			return Err(self.error(format!("expected identifier, got {}", self.current_desc())));
 		}
 		let text = self.text();
 		if is_reserved(text) {
-			return Err(self.error(format!(
-				"expected identifier, got reserved word '{text}'"
-			)));
+			return Err(self.error(format!("expected identifier, got reserved word '{text}'")));
 		}
 		let s: IStr = text.into();
 		self.eat_any();
@@ -164,36 +162,38 @@ fn is_reserved(s: &str) -> bool {
 		"assert"
 			| "else" | "error"
 			| "false" | "for"
-			| "function" | "if"
-			| "import" | "importstr"
-			| "importbin" | "in"
-			| "local" | "null"
-			| "tailstrict" | "then"
-			| "self" | "super"
-			| "true"
+			| "function"
+			| "if" | "import"
+			| "importstr"
+			| "importbin"
+			| "in" | "local"
+			| "null" | "tailstrict"
+			| "then" | "self"
+			| "super" | "true"
 	)
 }
 
-fn spanned<T: Acyclic>(p: &mut Parser<'_>, cb: impl FnOnce(&mut Parser<'_>) -> R<T>) -> R<Spanned<T>> {
+fn spanned<T: Acyclic>(
+	p: &mut Parser<'_>,
+	cb: impl FnOnce(&mut Parser<'_>) -> Result<T>,
+) -> Result<Spanned<T>> {
 	let start = p.span_start();
 	let v = cb(p)?;
 	let end = p.span_end();
 	Ok(Spanned::new(v, Span(p.source.clone(), start, end)))
 }
 
-fn parse_string_content(p: &mut Parser<'_>) -> R<IStr> {
+fn parse_string_content(p: &mut Parser<'_>) -> Result<IStr> {
 	let kind = p.peek();
 	let text = p.text();
 	let s = match kind {
 		SyntaxKind::STRING_DOUBLE => {
 			let inner = &text[1..text.len() - 1];
-			unescape::unescape(inner)
-				.ok_or_else(|| p.error("invalid string escape".into()))?
+			unescape::unescape(inner).ok_or_else(|| p.error("invalid string escape".into()))?
 		}
 		SyntaxKind::STRING_SINGLE => {
 			let inner = &text[1..text.len() - 1];
-			unescape::unescape(inner)
-				.ok_or_else(|| p.error("invalid string escape".into()))?
+			unescape::unescape(inner).ok_or_else(|| p.error("invalid string escape".into()))?
 		}
 		SyntaxKind::STRING_DOUBLE_VERBATIM => {
 			let inner = &text[2..text.len() - 1];
@@ -236,7 +236,7 @@ fn is_string_token(kind: SyntaxKind) -> bool {
 	)
 }
 
-fn parse_number(p: &mut Parser<'_>) -> R<f64> {
+fn parse_number(p: &mut Parser<'_>) -> Result<f64> {
 	let text = p.text();
 	let n: f64 = text
 		.replace('_', "")
@@ -263,7 +263,7 @@ fn literal(p: &mut Parser<'_>) -> Option<LiteralType> {
 	Some(t)
 }
 
-fn assert_stmt(p: &mut Parser<'_>) -> R<AssertStmt> {
+fn assert_stmt(p: &mut Parser<'_>) -> Result<AssertStmt> {
 	p.eat(T![assert])?;
 	let cond = spanned(p, expr)?;
 	let msg = if p.try_eat(T![:]) {
@@ -274,13 +274,13 @@ fn assert_stmt(p: &mut Parser<'_>) -> R<AssertStmt> {
 	Ok(AssertStmt(cond, msg))
 }
 
-fn if_spec_data(p: &mut Parser<'_>) -> R<IfSpecData> {
+fn if_spec_data(p: &mut Parser<'_>) -> Result<IfSpecData> {
 	let v = spanned(p, |p| p.eat(T![if]))?;
 	let cond = expr(p)?;
 	Ok(IfSpecData { span: v.span, cond })
 }
 
-fn if_else(p: &mut Parser<'_>) -> R<IfElse> {
+fn if_else(p: &mut Parser<'_>) -> Result<IfElse> {
 	let cond = if_spec_data(p)?;
 	p.eat(T![then])?;
 	let cond_then = expr(p)?;
@@ -296,7 +296,7 @@ fn if_else(p: &mut Parser<'_>) -> R<IfElse> {
 	})
 }
 
-fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> R<SliceDesc> {
+fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> Result<SliceDesc> {
 	p.eat(T![:])?;
 	let end = if !p.at(T![:]) && !p.at(T![']']) {
 		Some(spanned(p, expr)?)
@@ -315,15 +315,12 @@ fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> R<SliceDesc> 
 	Ok(SliceDesc { start, end, step })
 }
 
-fn destruct(p: &mut Parser<'_>) -> R<Destruct> {
+fn destruct(p: &mut Parser<'_>) -> Result<Destruct> {
 	if p.at_ident() {
 		return Ok(Destruct::Full(p.expect_ident()?));
 	}
 	#[cfg(not(feature = "exp-destruct"))]
-	return Err(p.error(format!(
-		"expected identifier, got {}",
-		p.current_desc()
-	)));
+	return Err(p.error(format!("expected identifier, got {}", p.current_desc())));
 	#[cfg(feature = "exp-destruct")]
 	{
 		if p.try_eat(T![?]) {
@@ -343,17 +340,17 @@ fn destruct(p: &mut Parser<'_>) -> R<Destruct> {
 }
 
 #[cfg(feature = "exp-destruct")]
-fn destruct_rest(p: &mut Parser<'_>) -> R<DestructRest> {
+fn destruct_rest(p: &mut Parser<'_>) -> Result<jrsonnet_ir::DestructRest> {
 	p.eat(T![...])?;
 	if p.at_ident() {
-		Ok(DestructRest::Keep(p.expect_ident()?))
+		Ok(jrsonnet_ir::DestructRest::Keep(p.expect_ident()?))
 	} else {
-		Ok(DestructRest::Drop)
+		Ok(jrsonnet_ir::DestructRest::Drop)
 	}
 }
 
 #[cfg(feature = "exp-destruct")]
-fn destruct_array(p: &mut Parser<'_>) -> R<Destruct> {
+fn destruct_array(p: &mut Parser<'_>) -> Result<Destruct> {
 	p.eat(T!['['])?;
 	let mut start = Vec::new();
 	let mut rest = None;
@@ -391,7 +388,7 @@ fn destruct_array(p: &mut Parser<'_>) -> R<Destruct> {
 }
 
 #[cfg(feature = "exp-destruct")]
-fn destruct_object(p: &mut Parser<'_>) -> R<Destruct> {
+fn destruct_object(p: &mut Parser<'_>) -> Result<Destruct> {
 	p.eat(T!['{'])?;
 	let mut fields = Vec::new();
 	let mut rest = None;
@@ -426,7 +423,7 @@ fn destruct_object(p: &mut Parser<'_>) -> R<Destruct> {
 	Ok(Destruct::Object { fields, rest })
 }
 
-fn params(p: &mut Parser<'_>) -> R<ExprParams> {
+fn params(p: &mut Parser<'_>) -> Result<ExprParams> {
 	if p.at(T![')']) {
 		return Ok(ExprParams::new(Vec::new()));
 	}
@@ -452,7 +449,7 @@ fn params(p: &mut Parser<'_>) -> R<ExprParams> {
 	Ok(ExprParams::new(result))
 }
 
-fn args(p: &mut Parser<'_>) -> R<ArgsDesc> {
+fn args(p: &mut Parser<'_>) -> Result<ArgsDesc> {
 	if p.at(T![')']) {
 		return Ok(ArgsDesc::new(Vec::new(), Vec::new()));
 	}
@@ -489,7 +486,7 @@ fn args(p: &mut Parser<'_>) -> R<ArgsDesc> {
 	Ok(ArgsDesc::new(unnamed, named))
 }
 
-fn bind(p: &mut Parser<'_>) -> R<BindSpec> {
+fn bind(p: &mut Parser<'_>) -> Result<BindSpec> {
 	#[cfg(feature = "exp-destruct")]
 	{
 		if !p.at_ident() {
@@ -520,7 +517,7 @@ fn bind(p: &mut Parser<'_>) -> R<BindSpec> {
 	}
 }
 
-fn visibility(p: &mut Parser<'_>) -> R<Visibility> {
+fn visibility(p: &mut Parser<'_>) -> Result<Visibility> {
 	p.eat(T![:])?;
 	if p.try_eat(T![:]) {
 		if p.try_eat(T![:]) {
@@ -533,7 +530,7 @@ fn visibility(p: &mut Parser<'_>) -> R<Visibility> {
 	}
 }
 
-fn field_name(p: &mut Parser<'_>) -> R<FieldName> {
+fn field_name(p: &mut Parser<'_>) -> Result<FieldName> {
 	if p.at_ident() {
 		Ok(FieldName::Fixed(p.expect_ident()?))
 	} else if is_string_token(p.peek()) {
@@ -548,7 +545,7 @@ fn field_name(p: &mut Parser<'_>) -> R<FieldName> {
 	}
 }
 
-fn field(p: &mut Parser<'_>) -> R<FieldMember> {
+fn field(p: &mut Parser<'_>) -> Result<FieldMember> {
 	let name = spanned(p, field_name)?;
 
 	if p.at(T!['(']) {
@@ -578,7 +575,7 @@ fn field(p: &mut Parser<'_>) -> R<FieldMember> {
 	}
 }
 
-fn member(p: &mut Parser<'_>) -> R<Member> {
+fn member(p: &mut Parser<'_>) -> Result<Member> {
 	if p.at(T![local]) {
 		p.eat(T![local])?;
 		Ok(Member::BindStmt(bind(p)?))
@@ -589,7 +586,7 @@ fn member(p: &mut Parser<'_>) -> R<Member> {
 	}
 }
 
-fn for_spec(p: &mut Parser<'_>) -> R<ForSpecData> {
+fn for_spec(p: &mut Parser<'_>) -> Result<ForSpecData> {
 	p.eat(T![for])?;
 	let d = destruct(p)?;
 	p.eat(T![in])?;
@@ -597,7 +594,7 @@ fn for_spec(p: &mut Parser<'_>) -> R<ForSpecData> {
 	Ok(ForSpecData { destruct: d, over })
 }
 
-fn compspecs(p: &mut Parser<'_>) -> R<Vec<CompSpec>> {
+fn compspecs(p: &mut Parser<'_>) -> Result<Vec<CompSpec>> {
 	let mut specs = Vec::new();
 	specs.push(CompSpec::ForSpec(for_spec(p)?));
 	loop {
@@ -613,7 +610,7 @@ fn compspecs(p: &mut Parser<'_>) -> R<Vec<CompSpec>> {
 	Ok(specs)
 }
 
-fn objinside(p: &mut Parser<'_>) -> R<ObjBody> {
+fn objinside(p: &mut Parser<'_>) -> Result<ObjBody> {
 	if p.at(T!['}']) {
 		return Ok(ObjBody::MemberList(ObjMembers {
 			locals: Rc::new(Vec::new()),
@@ -641,26 +638,22 @@ fn objinside(p: &mut Parser<'_>) -> R<ObjBody> {
 			match m {
 				Member::Field(f) => {
 					if field_member.is_some() {
-						return Err(p.error(
-							"object comprehension can only contain one field".into(),
-						));
+						return Err(
+							p.error("object comprehension can only contain one field".into())
+						);
 					}
 					field_member = Some(f);
 				}
 				Member::BindStmt(b) => locals.push(b),
 				Member::AssertStmt(_) => {
-					return Err(p.error(
-						"asserts are unsupported in object comprehension".into(),
-					));
+					return Err(p.error("asserts are unsupported in object comprehension".into()));
 				}
 			}
 		}
 		Ok(ObjBody::ObjComp(ObjComp {
 			locals: Rc::new(locals),
 			field: Rc::new(
-				field_member.ok_or_else(|| {
-					p.error("missing object comprehension field".into())
-				})?,
+				field_member.ok_or_else(|| p.error("missing object comprehension field".into()))?,
 			),
 			compspecs: specs,
 		}))
@@ -683,7 +676,7 @@ fn objinside(p: &mut Parser<'_>) -> R<ObjBody> {
 	}
 }
 
-fn expr_basic(p: &mut Parser<'_>) -> R<Expr> {
+fn expr_basic(p: &mut Parser<'_>) -> Result<Expr> {
 	if let Some(lit) = literal(p) {
 		return Ok(Expr::Literal(lit));
 	}
@@ -825,7 +818,6 @@ fn expr_basic(p: &mut Parser<'_>) -> R<Expr> {
 	}
 }
 
-/// Flush accumulated index parts into an Expr::Index wrapping `e`.
 fn flush_index_parts(e: &mut Expr, parts: &mut Vec<IndexPart>) {
 	if parts.is_empty() {
 		return;
@@ -837,7 +829,7 @@ fn flush_index_parts(e: &mut Expr, parts: &mut Vec<IndexPart>) {
 	};
 }
 
-fn expr_suffix(p: &mut Parser<'_>) -> R<Expr> {
+fn expr_suffix(p: &mut Parser<'_>) -> Result<Expr> {
 	let mut e = expr_basic(p)?;
 	// Accumulate consecutive index parts (.field, [expr], ?.field, ?.[expr])
 	// into a single Expr::Index. This is critical for null-coalesce semantics:
@@ -1006,7 +998,7 @@ fn binary_op(p: &Parser<'_>) -> Option<BinaryOpType> {
 	}
 }
 
-fn expr_bp(p: &mut Parser<'_>, min_bp: u8) -> R<Expr> {
+fn expr_bp(p: &mut Parser<'_>, min_bp: u8) -> Result<Expr> {
 	let mut lhs = if let Some(op) = unary_op(p.peek()) {
 		p.eat_any();
 		let rbp = prefix_binding_power(op);
@@ -1038,11 +1030,11 @@ fn expr_bp(p: &mut Parser<'_>, min_bp: u8) -> R<Expr> {
 	Ok(lhs)
 }
 
-fn expr(p: &mut Parser<'_>) -> R<Expr> {
+fn expr(p: &mut Parser<'_>) -> Result<Expr> {
 	expr_bp(p, 0)
 }
 
-pub fn parse(str: &str, settings: &ParserSettings) -> Result<Expr, ParseError> {
+pub fn parse(str: &str, settings: &ParserSettings) -> Result<Expr> {
 	let mut p = Parser::new(str, settings.source.clone());
 	for lexeme in &p.lexemes {
 		if let Some(desc) = lexeme.kind.error_description() {
@@ -1056,20 +1048,14 @@ pub fn parse(str: &str, settings: &ParserSettings) -> Result<Expr, ParseError> {
 	}
 	let e = expr(&mut p)?;
 	if !p.at_eof() {
-		return Err(p.error(format!(
-			"expected end of file, got {}",
-			p.current_desc(),
-		)));
+		return Err(p.error(format!("expected end of file, got {}", p.current_desc(),)));
 	}
 	Ok(e)
 }
 
 pub fn string_to_expr(s: IStr, settings: &ParserSettings) -> Spanned<Expr> {
 	let len = s.len();
-	Spanned::new(
-		Expr::Str(s),
-		Span(settings.source.clone(), 0, len as u32),
-	)
+	Spanned::new(Expr::Str(s), Span(settings.source.clone(), 0, len as u32))
 }
 
 #[cfg(test)]

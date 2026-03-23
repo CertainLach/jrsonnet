@@ -1,5 +1,13 @@
 use std::{
-	any::Any, cell::{Cell, RefCell}, clone::Clone, cmp::Reverse, collections::hash_map::Entry, fmt::{self, Debug}, hash::{Hash, Hasher}, num::Saturating, ops::ControlFlow
+	any::Any,
+	cell::{Cell, RefCell},
+	clone::Clone,
+	cmp::Reverse,
+	collections::hash_map::Entry,
+	fmt::{self, Debug},
+	hash::{Hash, Hasher},
+	num::Saturating,
+	ops::ControlFlow,
 };
 
 use educe::Educe;

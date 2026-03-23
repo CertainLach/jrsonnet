@@ -21,6 +21,7 @@ pub fn visit_destruct_rest<V: Visitor>(_v: &mut V, destruct: &crate::DestructRes
 	}
 }
 
+#[allow(unused_variables, reason = "used with exp-destruct")]
 pub fn visit_destruct<V: Visitor>(v: &mut V, destruct: &Destruct) {
 	match destruct {
 		Destruct::Full(_istr) => {}

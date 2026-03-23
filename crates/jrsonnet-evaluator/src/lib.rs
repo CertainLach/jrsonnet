@@ -5,7 +5,7 @@
 extern crate self as jrsonnet_evaluator;
 
 mod arr;
-// pub mod async_import;
+pub mod async_import;
 mod ctx;
 mod dynamic;
 pub mod error;

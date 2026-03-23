@@ -11,9 +11,11 @@ pub struct Lexeme<'s> {
 }
 
 pub fn lex(input: &str) -> Vec<Lexeme<'_>> {
-	Lexer::new(input).map(|l| Lexeme {
-		kind: SyntaxKind::from_raw(l.kind.into_raw()),
-		text: l.text,
-		range: TextRange::new(TextSize::from(l.range.0), TextSize::from(l.range.1)),
-	}).collect()
+	Lexer::new(input)
+		.map(|l| Lexeme {
+			kind: SyntaxKind::from_raw(l.kind.into_raw()),
+			text: l.text,
+			range: TextRange::new(TextSize::from(l.range.0), TextSize::from(l.range.1)),
+		})
+		.collect()
 }

@@ -3,11 +3,7 @@ use std::{any::Any, cell::RefCell, future::Future};
 
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_ir::visit::Visitor;
-use jrsonnet_ir::{
-	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, ExprParam, ExprParams,
-	FieldMember, FieldName, ForSpecData, IStr, IfElse, IfSpecData, ImportKind, ObjBody, Slice,
-	SliceDesc, Source, SourcePath, Spanned,
-};
+use jrsonnet_ir::{IStr, Source, SourcePath};
 use rustc_hash::FxHashMap;
 
 use crate::{AsPathLike, FileData, ImportResolver, ResolvePathOwned, State};
@@ -23,7 +19,7 @@ impl Visitor for FoundImports {
 		self.0.push(Import {
 			path: ResolvePathOwned::Str(value.to_string()),
 			expression,
-		})
+		});
 	}
 }
 

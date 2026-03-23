@@ -45,8 +45,8 @@ pub extern "C" fn _start() {}
 /// If this does not match `LIB_JSONNET_VERSION`
 /// then there is a mismatch between header and compiled library.
 #[no_mangle]
-pub extern "C" fn jsonnet_version() -> &'static [u8; 8] {
-	b"v0.20.0\0"
+pub extern "C" fn jsonnet_version() -> &'static [u8; 12] {
+	b"v0.22.0-rc1\0"
 }
 
 unsafe fn parse_path(input: &CStr) -> Cow<'_, Path> {

@@ -120,11 +120,15 @@ impl TokenKind {
 			Self::Literal { name, .. } => match name.as_str() {
 				"FLOAT" => "number".to_owned(),
 				"IDENT" => "identifier".to_owned(),
-				"STRING_DOUBLE" | "STRING_SINGLE" | "STRING_DOUBLE_VERBATIM"
-				| "STRING_SINGLE_VERBATIM" | "STRING_BLOCK" => "string".to_owned(),
+				"STRING_DOUBLE"
+				| "STRING_SINGLE"
+				| "STRING_DOUBLE_VERBATIM"
+				| "STRING_SINGLE_VERBATIM"
+				| "STRING_BLOCK" => "string".to_owned(),
 				"WHITESPACE" => "whitespace".to_owned(),
-				"SINGLE_LINE_SLASH_COMMENT" | "SINGLE_LINE_HASH_COMMENT"
-				| "MULTI_LINE_COMMENT" => "comment".to_owned(),
+				"SINGLE_LINE_SLASH_COMMENT" | "SINGLE_LINE_HASH_COMMENT" | "MULTI_LINE_COMMENT" => {
+					"comment".to_owned()
+				}
 				_ => name.to_lowercase(),
 			},
 			Self::Meta { name, .. } => name.to_lowercase(),
