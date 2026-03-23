@@ -7,6 +7,7 @@ pub mod function;
 mod location;
 mod source;
 pub mod unescape;
+pub mod visit;
 
 pub use location::CodeLocation;
 pub use source::{

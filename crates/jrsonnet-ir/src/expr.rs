@@ -160,7 +160,7 @@ pub struct ExprParam {
 pub struct ExprParams {
 	pub exprs: Rc<Vec<ExprParam>>,
 	pub signature: FunctionSignature,
-	binds_len: usize,
+	pub(crate) binds_len: usize,
 }
 impl ExprParams {
 	pub fn len(&self) -> usize {

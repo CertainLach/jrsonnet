@@ -2,10 +2,11 @@ use std::rc::Rc;
 use std::{any::Any, cell::RefCell, future::Future};
 
 use jrsonnet_gcmodule::Acyclic;
+use jrsonnet_ir::visit::Visitor;
 use jrsonnet_ir::{
 	ArgsDesc, AssertExpr, AssertStmt, BindSpec, CompSpec, Destruct, Expr, ExprParam, ExprParams,
-	FieldMember, FieldName, ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, Slice, SliceDesc,
-	Source, SourcePath, Spanned,
+	FieldMember, FieldName, ForSpecData, IStr, IfElse, IfSpecData, ImportKind, ObjBody, Slice,
+	SliceDesc, Source, SourcePath, Spanned,
 };
 use rustc_hash::FxHashMap;
 
@@ -17,213 +18,12 @@ pub struct Import {
 }
 
 pub struct FoundImports(Vec<Import>);
-
-// Visits all nodes, trying to find import statements
-#[allow(clippy::too_many_lines)]
-pub fn find_imports(expr: &Spanned<Expr>, out: &mut FoundImports) {
-	#[allow(unused_variables, clippy::needless_pass_by_ref_mut)]
-	fn in_destruct(dest: &Destruct, out: &mut FoundImports) {
-		match dest {
-			#[cfg(feature = "exp-destruct")]
-			Destruct::Array {
-				start,
-				rest: _,
-				end,
-			} => {
-				for dest in start {
-					in_destruct(dest, out);
-				}
-				for dest in end {
-					in_destruct(dest, out);
-				}
-			}
-			#[cfg(feature = "exp-destruct")]
-			Destruct::Object { fields, rest: _ } => {
-				for (_, dest, default) in fields {
-					if let Some(dest) = dest {
-						in_destruct(dest, out);
-					}
-					if let Some(expr) = default {
-						find_imports(expr, out);
-					}
-				}
-			}
-			#[cfg(feature = "exp-destruct")]
-			Destruct::Skip => {}
-			Destruct::Full(_) => {}
-		}
-	}
-	fn in_compspec(specs: &[CompSpec], out: &mut FoundImports) {
-		for spec in specs {
-			match spec {
-				CompSpec::IfSpec(IfSpecData(expr)) => find_imports(expr, out),
-				CompSpec::ForSpec(ForSpecData(destruct, expr)) => {
-					in_destruct(destruct, out);
-					find_imports(expr, out);
-				}
-			}
-		}
-	}
-	fn in_params(params: &ExprParams, out: &mut FoundImports) {
-		for ExprParam { destruct, default } in &*params.exprs {
-			in_destruct(destruct, out);
-			if let Some(expr) = default {
-				find_imports(expr, out);
-			}
-		}
-	}
-	fn in_bind(specs: &[BindSpec], out: &mut FoundImports) {
-		for spec in specs {
-			match spec {
-				BindSpec::Field {
-					into: dest,
-					value: expr,
-				} => {
-					in_destruct(dest, out);
-					find_imports(expr, out);
-				}
-				BindSpec::Function {
-					name: _,
-					params,
-					value: expr,
-				} => {
-					in_params(params, out);
-					find_imports(expr, out);
-				}
-			}
-		}
-	}
-	fn in_args(ArgsDesc { unnamed, named }: &ArgsDesc, out: &mut FoundImports) {
-		for expr in unnamed {
-			find_imports(expr, out);
-		}
-		for (_, expr) in named {
-			find_imports(expr, out);
-		}
-	}
-	fn in_obj(obj: &ObjBody, out: &mut FoundImports) {
-		match obj {
-			ObjBody::MemberList(obj) => {
-				for FieldMember {
-					name,
-					params,
-					value,
-					..
-				} in &obj.fields
-				{
-					match name {
-						FieldName::Fixed(_) => {}
-						FieldName::Dyn(expr) => find_imports(expr, out),
-					}
-					if let Some(params) = params {
-						in_params(params, out);
-					}
-					find_imports(value, out);
-				}
-				for _ in &*obj.locals {
-					todo!()
-				}
-				for assert in &*obj.asserts {
-					find_imports(&assert.0, out);
-					if let Some(expr) = &assert.1 {
-						find_imports(expr, out);
-					}
-				}
-			}
-			ObjBody::ObjComp(_) => todo!(),
-		}
-	}
-	match &**expr {
-		Expr::Import(_, v) => {
-			if let Expr::Str(s) = &***v {
-				out.0.push(Import {
-					path: ResolvePathOwned::Str(s.to_string()),
-					expression: todo!(),
-				});
-			}
-			// Non-string import will fail in runtime
-		}
-
-		Expr::Literal(_) | Expr::Str(_) | Expr::Num(_) | Expr::Var(_) => {}
-
-		Expr::Arr(arr) => {
-			for expr in &**arr {
-				find_imports(expr, out);
-			}
-		}
-		Expr::ArrComp(expr, specs) => {
-			find_imports(expr, out);
-			in_compspec(specs, out);
-		}
-		Expr::Obj(obj) => in_obj(obj, out),
-		Expr::ObjExtend(expr, obj) => {
-			find_imports(expr, out);
-			in_obj(obj, out);
-		}
-		Expr::BinaryOp(binop) => {
-			find_imports(&binop.lhs, out);
-			find_imports(&binop.rhs, out);
-		}
-		Expr::AssertExpr(assert) => {
-			let AssertExpr {
-				assert: AssertStmt(expr, expr2),
-				rest,
-			} = &**assert;
-			find_imports(expr, out);
-			if let Some(expr) = expr2 {
-				find_imports(expr, out);
-			}
-			find_imports(rest, out);
-		}
-		Expr::LocalExpr(specs, expr) => {
-			in_bind(specs, out);
-			find_imports(expr, out);
-		}
-		Expr::Apply(expr, args, _) => {
-			find_imports(expr, out);
-			in_args(args, out);
-		}
-		Expr::Index { indexable, parts } => {
-			find_imports(indexable, out);
-			for part in parts {
-				find_imports(&part.value, out);
-			}
-		}
-		Expr::Function(params, expr) => {
-			in_params(params, out);
-			find_imports(expr, out);
-		}
-		Expr::IfElse(if_else) => {
-			let IfElse {
-				cond: IfSpecData(expr),
-				cond_then,
-				cond_else,
-			} = &**if_else;
-			find_imports(expr, out);
-			find_imports(cond_then, out);
-			if let Some(expr) = cond_else {
-				find_imports(expr, out);
-			}
-		}
-		Expr::Slice(slice) => {
-			let Slice {
-				value,
-				slice: SliceDesc { start, end, step },
-			} = &**slice;
-			find_imports(value, out);
-			if let Some(expr) = start {
-				find_imports(expr, out);
-			}
-			if let Some(expr) = end {
-				find_imports(expr, out);
-			}
-			if let Some(expr) = step {
-				find_imports(expr, out);
-			}
-		}
-		Expr::UnaryOp(_, expr) | Expr::ErrorStmt(expr) => {
-			find_imports(expr, out);
-		}
+impl Visitor for FoundImports {
+	fn visit_import(&mut self, expression: bool, value: IStr) {
+		self.0.push(Import {
+			path: ResolvePathOwned::Str(value.to_string()),
+			expression,
+		})
 	}
 }
 
@@ -322,12 +122,10 @@ where
 						};
 						let source = Source::new(path.clone(), code.clone());
 						// If failed - then skip import
-						file.parsed = crate::parse_jsonnet(&code, source)
-							.map(Rc::new)
-							.ok();
+						file.parsed = crate::parse_jsonnet(&code, source).map(Rc::new).ok();
 						if let Some(parsed) = &file.parsed {
 							let mut imports = FoundImports(vec![]);
-							find_imports(parsed, &mut imports);
+							imports.visit_expr(parsed);
 							for import in imports.0 {
 								queue.push(Job::ResolveImport {
 									from: path.clone(),
