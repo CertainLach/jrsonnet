@@ -142,7 +142,7 @@ pub fn evaluate_comp(
 						false,
 					) {
 						let fctx = Pending::new();
-						let mut new_bindings = FxHashMap::with_capacity(var.binds_len());
+						let mut new_bindings = FxHashMap::with_capacity(into.binds_len());
 						let obj = obj.clone();
 						let value = Thunk::evaluated(Val::Arr(ArrValue::lazy(vec![
 							Thunk::evaluated(Val::string(field.clone())),
@@ -150,7 +150,7 @@ pub fn evaluate_comp(
 								"field exists, as field name was obtained from object.fields()",
 							)),
 						])));
-						destruct(var, value, fctx.clone(), &mut new_bindings)?;
+						destruct(into, value, fctx.clone(), &mut new_bindings)?;
 						let ctx = ctx.clone().extend_bindings(new_bindings).into_future(fctx);
 
 						evaluate_comp(ctx, &specs[1..], callback)?;

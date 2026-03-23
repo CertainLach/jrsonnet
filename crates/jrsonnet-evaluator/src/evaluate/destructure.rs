@@ -142,7 +142,7 @@ pub fn destruct<H: BuildHasher>(
 							Ok(field)
 						} else {
 							let (fctx, expr) = default.as_ref().expect("shape is checked");
-							Ok(evaluate(fctx.clone().unwrap(), expr)?)
+							Ok(crate::evaluate(fctx.clone().unwrap(), expr)?)
 						}
 					})
 				};

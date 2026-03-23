@@ -3,9 +3,9 @@ use std::rc::Rc;
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_ir::{
 	unescape, ArgsDesc, AssertExpr, AssertStmt, BinaryOp, BinaryOpType, BindSpec, CompSpec,
-	Destruct, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr, IfElse,
-	IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers, Slice,
-	SliceDesc, Source, Span, Spanned, UnaryOpType, Visibility,
+	Destruct, DestructRest, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr,
+	IfElse, IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers,
+	Slice, SliceDesc, Source, Span, Spanned, UnaryOpType, Visibility,
 };
 use jrsonnet_lexer::{collect_lexed_str_block, Lexeme, Lexer, SyntaxKind, T};
 
@@ -316,7 +316,114 @@ fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> R<SliceDesc> 
 }
 
 fn destruct(p: &mut Parser<'_>) -> R<Destruct> {
-	Ok(Destruct::Full(p.expect_ident()?))
+	if p.at_ident() {
+		return Ok(Destruct::Full(p.expect_ident()?));
+	}
+	#[cfg(not(feature = "exp-destruct"))]
+	return Err(p.error(format!(
+		"expected identifier, got {}",
+		p.current_desc()
+	)));
+	#[cfg(feature = "exp-destruct")]
+	{
+		if p.try_eat(T![?]) {
+			return Ok(Destruct::Skip);
+		}
+		if p.at(T!['[']) {
+			return destruct_array(p);
+		}
+		if p.at(T!['{']) {
+			return destruct_object(p);
+		}
+		Err(p.error(format!(
+			"expected destructure pattern, got {}",
+			p.current_desc()
+		)))
+	}
+}
+
+#[cfg(feature = "exp-destruct")]
+fn destruct_rest(p: &mut Parser<'_>) -> R<DestructRest> {
+	p.eat(T![...])?;
+	if p.at_ident() {
+		Ok(DestructRest::Keep(p.expect_ident()?))
+	} else {
+		Ok(DestructRest::Drop)
+	}
+}
+
+#[cfg(feature = "exp-destruct")]
+fn destruct_array(p: &mut Parser<'_>) -> R<Destruct> {
+	p.eat(T!['['])?;
+	let mut start = Vec::new();
+	let mut rest = None;
+	let mut end = Vec::new();
+	if !p.at(T![']']) {
+		loop {
+			if p.at(T![...]) {
+				rest = Some(destruct_rest(p)?);
+				if p.try_eat(T![,]) {
+					if !p.at(T![']']) {
+						loop {
+							end.push(destruct(p)?);
+							if !p.try_eat(T![,]) {
+								break;
+							}
+							if p.at(T![']']) {
+								break;
+							}
+						}
+					}
+				}
+				break;
+			}
+			start.push(destruct(p)?);
+			if !p.try_eat(T![,]) {
+				break;
+			}
+			if p.at(T![']']) {
+				break;
+			}
+		}
+	}
+	p.eat(T![']'])?;
+	Ok(Destruct::Array { start, rest, end })
+}
+
+#[cfg(feature = "exp-destruct")]
+fn destruct_object(p: &mut Parser<'_>) -> R<Destruct> {
+	p.eat(T!['{'])?;
+	let mut fields = Vec::new();
+	let mut rest = None;
+	if !p.at(T!['}']) {
+		loop {
+			if p.at(T![...]) {
+				rest = Some(destruct_rest(p)?);
+				p.try_eat(T![,]);
+				break;
+			}
+			let name = p.expect_ident()?;
+			let into = if p.try_eat(T![:]) {
+				Some(destruct(p)?)
+			} else {
+				None
+			};
+			let default = if p.try_eat(T![=]) {
+				Some(Rc::new(spanned(p, expr)?))
+			} else {
+				None
+			};
+			fields.push((name, into, default));
+			if !p.try_eat(T![,]) {
+				break;
+			}
+			if p.at(T!['}']) {
+				break;
+			}
+		}
+	}
+	p.eat(T!['}'])?;
+	Ok(Destruct::Object { fields, rest })
 }
 
 fn params(p: &mut Parser<'_>) -> R<ExprParams> {
@@ -383,6 +490,15 @@ fn args(p: &mut Parser<'_>) -> R<ArgsDesc> {
 }
 
 fn bind(p: &mut Parser<'_>) -> R<BindSpec> {
+	#[cfg(feature = "exp-destruct")]
+	{
+		if !p.at_ident() {
+			let d = destruct(p)?;
+			p.eat(T![=])?;
+			let value = Rc::new(expr(p)?);
+			return Ok(BindSpec::Field { into: d, value });
+		}
+	}
 	let name = p.expect_ident()?;
 	if p.try_eat(T!['(']) {
 		let ps = params(p)?;
