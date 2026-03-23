@@ -126,11 +126,11 @@ pub fn builtin_flatmap(
 	}
 }
 
-type FilterFunc = NativeFn!((Val) -> bool);
+type FilterFunc = NativeFn!((Thunk<Val>) -> bool);
 
 #[builtin]
 pub fn builtin_filter(func: FilterFunc, arr: ArrValue) -> Result<ArrValue> {
-	arr.filter(|val| func.call(val.clone()))
+	arr.filter(func)
 }
 
 #[builtin]
@@ -139,7 +139,7 @@ pub fn builtin_filter_map(
 	map_func: NativeFn!((Val) -> Val),
 	arr: ArrValue,
 ) -> Result<ArrValue> {
-	Ok(builtin_filter(filter_func, arr)?.map(map_func))
+	Ok(arr.filter(filter_func)?.map(map_func))
 }
 
 #[builtin]

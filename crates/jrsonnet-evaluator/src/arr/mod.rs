@@ -9,7 +9,7 @@ use jrsonnet_gcmodule::{cc_dyn, Cc};
 use jrsonnet_interner::IBytes;
 use jrsonnet_ir::Expr;
 
-use crate::{function::NativeFn, Context, Result, Thunk, Val};
+use crate::{function::NativeFn, typed::IntoUntyped, Context, Result, Thunk, Val};
 
 mod spec;
 pub use spec::{ArrayLike, *};
@@ -71,16 +71,28 @@ impl ArrValue {
 		Self::new(<MappedArray>::new(self, ArrayMapper::WithIndex(mapper)))
 	}
 
-	pub fn filter(self, filter: impl Fn(&Val) -> Result<bool>) -> Result<Self> {
+	pub fn filter(self, filter: NativeFn!((Thunk<Val>) -> bool)) -> Result<Self> {
 		// TODO: ArrValue::Picked(inner, indexes) for large arrays
+		'eager: {
+			let mut out = Vec::new();
+			for i in self.iter() {
+				let Ok(i) = i else {
+					break 'eager;
+				};
+				if filter.call(IntoUntyped::into_lazy_untyped(i.clone()))? {
+					out.push(i);
+				}
+			}
+			return Ok(Self::eager(out));
+		};
+
 		let mut out = Vec::new();
-		for i in self.iter() {
-			let i = i?;
-			if filter(&i)? {
+		for i in self.iter_lazy() {
+			if filter.call(i.clone())? {
 				out.push(i);
 			}
 		}
-		Ok(Self::eager(out))
+		Ok(Self::lazy(out))
 	}
 
 	pub fn extended(a: Self, b: Self) -> Self {
