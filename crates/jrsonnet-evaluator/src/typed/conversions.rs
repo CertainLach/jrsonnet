@@ -127,19 +127,16 @@ where
 	const TYPE: &'static ComplexValType = &ComplexValType::Lazy(T::TYPE);
 }
 
-impl<T> IntoUntyped for Thunk<T>
-where
-	T: Typed + IntoUntyped + Trace + Clone,
-{
+impl IntoUntyped for Thunk<Val> {
 	fn into_untyped(typed: Self) -> Result<Val> {
-		T::into_untyped(typed.evaluate()?)
+		typed.evaluate()
 	}
 	fn provides_lazy() -> bool {
 		true
 	}
 
 	fn into_lazy_untyped(inner: Self) -> Thunk<Val> {
-		inner.map(<ThunkIntoUntyped<T>>::default())
+		inner
 	}
 }
 
