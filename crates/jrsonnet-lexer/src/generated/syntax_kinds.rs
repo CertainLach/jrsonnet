@@ -86,13 +86,15 @@ pub enum SyntaxKind {
 	ASSIGN,
 	#[token("?")]
 	QUESTION_MARK,
-	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?(?:[eE][+-]?[0-9]+)?")]
+	#[regex(
+		"(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\\.[0-9]+(?:_[0-9]+)*)?(?:[eE][+-]?[0-9]+(?:_[0-9]+)*)?"
+	)]
 	FLOAT,
-	#[regex("(?:0|[1-9][0-9]*)\\.[^0-9]")]
+	#[regex("(?:0|[1-9][0-9]*(?:_[0-9]+)*)\\.[^0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_POINT,
-	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?[eE][^+\\-0-9]")]
+	#[regex("(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\\.[0-9]+(?:_[0-9]+)*)?[eE][^+\\-0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_EXPONENT,
-	#[regex("(?:0|[1-9][0-9]*)(?:\\.[0-9]+)?[eE][+-][^0-9]")]
+	#[regex("(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\\.[0-9]+(?:_[0-9]+)*)?[eE][+-][^0-9]")]
 	ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN,
 	#[regex("\"(?s:[^\"\\\\]|\\\\.)*\"")]
 	STRING_DOUBLE,
@@ -189,6 +191,149 @@ impl SyntaxKind {
 			| IMPORTBIN_KW | IMPORT_KW | IF_KW | THEN_KW | ELSE_KW | FUNCTION_KW | ERROR_KW
 			| IN_KW | NULL_KW | TRUE_KW | FALSE_KW | SELF_KW | SUPER_KW | FOR_KW | ASSERT_KW => true,
 			_ => false,
+		}
+	}
+	pub fn error_description(self) -> Option<&'static str> {
+		match self {
+			ERROR_FLOAT_JUNK_AFTER_POINT => {
+				::core::option::Option::Some("junk after decimal point in number literal")
+			}
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT => {
+				::core::option::Option::Some("junk after exponent in number literal")
+			}
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => {
+				::core::option::Option::Some("junk after exponent sign in number literal")
+			}
+			ERROR_STRING_DOUBLE_UNTERMINATED => {
+				::core::option::Option::Some("unterminated double-quoted string")
+			}
+			ERROR_STRING_SINGLE_UNTERMINATED => {
+				::core::option::Option::Some("unterminated single-quoted string")
+			}
+			ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED => {
+				::core::option::Option::Some("unterminated verbatim double-quoted string")
+			}
+			ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED => {
+				::core::option::Option::Some("unterminated verbatim single-quoted string")
+			}
+			ERROR_STRING_VERBATIM_MISSING_QUOTES => {
+				::core::option::Option::Some("verbatim string missing opening quotes")
+			}
+			ERROR_STRING_BLOCK_UNEXPECTED_END => {
+				::core::option::Option::Some("unexpected end of text block")
+			}
+			ERROR_STRING_BLOCK_MISSING_NEW_LINE => {
+				::core::option::Option::Some("text block requires new line after |||")
+			}
+			ERROR_STRING_BLOCK_MISSING_TERMINATION => {
+				::core::option::Option::Some("unterminated text block")
+			}
+			ERROR_STRING_BLOCK_MISSING_INDENT => {
+				::core::option::Option::Some("text block first line must be indented")
+			}
+			ERROR_COMMENT_TOO_SHORT => ::core::option::Option::Some("comment too short"),
+			ERROR_COMMENT_UNTERMINATED => {
+				::core::option::Option::Some("unterminated multi-line comment")
+			}
+			ERROR_NO_OPERATOR => ::core::option::Option::Some("expected operator"),
+			ERROR_MISSING_TOKEN => ::core::option::Option::Some("missing token"),
+			ERROR_UNEXPECTED_TOKEN => ::core::option::Option::Some("unexpected token"),
+			ERROR_CUSTOM => ::core::option::Option::Some("error"),
+			LEXING_ERROR => ::core::option::Option::Some("unexpected character"),
+			_ => None,
+		}
+	}
+	pub fn display_name(self) -> &'static str {
+		match self {
+			OR => "'||'",
+			NULL_COAELSE => "'??'",
+			AND => "'&&'",
+			BIT_OR => "'|'",
+			BIT_XOR => "'^'",
+			BIT_AND => "'&'",
+			EQ => "'=='",
+			NE => "'!='",
+			LT => "'<'",
+			GT => "'>'",
+			LE => "'<='",
+			GE => "'>='",
+			LHS => "'<<'",
+			RHS => "'>>'",
+			PLUS => "'+'",
+			MINUS => "'-'",
+			MUL => "'*'",
+			DIV => "'/'",
+			MODULO => "'%'",
+			NOT => "'!'",
+			BIT_NOT => "'~'",
+			L_BRACK => "'['",
+			R_BRACK => "']'",
+			L_PAREN => "'('",
+			R_PAREN => "')'",
+			L_BRACE => "'{'",
+			R_BRACE => "'}'",
+			COLON => "':'",
+			SEMI => "';'",
+			DOT => "'.'",
+			DOTDOTDOT => "'...'",
+			COMMA => "','",
+			DOLLAR => "'$'",
+			ASSIGN => "'='",
+			QUESTION_MARK => "'?'",
+			FLOAT => "number",
+			ERROR_FLOAT_JUNK_AFTER_POINT => "junk after decimal point in number literal",
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT => "junk after exponent in number literal",
+			ERROR_FLOAT_JUNK_AFTER_EXPONENT_SIGN => "junk after exponent sign in number literal",
+			STRING_DOUBLE => "string",
+			ERROR_STRING_DOUBLE_UNTERMINATED => "unterminated double-quoted string",
+			STRING_SINGLE => "string",
+			ERROR_STRING_SINGLE_UNTERMINATED => "unterminated single-quoted string",
+			STRING_DOUBLE_VERBATIM => "string",
+			ERROR_STRING_DOUBLE_VERBATIM_UNTERMINATED => {
+				"unterminated verbatim double-quoted string"
+			}
+			STRING_SINGLE_VERBATIM => "string",
+			ERROR_STRING_SINGLE_VERBATIM_UNTERMINATED => {
+				"unterminated verbatim single-quoted string"
+			}
+			ERROR_STRING_VERBATIM_MISSING_QUOTES => "verbatim string missing opening quotes",
+			STRING_BLOCK => "string",
+			ERROR_STRING_BLOCK_UNEXPECTED_END => "unexpected end of text block",
+			ERROR_STRING_BLOCK_MISSING_NEW_LINE => "text block requires new line after |||",
+			ERROR_STRING_BLOCK_MISSING_TERMINATION => "unterminated text block",
+			ERROR_STRING_BLOCK_MISSING_INDENT => "text block first line must be indented",
+			IDENT => "identifier",
+			WHITESPACE => "whitespace",
+			SINGLE_LINE_SLASH_COMMENT => "comment",
+			SINGLE_LINE_HASH_COMMENT => "comment",
+			MULTI_LINE_COMMENT => "comment",
+			ERROR_COMMENT_TOO_SHORT => "comment too short",
+			ERROR_COMMENT_UNTERMINATED => "unterminated multi-line comment",
+			ERROR_NO_OPERATOR => "expected operator",
+			ERROR_MISSING_TOKEN => "missing token",
+			ERROR_UNEXPECTED_TOKEN => "unexpected token",
+			ERROR_CUSTOM => "error",
+			TAILSTRICT_KW => "'tailstrict'",
+			LOCAL_KW => "'local'",
+			IMPORTSTR_KW => "'importstr'",
+			IMPORTBIN_KW => "'importbin'",
+			IMPORT_KW => "'import'",
+			IF_KW => "'if'",
+			THEN_KW => "'then'",
+			ELSE_KW => "'else'",
+			FUNCTION_KW => "'function'",
+			ERROR_KW => "'error'",
+			IN_KW => "'in'",
+			META_OBJECT_APPLY => "meta_object_apply",
+			NULL_KW => "'null'",
+			TRUE_KW => "'true'",
+			FALSE_KW => "'false'",
+			SELF_KW => "'self'",
+			SUPER_KW => "'super'",
+			FOR_KW => "'for'",
+			ASSERT_KW => "'assert'",
+			LEXING_ERROR => "unexpected character",
+			_ => "unknown",
 		}
 	}
 	pub fn from_raw(r: u16) -> Self {
