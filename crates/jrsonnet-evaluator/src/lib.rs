@@ -60,19 +60,22 @@ pub use val::{Thunk, Val};
 
 use crate::gc::WithCapacityExt as _;
 
+#[allow(clippy::needless_return)]
 pub(crate) fn parse_jsonnet(code: &str, source: Source) -> Result<Expr, SyntaxError> {
-	#[cfg(all(feature = "ir-parser", feature = "peg-parser"))]
+	#[cfg(feature = "peg-parser")]
 	{
-		if std::env::var_os("JRSONNET_LEGACY_PARSER").is_some() {
+		static USE_LEGACY_PARSER: LazyLock<bool> =
+			LazyLock::new(|| std::env::var_os("JRSONNET_LEGACY_PARSER").is_some());
+
+		if USE_LEGACY_PARSER {
 			return parse_peg(code, source);
 		}
-		return parse_ir(code, source);
 	}
-	#[cfg(all(feature = "ir-parser", not(feature = "peg-parser")))]
+	#[cfg(feature = "ir-parser")]
 	{
 		return parse_ir(code, source);
 	}
-	#[cfg(all(feature = "peg-parser", not(feature = "ir-parser")))]
+	#[cfg(feature = "peg-parser")]
 	{
 		return parse_peg(code, source);
 	}
@@ -80,44 +83,42 @@ pub(crate) fn parse_jsonnet(code: &str, source: Source) -> Result<Expr, SyntaxEr
 
 #[cfg(feature = "ir-parser")]
 fn parse_ir(code: &str, source: Source) -> Result<Expr, SyntaxError> {
-	jrsonnet_ir_parser::parse(code, &jrsonnet_ir_parser::ParserSettings { source }).map_err(
-		|e| SyntaxError {
+	jrsonnet_ir_parser::parse(code, &jrsonnet_ir_parser::ParserSettings { source }).map_err(|e| {
+		SyntaxError {
 			message: e.message,
 			location: SyntaxErrorLocation {
 				offset: e.location.offset,
 			},
-		},
-	)
+		}
+	})
 }
 
 #[cfg(feature = "peg-parser")]
 fn parse_peg(code: &str, source: Source) -> Result<Expr, SyntaxError> {
-	jrsonnet_peg_parser::parse(code, &jrsonnet_peg_parser::ParserSettings { source }).map_err(
-		|e| {
-			let message = e
-				.expected
-				.tokens()
-				.find(|t| t.starts_with("!!!"))
-				.map_or_else(
-					|| {
-						format!(
-							"expected {}, got {:?}",
-							e.expected,
-							code.chars()
-								.nth(e.location.offset)
-								.map_or_else(|| "EOF".into(), |c: char| c.to_string())
-						)
-					},
-					|v| v[3..].into(),
-				);
-			SyntaxError {
-				message,
-				location: SyntaxErrorLocation {
-					offset: e.location.offset,
+	jrsonnet_peg_parser::parse(code, &jrsonnet_peg_parser::ParserSettings { source }).map_err(|e| {
+		let message = e
+			.expected
+			.tokens()
+			.find(|t| t.starts_with("!!!"))
+			.map_or_else(
+				|| {
+					format!(
+						"expected {}, got {:?}",
+						e.expected,
+						code.chars()
+							.nth(e.location.offset)
+							.map_or_else(|| "EOF".into(), |c: char| c.to_string())
+					)
 				},
-			}
-		},
-	)
+				|v| v[3..].into(),
+			);
+		SyntaxError {
+			message,
+			location: SyntaxErrorLocation {
+				offset: e.location.offset,
+			},
+		}
+	})
 }
 
 cc_dyn!(
@@ -410,11 +411,11 @@ impl State {
 		if file.parsed.is_none() {
 			file.parsed = Some(
 				parse_jsonnet(&code, file_name.clone())
-				.map(Rc::new)
-				.map_err(|e| ImportSyntaxError {
-					path: file_name.clone(),
-					error: Box::new(e),
-				})?,
+					.map(Rc::new)
+					.map_err(|e| ImportSyntaxError {
+						path: file_name.clone(),
+						error: Box::new(e),
+					})?,
 			);
 		}
 		let parsed = file.parsed.as_ref().expect("just set").clone();
@@ -520,8 +521,7 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = parse_jsonnet(&code, source.clone())
-		.map_err(|e| ImportSyntaxError {
+		let parsed = parse_jsonnet(&code, source.clone()).map_err(|e| ImportSyntaxError {
 			path: source.clone(),
 			error: Box::new(e),
 		})?;
@@ -536,8 +536,7 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = parse_jsonnet(&code, source.clone())
-		.map_err(|e| ImportSyntaxError {
+		let parsed = parse_jsonnet(&code, source.clone()).map_err(|e| ImportSyntaxError {
 			path: source.clone(),
 			error: Box::new(e),
 		})?;
