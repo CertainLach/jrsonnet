@@ -16,7 +16,7 @@ use crate::{
 	bail,
 	destructure::evaluate_dest,
 	error::{suggest_object_fields, ErrorKind::*},
-	evaluate::operator::{evaluate_add_op, evaluate_binary_op_special, evaluate_unary_op},
+	evaluate::operator::{evaluate_binary_op_special, evaluate_unary_op},
 	function::{CallLocation, FuncDesc, FuncVal},
 	gc::WithCapacityExt as _,
 	in_frame,
@@ -283,8 +283,16 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 }
 
 #[allow(clippy::too_many_lines)]
-pub fn evaluate_member_list_object(ctx: Context, members: &ObjMembers) -> Result<ObjValue> {
+pub fn evaluate_member_list_object(
+	super_obj: Option<ObjValue>,
+	ctx: Context,
+	members: &ObjMembers,
+) -> Result<ObjValue> {
 	let mut builder = ObjValueBuilder::new();
+	if let Some(super_obj) = super_obj {
+		builder.with_super(super_obj);
+	}
+
 	let locals = members.locals.clone();
 
 	// We have single context for all fields, so we can cache binds
@@ -318,11 +326,18 @@ pub fn evaluate_member_list_object(ctx: Context, members: &ObjMembers) -> Result
 	Ok(builder.build())
 }
 
-pub fn evaluate_object(ctx: Context, object: &ObjBody) -> Result<ObjValue> {
+pub fn evaluate_object(
+	super_obj: Option<ObjValue>,
+	ctx: Context,
+	object: &ObjBody,
+) -> Result<ObjValue> {
 	Ok(match object {
-		ObjBody::MemberList(members) => evaluate_member_list_object(ctx, members)?,
+		ObjBody::MemberList(members) => evaluate_member_list_object(super_obj, ctx, members)?,
 		ObjBody::ObjComp(obj) => {
 			let mut builder = ObjValueBuilder::new();
+			if let Some(super_obj) = super_obj {
+				builder.with_super(super_obj);
+			}
 			let locals = obj.locals.clone();
 			evaluate_comp(ctx, &obj.compspecs, &mut |ctx| {
 				let uctx = evaluate_object_locals(ctx.clone(), locals.clone());
@@ -584,11 +599,14 @@ pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 			})?;
 			Val::Arr(ArrValue::lazy(out))
 		}
-		Obj(body) => Val::Obj(evaluate_object(ctx, body)?),
-		ObjExtend(a, b) => evaluate_add_op(
-			&evaluate(ctx.clone(), a)?,
-			&Val::Obj(evaluate_object(ctx, b)?),
-		)?,
+		Obj(body) => Val::Obj(evaluate_object(None, ctx, body)?),
+		ObjExtend(a, b) => {
+			let base = evaluate(ctx.clone(), a)?;
+			match base {
+				Val::Obj(base_obj) => Val::Obj(evaluate_object(Some(base_obj), ctx, b)?),
+				_ => bail!("ObjExtend lhs should be an object value"),
+			}
+		}
 		Apply(value, args, tailstrict) => ensure_sufficient_stack(|| {
 			evaluate_apply(ctx, value, args, CallLocation::new(&args.span), *tailstrict)
 		})?,
