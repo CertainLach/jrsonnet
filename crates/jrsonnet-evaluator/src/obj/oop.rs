@@ -114,6 +114,7 @@ impl ObjectCore for OopObject {
 #[allow(clippy::module_name_repetitions)]
 pub struct ObjValueBuilder {
 	sup: Vec<CcObjectCore>,
+	has_assertions: bool,
 
 	new: OopObject,
 	next_field_index: FieldIndex,
@@ -125,6 +126,7 @@ impl ObjValueBuilder {
 	pub fn with_capacity(capacity: usize) -> Self {
 		Self {
 			sup: vec![],
+			has_assertions: false,
 			new: OopObject::new(FxHashMap::with_capacity(capacity), None),
 			next_field_index: FieldIndex::default(),
 		}
@@ -134,6 +136,7 @@ impl ObjValueBuilder {
 		self
 	}
 	pub fn with_super(&mut self, super_obj: ObjValue) -> &mut Self {
+		self.has_assertions |= super_obj.0.has_assertions;
 		self.sup.clone_from(&super_obj.0.cores);
 		self
 	}
@@ -143,6 +146,7 @@ impl ObjValueBuilder {
 			self.new.assertion.is_none(),
 			"one OopObject can only have one assertion"
 		);
+		self.has_assertions = true;
 		self.new.assertion = Some(CcObjectAssertion::new(assertion));
 		self
 	}
@@ -193,9 +197,11 @@ impl ObjValueBuilder {
 		if self.sup.is_empty() {
 			return ObjValue::empty();
 		}
+		let has_assertions = self.has_assertions;
 		ObjValue(Cc::new(ObjValueInner {
 			cores: self.sup,
-			assertions_ran: Cell::new(false),
+			assertions_ran: Cell::new(!has_assertions),
+			has_assertions,
 			value_cache: RefCell::default(),
 		}))
 	}

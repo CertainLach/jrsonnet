@@ -231,6 +231,7 @@ cc_dyn!(
 struct ObjValueInner {
 	cores: Vec<CcObjectCore>,
 	assertions_ran: Cell<bool>,
+	has_assertions: bool,
 	value_cache: RefCell<FxHashMap<(IStr, CoreIdx), CacheValue>>,
 }
 
@@ -258,6 +259,7 @@ thread_local! {
 	static EMPTY_OBJ: ObjValue = ObjValue(Cc::new(ObjValueInner {
 		cores: vec![],
 		assertions_ran: Cell::new(true),
+		has_assertions: false,
 		value_cache: RefCell::default(),
 	}))
 }
@@ -475,10 +477,12 @@ impl ObjValue {
 	pub fn extend_from(&self, sup: Self) -> Self {
 		let mut cores = sup.0.cores.clone();
 		cores.extend(self.0.cores.iter().cloned());
+		let has_assertions = sup.0.has_assertions || self.0.has_assertions;
 		ObjValue(Cc::new(ObjValueInner {
 			cores,
 			value_cache: RefCell::default(),
-			assertions_ran: Cell::new(false),
+			assertions_ran: Cell::new(!has_assertions),
+			has_assertions,
 		}))
 	}
 	// #[must_use]
