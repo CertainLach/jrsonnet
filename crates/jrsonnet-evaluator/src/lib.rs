@@ -64,10 +64,11 @@ use crate::gc::WithCapacityExt as _;
 pub(crate) fn parse_jsonnet(code: &str, source: Source) -> Result<Expr, SyntaxError> {
 	#[cfg(feature = "peg-parser")]
 	{
+		use std::sync::LazyLock;
 		static USE_LEGACY_PARSER: LazyLock<bool> =
 			LazyLock::new(|| std::env::var_os("JRSONNET_LEGACY_PARSER").is_some());
 
-		if USE_LEGACY_PARSER {
+		if *USE_LEGACY_PARSER {
 			return parse_peg(code, source);
 		}
 	}

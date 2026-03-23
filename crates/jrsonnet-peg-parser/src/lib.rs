@@ -100,7 +100,7 @@ parser! {
 				) {(rest, end)}
 				/ comma()? {(None, Vec::new())}
 			) _ "]" {?
-				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Array {
+				#[cfg(feature = "exp-destruct")] return Ok(Destruct::Array {
 					start,
 					rest: rest.0,
 					end: rest.1,
@@ -109,13 +109,13 @@ parser! {
 			}
 		pub rule destruct_object(s: &ParserSettings) -> Destruct
 			= "{" _
-				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:expr(s) {v})? {(name, into, default.map(Rc::new))})**comma()
+				fields:(name:id() into:(_ ":" _ into:destruct(s) {into})? default:(_ "=" _ v:spanned(<expr(s)>, s) {v})? {(name, into, default.map(Rc::new))})**comma()
 				rest:(
 					comma() rest:destruct_rest()? {rest}
 					/ comma()? {None}
 				)
 			_ "}" {?
-				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Object {
+				#[cfg(feature = "exp-destruct")] return Ok(Destruct::Object {
 					fields,
 					rest,
 				});
@@ -124,7 +124,7 @@ parser! {
 		pub rule destruct(s: &ParserSettings) -> Destruct
 			= v:id() {Destruct::Full(v)}
 			/ "?" {?
-				#[cfg(feature = "exp-destruct")] return Ok(expr::Destruct::Skip);
+				#[cfg(feature = "exp-destruct")] return Ok(Destruct::Skip);
 				#[cfg(not(feature = "exp-destruct"))] Err("!!!experimental destructuring was not enabled")
 			}
 			/ arr:destruct_array(s) {arr}
