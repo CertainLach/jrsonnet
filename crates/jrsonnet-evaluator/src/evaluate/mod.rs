@@ -282,45 +282,69 @@ pub fn evaluate_field_member<B: Unbound<Bound = Context> + Clone>(
 	Ok(())
 }
 
+#[derive(Trace, Clone)]
+struct DirectUnbound(Context);
+impl Unbound for DirectUnbound {
+	type Bound = Context;
+	fn bind(&self, sup_this: SupThis) -> Result<Context> {
+		Ok(self
+			.0
+			.clone()
+			.extend_bindings_sup_this(FxHashMap::new(), sup_this))
+	}
+}
+
 #[allow(clippy::too_many_lines)]
 pub fn evaluate_member_list_object(
 	super_obj: Option<ObjValue>,
 	ctx: Context,
 	members: &ObjMembers,
 ) -> Result<ObjValue> {
+	#[derive(Trace)]
+	struct ObjectAssert<B: Trace> {
+		uctx: B,
+		asserts: Rc<Vec<AssertStmt>>,
+	}
+	impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
+		fn run(&self, sup_this: SupThis) -> Result<()> {
+			let ctx = self.uctx.bind(sup_this)?;
+			for assert in &*self.asserts {
+				evaluate_assert(ctx.clone(), assert)?;
+			}
+			Ok(())
+		}
+	}
+
 	let mut builder = ObjValueBuilder::new();
 	if let Some(super_obj) = super_obj {
 		builder.with_super(super_obj);
 	}
 
-	let locals = members.locals.clone();
-
-	// We have single context for all fields, so we can cache binds
-	let uctx = CachedUnbound::new(evaluate_object_locals(ctx.clone(), locals));
-
-	for field in &members.fields {
-		evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
-	}
-
-	if !members.asserts.is_empty() {
-		#[derive(Trace)]
-		struct ObjectAssert<B: Trace> {
-			uctx: B,
-			asserts: Rc<Vec<AssertStmt>>,
+	if members.locals.is_empty() {
+		// We can use the same context for all field evaluation, it doesn't depends on locals, only on this/super
+		let uctx = DirectUnbound(ctx.clone());
+		for field in &members.fields {
+			evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
 		}
-		impl<B: Unbound<Bound = Context>> ObjectAssertion for ObjectAssert<B> {
-			fn run(&self, sup_this: SupThis) -> Result<()> {
-				let ctx = self.uctx.bind(sup_this)?;
-				for assert in &*self.asserts {
-					evaluate_assert(ctx.clone(), assert)?;
-				}
-				Ok(())
-			}
+		if !members.asserts.is_empty() {
+			builder.assert(ObjectAssert {
+				uctx,
+				asserts: members.asserts.clone(),
+			});
 		}
-		builder.assert(ObjectAssert {
-			uctx,
-			asserts: members.asserts.clone(),
-		});
+	} else {
+		let locals = members.locals.clone();
+		// We have single context for all fields, so we can cache them together
+		let uctx = CachedUnbound::new(evaluate_object_locals(ctx.clone(), locals));
+		for field in &members.fields {
+			evaluate_field_member(&mut builder, ctx.clone(), uctx.clone(), field)?;
+		}
+		if !members.asserts.is_empty() {
+			builder.assert(ObjectAssert {
+				uctx,
+				asserts: members.asserts.clone(),
+			});
+		}
 	}
 
 	Ok(builder.build())
