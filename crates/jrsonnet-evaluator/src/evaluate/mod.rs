@@ -437,9 +437,6 @@ pub fn evaluate_named(ctx: Context, expr: &Expr, name: IStr) -> Result<Val> {
 pub fn evaluate(ctx: Context, expr: &Expr) -> Result<Val> {
 	use Expr::*;
 
-	if let Some(trivial) = evaluate_trivial(expr) {
-		return Ok(trivial);
-	}
 	Ok(match expr {
 		Literal(LiteralType::This) => Val::Obj(ctx.try_this()?),
 		Literal(LiteralType::Super) => Val::Obj(ctx.try_sup_this()?.standalone_super()?),
