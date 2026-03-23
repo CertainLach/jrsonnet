@@ -1,0 +1,19 @@
+[package]
+name = "jrsonnet-deps"
+description = "List dependencies of a jsonnet file"
+authors.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+version.workspace = true
+
+[lints]
+workspace = true
+
+[dependencies]
+jrsonnet-evaluator.workspace = true
+jrsonnet-ir.workspace = true
+jrsonnet-ir-parser.workspace = true
+jrsonnet-cli.workspace = true
+
+clap = { workspace = true, features = ["derive"] }
