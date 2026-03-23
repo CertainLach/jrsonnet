@@ -56,14 +56,7 @@ pub fn generate_ungrammar() -> Result<()> {
 						});
 					}
 					SpecialName::Error => {
-						eprintln!("implicit error: {name}");
-						kinds.define_token(TokenKind::Error {
-							grammar_name: token.to_owned(),
-							name: format!("ERROR_{name}"),
-							regex: None,
-							priority: None,
-							is_lexer_error: true,
-						});
+						panic!("error token ERROR_{name} must be explicitly defined in jsonnet_kinds()");
 					}
 				}
 				continue;
@@ -170,6 +163,24 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc, lexer: bool) -> Res
 		quote! {}
 	};
 
+	let error_desc_arms = kinds.tokens().filter_map(|t| {
+		if let TokenKind::Error {
+			name, description, ..
+		} = t
+		{
+			let ident = format_ident!("{name}");
+			Some(quote! { #ident => ::core::option::Option::Some(#description) })
+		} else {
+			None
+		}
+	});
+
+	let display_name_arms = kinds.tokens().map(|t| {
+		let ident = format_ident!("{}", t.name());
+		let display = t.display_name();
+		quote! { #ident => #display }
+	});
+
 	let ast = quote! {
 		#![allow(bad_style, missing_docs, unreachable_pub, clippy::manual_non_exhaustive, clippy::match_like_matches_macro)]
 
@@ -199,6 +210,22 @@ fn generate_syntax_kinds(kinds: &KindsSrc, grammar: &AstSrc, lexer: bool) -> Res
 			}
 
 			#is_enum
+
+			pub fn error_description(self) -> Option<&'static str> {
+				match self {
+					#(#error_desc_arms,)*
+					LEXING_ERROR => ::core::option::Option::Some("unexpected character"),
+					_ => None,
+				}
+			}
+
+			pub fn display_name(self) -> &'static str {
+				match self {
+					#(#display_name_arms,)*
+					LEXING_ERROR => "unexpected character",
+					_ => "unknown",
+				}
+			}
 
 			pub fn from_raw(r: u16) -> Self {
 				assert!(r < Self::__LAST as u16);

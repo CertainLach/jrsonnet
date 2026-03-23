@@ -19,6 +19,7 @@ pub enum TokenKind {
 		is_lexer_error: bool,
 		regex: Option<String>,
 		priority: Option<u32>,
+		description: String,
 	},
 	/// Keyword - literal match of token
 	Keyword {
@@ -113,6 +114,24 @@ impl TokenKind {
 		}
 	}
 
+	pub fn display_name(&self) -> String {
+		match self {
+			Self::Keyword { code, .. } => format!("'{code}'"),
+			Self::Literal { name, .. } => match name.as_str() {
+				"FLOAT" => "number".to_owned(),
+				"IDENT" => "identifier".to_owned(),
+				"STRING_DOUBLE" | "STRING_SINGLE" | "STRING_DOUBLE_VERBATIM"
+				| "STRING_SINGLE_VERBATIM" | "STRING_BLOCK" => "string".to_owned(),
+				"WHITESPACE" => "whitespace".to_owned(),
+				"SINGLE_LINE_SLASH_COMMENT" | "SINGLE_LINE_HASH_COMMENT"
+				| "MULTI_LINE_COMMENT" => "comment".to_owned(),
+				_ => name.to_lowercase(),
+			},
+			Self::Meta { name, .. } => name.to_lowercase(),
+			Self::Error { description, .. } => description.clone(),
+		}
+	}
+
 	pub fn method_name(&self) -> Ident {
 		match self {
 			Self::Keyword { name, .. } => {
@@ -138,7 +157,7 @@ macro_rules! define_kinds {
 		});
 		$(define_kinds!($into = $($rest)*))?
 	}};
-	($into:ident = error($name:literal$(, priority = $priority:literal)? $(, lexer = $lexer:literal)?) $(=> $regex:literal)? $(; $($rest:tt)*)?) => {{
+	($into:ident = error($name:literal, $desc:literal $(, priority = $priority:literal)? $(, lexer = $lexer:literal)?) $(=> $regex:literal)? $(; $($rest:tt)*)?) => {{
 		{
 			let regex = None$(.or(Some($regex.to_owned())))?;
 			let priority = None$(.or(Some($priority)))?;
@@ -148,6 +167,7 @@ macro_rules! define_kinds {
 				is_lexer_error: false $(|| $lexer)? || regex.is_some() || priority.is_some(),
 				regex,
 				priority,
+				description: $desc.to_owned(),
 			});
 		}
 		$(define_kinds!($into = $($rest)*))?
@@ -248,31 +268,35 @@ pub fn jsonnet_kinds() -> KindsSrc {
 		"=" => "ASSIGN";
 		"?" => "QUESTION_MARK";
 		// Literals
-		lit("FLOAT") => r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?(?:[eE][+-]?[0-9]+)?";
-		error("FLOAT_JUNK_AFTER_POINT") => r"(?:0|[1-9][0-9]*)\.[^0-9]";
-		error("FLOAT_JUNK_AFTER_EXPONENT") => r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[eE][^+\-0-9]";
-		error("FLOAT_JUNK_AFTER_EXPONENT_SIGN") => r"(?:0|[1-9][0-9]*)(?:\.[0-9]+)?[eE][+-][^0-9]";
+		lit("FLOAT") => r"(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\.[0-9]+(?:_[0-9]+)*)?(?:[eE][+-]?[0-9]+(?:_[0-9]+)*)?";
+		error("FLOAT_JUNK_AFTER_POINT", "junk after decimal point in number literal") => r"(?:0|[1-9][0-9]*(?:_[0-9]+)*)\.[^0-9]";
+		error("FLOAT_JUNK_AFTER_EXPONENT", "junk after exponent in number literal") => r"(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\.[0-9]+(?:_[0-9]+)*)?[eE][^+\-0-9]";
+		error("FLOAT_JUNK_AFTER_EXPONENT_SIGN", "junk after exponent sign in number literal") => r"(?:0|[1-9][0-9]*(?:_[0-9]+)*)(?:\.[0-9]+(?:_[0-9]+)*)?[eE][+-][^0-9]";
 		lit("STRING_DOUBLE") => "\"(?s:[^\"\\\\]|\\\\.)*\"";
-		error("STRING_DOUBLE_UNTERMINATED") => "\"(?s:[^\"\\\\]|\\\\.)*";
+		error("STRING_DOUBLE_UNTERMINATED", "unterminated double-quoted string") => "\"(?s:[^\"\\\\]|\\\\.)*";
 		lit("STRING_SINGLE") => "'(?s:[^'\\\\]|\\\\.)*'";
-		error("STRING_SINGLE_UNTERMINATED") => "'(?s:[^'\\\\]|\\\\.)*";
+		error("STRING_SINGLE_UNTERMINATED", "unterminated single-quoted string") => "'(?s:[^'\\\\]|\\\\.)*";
 		lit("STRING_DOUBLE_VERBATIM") => "@\"(?:[^\"]|\"\")*\"";
-		error("STRING_DOUBLE_VERBATIM_UNTERMINATED") => "@\"(?:[^\"]|\"\")*";
+		error("STRING_DOUBLE_VERBATIM_UNTERMINATED", "unterminated verbatim double-quoted string") => "@\"(?:[^\"]|\"\")*";
 		lit("STRING_SINGLE_VERBATIM") => "@'(?:[^']|'')*'";
-		error("STRING_SINGLE_VERBATIM_UNTERMINATED") => "@'(?:[^']|'')*";
-		error("STRING_VERBATIM_MISSING_QUOTES") => "@[^\"'\\s]\\S+";
+		error("STRING_SINGLE_VERBATIM_UNTERMINATED", "unterminated verbatim single-quoted string") => "@'(?:[^']|'')*";
+		error("STRING_VERBATIM_MISSING_QUOTES", "verbatim string missing opening quotes") => "@[^\"'\\s]\\S+";
 		lit("STRING_BLOCK") => r"\|\|\|", "crate::string_block::lex_str_block_test";
-		error("STRING_BLOCK_UNEXPECTED_END", lexer = true);
-		error("STRING_BLOCK_MISSING_NEW_LINE", lexer = true);
-		error("STRING_BLOCK_MISSING_TERMINATION", lexer = true);
-		error("STRING_BLOCK_MISSING_INDENT", lexer = true);
+		error("STRING_BLOCK_UNEXPECTED_END", "unexpected end of text block", lexer = true);
+		error("STRING_BLOCK_MISSING_NEW_LINE", "text block requires new line after |||", lexer = true);
+		error("STRING_BLOCK_MISSING_TERMINATION", "unterminated text block", lexer = true);
+		error("STRING_BLOCK_MISSING_INDENT", "text block first line must be indented", lexer = true);
 		lit("IDENT") => r"[_a-zA-Z][_a-zA-Z0-9]*";
 		lit("WHITESPACE") => r"[ \t\n\r]+";
 		lit("SINGLE_LINE_SLASH_COMMENT") => r"//[^\r\n]*?(\r\n|\n)?";
 		lit("SINGLE_LINE_HASH_COMMENT") => r"#[^\r\n]*?(\r\n|\n)?";
 		lit("MULTI_LINE_COMMENT") => r"/\*([^*]|\*[^/])*\*/";
-		error("COMMENT_TOO_SHORT") => r"/\*/";
-		error("COMMENT_UNTERMINATED") =>  r"/\*([^*/]|\*[^/])+";
+		error("COMMENT_TOO_SHORT", "comment too short") => r"/\*/";
+		error("COMMENT_UNTERMINATED", "unterminated multi-line comment") =>  r"/\*([^*/]|\*[^/])+";
+		error("NO_OPERATOR", "expected operator");
+		error("MISSING_TOKEN", "missing token");
+		error("UNEXPECTED_TOKEN", "unexpected token");
+		error("CUSTOM", "error");
 	];
 	kinds
 }

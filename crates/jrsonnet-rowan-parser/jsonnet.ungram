@@ -209,7 +209,7 @@ FieldName =
 |   FieldNameDynamic
 
 Visibility =
-    ':' v1:':'? v2:':'?
+    ':' ':'? ':'?
 
 Literal =
     'null'

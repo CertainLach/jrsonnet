@@ -211,6 +211,7 @@ pub(crate) fn lex_str_block<'a>(lex: &mut impl StrBlockLexCtx<'a>) -> Result<(),
 
 	// Process leading blank lines before calculating string block indent
 	while ctx.peek() == Some('\n') {
+		lex.mark_line("");
 		ctx.next();
 	}
 

@@ -132,6 +132,10 @@ pub enum SyntaxKind {
 	ERROR_COMMENT_TOO_SHORT,
 	#[regex("/\\*([^*/]|\\*[^/])+")]
 	ERROR_COMMENT_UNTERMINATED,
+	ERROR_NO_OPERATOR,
+	ERROR_MISSING_TOKEN,
+	ERROR_UNEXPECTED_TOKEN,
+	ERROR_CUSTOM,
 	#[token("tailstrict")]
 	TAILSTRICT_KW,
 	#[token("local")]
@@ -155,7 +159,6 @@ pub enum SyntaxKind {
 	#[token("in")]
 	IN_KW,
 	META_OBJECT_APPLY,
-	ERROR_NO_OPERATOR,
 	#[token("null")]
 	NULL_KW,
 	#[token("true")]
@@ -170,9 +173,6 @@ pub enum SyntaxKind {
 	FOR_KW,
 	#[token("assert")]
 	ASSERT_KW,
-	ERROR_MISSING_TOKEN,
-	ERROR_UNEXPECTED_TOKEN,
-	ERROR_CUSTOM,
 	LEXING_ERROR,
 	__LAST_TOKEN,
 	#[doc(hidden)]
