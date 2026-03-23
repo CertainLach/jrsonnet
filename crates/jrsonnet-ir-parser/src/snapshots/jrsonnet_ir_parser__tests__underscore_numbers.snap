@@ -1,0 +1,17 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+Arr(
+    [
+        Num(
+            1000.0,
+        ),
+        Num(
+            1000.0001,
+        ),
+        Num(
+            100000000000.0,
+        ),
+    ],
+)

@@ -241,8 +241,25 @@ fn cpp_test_suite() -> io::Result<()> {
 			golden = Some(golden_path);
 		}
 
+		// ir-parser has its own override layer
+		#[cfg(feature = "ir-parser")]
+		let ir_parser_override_path = {
+			let p = root_tests
+				.join(format!("{root_dir}_golden_override_ir_parser"))
+				.join(golden_path.file_name().expect("file has basename"));
+			if let Some(golden_path) = read_file(&p)? {
+				golden = Some(golden_path);
+			}
+			p
+		};
+
 		// Otherwise assume test should just not fail and return true.
 		let golden = golden.unwrap_or_else(|| "true".to_owned());
+
+		#[cfg(feature = "ir-parser")]
+		let update_golden_path = &ir_parser_override_path;
+		#[cfg(not(feature = "ir-parser"))]
+		let update_golden_path = &golden_override;
 
 		match (serde_json::from_str(&result), serde_json::from_str(&golden)) {
 			(Err(_), Ok(_)) => panic!(
@@ -258,7 +275,7 @@ fn cpp_test_suite() -> io::Result<()> {
 				let diff = JsonDiff::diff_string(&golden, &result_v, false);
 				if let Some(diff) = diff {
 					if env::var_os("UPDATE_GOLDEN").is_some() {
-						fs::write(golden_override, result)?;
+						fs::write(update_golden_path, result)?;
 					} else {
 						panic!(
 							"Result \n{result_v:#}\n\
@@ -273,7 +290,7 @@ fn cpp_test_suite() -> io::Result<()> {
 			(Err(_), Err(_)) => {
 				if result != golden.trim_end() {
 					if env::var_os("UPDATE_GOLDEN").is_some() {
-						fs::write(golden_override, result)?;
+						fs::write(update_golden_path, result)?;
 					} else {
 						panic!(
 						"golden didn't match for {}:\n<got>\n{result}\n</got>\n<golden>\n{golden}\n</golden>",

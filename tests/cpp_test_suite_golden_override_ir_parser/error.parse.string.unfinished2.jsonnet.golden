@@ -1,0 +1,2 @@
+syntax error: unterminated single-quoted string
+    error.parse.string.unfinished2.jsonnet:17:1

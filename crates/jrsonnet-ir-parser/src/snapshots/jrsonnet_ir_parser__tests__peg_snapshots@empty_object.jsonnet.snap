@@ -1,0 +1,14 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/empty_object.jsonnet
+---
+Obj(
+    MemberList(
+        ObjMembers {
+            locals: [],
+            asserts: [],
+            fields: [],
+        },
+    ),
+)

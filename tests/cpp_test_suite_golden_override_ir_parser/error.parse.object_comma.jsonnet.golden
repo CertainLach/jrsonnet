@@ -1,0 +1,2 @@
+syntax error: expected '}', got identifier "z"
+    error.parse.object_comma.jsonnet:17:11

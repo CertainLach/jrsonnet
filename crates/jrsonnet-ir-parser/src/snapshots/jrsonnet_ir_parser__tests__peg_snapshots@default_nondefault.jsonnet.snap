@@ -1,0 +1,55 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/default_nondefault.jsonnet
+---
+LocalExpr(
+    [
+        Function {
+            name: "x",
+            params: ExprParams {
+                exprs: [
+                    ExprParam {
+                        destruct: Full(
+                            "foo",
+                        ),
+                        default: Some(
+                            Str(
+                                "foo",
+                            ),
+                        ),
+                    },
+                    ExprParam {
+                        destruct: Full(
+                            "bar",
+                        ),
+                        default: None,
+                    },
+                ],
+                signature: FunctionSignature(
+                    [
+                        ParamParse {
+                            name: Named(
+                                "foo",
+                            ),
+                            default: Exists,
+                        },
+                        ParamParse {
+                            name: Named(
+                                "bar",
+                            ),
+                            default: None,
+                        },
+                    ],
+                ),
+                binds_len: 2,
+            },
+            value: Literal(
+                Null,
+            ),
+        },
+    ],
+    Literal(
+        Null,
+    ),
+)

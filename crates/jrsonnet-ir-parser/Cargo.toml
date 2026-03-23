@@ -6,6 +6,9 @@ license.workspace = true
 repository.workspace = true
 version.workspace = true
 
+[features]
+exp-null-coaelse = ["jrsonnet-ir/exp-null-coaelse"]
+
 [dependencies]
 insta.workspace = true
 jrsonnet-gcmodule.workspace = true

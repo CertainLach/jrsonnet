@@ -638,6 +638,7 @@ dependencies = [
  "jrsonnet-gcmodule",
  "jrsonnet-interner",
  "jrsonnet-ir",
+ "jrsonnet-ir-parser",
  "jrsonnet-macros",
  "jrsonnet-peg-parser",
  "jrsonnet-types",

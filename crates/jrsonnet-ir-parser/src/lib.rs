@@ -1,12 +1,36 @@
 use std::rc::Rc;
 
-use insta::assert_snapshot;
 use jrsonnet_gcmodule::Acyclic;
 use jrsonnet_ir::{
-	AssertExpr, AssertStmt, Expr, IfElse, IfSpecData, LiteralType, Slice, SliceDesc, Source,
-	SourceVirtual, Span, Spanned,
+	unescape, ArgsDesc, AssertExpr, AssertStmt, BinaryOp, BinaryOpType, BindSpec, CompSpec,
+	Destruct, Expr, ExprParam, ExprParams, FieldMember, FieldName, ForSpecData, IStr, IfElse,
+	IfSpecData, ImportKind, IndexPart, LiteralType, Member, ObjBody, ObjComp, ObjMembers, Slice,
+	SliceDesc, Source, Span, Spanned, UnaryOpType, Visibility,
 };
-use jrsonnet_lexer::{Lexeme, Lexer, SyntaxKind, T};
+use jrsonnet_lexer::{collect_lexed_str_block, Lexeme, Lexer, SyntaxKind, T};
+
+pub struct ParserSettings {
+	pub source: Source,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseErrorLocation {
+	pub offset: usize,
+}
+
+#[derive(Debug, Clone)]
+pub struct ParseError {
+	pub message: String,
+	pub location: ParseErrorLocation,
+}
+
+impl std::fmt::Display for ParseError {
+	fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+		write!(f, "{}", self.message)
+	}
+}
+
+type R<T> = Result<T, ParseError>;
 
 struct Parser<'a> {
 	lexemes: Vec<Lexeme<'a>>,
@@ -15,30 +39,46 @@ struct Parser<'a> {
 }
 
 impl<'a> Parser<'a> {
-	fn new(s: &'a str) -> Self {
+	fn new(code: &'a str, source: Source) -> Self {
 		Self {
-			lexemes: Lexer::new(s)
-				.filter(|l| l.kind != SyntaxKind::WHITESPACE)
+			lexemes: Lexer::new(code)
+				.filter(|l| {
+					!matches!(
+						l.kind,
+						SyntaxKind::WHITESPACE
+							| SyntaxKind::SINGLE_LINE_SLASH_COMMENT
+							| SyntaxKind::SINGLE_LINE_HASH_COMMENT
+							| SyntaxKind::MULTI_LINE_COMMENT
+					)
+				})
 				.collect(),
 			offset: 0,
-			source: Source::new_virtual("<test>".into(), s.into()),
+			source,
 		}
 	}
+
 	fn peek(&self) -> SyntaxKind {
-		self.lexemes[self.offset].kind
+		if self.at_eof() {
+			SyntaxKind::EOF
+		} else {
+			self.lexemes[self.offset].kind
+		}
 	}
-	fn text(&self) -> &str {
+
+	fn text(&self) -> &'a str {
 		self.lexemes[self.offset].text
 	}
+
 	fn at(&self, kind: SyntaxKind) -> bool {
 		!self.at_eof() && self.peek() == kind
 	}
+
 	fn eat_any(&mut self) {
-		self.offset += 1
+		self.offset += 1;
 	}
 
 	fn at_eof(&self) -> bool {
-		self.offset == self.lexemes.len()
+		self.offset >= self.lexemes.len()
 	}
 
 	fn try_eat(&mut self, t: SyntaxKind) -> bool {
@@ -48,17 +88,165 @@ impl<'a> Parser<'a> {
 		}
 		false
 	}
-	fn eat(&mut self, t: SyntaxKind) {
-		assert_eq!(self.peek(), t);
+
+	fn current_desc(&self) -> String {
+		if self.at_eof() {
+			return "end of file".to_owned();
+		}
+		let kind = self.peek();
+		let text = self.text();
+		let name = kind.display_name();
+		if matches!(kind, SyntaxKind::IDENT | SyntaxKind::FLOAT) {
+			format!("{name} \"{text}\"")
+		} else {
+			name.to_owned()
+		}
+	}
+
+	fn eat(&mut self, t: SyntaxKind) -> R<()> {
+		if !self.at(t) {
+			return Err(self.error(format!(
+				"expected {}, got {}",
+				t.display_name(),
+				self.current_desc(),
+			)));
+		}
 		self.eat_any();
+		Ok(())
 	}
 
 	fn span_start(&self) -> u32 {
+		if self.at_eof() {
+			if let Some(last) = self.lexemes.last() {
+				return last.range.1;
+			}
+			return 0;
+		}
 		self.lexemes[self.offset].range.0
 	}
+
 	fn span_end(&self) -> u32 {
 		self.lexemes[self.offset - 1].range.1
 	}
+
+	fn error(&self, message: String) -> ParseError {
+		ParseError {
+			location: ParseErrorLocation {
+				offset: self.span_start() as usize,
+			},
+			message,
+		}
+	}
+
+	fn expect_ident(&mut self) -> R<IStr> {
+		if !self.at(SyntaxKind::IDENT) {
+			return Err(self.error(format!("expected identifier, got {}", self.current_desc())));
+		}
+		let text = self.text();
+		if is_reserved(text) {
+			return Err(self.error(format!(
+				"expected identifier, got reserved word '{text}'"
+			)));
+		}
+		let s: IStr = text.into();
+		self.eat_any();
+		Ok(s)
+	}
+
+	fn at_ident(&self) -> bool {
+		self.at(SyntaxKind::IDENT) && !is_reserved(self.lexemes[self.offset].text)
+	}
+}
+
+fn is_reserved(s: &str) -> bool {
+	matches!(
+		s,
+		"assert"
+			| "else" | "error"
+			| "false" | "for"
+			| "function" | "if"
+			| "import" | "importstr"
+			| "importbin" | "in"
+			| "local" | "null"
+			| "tailstrict" | "then"
+			| "self" | "super"
+			| "true"
+	)
+}
+
+fn spanned<T: Acyclic>(p: &mut Parser<'_>, cb: impl FnOnce(&mut Parser<'_>) -> R<T>) -> R<Spanned<T>> {
+	let start = p.span_start();
+	let v = cb(p)?;
+	let end = p.span_end();
+	Ok(Spanned::new(v, Span(p.source.clone(), start, end)))
+}
+
+fn parse_string_content(p: &mut Parser<'_>) -> R<IStr> {
+	let kind = p.peek();
+	let text = p.text();
+	let s = match kind {
+		SyntaxKind::STRING_DOUBLE => {
+			let inner = &text[1..text.len() - 1];
+			unescape::unescape(inner)
+				.ok_or_else(|| p.error("invalid string escape".into()))?
+		}
+		SyntaxKind::STRING_SINGLE => {
+			let inner = &text[1..text.len() - 1];
+			unescape::unescape(inner)
+				.ok_or_else(|| p.error("invalid string escape".into()))?
+		}
+		SyntaxKind::STRING_DOUBLE_VERBATIM => {
+			let inner = &text[2..text.len() - 1];
+			inner.replace("\"\"", "\"")
+		}
+		SyntaxKind::STRING_SINGLE_VERBATIM => {
+			let inner = &text[2..text.len() - 1];
+			inner.replace("''", "'")
+		}
+		SyntaxKind::STRING_BLOCK => {
+			let inner = &text[3..];
+			let collected = collect_lexed_str_block(inner)
+				.map_err(|_| p.error("invalid string block".into()))?;
+			let mut result = String::new();
+			for (i, line) in collected.lines.iter().enumerate() {
+				if i > 0 {
+					result.push('\n');
+				}
+				result.push_str(line);
+			}
+			if !collected.truncate {
+				result.push('\n');
+			}
+			result
+		}
+		_ => return Err(p.error(format!("expected string, got {}", p.current_desc()))),
+	};
+	p.eat_any();
+	Ok(s.into())
+}
+
+fn is_string_token(kind: SyntaxKind) -> bool {
+	matches!(
+		kind,
+		SyntaxKind::STRING_DOUBLE
+			| SyntaxKind::STRING_SINGLE
+			| SyntaxKind::STRING_DOUBLE_VERBATIM
+			| SyntaxKind::STRING_SINGLE_VERBATIM
+			| SyntaxKind::STRING_BLOCK
+	)
+}
+
+fn parse_number(p: &mut Parser<'_>) -> R<f64> {
+	let text = p.text();
+	let n: f64 = text
+		.replace('_', "")
+		.parse()
+		.map_err(|_| p.error(format!("invalid number literal: {text}")))?;
+	if !n.is_finite() {
+		return Err(p.error("numbers are finite".into()));
+	}
+	p.eat_any();
+	Ok(n)
 }
 
 fn literal(p: &mut Parser<'_>) -> Option<LiteralType> {
@@ -75,109 +263,816 @@ fn literal(p: &mut Parser<'_>) -> Option<LiteralType> {
 	Some(t)
 }
 
-fn spanned<T: Acyclic>(p: &mut Parser<'_>, cb: impl FnOnce(&mut Parser<'_>) -> T) -> Spanned<T> {
-	let start = p.span_start();
-	let v = cb(p);
-	let end = p.span_end();
-
-	Spanned::new(v, Span(p.source.clone(), start, end))
-}
-
-fn assert_stmt(p: &mut Parser<'_>) -> AssertStmt {
-	p.eat(T![assert]);
-	let cond = spanned(p, expr);
-	dbg!(p.peek());
+fn assert_stmt(p: &mut Parser<'_>) -> R<AssertStmt> {
+	p.eat(T![assert])?;
+	let cond = spanned(p, expr)?;
 	let msg = if p.try_eat(T![:]) {
-		Some(spanned(p, expr))
+		Some(spanned(p, expr)?)
 	} else {
 		None
 	};
-	dbg!(AssertStmt(cond, msg))
+	Ok(AssertStmt(cond, msg))
 }
 
-fn if_spec_data(p: &mut Parser<'_>) -> IfSpecData {
-	let v = spanned(p, |p| p.eat(T![if]));
-	let cond = expr(p);
-	IfSpecData { span: v.span, cond }
+fn if_spec_data(p: &mut Parser<'_>) -> R<IfSpecData> {
+	let v = spanned(p, |p| p.eat(T![if]))?;
+	let cond = expr(p)?;
+	Ok(IfSpecData { span: v.span, cond })
 }
 
-fn if_else(p: &mut Parser<'_>) -> IfElse {
-	let cond = if_spec_data(p);
-	p.eat(T![then]);
-	let cond_then = expr(p);
-	let cond_else = if p.at(T![else]) { Some(expr(p)) } else { None };
-	IfElse {
+fn if_else(p: &mut Parser<'_>) -> R<IfElse> {
+	let cond = if_spec_data(p)?;
+	p.eat(T![then])?;
+	let cond_then = expr(p)?;
+	let cond_else = if p.try_eat(T![else]) {
+		Some(expr(p)?)
+	} else {
+		None
+	};
+	Ok(IfElse {
 		cond,
 		cond_then,
 		cond_else,
+	})
+}
+
+fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> R<SliceDesc> {
+	p.eat(T![:])?;
+	let end = if !p.at(T![:]) && !p.at(T![']']) {
+		Some(spanned(p, expr)?)
+	} else {
+		None
+	};
+	let step = if p.try_eat(T![:]) {
+		if !p.at(T![']']) {
+			Some(spanned(p, expr)?)
+		} else {
+			None
+		}
+	} else {
+		None
+	};
+	Ok(SliceDesc { start, end, step })
+}
+
+fn destruct(p: &mut Parser<'_>) -> R<Destruct> {
+	Ok(Destruct::Full(p.expect_ident()?))
+}
+
+fn params(p: &mut Parser<'_>) -> R<ExprParams> {
+	if p.at(T![')']) {
+		return Ok(ExprParams::new(Vec::new()));
+	}
+	let mut result = Vec::new();
+	loop {
+		let d = destruct(p)?;
+		let default = if p.try_eat(T![=]) {
+			Some(Rc::new(expr(p)?))
+		} else {
+			None
+		};
+		result.push(ExprParam {
+			destruct: d,
+			default,
+		});
+		if !p.try_eat(T![,]) {
+			break;
+		}
+		if p.at(T![')']) {
+			break;
+		}
+	}
+	Ok(ExprParams::new(result))
+}
+
+fn args(p: &mut Parser<'_>) -> R<ArgsDesc> {
+	if p.at(T![')']) {
+		return Ok(ArgsDesc::new(Vec::new(), Vec::new()));
+	}
+	let mut unnamed = Vec::new();
+	let mut named = Vec::new();
+	let mut named_started = false;
+	loop {
+		let is_named = p.at_ident() && {
+			let next_offset = p.offset + 1;
+			next_offset < p.lexemes.len() && p.lexemes[next_offset].kind == T![=] && {
+				let after_eq = next_offset + 1;
+				after_eq >= p.lexemes.len() || p.lexemes[after_eq].kind != T![=]
+			}
+		};
+		if is_named {
+			let name: IStr = p.expect_ident()?;
+			p.eat(T![=])?;
+			let value = Rc::new(expr(p)?);
+			named.push((name, value));
+			named_started = true;
+		} else {
+			if named_started {
+				return Err(p.error("positional argument after named argument".into()));
+			}
+			unnamed.push(Rc::new(expr(p)?));
+		}
+		if !p.try_eat(T![,]) {
+			break;
+		}
+		if p.at(T![')']) {
+			break;
+		}
+	}
+	Ok(ArgsDesc::new(unnamed, named))
+}
+
+fn bind(p: &mut Parser<'_>) -> R<BindSpec> {
+	let name = p.expect_ident()?;
+	if p.try_eat(T!['(']) {
+		let ps = params(p)?;
+		p.eat(T![')'])?;
+		p.eat(T![=])?;
+		let value = Rc::new(expr(p)?);
+		Ok(BindSpec::Function {
+			name,
+			params: ps,
+			value,
+		})
+	} else {
+		p.eat(T![=])?;
+		let value = Rc::new(expr(p)?);
+		Ok(BindSpec::Field {
+			into: Destruct::Full(name),
+			value,
+		})
 	}
 }
 
-fn slice_desc(p: &mut Parser<'_>, start: Option<Spanned<Expr>>) -> SliceDesc {
-	// start
-	p.eat(T![:]);
-	let end = if !p.at(T![:]) && !p.at(T![']']) {
-		Some(spanned(p, expr))
+fn visibility(p: &mut Parser<'_>) -> R<Visibility> {
+	p.eat(T![:])?;
+	if p.try_eat(T![:]) {
+		if p.try_eat(T![:]) {
+			Ok(Visibility::Unhide)
+		} else {
+			Ok(Visibility::Hidden)
+		}
 	} else {
-		None
-	};
-	let step = if p.try_eat(T![:]) && !p.at(T![']']) {
-		Some(spanned(p, expr))
-	} else {
-		None
-	};
-	SliceDesc { start, end, step }
+		Ok(Visibility::Normal)
+	}
 }
 
-fn expr_simple(p: &mut Parser<'_>) -> Expr {
-	let mut e = if let Some(literal) = literal(p) {
-		Expr::Literal(literal)
-	} else if p.at(T![assert]) {
-		let assert = assert_stmt(p);
-		p.eat(T![;]);
-		let rest = expr(p);
-		Expr::AssertExpr(Rc::new(AssertExpr { assert, rest }))
-	} else if p.at(T![if]) {
-		Expr::IfElse(Box::new(if_else(p)))
+fn field_name(p: &mut Parser<'_>) -> R<FieldName> {
+	if p.at_ident() {
+		Ok(FieldName::Fixed(p.expect_ident()?))
+	} else if is_string_token(p.peek()) {
+		Ok(FieldName::Fixed(parse_string_content(p)?))
+	} else if p.at(T!['[']) {
+		p.eat(T!['['])?;
+		let e = expr(p)?;
+		p.eat(T![']'])?;
+		Ok(FieldName::Dyn(e))
 	} else {
-		panic!("unexpected token: {:?}", p.peek());
-	};
+		Err(p.error(format!("expected field name, got {}", p.current_desc())))
+	}
+}
 
-	dbg!(&e);
+fn field(p: &mut Parser<'_>) -> R<FieldMember> {
+	let name = spanned(p, field_name)?;
+
+	if p.at(T!['(']) {
+		p.eat(T!['('])?;
+		let ps = params(p)?;
+		p.eat(T![')'])?;
+		let vis = visibility(p)?;
+		let value = Rc::new(expr(p)?);
+		Ok(FieldMember {
+			name,
+			plus: false,
+			params: Some(ps),
+			visibility: vis,
+			value,
+		})
+	} else {
+		let plus = p.try_eat(T![+]);
+		let vis = visibility(p)?;
+		let value = Rc::new(expr(p)?);
+		Ok(FieldMember {
+			name,
+			plus,
+			params: None,
+			visibility: vis,
+			value,
+		})
+	}
+}
+
+fn member(p: &mut Parser<'_>) -> R<Member> {
+	if p.at(T![local]) {
+		p.eat(T![local])?;
+		Ok(Member::BindStmt(bind(p)?))
+	} else if p.at(T![assert]) {
+		Ok(Member::AssertStmt(assert_stmt(p)?))
+	} else {
+		Ok(Member::Field(field(p)?))
+	}
+}
+
+fn for_spec(p: &mut Parser<'_>) -> R<ForSpecData> {
+	p.eat(T![for])?;
+	let d = destruct(p)?;
+	p.eat(T![in])?;
+	let over = expr(p)?;
+	Ok(ForSpecData { destruct: d, over })
+}
+
+fn compspecs(p: &mut Parser<'_>) -> R<Vec<CompSpec>> {
+	let mut specs = Vec::new();
+	specs.push(CompSpec::ForSpec(for_spec(p)?));
+	loop {
+		if p.at(T![for]) {
+			specs.push(CompSpec::ForSpec(for_spec(p)?));
+		} else if p.at(T![if]) {
+			let isd = if_spec_data(p)?;
+			specs.push(CompSpec::IfSpec(isd));
+		} else {
+			break;
+		}
+	}
+	Ok(specs)
+}
+
+fn objinside(p: &mut Parser<'_>) -> R<ObjBody> {
+	if p.at(T!['}']) {
+		return Ok(ObjBody::MemberList(ObjMembers {
+			locals: Rc::new(Vec::new()),
+			asserts: Rc::new(Vec::new()),
+			fields: Vec::new(),
+		}));
+	}
+
+	let mut members = Vec::new();
+	loop {
+		members.push(member(p)?);
+		if !p.try_eat(T![,]) {
+			break;
+		}
+		if p.at(T!['}']) || p.at(T![for]) {
+			break;
+		}
+	}
+
+	if p.at(T![for]) {
+		let specs = compspecs(p)?;
+		let mut locals = Vec::new();
+		let mut field_member = None;
+		for m in members {
+			match m {
+				Member::Field(f) => {
+					if field_member.is_some() {
+						return Err(p.error(
+							"object comprehension can only contain one field".into(),
+						));
+					}
+					field_member = Some(f);
+				}
+				Member::BindStmt(b) => locals.push(b),
+				Member::AssertStmt(_) => {
+					return Err(p.error(
+						"asserts are unsupported in object comprehension".into(),
+					));
+				}
+			}
+		}
+		Ok(ObjBody::ObjComp(ObjComp {
+			locals: Rc::new(locals),
+			field: Rc::new(
+				field_member.ok_or_else(|| {
+					p.error("missing object comprehension field".into())
+				})?,
+			),
+			compspecs: specs,
+		}))
+	} else {
+		let mut locals = Vec::new();
+		let mut asserts = Vec::new();
+		let mut fields = Vec::new();
+		for m in members {
+			match m {
+				Member::Field(f) => fields.push(f),
+				Member::BindStmt(b) => locals.push(b),
+				Member::AssertStmt(a) => asserts.push(a),
+			}
+		}
+		Ok(ObjBody::MemberList(ObjMembers {
+			locals: Rc::new(locals),
+			asserts: Rc::new(asserts),
+			fields,
+		}))
+	}
+}
+
+fn expr_basic(p: &mut Parser<'_>) -> R<Expr> {
+	if let Some(lit) = literal(p) {
+		return Ok(Expr::Literal(lit));
+	}
+
+	match p.peek() {
+		SyntaxKind::STRING_DOUBLE
+		| SyntaxKind::STRING_SINGLE
+		| SyntaxKind::STRING_DOUBLE_VERBATIM
+		| SyntaxKind::STRING_SINGLE_VERBATIM
+		| SyntaxKind::STRING_BLOCK => Ok(Expr::Str(parse_string_content(p)?)),
+
+		SyntaxKind::FLOAT => Ok(Expr::Num(parse_number(p)?)),
+
+		T!['('] => {
+			p.eat(T!['('])?;
+			let e = expr(p)?;
+			p.eat(T![')'])?;
+			Ok(e)
+		}
+
+		T!['['] => {
+			p.eat(T!['['])?;
+			if p.at(T![']']) {
+				p.eat(T![']'])?;
+				return Ok(Expr::Arr(Rc::new(Vec::new())));
+			}
+			let first = expr(p)?;
+			if p.at(T![for]) {
+				let specs = compspecs(p)?;
+				p.eat(T![']'])?;
+				Ok(Expr::ArrComp(Rc::new(first), specs))
+			} else if p.at(T![,]) && {
+				let next = p.offset + 1;
+				next < p.lexemes.len() && p.lexemes[next].kind == T![for]
+			} {
+				p.eat(T![,])?;
+				let specs = compspecs(p)?;
+				p.eat(T![']'])?;
+				Ok(Expr::ArrComp(Rc::new(first), specs))
+			} else {
+				let mut elems = vec![first];
+				while p.try_eat(T![,]) {
+					if p.at(T![']']) {
+						break;
+					}
+					elems.push(expr(p)?);
+				}
+				p.eat(T![']'])?;
+				Ok(Expr::Arr(Rc::new(elems)))
+			}
+		}
+
+		T!['{'] => {
+			p.eat(T!['{'])?;
+			let body = objinside(p)?;
+			p.eat(T!['}'])?;
+			Ok(Expr::Obj(body))
+		}
+
+		T![local] => {
+			p.eat(T![local])?;
+			let mut binds = Vec::new();
+			loop {
+				binds.push(bind(p)?);
+				if !p.try_eat(T![,]) {
+					break;
+				}
+			}
+			p.eat(T![;])?;
+			let body = expr(p)?;
+			Ok(Expr::LocalExpr(binds, Box::new(body)))
+		}
+
+		T![if] => Ok(Expr::IfElse(Box::new(if_else(p)?))),
+
+		T![function] => {
+			p.eat(T![function])?;
+			p.eat(T!['('])?;
+			let ps = params(p)?;
+			p.eat(T![')'])?;
+			let body = expr(p)?;
+			Ok(Expr::Function(ps, Rc::new(body)))
+		}
+
+		T![assert] => {
+			let a = assert_stmt(p)?;
+			p.eat(T![;])?;
+			let rest = expr(p)?;
+			Ok(Expr::AssertExpr(Rc::new(AssertExpr { assert: a, rest })))
+		}
+
+		T![error] => {
+			let span = spanned(p, |p| p.eat(T![error]))?;
+			let e = expr(p)?;
+			Ok(Expr::ErrorStmt(span.span, Box::new(e)))
+		}
+
+		T![importstr] => {
+			let kind = spanned(p, |p| {
+				p.eat(T![importstr])?;
+				Ok(ImportKind::Str)
+			})?;
+			let path = expr(p)?;
+			Ok(Expr::Import(kind, Box::new(path)))
+		}
+
+		T![importbin] => {
+			let kind = spanned(p, |p| {
+				p.eat(T![importbin])?;
+				Ok(ImportKind::Bin)
+			})?;
+			let path = expr(p)?;
+			Ok(Expr::Import(kind, Box::new(path)))
+		}
+
+		T![import] => {
+			let kind = spanned(p, |p| {
+				p.eat(T![import])?;
+				Ok(ImportKind::Normal)
+			})?;
+			let path = expr(p)?;
+			Ok(Expr::Import(kind, Box::new(path)))
+		}
+
+		SyntaxKind::IDENT => {
+			let text = p.text();
+			if is_reserved(text) {
+				return Err(p.error(format!("unexpected reserved word '{text}'")));
+			}
+			let n = spanned(p, |p| {
+				let s: IStr = p.text().into();
+				p.eat_any();
+				Ok(s)
+			})?;
+			Ok(Expr::Var(n))
+		}
+
+		_ => Err(p.error(format!("unexpected {}", p.current_desc()))),
+	}
+}
+
+/// Flush accumulated index parts into an Expr::Index wrapping `e`.
+fn flush_index_parts(e: &mut Expr, parts: &mut Vec<IndexPart>) {
+	if parts.is_empty() {
+		return;
+	}
+	let old = std::mem::replace(e, Expr::Literal(LiteralType::Null));
+	*e = Expr::Index {
+		indexable: Box::new(old),
+		parts: std::mem::take(parts),
+	};
+}
+
+fn expr_suffix(p: &mut Parser<'_>) -> R<Expr> {
+	let mut e = expr_basic(p)?;
+	// Accumulate consecutive index parts (.field, [expr], ?.field, ?.[expr])
+	// into a single Expr::Index. This is critical for null-coalesce semantics:
+	// a?.b.c needs all parts in one Index so the evaluator can skip .c when .b is null.
+	let mut parts: Vec<IndexPart> = Vec::new();
 
 	loop {
-		if p.try_eat(T!['[']) {
-			if p.at(T![:]) {
-				let slice = slice_desc(p, None);
-				e = Expr::Slice(Box::new(Slice { value: e, slice }));
-				p.eat(T![']']);
-				continue;
+		#[cfg(feature = "exp-null-coaelse")]
+		if p.at(T![?]) {
+			p.eat_any();
+			if p.try_eat(T![.]) {
+				if p.at(T!['[']) {
+					// ?.[expr]
+					p.eat(T!['['])?;
+					let idx = spanned(p, expr)?;
+					p.eat(T![']'])?;
+					parts.push(IndexPart {
+						span: idx.span,
+						value: idx.value,
+						null_coaelse: true,
+					});
+				} else {
+					// ?.field
+					let id_spanned = spanned(p, |p| {
+						let name = p.expect_ident()?;
+						Ok(Expr::Str(name))
+					})?;
+					parts.push(IndexPart {
+						span: id_spanned.span,
+						value: id_spanned.value,
+						null_coaelse: true,
+					});
+				}
+			} else {
+				return Err(p.error("expected '.' after '?'".into()));
 			}
+			continue;
+		}
 
-			let idx = spanned(p, expr);
+		if p.at(T![.]) {
+			p.eat(T![.])?;
+			let id_spanned = spanned(p, |p| {
+				let name = p.expect_ident()?;
+				Ok(Expr::Str(name))
+			})?;
+			parts.push(IndexPart {
+				span: id_spanned.span,
+				value: id_spanned.value,
+				#[cfg(feature = "exp-null-coaelse")]
+				null_coaelse: false,
+			});
+		} else if p.at(T!['[']) {
+			p.eat(T!['['])?;
+
 			if p.at(T![:]) {
-				let slice = slice_desc(p, Some(idx));
+				// Slice: flush index parts first, then handle slice
+				flush_index_parts(&mut e, &mut parts);
+				let slice = slice_desc(p, None)?;
+				p.eat(T![']'])?;
 				e = Expr::Slice(Box::new(Slice { value: e, slice }));
 			} else {
+				let idx = spanned(p, expr)?;
+				if p.at(T![:]) {
+					// Slice with start: flush index parts first
+					flush_index_parts(&mut e, &mut parts);
+					let slice = slice_desc(p, Some(idx))?;
+					p.eat(T![']'])?;
+					e = Expr::Slice(Box::new(Slice { value: e, slice }));
+				} else {
+					// Bracket index: add to parts
+					p.eat(T![']'])?;
+					parts.push(IndexPart {
+						span: idx.span,
+						value: idx.value,
+						#[cfg(feature = "exp-null-coaelse")]
+						null_coaelse: false,
+					});
+				}
 			}
-			p.eat(T![']']);
+		} else if p.at(T!['(']) {
+			flush_index_parts(&mut e, &mut parts);
+			let args_spanned = spanned(p, |p| {
+				p.eat(T!['('])?;
+				let a = args(p)?;
+				p.eat(T![')'])?;
+				Ok(a)
+			})?;
+			let tailstrict = p.try_eat(T![tailstrict]);
+			e = Expr::Apply(Box::new(e), args_spanned, tailstrict);
+		} else if p.at(T!['{']) {
+			flush_index_parts(&mut e, &mut parts);
+			p.eat(T!['{'])?;
+			let body = objinside(p)?;
+			p.eat(T!['}'])?;
+			e = Expr::ObjExtend(Rc::new(e), body);
 		} else {
 			break;
 		}
 	}
 
-	dbg!(e)
+	flush_index_parts(&mut e, &mut parts);
+	Ok(e)
 }
 
-fn expr(p: &mut Parser<'_>) -> Expr {
-	expr_simple(p)
+fn prefix_binding_power(op: UnaryOpType) -> u8 {
+	match op {
+		UnaryOpType::Plus | UnaryOpType::Minus | UnaryOpType::Not | UnaryOpType::BitNot => 20,
+	}
 }
 
-#[test]
-fn basic_test() {
-	let mut parser = Parser::new(" assert true[false] : false ; true ");
-	let e = expr(&mut parser);
-	let l = &parser.lexemes;
+fn infix_binding_power(op: BinaryOpType) -> (u8, u8) {
+	match op {
+		BinaryOpType::Or => (2, 3),
+		#[cfg(feature = "exp-null-coaelse")]
+		BinaryOpType::NullCoaelse => (2, 3),
+		BinaryOpType::And => (4, 5),
+		BinaryOpType::BitOr => (6, 7),
+		BinaryOpType::BitXor => (8, 9),
+		BinaryOpType::BitAnd => (10, 11),
+		BinaryOpType::Eq | BinaryOpType::Neq => (12, 13),
+		BinaryOpType::Lt
+		| BinaryOpType::Gt
+		| BinaryOpType::Lte
+		| BinaryOpType::Gte
+		| BinaryOpType::In => (14, 15),
+		BinaryOpType::Lhs | BinaryOpType::Rhs => (16, 17),
+		BinaryOpType::Add | BinaryOpType::Sub => (18, 19),
+		BinaryOpType::Mul | BinaryOpType::Div | BinaryOpType::Mod => (20, 21),
+	}
+}
 
-	assert_snapshot!(format!("{l:#?}\n\n---\n\n{e:#?}"));
+fn unary_op(kind: SyntaxKind) -> Option<UnaryOpType> {
+	match kind {
+		T![+] => Some(UnaryOpType::Plus),
+		T![-] => Some(UnaryOpType::Minus),
+		T![!] => Some(UnaryOpType::Not),
+		T![~] => Some(UnaryOpType::BitNot),
+		_ => None,
+	}
+}
+
+fn binary_op(p: &Parser<'_>) -> Option<BinaryOpType> {
+	match p.peek() {
+		T![||] => Some(BinaryOpType::Or),
+		T![&&] => Some(BinaryOpType::And),
+		T![|] => Some(BinaryOpType::BitOr),
+		T![^] => Some(BinaryOpType::BitXor),
+		T![&] => Some(BinaryOpType::BitAnd),
+		T![==] => Some(BinaryOpType::Eq),
+		T![!=] => Some(BinaryOpType::Neq),
+		T![<] => Some(BinaryOpType::Lt),
+		T![>] => Some(BinaryOpType::Gt),
+		T![<=] => Some(BinaryOpType::Lte),
+		T![>=] => Some(BinaryOpType::Gte),
+		T![<<] => Some(BinaryOpType::Lhs),
+		T![>>] => Some(BinaryOpType::Rhs),
+		T![+] => Some(BinaryOpType::Add),
+		T![-] => Some(BinaryOpType::Sub),
+		T![*] => Some(BinaryOpType::Mul),
+		T![/] => Some(BinaryOpType::Div),
+		T![%] => Some(BinaryOpType::Mod),
+		T![in] => Some(BinaryOpType::In),
+		#[cfg(feature = "exp-null-coaelse")]
+		T![??] => Some(BinaryOpType::NullCoaelse),
+		_ => None,
+	}
+}
+
+fn expr_bp(p: &mut Parser<'_>, min_bp: u8) -> R<Expr> {
+	let mut lhs = if let Some(op) = unary_op(p.peek()) {
+		p.eat_any();
+		let rbp = prefix_binding_power(op);
+		let rhs = expr_bp(p, rbp)?;
+		Expr::UnaryOp(op, Box::new(rhs))
+	} else {
+		expr_suffix(p)?
+	};
+
+	loop {
+		if p.at_eof() {
+			break;
+		}
+
+		let Some(op) = binary_op(p) else {
+			break;
+		};
+
+		let (lbp, rbp) = infix_binding_power(op);
+		if lbp < min_bp {
+			break;
+		}
+
+		p.eat_any();
+		let rhs = expr_bp(p, rbp)?;
+		lhs = Expr::BinaryOp(Box::new(BinaryOp { lhs, op, rhs }));
+	}
+
+	Ok(lhs)
+}
+
+fn expr(p: &mut Parser<'_>) -> R<Expr> {
+	expr_bp(p, 0)
+}
+
+pub fn parse(str: &str, settings: &ParserSettings) -> Result<Expr, ParseError> {
+	let mut p = Parser::new(str, settings.source.clone());
+	for lexeme in &p.lexemes {
+		if let Some(desc) = lexeme.kind.error_description() {
+			return Err(ParseError {
+				message: desc.to_owned(),
+				location: ParseErrorLocation {
+					offset: lexeme.range.0 as usize,
+				},
+			});
+		}
+	}
+	let e = expr(&mut p)?;
+	if !p.at_eof() {
+		return Err(p.error(format!(
+			"expected end of file, got {}",
+			p.current_desc(),
+		)));
+	}
+	Ok(e)
+}
+
+pub fn string_to_expr(s: IStr, settings: &ParserSettings) -> Spanned<Expr> {
+	let len = s.len();
+	Spanned::new(
+		Expr::Str(s),
+		Span(settings.source.clone(), 0, len as u32),
+	)
+}
+
+#[cfg(test)]
+mod tests {
+	use std::fs;
+
+	use insta::{assert_snapshot, glob};
+	use jrsonnet_ir::{IStr, Source};
+
+	use super::*;
+
+	fn parse_str(input: &str) -> Expr {
+		let source = Source::new_virtual("<test>".into(), input.into());
+		let settings = ParserSettings { source };
+		parse(input, &settings).unwrap()
+	}
+
+	#[test]
+	#[cfg(not(feature = "exp-null-coaelse"))]
+	fn basic_test() {
+		let v = parse_str("assert true[false] : false ; true");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn literals() {
+		let v = parse_str("[null, true, false, self, super, $]");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn basic_math() {
+		let v = parse_str("2+2*2");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn underscore_numbers() {
+		let v = parse_str("[1_000, 1_000.000_1, 1_0e1_0]");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn strings() {
+		let v = parse_str(r#"["hello", 'world', @"raw""str", @'raw''str']"#);
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn object() {
+		let v = parse_str("{a: 1, b:: 2, c::: 3}");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn function_and_call() {
+		let v = parse_str("local f(x, y=1) = x + y; f(2, y=3)");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn if_then_else() {
+		let v = parse_str("if true then 1 else 2");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn imports() {
+		let v = parse_str(r#"[import "a", importstr "b", importbin "c"]"#);
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn array_comp() {
+		let v = parse_str("[x for x in arr]");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	#[cfg(not(feature = "exp-null-coaelse"))]
+	fn index_and_suffix() {
+		let v = parse_str("std.test(2).field[0]");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn obj_extend() {
+		let v = parse_str("{} { x: 1 }");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn unary_ops() {
+		let v = parse_str("!a && !b");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn error_expr() {
+		let v = parse_str("error \"bad\"");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	fn slice() {
+		let v = parse_str("[a[1:], a[1::], a[:1:], a[::1]]");
+		assert_snapshot!(format!("{v:#?}"));
+	}
+
+	#[test]
+	#[cfg(not(feature = "exp-null-coaelse"))]
+	fn peg_snapshots() {
+		glob!("../../jrsonnet-peg-parser/src", "tests/*.jsonnet", |path| {
+			let input = fs::read_to_string(path).expect("read test file");
+			let source = Source::new_virtual("<test>".into(), IStr::empty());
+			let settings = ParserSettings { source };
+			let v = parse(&input, &settings).unwrap();
+			let v = format!("{v:#?}");
+			assert_snapshot!(v);
+		});
+	}
 }

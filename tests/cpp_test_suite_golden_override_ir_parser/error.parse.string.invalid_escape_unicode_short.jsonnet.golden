@@ -1,0 +1,2 @@
+syntax error: unterminated double-quoted string
+    error.parse.string.invalid_escape_unicode_short.jsonnet:17:1

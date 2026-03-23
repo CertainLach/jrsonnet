@@ -1,0 +1,82 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/array_comp.jsonnet
+---
+Arr(
+    [
+        ArrComp(
+            Apply(
+                Index {
+                    indexable: Var(
+                        "std" from virtual:<test>:3-6,
+                    ),
+                    parts: [
+                        IndexPart {
+                            span: virtual:<test>:7-15,
+                            value: Str(
+                                "deepJoin",
+                            ),
+                        },
+                    ],
+                },
+                ArgsDesc {
+                    unnamed: [
+                        Var(
+                            "x" from virtual:<test>:16-17,
+                        ),
+                    ],
+                    named: [],
+                } from virtual:<test>:15-18,
+                false,
+            ),
+            [
+                ForSpec(
+                    ForSpecData {
+                        destruct: Full(
+                            "x",
+                        ),
+                        over: Var(
+                            "arr" from virtual:<test>:28-31,
+                        ),
+                    },
+                ),
+            ],
+        ),
+        ArrComp(
+            Var(
+                "a" from virtual:<test>:35-36,
+            ),
+            [
+                ForSpec(
+                    ForSpecData {
+                        destruct: Full(
+                            "a",
+                        ),
+                        over: Var(
+                            "b" from virtual:<test>:46-47,
+                        ),
+                    },
+                ),
+                IfSpec(
+                    IfSpecData {
+                        span: virtual:<test>:48-50,
+                        cond: Var(
+                            "c" from virtual:<test>:51-52,
+                        ),
+                    },
+                ),
+                ForSpec(
+                    ForSpecData {
+                        destruct: Full(
+                            "e",
+                        ),
+                        over: Var(
+                            "f" from virtual:<test>:62-63,
+                        ),
+                    },
+                ),
+            ],
+        ),
+    ],
+)

@@ -1,0 +1,26 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/comment_eof.jsonnet
+---
+Obj(
+    MemberList(
+        ObjMembers {
+            locals: [],
+            asserts: [],
+            fields: [
+                FieldMember {
+                    name: Fixed(
+                        "a",
+                    ) from virtual:<test>:1-2,
+                    plus: false,
+                    params: None,
+                    visibility: Normal,
+                    value: Num(
+                        1.0,
+                    ),
+                },
+            ],
+        },
+    ),
+)

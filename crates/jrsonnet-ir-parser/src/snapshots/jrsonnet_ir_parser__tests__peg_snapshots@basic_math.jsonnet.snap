@@ -1,0 +1,120 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/basic_math.jsonnet
+---
+Arr(
+    [
+        BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    2.0,
+                ),
+                op: Add,
+                rhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            2.0,
+                        ),
+                        op: Mul,
+                        rhs: Num(
+                            2.0,
+                        ),
+                    },
+                ),
+            },
+        ),
+        BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    2.0,
+                ),
+                op: Add,
+                rhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            2.0,
+                        ),
+                        op: Mul,
+                        rhs: Num(
+                            2.0,
+                        ),
+                    },
+                ),
+            },
+        ),
+        BinaryOp(
+            BinaryOp {
+                lhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            2.0,
+                        ),
+                        op: Add,
+                        rhs: Num(
+                            2.0,
+                        ),
+                    },
+                ),
+                op: Add,
+                rhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            2.0,
+                        ),
+                        op: Mul,
+                        rhs: Num(
+                            2.0,
+                        ),
+                    },
+                ),
+            },
+        ),
+        BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    2.0,
+                ),
+                op: Add,
+                rhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            2.0,
+                        ),
+                        op: Add,
+                        rhs: BinaryOp(
+                            BinaryOp {
+                                lhs: Num(
+                                    2.0,
+                                ),
+                                op: Mul,
+                                rhs: Num(
+                                    2.0,
+                                ),
+                            },
+                        ),
+                    },
+                ),
+            },
+        ),
+        BinaryOp(
+            BinaryOp {
+                lhs: Num(
+                    2.0,
+                ),
+                op: Add,
+                rhs: BinaryOp(
+                    BinaryOp {
+                        lhs: Num(
+                            3.0,
+                        ),
+                        op: Mul,
+                        rhs: Num(
+                            4.0,
+                        ),
+                    },
+                ),
+            },
+        ),
+    ],
+)

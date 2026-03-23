@@ -1,2 +1,2 @@
-syntax error: expected one of "(", "[", "{", <identifier>, <number>, <string>, <unary op>, ['"'], ['\''], got "|"
+syntax error: unexpected token: ERROR_STRING_BLOCK_UNEXPECTED_END
     error.parse.text_block_eof.jsonnet:17:1

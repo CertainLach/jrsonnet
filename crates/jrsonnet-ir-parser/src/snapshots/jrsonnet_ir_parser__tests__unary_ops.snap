@@ -1,0 +1,21 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+BinaryOp(
+    BinaryOp {
+        lhs: UnaryOp(
+            Not,
+            Var(
+                "a" from virtual:<test>:1-2,
+            ),
+        ),
+        op: And,
+        rhs: UnaryOp(
+            Not,
+            Var(
+                "b" from virtual:<test>:7-8,
+            ),
+        ),
+    },
+)

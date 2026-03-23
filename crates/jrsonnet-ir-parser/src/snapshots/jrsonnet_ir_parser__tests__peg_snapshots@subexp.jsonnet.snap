@@ -1,0 +1,58 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/subexp.jsonnet
+---
+BinaryOp(
+    BinaryOp {
+        lhs: ObjExtend(
+            Obj(
+                MemberList(
+                    ObjMembers {
+                        locals: [],
+                        asserts: [],
+                        fields: [],
+                    },
+                ),
+            ),
+            MemberList(
+                ObjMembers {
+                    locals: [
+                        Field {
+                            into: Full(
+                                "x",
+                            ),
+                            value: Num(
+                                1.0,
+                            ),
+                        },
+                    ],
+                    asserts: [],
+                    fields: [
+                        FieldMember {
+                            name: Fixed(
+                                "x",
+                            ) from virtual:<test>:18-19,
+                            plus: false,
+                            params: None,
+                            visibility: Normal,
+                            value: Var(
+                                "x" from virtual:<test>:21-22,
+                            ),
+                        },
+                    ],
+                },
+            ),
+        ),
+        op: Add,
+        rhs: Obj(
+            MemberList(
+                ObjMembers {
+                    locals: [],
+                    asserts: [],
+                    fields: [],
+                },
+            ),
+        ),
+    },
+)

@@ -1,0 +1,73 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/suffix.jsonnet
+---
+Arr(
+    [
+        Index {
+            indexable: Var(
+                "std" from virtual:<test>:2-5,
+            ),
+            parts: [
+                IndexPart {
+                    span: virtual:<test>:6-10,
+                    value: Str(
+                        "test",
+                    ),
+                },
+            ],
+        },
+        Apply(
+            Var(
+                "std" from virtual:<test>:12-15,
+            ),
+            ArgsDesc {
+                unnamed: [
+                    Num(
+                        2.0,
+                    ),
+                ],
+                named: [],
+            } from virtual:<test>:15-18,
+            false,
+        ),
+        Apply(
+            Index {
+                indexable: Var(
+                    "std" from virtual:<test>:20-23,
+                ),
+                parts: [
+                    IndexPart {
+                        span: virtual:<test>:24-28,
+                        value: Str(
+                            "test",
+                        ),
+                    },
+                ],
+            },
+            ArgsDesc {
+                unnamed: [
+                    Num(
+                        2.0,
+                    ),
+                ],
+                named: [],
+            } from virtual:<test>:28-31,
+            false,
+        ),
+        Index {
+            indexable: Var(
+                "a" from virtual:<test>:33-34,
+            ),
+            parts: [
+                IndexPart {
+                    span: virtual:<test>:35-36,
+                    value: Var(
+                        "b" from virtual:<test>:35-36,
+                    ),
+                },
+            ],
+        },
+    ],
+)

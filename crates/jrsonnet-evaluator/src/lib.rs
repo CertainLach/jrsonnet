@@ -46,6 +46,9 @@ pub use jrsonnet_ir as parser;
 use jrsonnet_ir::{Expr, Source, SourcePath};
 #[doc(hidden)]
 pub use jrsonnet_macros;
+#[cfg(feature = "ir-parser")]
+use jrsonnet_ir_parser::ParserSettings;
+#[cfg(not(feature = "ir-parser"))]
 use jrsonnet_peg_parser::ParserSettings;
 pub use obj::*;
 pub use rustc_hash;
@@ -55,6 +58,22 @@ pub use tla::apply_tla;
 pub use val::{Thunk, Val};
 
 use crate::gc::WithCapacityExt as _;
+
+#[cfg(feature = "ir-parser")]
+pub(crate) fn parse_jsonnet(
+	code: &str,
+	settings: &ParserSettings,
+) -> Result<Expr, jrsonnet_ir_parser::ParseError> {
+	jrsonnet_ir_parser::parse(code, settings)
+}
+
+#[cfg(not(feature = "ir-parser"))]
+pub(crate) fn parse_jsonnet(
+	code: &str,
+	settings: &ParserSettings,
+) -> Result<Expr, jrsonnet_peg_parser::ParseError> {
+	jrsonnet_peg_parser::parse(code, settings)
+}
 
 cc_dyn!(
 	#[derive(Clone)]
@@ -345,7 +364,7 @@ impl State {
 		let file_name = Source::new(path.clone(), code.clone());
 		if file.parsed.is_none() {
 			file.parsed = Some(
-				jrsonnet_peg_parser::parse(
+				parse_jsonnet(
 					&code,
 					&ParserSettings {
 						source: file_name.clone(),
@@ -461,7 +480,7 @@ impl State {
 	pub fn evaluate_snippet(&self, name: impl Into<IStr>, code: impl Into<IStr>) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_peg_parser::parse(
+		let parsed = parse_jsonnet(
 			&code,
 			&ParserSettings {
 				source: source.clone(),
@@ -482,7 +501,7 @@ impl State {
 	) -> Result<Val> {
 		let code = code.into();
 		let source = Source::new_virtual(name.into(), code.clone());
-		let parsed = jrsonnet_peg_parser::parse(
+		let parsed = parse_jsonnet(
 			&code,
 			&ParserSettings {
 				source: source.clone(),

@@ -13,11 +13,13 @@ build = "build.rs"
 workspace = true
 
 [features]
-default = ["explaining-traces"]
+default = ["explaining-traces", "ir-parser"]
 # Rustc-like trace visualization
 explaining-traces = ["annotate-snippets", "hi-doc"]
 # Allows library authors to throw custom errors
 anyhow-error = ["anyhow"]
+# Use hand-written recursive descent parser instead of PEG parser
+ir-parser = ["dep:jrsonnet-ir-parser"]
 
 # Allows to preserve field order in objects
 exp-preserve-order = []
@@ -28,12 +30,13 @@ exp-object-iteration = []
 # Bigint type
 exp-bigint = ["num-bigint", "jrsonnet-types/exp-bigint"]
 # obj?.field, obj?.['field']
-exp-null-coaelse = ["jrsonnet-peg-parser/exp-null-coaelse"]
+exp-null-coaelse = ["jrsonnet-peg-parser/exp-null-coaelse", "jrsonnet-ir-parser?/exp-null-coaelse"]
 
 [dependencies]
 jrsonnet-interner.workspace = true
 jrsonnet-ir.workspace = true
 jrsonnet-peg-parser.workspace = true
+jrsonnet-ir-parser = { workspace = true, optional = true }
 jrsonnet-types.workspace = true
 jrsonnet-macros.workspace = true
 jrsonnet-gcmodule.workspace = true

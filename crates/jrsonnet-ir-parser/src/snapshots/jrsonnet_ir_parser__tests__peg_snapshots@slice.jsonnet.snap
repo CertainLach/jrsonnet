@@ -1,0 +1,97 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: v
+input_file: crates/jrsonnet-peg-parser/src/tests/slice.jsonnet
+---
+Arr(
+    [
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:2-3,
+                ),
+                slice: SliceDesc {
+                    start: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:4-5,
+                    ),
+                    end: None,
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:9-10,
+                ),
+                slice: SliceDesc {
+                    start: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:11-12,
+                    ),
+                    end: None,
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:17-18,
+                ),
+                slice: SliceDesc {
+                    start: None,
+                    end: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:20-21,
+                    ),
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:25-26,
+                ),
+                slice: SliceDesc {
+                    start: None,
+                    end: None,
+                    step: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:29-30,
+                    ),
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "str" from virtual:<test>:33-36,
+                ),
+                slice: SliceDesc {
+                    start: None,
+                    end: Some(
+                        BinaryOp(
+                            BinaryOp {
+                                lhs: Var(
+                                    "len" from virtual:<test>:38-41,
+                                ),
+                                op: Sub,
+                                rhs: Num(
+                                    1.0,
+                                ),
+                            },
+                        ) from virtual:<test>:38-45,
+                    ),
+                    step: None,
+                },
+            },
+        ),
+    ],
+)

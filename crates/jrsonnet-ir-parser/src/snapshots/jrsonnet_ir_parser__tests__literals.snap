@@ -1,0 +1,26 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+Arr(
+    [
+        Literal(
+            Null,
+        ),
+        Literal(
+            True,
+        ),
+        Literal(
+            False,
+        ),
+        Literal(
+            This,
+        ),
+        Literal(
+            Super,
+        ),
+        Literal(
+            Dollar,
+        ),
+    ],
+)

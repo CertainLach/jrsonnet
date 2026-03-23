@@ -1,0 +1,26 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+Arr(
+    [
+        Import(
+            Normal from virtual:<test>:1-7,
+            Str(
+                "a",
+            ),
+        ),
+        Import(
+            Str from virtual:<test>:13-22,
+            Str(
+                "b",
+            ),
+        ),
+        Import(
+            Bin from virtual:<test>:28-37,
+            Str(
+                "c",
+            ),
+        ),
+    ],
+)

@@ -154,6 +154,7 @@ pub enum ErrorKind {
 	ImportNotSupported(SourcePath, ResolvePathOwned),
 	#[error("can't import from virtual file")]
 	CantImportFromVirtualFile,
+	#[cfg(not(feature = "ir-parser"))]
 	#[error(
 		"syntax error: {}",
 		// Peg has no fancier way to handle critical parsing errors https://github.com/kevinmehall/rust-peg/issues/225
@@ -170,6 +171,14 @@ pub enum ErrorKind {
 		path: Source,
 		#[trace(skip)]
 		error: Box<jrsonnet_peg_parser::ParseError>,
+	},
+
+	#[cfg(feature = "ir-parser")]
+	#[error("syntax error: {error}")]
+	ImportSyntaxError {
+		path: Source,
+		#[trace(skip)]
+		error: Box<jrsonnet_ir_parser::ParseError>,
 	},
 
 	#[error("runtime error: {}", format_empty_str(.0))]

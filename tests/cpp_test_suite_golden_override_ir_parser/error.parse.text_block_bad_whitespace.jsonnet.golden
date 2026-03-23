@@ -1,0 +1,2 @@
+syntax error: unterminated text block
+    error.parse.text_block_bad_whitespace.jsonnet:17:1

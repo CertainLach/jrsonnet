@@ -1,0 +1,2 @@
+syntax error: unexpected end of text block
+    error.parse.text_block_not_terminated.jsonnet:17:1

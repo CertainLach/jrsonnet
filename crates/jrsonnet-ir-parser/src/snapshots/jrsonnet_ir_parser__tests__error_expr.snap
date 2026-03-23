@@ -1,0 +1,10 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+ErrorStmt(
+    virtual:<test>:0-5,
+    Str(
+        "bad",
+    ),
+)

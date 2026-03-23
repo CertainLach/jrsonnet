@@ -1,0 +1,2 @@
+syntax error: missing object comprehension field
+    object_comp_illegal.jsonnet:1:34

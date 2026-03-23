@@ -1,0 +1,2 @@
+syntax error: expected field name, got 'self'
+    error.parse.self_in_computed_field.jsonnet:17:15

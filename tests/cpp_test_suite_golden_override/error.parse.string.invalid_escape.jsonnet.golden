@@ -1,2 +1,2 @@
-syntax error: expected <escape character>, got "o"
-    error.parse.string.invalid_escape.jsonnet:17:3
+syntax error: invalid string escape
+    error.parse.string.invalid_escape.jsonnet:17:1

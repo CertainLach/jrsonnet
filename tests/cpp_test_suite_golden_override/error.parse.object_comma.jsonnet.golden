@@ -1,2 +1,2 @@
-syntax error: expected one of "(", ".", "?", "[", "{", "}", <binary op>, got "z"
+syntax error: expected R_BRACE, got "z"
     error.parse.object_comma.jsonnet:17:11

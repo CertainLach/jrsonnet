@@ -1,0 +1,72 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+Arr(
+    [
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:1-2,
+                ),
+                slice: SliceDesc {
+                    start: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:3-4,
+                    ),
+                    end: None,
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:8-9,
+                ),
+                slice: SliceDesc {
+                    start: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:10-11,
+                    ),
+                    end: None,
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:16-17,
+                ),
+                slice: SliceDesc {
+                    start: None,
+                    end: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:19-20,
+                    ),
+                    step: None,
+                },
+            },
+        ),
+        Slice(
+            Slice {
+                value: Var(
+                    "a" from virtual:<test>:24-25,
+                ),
+                slice: SliceDesc {
+                    start: None,
+                    end: None,
+                    step: Some(
+                        Num(
+                            1.0,
+                        ) from virtual:<test>:28-29,
+                    ),
+                },
+            },
+        ),
+    ],
+)

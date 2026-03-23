@@ -1,0 +1,47 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+Obj(
+    MemberList(
+        ObjMembers {
+            locals: [],
+            asserts: [],
+            fields: [
+                FieldMember {
+                    name: Fixed(
+                        "a",
+                    ) from virtual:<test>:1-2,
+                    plus: false,
+                    params: None,
+                    visibility: Normal,
+                    value: Num(
+                        1.0,
+                    ),
+                },
+                FieldMember {
+                    name: Fixed(
+                        "b",
+                    ) from virtual:<test>:7-8,
+                    plus: false,
+                    params: None,
+                    visibility: Hidden,
+                    value: Num(
+                        2.0,
+                    ),
+                },
+                FieldMember {
+                    name: Fixed(
+                        "c",
+                    ) from virtual:<test>:14-15,
+                    plus: false,
+                    params: None,
+                    visibility: Unhide,
+                    value: Num(
+                        3.0,
+                    ),
+                },
+            ],
+        },
+    ),
+)

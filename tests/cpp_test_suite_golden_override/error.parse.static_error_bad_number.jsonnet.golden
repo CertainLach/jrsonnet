@@ -1,2 +1,2 @@
-syntax error: expected one of "(", "[", "{", <identifier>, <number>, <string>, <unary op>, ['"'], ['\''], got "."
+syntax error: unexpected token in expression: DOT
     error.parse.static_error_bad_number.jsonnet:17:1

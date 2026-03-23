@@ -1,0 +1,11 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden_null_coalesce/null_coalesce_access.jsonnet
+---
+[
+    null,
+    42,
+    null,
+    null
+]

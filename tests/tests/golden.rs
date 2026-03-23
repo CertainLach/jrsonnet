@@ -45,3 +45,13 @@ fn golden() {
 		assert_snapshot!(result);
 	});
 }
+
+#[test]
+#[cfg(feature = "exp-null-coaelse")]
+fn golden_null_coalesce() {
+	glob!("../", "golden_null_coalesce/*.jsonnet", |path| {
+		let result = run(path);
+
+		assert_snapshot!(result);
+	});
+}

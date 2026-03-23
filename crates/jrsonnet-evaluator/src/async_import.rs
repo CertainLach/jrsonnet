@@ -7,6 +7,9 @@ use jrsonnet_ir::{
 	FieldMember, FieldName, ForSpecData, IfElse, IfSpecData, ImportKind, ObjBody, Slice, SliceDesc,
 	Source, SourcePath, Spanned,
 };
+#[cfg(feature = "ir-parser")]
+use jrsonnet_ir_parser::ParserSettings;
+#[cfg(not(feature = "ir-parser"))]
 use jrsonnet_peg_parser::ParserSettings;
 use rustc_hash::FxHashMap;
 
@@ -323,7 +326,7 @@ where
 						};
 						let source = Source::new(path.clone(), code.clone());
 						// If failed - then skip import
-						file.parsed = jrsonnet_peg_parser::parse(&code, &ParserSettings { source })
+						file.parsed = crate::parse_jsonnet(&code, &ParserSettings { source })
 							.map(Rc::new)
 							.ok();
 						if let Some(parsed) = &file.parsed {

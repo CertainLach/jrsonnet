@@ -1,0 +1,21 @@
+---
+source: crates/jrsonnet-ir-parser/src/lib.rs
+expression: "format!(\"{v:#?}\")"
+---
+ArrComp(
+    Var(
+        "x" from virtual:<test>:1-2,
+    ),
+    [
+        ForSpec(
+            ForSpecData {
+                destruct: Full(
+                    "x",
+                ),
+                over: Var(
+                    "arr" from virtual:<test>:12-15,
+                ),
+            },
+        ),
+    ],
+)
