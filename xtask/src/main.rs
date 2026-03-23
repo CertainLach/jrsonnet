@@ -52,11 +52,7 @@ fn main() -> Result<()> {
 		} => {
 			let out = sh.create_temp_dir()?;
 
-			cmd!(
-				sh,
-				"cargo build --target={target} --profile releasedebug"
-			)
-			.run()?;
+			cmd!(sh, "cargo build --target={target} --profile releasedebug").run()?;
 			let built = format!("./target/{target}/releasedebug/jrsonnet");
 			let bench_cmd = format!("{built} {}", args.join(" "));
 			if hyperfine {
