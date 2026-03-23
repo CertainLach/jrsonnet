@@ -85,7 +85,6 @@ xshell = "0.2.7"
 regex = "1.12"
 lru = "0.16.3"
 
-json-structural-diff = "0.2.0"
 syn-dissect-closure = "0.1.0"
 
 [workspace.lints.rust]
