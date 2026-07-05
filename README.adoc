@@ -79,18 +79,18 @@ Jrsonnet is written in rust itself, so just add it as dependency
 
 === JavaScript/TypeScript (WASM)
 
-// image:https://img.shields.io/npm/v/jrsonnet[alt=npm, link=https://www.npmjs.com/package/jrsonnet]
-image:https://jsr.io/badges/@jrsonnet/jrsonnet[alt=JSR, link=https://jsr.io/@jrsonnet/jrsonnet]
-image:https://jsr.io/badges/@jrsonnet/jrsonnet/score[alt=JSR score, link=https://jsr.io/@jrsonnet/jrsonnet]
+image:https://jsr.io/badges/@deltarocks/jrsonnet[alt=JSR, link=https://jsr.io/@deltarocks/jrsonnet]
+image:https://jsr.io/badges/@deltarocks/jrsonnet/score[alt=JSR score, link=https://jsr.io/@deltarocks/jrsonnet]
+image:https://img.shields.io/npm/v/@deltarocks/jrsonnet[alt=npm, link=https://www.npmjs.com/package/@deltarocks/jrsonnet]
 
-WASM bindings are published to JSR as `@jrsonnet/jrsonnet`.
+WASM bindings are published to JSR and NPM as `@deltarocks/jrsonnet`.
 
 [source,sh]
 ----
-deno add jsr:@jrsonnet/jrsonnet
-----
+deno add jsr:@deltarocks/jrsonnet
 
-// npm package (`jrsonnet`) is not yet published.
+yarn add @deltarocks/jrsonnet
+----
 
 === Python
 
