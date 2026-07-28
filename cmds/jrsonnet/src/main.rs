@@ -1,6 +1,7 @@
 use std::{
 	fs::{File, create_dir_all},
 	io::{Read, Write},
+	path::{Component, Path, PathBuf},
 };
 
 use clap::{CommandFactory, Parser};
@@ -160,6 +161,24 @@ fn main_catch(opts: Opts) -> bool {
 	true
 }
 
+fn multi_output_path(base: &Path, field: &str) -> Result<PathBuf, Error> {
+	let mut normalized = PathBuf::new();
+	for component in Path::new(field).components() {
+		match component {
+			Component::Normal(name) => normalized.push(name),
+			Component::CurDir => {}
+			Component::ParentDir if normalized.pop() => {}
+			Component::ParentDir | Component::RootDir | Component::Prefix(_) => {
+				bail!("field {field} escapes --multi output directory")
+			}
+		}
+	}
+	if normalized.as_os_str().is_empty() {
+		bail!("field {field} is not a valid output path")
+	}
+	Ok(base.join(normalized))
+}
+
 fn main_real(opts: Opts) -> Result<(), Error> {
 	let _gc_leak_guard = opts.gc.leak_on_exit();
 	let _gc_print_stats = opts.gc.stats_printer();
@@ -222,8 +241,7 @@ fn main_real(opts: Opts) -> Result<(), Error> {
 		) {
 			let data = data.with_description(|| format!("getting field {field} for manifest"))?;
 
-			let mut path = multi.clone();
-			path.push(&field as &str);
+			let path = multi_output_path(&multi, &field)?;
 			if opts.output.create_output_dirs {
 				let mut dir = path.clone();
 				dir.pop();
