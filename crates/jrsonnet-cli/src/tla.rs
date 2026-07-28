@@ -40,7 +40,7 @@ impl TlaOpts {
 		for ext in &self.tla_str_file {
 			out.insert(
 				ext.name.as_str().into(),
-				TlaArg::ImportStr(ext.name.as_str().into()),
+				TlaArg::ImportStr(ext.path.clone()),
 			);
 		}
 		for ext in &self.tla_code {
