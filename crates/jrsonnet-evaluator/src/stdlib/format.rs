@@ -796,7 +796,7 @@ pub fn format_code(
 		ConvTypeV::Percent => tmp_out.push('%'),
 	}
 
-	let padding = width.saturating_sub(tmp_out.len() as u16);
+	let padding = width.saturating_sub(tmp_out.chars().count() as u16);
 
 	if !clfags.left {
 		for _ in 0..padding {
