@@ -1,7 +1,7 @@
 {
   description = "Jrsonnet";
   inputs = {
-    nixpkgs.url = "github:nixos/nixpkgs/master";
+    nixpkgs.url = "github:nixos/nixpkgs/release-26.05";
     fenix = {
       url = "github:CertainLach/fenix/fix/libatomic";
       inputs.nixpkgs.follows = "nixpkgs";

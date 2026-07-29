@@ -54,7 +54,7 @@ clap_complete = "4.5"
 # Parsing, manifestification is implemented manually everywhere
 serde = "1.0.228"
 serde_json = "1.0.149"
-serde-saphyr = { version = "0.0.27", default-features = false, features = [
+serde-saphyr = { version = "0.0.29", default-features = false, features = [
   "deserialize",
 ] }
 
@@ -63,12 +63,12 @@ anyhow = "1.0.101"
 thiserror = "2.0.18"
 
 # Code formatting
-dprint-core = "0.67.4"
+dprint-core = "0.68.2"
 
 # Evaluator
 stacker = "0.1.23"
 smallvec = "1.15.1"
-educe = { version = "0.6.0", default-features = false }
+educe = { version = "0.7.4", default-features = false }
 url = "2.5.8"
 rustversion = "1.0.22"
 
@@ -94,21 +94,21 @@ pathdiff = "0.2.3"
 hashbrown = "0.17.0"
 static_assertions = "1.1"
 rustc-hash = "2.1"
-num-bigint = "0.4.6"
+num-bigint = "0.5.1"
 strsim = "0.11.1"
 proc-macro2 = "1.0"
 quote = "1.0"
-syn = "2.0"
+syn = "3.0.3"
 drop_bomb = "0.1.5"
-base64 = "0.22.1"
+base64 = "0.23.0"
 indexmap = "2.13.0"
-itertools = "0.14.0"
+itertools = "0.15.0"
 xshell = "0.2.7"
 
 regex = "1.12"
 lru = "0.18.0"
 
-syn-dissect-closure = "0.1.0"
+syn-dissect-closure = "0.2.1"
 
 # Tests/benchmarks
 insta = { version = "1.46", features = ["glob"] }
@@ -117,11 +117,11 @@ strip-ansi-escapes = "0.2.1"
 nix = { version = "0.31", features = ["process"] }
 
 # Web
-wasm-bindgen = "=0.2.106"
+wasm-bindgen = "=0.2.108"
 wasm-bindgen-futures = "0.4.56"
-js-sys = "0.3.83"
+js-sys = "0.3.85"
 console_error_panic_hook = "0.1"
-getrandom = "0.3.4"
+getrandom = "0.4.3"
 
 # Bundler
 tracing = "0.1.44"
@@ -131,7 +131,7 @@ reqwest = { version = "0.13", default-features = false, features = [
 ] }
 zip = { version = "8", default-features = false, features = ["deflate"] }
 directories = "6.0.0"
-gix = { version = "0.83.0", features = ["blocking-network-client"] }
+gix = { version = "0.86.0", features = ["blocking-network-client"] }
 camino = { version = "1.2.2", features = ["serde1"] }
 rustls = { version = "0.23", default-features = false }
 
