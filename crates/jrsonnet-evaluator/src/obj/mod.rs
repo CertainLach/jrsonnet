@@ -152,7 +152,7 @@ pub trait ObjectAssertion: Trace {
 #[derive(Trace, Debug)]
 enum CacheValue {
 	Cached(Result<Option<Val>>),
-	Pending,
+	Pending { in_current_assertion: Cell<bool> },
 }
 
 pub type EnumFieldsHandler<'a> =
@@ -252,21 +252,25 @@ struct ObjValueInner {
 thread_local! {
 	static RUNNING_ASSERTIONS: RefCell<FxHashSet<ObjValue>> = RefCell::default();
 }
-fn is_asserting(obj: &ObjValue) -> bool {
-	RUNNING_ASSERTIONS.with_borrow(|v| v.contains(obj))
+fn is_asserting() -> bool {
+	RUNNING_ASSERTIONS.with_borrow(|v| !v.is_empty())
 }
-/// Returns false if already asserting
-fn start_asserting(obj: &ObjValue) -> bool {
-	RUNNING_ASSERTIONS.with_borrow_mut(|v| v.insert(obj.clone()))
+struct AssertionGuard(ObjValue);
+impl Drop for AssertionGuard {
+	fn drop(&mut self) {
+		RUNNING_ASSERTIONS.with_borrow_mut(|v| {
+			let r = v.remove(&self.0);
+			debug_assert!(
+				r,
+				"finish_asserting was called before start_asserting or twice"
+			);
+		});
+	}
 }
-fn finish_asserting(obj: &ObjValue) {
-	RUNNING_ASSERTIONS.with_borrow_mut(|v| {
-		let r = v.remove(obj);
-		debug_assert!(
-			r,
-			"finish_asserting was called before start_asserting or twice"
-		);
-	});
+/// Returns `None` if already asserting
+fn asserting(obj: &ObjValue) -> Option<AssertionGuard> {
+	RUNNING_ASSERTIONS
+		.with_borrow_mut(|v| v.insert(obj.clone()).then(|| AssertionGuard(obj.clone())))
 }
 
 thread_local! {
@@ -625,17 +629,28 @@ impl ObjValue {
 			match cache.entry(cache_key.clone()) {
 				Entry::Occupied(v) => match v.get() {
 					CacheValue::Cached(v) => return v.clone(),
-					CacheValue::Pending => {
-						if !is_asserting(self) {
+					CacheValue::Pending {
+						in_current_assertion,
+					} => {
+						// During assertions we may encounter field that triggered the first assertion. This field is pending,
+						// but this time evaluation of this field would not trigger assertions in currently asserting object
+						// again; thus the evaluation result will be different, as it won't trigger the assertion failure side
+						// effect. The field vould be evaluated twice, yet the results should not be affected.
+						if !is_asserting() || in_current_assertion.get() {
 							bail!(InfiniteRecursionDetected);
 						}
+						in_current_assertion.set(true);
 					}
 				},
 				Entry::Vacant(v) => {
-					v.insert(CacheValue::Pending);
+					v.insert(CacheValue::Pending {
+						// Should not default to is_asserting(), as evaluation of this field may trigger the other object
+						// assertions which would hit the same field again.
+						in_current_assertion: Cell::default(),
+					});
 				}
 			}
-		}
+		};
 		let result = self.get_idx_uncached(key, core);
 		{
 			let mut cache = self.0.value_cache.borrow_mut();
@@ -746,19 +761,16 @@ impl ObjValue {
 		if self.0.assertions_ran.get() {
 			return Ok(());
 		}
-		if !start_asserting(self) {
+		let Some(_asserting) = asserting(self) else {
 			return Ok(());
-		}
+		};
 		for (idx, ele) in self.0.cores.iter().enumerate() {
 			let sup_this = SupThis {
 				sup: CoreIdx { idx },
 				this: self.clone(),
 			};
-			ele.0.run_assertions_core(sup_this).inspect_err(|_e| {
-				finish_asserting(self);
-			})?;
+			ele.0.run_assertions_core(sup_this)?;
 		}
-		finish_asserting(self);
 		self.0.assertions_ran.set(true);
 		Ok(())
 	}
