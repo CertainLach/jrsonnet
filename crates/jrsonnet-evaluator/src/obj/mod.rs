@@ -244,39 +244,48 @@ cc_dyn!(
 #[educe(Debug)]
 struct ObjValueInner {
 	cores: Vec<CcObjectCore>,
+	asserting: Cell<bool>,
 	assertions_ran: Cell<bool>,
 	has_assertions: bool,
 	value_cache: RefCell<FxHashMap<(IStr, CoreIdx), CacheValue>>,
 }
 
 thread_local! {
-	static RUNNING_ASSERTIONS: RefCell<FxHashSet<ObjValue>> = RefCell::default();
+	static IN_ASSERTION: Cell<bool> = Cell::default();
 }
 fn is_asserting() -> bool {
-	RUNNING_ASSERTIONS.with_borrow(|v| !v.is_empty())
+	IN_ASSERTION.get()
 }
-struct AssertionGuard(ObjValue);
+struct AssertionGuard {
+	obj: ObjValue,
+	toplevel: bool,
+}
 impl Drop for AssertionGuard {
 	fn drop(&mut self) {
-		RUNNING_ASSERTIONS.with_borrow_mut(|v| {
-			let r = v.remove(&self.0);
-			debug_assert!(
-				r,
-				"finish_asserting was called before start_asserting or twice"
-			);
-		});
+		let was_asserting = self.obj.0.asserting.replace(false);
+		debug_assert!(was_asserting);
+		if self.toplevel {
+			let was_toplevel_assertion = IN_ASSERTION.replace(false);
+			debug_assert!(was_toplevel_assertion);
+		}
 	}
 }
 /// Returns `None` if already asserting
 fn asserting(obj: &ObjValue) -> Option<AssertionGuard> {
-	RUNNING_ASSERTIONS
-		.with_borrow_mut(|v| v.insert(obj.clone()).then(|| AssertionGuard(obj.clone())))
+	if obj.0.asserting.replace(true) {
+		return None;
+	}
+	Some(AssertionGuard {
+		obj: obj.clone(),
+		toplevel: !IN_ASSERTION.replace(true),
+	})
 }
 
 thread_local! {
 	static EMPTY_OBJ: ObjValue = ObjValue(Cc::new(ObjValueInner {
 		cores: vec![],
 		assertions_ran: Cell::new(true),
+		asserting: Cell::new(false),
 		has_assertions: false,
 		value_cache: RefCell::default(),
 	}))
@@ -511,6 +520,7 @@ impl ObjValue {
 			cores,
 			value_cache: RefCell::default(),
 			assertions_ran: Cell::new(!has_assertions),
+			asserting: Cell::new(false),
 			has_assertions,
 		}))
 	}

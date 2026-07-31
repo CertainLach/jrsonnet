@@ -209,6 +209,7 @@ impl ObjValueBuilder {
 		ObjValue(Cc::new(ObjValueInner {
 			cores: self.sup,
 			assertions_ran: Cell::new(!has_assertions),
+			asserting: Cell::new(false),
 			has_assertions,
 			value_cache: RefCell::default(),
 		}))
