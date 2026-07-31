@@ -18,10 +18,10 @@
     },
     "crane": {
       "locked": {
-        "lastModified": 1785284101,
+        "lastModified": 1787326676,
         "owner": "ipetkov",
         "repo": "crane",
-        "rev": "756d6d07c3818ea95d1e2cdac63fa7d02fe3e61b",
+        "rev": "692f7e9ef2ece8125b466f66f2af532b3edaed0d",
         "type": "github"
       },
       "original": {
@@ -58,10 +58,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1782949081,
+        "lastModified": 1787559586,
         "owner": "hercules-ci",
         "repo": "flake-parts",
-        "rev": "17c9d6cdfc60c64f4ee8d306f9bc0b4ccb51481e",
+        "rev": "9d0d87172c374f89da73c1cfe6d81ae62feac1f1",
         "type": "github"
       },
       "original": {
@@ -96,10 +96,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1784091696,
+        "lastModified": 1786770286,
         "owner": "hercules-ci",
         "repo": "hercules-ci-effects",
-        "rev": "41134a44913c4a32cdb03e5e82ac331af0ff3efc",
+        "rev": "f5df0b4ad1aea4a435dfdd65b616c64cadcd2725",
         "type": "github"
       },
       "original": {
@@ -110,10 +110,10 @@
     },
     "nixpkgs": {
       "locked": {
-        "lastModified": 1785288896,
+        "lastModified": 1788181121,
         "owner": "nixos",
         "repo": "nixpkgs",
-        "rev": "18fb21044ebd6570f88f0b60893d85a48bb06395",
+        "rev": "68777210cd7f124b02e334e03cd366117355ab0b",
         "type": "github"
       },
       "original": {
@@ -174,10 +174,10 @@
         ]
       },
       "locked": {
-        "lastModified": 1784369104,
+        "lastModified": 1786901030,
         "owner": "numtide",
         "repo": "treefmt-nix",
-        "rev": "df3c0640565d04a0261253cdd89fce78ec50168a",
+        "rev": "27b3b12a8e6375f28ebe122f07d230ca5459bbfa",
         "type": "github"
       },
       "original": {

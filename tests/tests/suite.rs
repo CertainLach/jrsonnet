@@ -1,7 +1,4 @@
-use std::{
-	fs, io,
-	path::{Path, PathBuf},
-};
+use std::path::{Path, PathBuf};
 
 use jrsonnet_evaluator::{
 	FileImportResolver, State, Val,
@@ -11,6 +8,7 @@ use jrsonnet_stdlib::ContextInitializer;
 
 mod common;
 use common::ContextInitializer as TestContextInitializer;
+use rstest::rstest;
 
 fn run(file: &Path) {
 	let mut s = State::builder();
@@ -35,17 +33,11 @@ fn run(file: &Path) {
 	}
 }
 
-#[test]
-fn suite() -> io::Result<()> {
-	let mut root = PathBuf::from(env!("CARGO_MANIFEST_DIR"));
-	root.push("suite");
-
-	for entry in fs::read_dir(&root)? {
-		let entry = entry?;
-		if entry.path().extension().is_some_and(|e| e == "jsonnet") {
-			run(&entry.path());
-		}
-	}
-
-	Ok(())
+#[rstest]
+fn test_suite(
+	#[base_dir = "suite"]
+	#[files("*.jsonnet")]
+	path: PathBuf,
+) {
+	run(&path);
 }

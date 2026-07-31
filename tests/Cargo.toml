@@ -29,6 +29,7 @@ jrsonnet-evaluator.workspace = true
 jrsonnet-gcmodule.workspace = true
 jrsonnet-stdlib.workspace = true
 mimallocator.workspace = true
+rstest = "0.26.1"
 serde.workspace = true
 serde_json.workspace = true
 
