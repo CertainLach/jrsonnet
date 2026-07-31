@@ -1,1 +1,2 @@
-only functions can be called, got null
+runtime error: tried to manifest function
+    native5.jsonnet:1:27-41: function <json_to_string> call

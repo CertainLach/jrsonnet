@@ -1,1 +1,4 @@
-only functions can be called, got null
+runtime error: xxx
+    native4.jsonnet:1:28-32: error statement
+    argument <x> evaluation
+    native4.jsonnet:1:27-39: function <json_to_string> call

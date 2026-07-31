@@ -5,7 +5,8 @@ use std::{
 };
 
 use jrsonnet_evaluator::{
-	FileImportResolver, IStr, ObjValueBuilder, State, Val, apply_tla,
+	FileImportResolver, IStr, ObjValueBuilder, Result, State, Val, apply_tla,
+	function::builtin,
 	gc::WithCapacityExt as _,
 	manifest::JsonFormat,
 	rustc_hash::FxHashMap,
@@ -17,6 +18,14 @@ use jrsonnet_gcmodule::ObjectSpace;
 use jrsonnet_stdlib::ContextInitializer;
 mod common;
 use common::ContextInitializer as TestContextInitializer;
+
+#[builtin]
+fn json_to_string(x: Val) -> Result<String> {
+	x.manifest(JsonFormat::minify(
+		#[cfg(feature = "exp-preserve-order")]
+		false,
+	))
+}
 
 fn run(file: &Path, root: &Path) -> String {
 	let mut s = State::builder();
@@ -30,6 +39,7 @@ fn run(file: &Path, root: &Path) -> String {
 		.expect("code is valid");
 
 	// Golang test suite
+	std_context.add_native("jsonToString", json_to_string {});
 	std_context
 		.add_ext_code("codeVar", "3+3")
 		.expect("code is valid");
@@ -147,11 +157,6 @@ const SKIPPED: &[&str] = &[
 	"multi_no_newline.jsonnet",
 	"multi_no_newline_string_output.jsonnet",
 	"multi_string_output.jsonnet",
-	// Tested otherwise
-	"native1.jsonnet",
-	"native2.jsonnet",
-	"native3.jsonnet",
-	"native6.jsonnet",
 	// Golang fails with max stack frames exceeded error
 	"std.makeArray_recursive_evalutation_order_matters.jsonnet",
 	// Tailstrict semantics is partially unspecified
