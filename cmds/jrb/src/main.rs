@@ -18,6 +18,10 @@ struct Opts {
 	/// The directory used to cache packages in.
 	#[clap(long, default_value = "vendor")]
 	jsonnetpkg_home: PathBuf,
+	/// Accept checksums of trees jsonnet-bundler hashes incorrectly. Correct
+	/// checksums are written back, so this is only needed once per lockfile.
+	#[clap(long)]
+	compat: bool,
 	#[clap(subcommand)]
 	command: Command,
 }
@@ -103,9 +107,10 @@ fn do_install(
 	manifest: &JsonnetFile,
 	lock: Option<&JsonnetFile>,
 	vendor_dir: &Path,
-	dry_run: bool,
+	opts: install::Options,
 ) {
-	let new_lock = install::install(manifest, lock, vendor_dir, dry_run).unwrap_or_else(|e| {
+	let dry_run = opts.dry_run;
+	let new_lock = install::install(manifest, lock, vendor_dir, opts).unwrap_or_else(|e| {
 		error!("install failed: {e}");
 		exit(1);
 	});
@@ -160,7 +165,15 @@ fn main() {
 			}
 
 			let lock = load_lockfile();
-			do_install(&manifest, lock.as_ref(), &opts.jsonnetpkg_home, dry_run);
+			do_install(
+				&manifest,
+				lock.as_ref(),
+				&opts.jsonnetpkg_home,
+				install::Options {
+					dry_run,
+					compat: opts.compat,
+				},
+			);
 		}
 		Command::Update { uris, dry_run } => {
 			let mut manifest = load_manifest();
@@ -184,7 +197,15 @@ fn main() {
 				save_json(Path::new(MANIFEST), &manifest);
 			}
 
-			do_install(&manifest, None, &opts.jsonnetpkg_home, dry_run);
+			do_install(
+				&manifest,
+				None,
+				&opts.jsonnetpkg_home,
+				install::Options {
+					dry_run,
+					compat: opts.compat,
+				},
+			);
 		}
 		Command::Remove { names, dry_run } => {
 			let mut manifest = load_manifest();

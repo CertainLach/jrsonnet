@@ -3,6 +3,7 @@
 pub mod accessor;
 mod git;
 mod github;
+mod hash;
 
 use std::{
 	collections::{BTreeMap, HashSet},
@@ -11,10 +12,13 @@ use std::{
 	result,
 };
 
-use camino::Utf8PathBuf;
-use tracing::info;
+use camino::{Utf8Path, Utf8PathBuf};
+use tracing::{info, warn};
 
-use crate::jsonnet_bundler::{Dependency, GitScheme, GitSource, JsonnetFile, Source, SubDir};
+use crate::{
+	install::hash::{Exclusions, Mode, hash_dir},
+	jsonnet_bundler::{Dependency, GitScheme, GitSource, JsonnetFile, Source, SubDir},
+};
 
 pub const PKG_USER_AGENT: &str = "jrsonnet-pkg (https://delta.rocks/jrsonnet)";
 
@@ -87,14 +91,25 @@ pub struct InstallPlan {
 	pub entries: BTreeMap<Utf8PathBuf, VendorSource>,
 }
 
+#[derive(Debug, Clone, Copy, Default)]
+pub struct Options {
+	pub dry_run: bool,
+	/// Accept checksums of trees `jsonnet-bundler` hashes incorrectly. Correct
+	/// checksums are written back, so this is only needed once per lockfile.
+	pub compat: bool,
+}
+
 pub fn install(
 	manifest: &JsonnetFile,
 	lock: Option<&JsonnetFile>,
 	vendor_dir: &Path,
-	dry_run: bool,
+	opts: Options,
 ) -> Result<JsonnetFile, Error> {
-	let plan = resolve(manifest, lock)?;
-	execute(&plan, vendor_dir, dry_run)?;
+	let mut plan = resolve(manifest, lock)?;
+	execute(&plan, vendor_dir, opts)?;
+	if !opts.dry_run {
+		update_sums(&mut plan, vendor_dir, opts.compat)?;
+	}
 	Ok(plan.lock)
 }
 
@@ -138,16 +153,41 @@ fn make_symlink(_target: &str, _link: &Path) -> std::io::Result<()> {
 	))
 }
 
-fn is_up_to_date(dest: &Path, version: &str) -> bool {
-	fs::read_to_string(dest.join(VERSION_FILE)).is_ok_and(|v| v.trim() == version)
+fn is_up_to_date(
+	plan: &InstallPlan,
+	vendor_dir: &Path,
+	path: &Utf8PathBuf,
+	version: &str,
+	compat: bool,
+) -> bool {
+	let dest = vendor_dir.join(path);
+	if !fs::read_to_string(dest.join(VERSION_FILE)).is_ok_and(|v| v.trim() == version) {
+		return false;
+	}
+	// The vendored tree may have been modified since it was extracted.
+	let Some(expected) = locked_sum(plan, path) else {
+		return true;
+	};
+	let exclude = exclusions(&plan.entries, vendor_dir, path);
+	let matches =
+		|mode| hash_dir(&dest, &exclude, Some(version), mode).is_ok_and(|sum| sum == expected);
+	matches(Mode::Correct) || (compat && matches(Mode::JsonnetBundler))
 }
 
 fn write_version(dest: &Path, version: &str) -> Result<(), Error> {
-	fs::write(dest.join(VERSION_FILE), format!("{version}\n"))
-		.map_err(|e| Error::Io(dest.join(VERSION_FILE), e))
+	let marker = dest.join(VERSION_FILE);
+	if marker.exists() {
+		warn!(
+			"{}: dependency ships its own {VERSION_FILE}, keeping it and re-extracting on every install",
+			dest.display()
+		);
+		return Ok(());
+	}
+	fs::write(&marker, format!("{version}\n")).map_err(|e| Error::Io(marker, e))
 }
 
-pub fn execute(plan: &InstallPlan, vendor_dir: &Path, dry_run: bool) -> Result<(), Error> {
+pub fn execute(plan: &InstallPlan, vendor_dir: &Path, opts: Options) -> Result<(), Error> {
+	let dry_run = opts.dry_run;
 	if !dry_run {
 		for (path, source) in &plan.entries {
 			let dest = vendor_dir.join(path);
@@ -157,7 +197,7 @@ pub fn execute(plan: &InstallPlan, vendor_dir: &Path, dry_run: bool) -> Result<(
 					commit_sha,
 					subdir,
 				} => {
-					if is_up_to_date(&dest, commit_sha) {
+					if is_up_to_date(plan, vendor_dir, path, commit_sha, opts.compat) {
 						continue;
 					}
 					info!("extract {path}");
@@ -173,7 +213,7 @@ pub fn execute(plan: &InstallPlan, vendor_dir: &Path, dry_run: bool) -> Result<(
 					commit_sha,
 					subdir,
 				} => {
-					if is_up_to_date(&dest, commit_sha) {
+					if is_up_to_date(plan, vendor_dir, path, commit_sha, opts.compat) {
 						continue;
 					}
 					info!("extract {path}");
@@ -205,6 +245,75 @@ pub fn execute(plan: &InstallPlan, vendor_dir: &Path, dry_run: bool) -> Result<(
 		}
 	}
 	prune(plan, vendor_dir, dry_run)?;
+	Ok(())
+}
+
+/// Nested dependencies are not part of the checksum of the dependency they are
+/// nested in, as `jsonnet-bundler` wipes them when extracting the parent.
+fn exclusions(
+	entries: &BTreeMap<Utf8PathBuf, VendorSource>,
+	vendor_dir: &Path,
+	path: &Utf8Path,
+) -> Exclusions {
+	let prefix = format!("{path}/");
+	Exclusions(
+		entries
+			.keys()
+			.filter(|k| k.as_str().starts_with(&prefix))
+			.map(|k| vendor_dir.join(k))
+			.collect(),
+	)
+}
+
+fn locked_sum<'a>(plan: &'a InstallPlan, path: &Utf8Path) -> Option<&'a str> {
+	plan.lock
+		.dependencies
+		.iter()
+		.find(|d| d.canonical_name() == path)?
+		.sum
+		.as_deref()
+}
+
+/// Verify checksums of the vendored trees against the ones carried over from
+/// the lockfile, and record the missing ones.
+fn update_sums(plan: &mut InstallPlan, vendor_dir: &Path, compat: bool) -> Result<(), Error> {
+	let InstallPlan { lock, entries } = plan;
+	for dep in &mut lock.dependencies {
+		if !matches!(dep.source, Source::Git(_)) {
+			continue;
+		}
+		let path = dep.canonical_name();
+		if !entries.contains_key(&path) {
+			continue;
+		}
+		let dir = vendor_dir.join(&path);
+		let exclude = exclusions(entries, vendor_dir, &path);
+		if !exclude.0.is_empty() {
+			warn!(
+				"{path}: nested dependencies are excluded from its checksum, jsonnet-bundler's value depends on install order here"
+			);
+		}
+		let version = dep.version.as_deref();
+		let sum = hash_dir(&dir, &exclude, version, Mode::Correct)?;
+		if let Some(expected) = &dep.sum
+			&& *expected != sum
+		{
+			// The tree itself is intact, the lockfile just carries a checksum
+			// jsonnet-bundler computed incorrectly. Replace it with a correct one.
+			let bundler_sum = compat
+				.then(|| hash_dir(&dir, &exclude, version, Mode::JsonnetBundler))
+				.transpose()?;
+			if bundler_sum.as_deref() != Some(expected.as_str()) {
+				return Err(Error::ChecksumMismatch {
+					dep: path,
+					expected: expected.clone(),
+					got: sum,
+				});
+			}
+			warn!("{path}: replacing the checksum written by jsonnet-bundler");
+		}
+		dep.sum = Some(sum);
+	}
 	Ok(())
 }
 
@@ -289,13 +398,12 @@ fn resolve_one(git_source: &GitSource, version: Option<&str>) -> Result<ResolveR
 	git::resolve(git_source, version)
 }
 
-fn locked_version<'a>(dep: &Dependency, lock: Option<&'a JsonnetFile>) -> Option<&'a str> {
-	let lock = lock?;
+fn locked_dep<'a>(dep: &Dependency, lock: Option<&'a JsonnetFile>) -> Option<&'a Dependency> {
 	let key = dep.canonical_name();
-	lock.dependencies
+	lock?
+		.dependencies
 		.iter()
 		.find(|d| d.canonical_name() == key)
-		.and_then(|d| d.version.as_deref())
 }
 
 fn resolve_deps(
@@ -315,7 +423,10 @@ fn resolve_deps(
 			continue;
 		}
 
-		let version = locked_version(dep, lock).or(dep.version.as_deref());
+		let locked = locked_dep(dep, lock);
+		let version = locked
+			.and_then(|d| d.version.as_deref())
+			.or(dep.version.as_deref());
 
 		info!(
 			"resolving {canonical} (version: {})",
@@ -324,10 +435,16 @@ fn resolve_deps(
 
 		let result = resolve_one(git_source, version)?;
 
+		// Only the lockfile checksum is authoritative, and only for the exact
+		// version it was recorded for.
+		let expected_sum = locked
+			.filter(|d| d.version.as_deref() == Some(result.version.as_str()))
+			.and_then(|d| d.sum.clone());
+
 		plan.lock.dependencies.push(Dependency {
 			source: dep.source.clone(),
 			version: Some(result.version),
-			sum: dep.sum.clone(),
+			sum: expected_sum,
 			name: dep.name.clone(),
 			single: dep.single,
 		});
@@ -417,6 +534,14 @@ pub enum Error {
 	Zip(Box<zip::result::ZipError>),
 	#[error(transparent)]
 	Accessor(#[from] accessor::Error),
+	#[error(
+		"checksum mismatch for {dep}: expected {expected}, got {got}. If the lockfile was written by jsonnet-bundler, pass --compat to accept and rewrite its checksums"
+	)]
+	ChecksumMismatch {
+		dep: Utf8PathBuf,
+		expected: String,
+		got: String,
+	},
 	#[error("unknown subdir: {0}")]
 	SubdirNotFound(String),
 	#[error("invalid path in tree: {0}")]
