@@ -8,7 +8,7 @@ use jrsonnet_types::ValType;
 use self::{
 	compspec::{evaluate_arr_comp, evaluate_obj_comp},
 	destructure::evaluate_locals_unbound,
-	operator::evaluate_binary_op_special,
+	operator::{evaluate_add_op, evaluate_binary_op},
 };
 use crate::{
 	CcObjectAssertion, CcUnbound, Context, Error, MaybeUnbound, ObjValue, ObjValueBuilder,
@@ -137,7 +137,7 @@ pub fn evaluate(mut ctx: Context, mut expr: &LExpr) -> Result<Val> {
 				let value = evaluate(ctx, value)?;
 				evaluate_unary_op(*op, &value)?
 			}
-			LExpr::BinaryOp { lhs, op, rhs } => evaluate_binary_op_special(ctx, lhs, *op, rhs)?,
+			LExpr::BinaryOp { lhs, op, rhs } => evaluate_binary_op(ctx, lhs, *op, rhs)?,
 			LExpr::LocalExpr(l) => {
 				ctx = ctx
 					.pack_captures_sup_this(&l.frame_shape)
@@ -202,11 +202,7 @@ pub fn evaluate(mut ctx: Context, mut expr: &LExpr) -> Result<Val> {
 			LExpr::ObjExtend(lhs, body) => {
 				let lhs_val = evaluate(ctx.clone(), lhs)?;
 				let Val::Obj(lhs_obj) = lhs_val else {
-					bail!(TypeMismatch(
-						"object extend lhs",
-						vec![ValType::Obj],
-						lhs_val.value_type(),
-					))
+					return evaluate_add_op(&lhs_val, &evaluate_obj_body(None, ctx, body)?);
 				};
 				evaluate_obj_body(Some(lhs_obj), ctx, body)?
 			}

@@ -159,33 +159,6 @@ pub fn evaluate_mod_op(a: &Val, b: &Val) -> Result<Val> {
 	})
 }
 
-pub fn evaluate_binary_op_special(
-	ctx: Context,
-	a: &LExpr,
-	op: BinaryOpType,
-	b: &LExpr,
-) -> Result<Val> {
-	use BinaryOpType::*;
-	use Val::*;
-
-	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
-		(Bool(true), Or, _) => Val::Bool(true),
-		(Bool(false), And, _) => Val::Bool(false),
-		#[cfg(feature = "exp-null-coaelse")]
-		(Null, NullCoaelse, eb) => evaluate(ctx, eb)?,
-		#[cfg(feature = "exp-null-coaelse")]
-		(a, NullCoaelse, _) => a,
-		(a, In, LExpr::Super) => {
-			let sup_this = ctx.try_sup_this()?;
-			if !sup_this.has_super() {
-				return Ok(Val::Bool(false));
-			}
-			return Ok(Val::Bool(sup_this.field_in_super(a.to_string()?)));
-		}
-		(a, op, eb) => evaluate_binary_op_normal(&a, op, &evaluate(ctx, eb)?)?,
-	})
-}
-
 pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Ordering> {
 	use Val::*;
 	Ok(match (a, b) {
@@ -216,7 +189,32 @@ pub fn evaluate_compare_op(a: &Val, b: &Val, op: BinaryOpType) -> Result<Orderin
 	})
 }
 
-pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
+/// Short-circuit operators (`||`, `&&`, `??`) and `in super`
+pub fn evaluate_binary_op(ctx: Context, a: &LExpr, op: BinaryOpType, b: &LExpr) -> Result<Val> {
+	use BinaryOpType::*;
+	use Val::*;
+
+	Ok(match (evaluate(ctx.clone(), a)?, op, b) {
+		(Bool(true), Or, _) => Val::Bool(true),
+		(Bool(false), And, _) => Val::Bool(false),
+		#[cfg(feature = "exp-null-coaelse")]
+		(Null, NullCoaelse, eb) => evaluate(ctx, eb)?,
+		#[cfg(feature = "exp-null-coaelse")]
+		(a, NullCoaelse, _) => a,
+		(a, In, LExpr::Super) => {
+			let sup_this = ctx.try_sup_this()?;
+			if !sup_this.has_super() {
+				return Ok(Val::Bool(false));
+			}
+			return Ok(Val::Bool(sup_this.field_in_super(a.to_string()?)));
+		}
+		(a, op, eb) => evaluate_binary_op_eager(&a, op, &evaluate(ctx, eb)?)?,
+	})
+}
+
+/// Evaluation of non-short-circuiting binary operators
+/// short-circuit operators will be thrown out of here.
+fn evaluate_binary_op_eager(a: &Val, op: BinaryOpType, b: &Val) -> Result<Val> {
 	use BinaryOpType::*;
 	use Val::*;
 	Ok(match (a, op, b) {
@@ -228,11 +226,23 @@ pub fn evaluate_binary_op_normal(a: &Val, op: BinaryOpType, b: &Val) -> Result<V
 		(a, Lte, b) => Bool(evaluate_compare_op(a, b, Lte)?.is_le()),
 		(a, Gte, b) => Bool(evaluate_compare_op(a, b, Gte)?.is_ge()),
 
-		(Str(a), In, Obj(obj)) => Bool(obj.has_field_ex(a.clone().into_flat(), true)),
+		(Str(a), In, Obj(obj)) => {
+			// standalone super obj should not reach this path, because of short-circuit impl
+			Bool(obj.has_field_ex(a.clone().into_flat(), true))
+		}
 
 		// Bool X Bool
-		(Bool(a), And, Bool(b)) => Bool(*a && *b),
-		(Bool(a), Or, Bool(b)) => Bool(*a || *b),
+		(Bool(a), And, Bool(b)) => {
+			assert!(*a, "a == false would return from short-circuit impl");
+			Bool(*b)
+		}
+		(Bool(a), Or, Bool(b)) => {
+			assert!(!a, "a == true would return from short-circuit impl");
+			Bool(*b)
+		}
+
+		#[cfg(feature = "exp-null-coaelse")]
+		(_, NullCoaelse, _) => panic!("?? should return from short-circuit impl"),
 
 		(a, Add, b) => evaluate_add_op(a, b)?,
 		(a, Sub, b) => evaluate_sub_op(a, b)?,
