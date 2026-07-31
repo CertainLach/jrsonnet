@@ -1,0 +1,12 @@
+---
+source: tests/tests/golden.rs
+expression: result
+input_file: tests/golden/super_assert.jsonnet
+---
+{
+    "deployment": {
+        "spec": {
+            "replicas": 1
+        }
+    }
+}
