@@ -910,7 +910,7 @@ impl FormatOptions {
 	pub fn new() -> Self {
 		Self {
 			indent: 4,
-			use_tabs: true,
+			use_tabs: false,
 			max_width: 100,
 		}
 	}

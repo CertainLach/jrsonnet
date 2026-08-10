@@ -28,7 +28,7 @@ struct Opts {
 	#[arg(long, default_value = "4")]
 	indent: u8,
 	/// Force hard tab for indentation
-	#[arg(long, default_value = "true")]
+	#[arg(long)]
 	use_tabs: bool,
 	/// Max formatted source width
 	#[arg(long, default_value = "100")]
