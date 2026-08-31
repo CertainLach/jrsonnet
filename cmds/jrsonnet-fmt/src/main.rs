@@ -5,7 +5,7 @@ use std::{
 	process,
 };
 
-use clap::Parser;
+use clap::{ArgAction, Parser};
 use jrsonnet_formatter::{FormatOptions, format};
 
 #[derive(Parser)]
@@ -27,8 +27,8 @@ struct Opts {
 	/// Number of spaces to indent with
 	#[arg(long, default_value = "4")]
 	indent: u8,
-	/// Force hard tab for indentation
-	#[arg(long, default_value = "true")]
+	/// Force soft tab (`indent` spaces) for indentation
+	#[arg(long = "no-use-tabs", action = ArgAction::SetFalse)]
 	use_tabs: bool,
 	/// Max formatted source width
 	#[arg(long, default_value = "100")]
